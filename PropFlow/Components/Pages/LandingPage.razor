@@ -1,0 +1,179 @@
+@page "/landing"
+@layout PropFlow.Components.Layout.EmptyLayout
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<div class="bg-background font-body-md text-on-surface select-none relative min-h-screen">
+<!-- STITCH_THREEJS_START:ANIMATION_77 class="fixed inset-0 w-full h-full pointer-events-none z-0" -->
+<div class="fixed inset-0 w-full h-full pointer-events-none z-0" style="display:block;">
+<div id="threejs-canvas-container" style="width:100%;height:100%"></div>
+</div>
+<!-- STITCH_THREEJS_END:ANIMATION_77 -->
+<header class="fixed top-0 w-full z-50 bg-[#10141a]/60 backdrop-blur-md h-20 border-b border-outline-variant/10"><div class="w-full h-full px-margin-edge flex items-center justify-between"><div class="flex items-center gap-unit"><div class="w-8 h-8 bg-primary-container/20 rounded-full flex items-center justify-center border border-primary/30"><span class="material-symbols-outlined text-primary text-[20px]">blur_on</span></div><span class="font-headline-lg text-[20px] tracking-tight text-on-surface">AETHERIS<span class="text-primary">.CONTROL</span></span></div><nav class="hidden lg:flex items-center gap-gutter" data-active-classes="text-primary font-bold"><a aria-current="page" class="transition-all duration-300 text-primary font-bold hover:text-primary tracking-wide cursor-pointer" data-path="home" href="#home">HOME</a><a class="font-label-caps text-on-surface-variant hover:text-primary transition-all duration-300 tracking-wide cursor-pointer" data-path="features" href="#features">FEATURES</a><a class="font-label-caps text-on-surface-variant hover:text-primary transition-all duration-300 tracking-wide cursor-pointer" data-path="pricing" href="#pricing">PRICING</a></nav><div class="flex items-center gap-gutter"><a class="hidden md:flex items-center px-gutter py-2 rounded-full border border-primary/30 bg-primary/5 hover:bg-primary/20 hover:border-primary text-primary font-label-caps transition-all duration-300 shadow-[0_0_15px_rgba(0,219,231,0.1)]" data-path="portal" href="#">MEMBER PORTAL</a><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-[0_0_10px_rgba(0,219,231,0.3)]"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header>
+<main class="w-full pt-20 relative z-10 bg-transparent"><div class="flex flex-col w-full relative min-h-screen">
+<!-- Main Content Canvas (Interactive Layer) -->
+<div class="relative flex flex-col w-full">
+<!-- Hero Section -->
+<section class="min-h-[85vh] flex flex-col justify-center px-margin-edge pt-24 pb-32" id="home">
+<div class="max-w-4xl">
+<!-- Status Badge -->
+<div class="inline-flex items-center gap-2 px-4 py-2 bg-surface-container/40 backdrop-blur-md rounded-full border border-primary/20 mb-8 animate-[pulse_4s_ease-in-out_infinite]">
+<span class="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(0,219,231,0.8)]"></span>
+<span class="font-label-caps text-primary tracking-widest uppercase">System Online • Connection Stable</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-on-surface mb-6 drop-shadow-[0_0_15px_rgba(0,219,231,0.2)]">
+                    AETHERIS <br/>
+<span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">CONTROL.</span>
+</h1>
+<p class="font-body-md text-[20px] text-on-surface-variant max-w-2xl leading-relaxed mb-12">
+                    AI-Powered Building Visualization &amp; Management. Command your infrastructure through highly-responsive neural networks and predictive analytics.
+                </p>
+<div class="flex flex-wrap items-center gap-6">
+<button class="px-8 py-4 bg-primary text-on-primary font-label-caps rounded-full hover:bg-primary-fixed hover:shadow-[0_0_20px_rgba(0,219,231,0.4)] transition-all duration-300 relative group overflow-hidden">
+<span class="relative z-10 flex items-center gap-2">
+                            INITIALIZE SYSTEM
+                            <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</span>
+<div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+</button>
+<button class="px-8 py-4 bg-surface-container/20 border border-primary/30 text-primary font-label-caps rounded-full backdrop-blur-md hover:bg-primary/10 transition-all duration-300 flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">play_circle</span>
+                        VIEW SIMULATION
+                    </button>
+</div>
+</div>
+<!-- Scroll Indicator -->
+<div class="mt-20 flex items-center gap-4 opacity-50">
+<span class="font-mono-data text-[10px] tracking-widest uppercase text-on-surface">Scroll to Matrix</span>
+<div class="w-12 h-[1px] bg-outline relative overflow-hidden">
+<div class="absolute top-0 left-0 h-full w-full bg-primary animate-[translateX_2s_ease-in-out_infinite]"></div>
+</div>
+</div>
+</section>
+<!-- Core Systems Grid -->
+<section class="px-margin-edge py-32 relative" id="features">
+<div class="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
+<div class="flex justify-between items-end mb-16">
+<div>
+<h2 class="font-headline-lg text-[24px] text-primary font-mono-data uppercase tracking-widest mb-2">01 // Architecture</h2>
+<h3 class="font-headline-lg text-[40px] text-on-surface">Core Subsystems</h3>
+</div>
+<div class="hidden md:flex gap-4">
+<button class="w-12 h-12 rounded-full border border-outline-variant/30 flex items-center justify-center hover:border-primary/50 hover:text-primary transition-colors bg-surface-container/50 backdrop-blur-sm">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-12 h-12 rounded-full border border-outline-variant/30 flex items-center justify-center hover:border-primary/50 hover:text-primary transition-colors bg-surface-container/50 backdrop-blur-sm">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-container-gap">
+<!-- Card 1 -->
+<div class="group relative p-8 bg-surface-container-low/60 backdrop-blur-xl border border-outline-variant/20 rounded-2xl hover:border-primary/40 transition-all duration-500 overflow-hidden flex flex-col justify-between min-h-[400px]">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+<div class="relative z-10">
+<div class="w-14 h-14 rounded-xl bg-surface border border-outline-variant/30 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-[0_0_15px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_20px_rgba(0,219,231,0.2)]">
+<span class="material-symbols-outlined text-primary text-[28px]" style="font-variation-settings: 'FILL' 1;">view_in_ar</span>
+</div>
+<h4 class="font-headline-lg text-[24px] text-on-surface mb-4">Holographic Monitoring</h4>
+<p class="font-body-md text-on-surface-variant text-[15px] leading-relaxed">
+                            Project real-time structural data into navigable 3D space. Isolate floors, trace utility lines, and identify thermal anomalies instantly.
+                        </p>
+</div>
+<div class="relative z-10 mt-8">
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[85%] relative">
+<div class="absolute top-0 right-0 bottom-0 w-4 bg-white/50 blur-sm"></div>
+</div>
+</div>
+<div class="flex justify-between mt-2">
+<span class="font-mono-data text-[12px] text-on-surface-variant">RENDER LOAD</span>
+<span class="font-mono-data text-[12px] text-primary">85%</span>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group relative p-8 bg-surface-container-low/60 backdrop-blur-xl border border-outline-variant/20 rounded-2xl hover:border-primary/40 transition-all duration-500 overflow-hidden flex flex-col justify-between min-h-[400px]">
+<div class="absolute inset-0 bg-gradient-to-br from-secondary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+<div class="relative z-10">
+<div class="w-14 h-14 rounded-xl bg-surface border border-outline-variant/30 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-[0_0_15px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_20px_rgba(2da0ff,0.2)]">
+<span class="material-symbols-outlined text-secondary text-[28px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+<h4 class="font-headline-lg text-[24px] text-on-surface mb-4">Automated Energy Flow</h4>
+<p class="font-body-md text-on-surface-variant text-[15px] leading-relaxed">
+                            Predictive HVAC and lighting models adjust dynamically to occupancy density, slashing waste while maintaining optimal environmental metrics.
+                        </p>
+</div>
+<!-- Inline Mini Chart -->
+<div class="relative z-10 mt-8 h-16 w-full flex items-end gap-1">
+<div class="w-full bg-secondary/20 h-[30%] rounded-t-sm hover:h-[40%] transition-all"></div>
+<div class="w-full bg-secondary/40 h-[50%] rounded-t-sm hover:h-[60%] transition-all"></div>
+<div class="w-full bg-secondary/60 h-[70%] rounded-t-sm hover:h-[80%] transition-all"></div>
+<div class="w-full bg-secondary h-[90%] rounded-t-sm shadow-[0_0_10px_rgba(179,197,255,0.5)]"></div>
+<div class="w-full bg-secondary/30 h-[60%] rounded-t-sm"></div>
+<div class="w-full bg-secondary/10 h-[40%] rounded-t-sm"></div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="group relative p-8 bg-surface-container-low/60 backdrop-blur-xl border border-outline-variant/20 rounded-2xl hover:border-error/40 transition-all duration-500 overflow-hidden flex flex-col justify-between min-h-[400px]">
+<div class="absolute inset-0 bg-gradient-to-br from-error/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+<div class="relative z-10">
+<div class="w-14 h-14 rounded-xl bg-surface border border-outline-variant/30 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-[0_0_15px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_20px_rgba(255,180,171,0.2)]">
+<span class="material-symbols-outlined text-error text-[28px]" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<h4 class="font-headline-lg text-[24px] text-on-surface mb-4">Security Matrix</h4>
+<p class="font-body-md text-on-surface-variant text-[15px] leading-relaxed">
+                            Biometric integration and localized lockdown protocols. AI threat assessment categorizes anomalies before they escalate.
+                        </p>
+</div>
+<div class="relative z-10 mt-8 flex items-center gap-4 bg-surface/50 p-3 rounded-lg border border-outline-variant/20">
+<span class="relative flex h-3 w-3">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+</span>
+<span class="font-mono-data text-[12px] text-on-surface">ZERO BREACHES DETECTED</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Data Dashboard Preview -->
+<section class="px-margin-edge py-32 relative">
+<div class="max-w-6xl mx-auto rounded-3xl bg-surface-container/30 border border-outline-variant/20 p-2 md:p-4 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+<!-- Decorative scan line -->
+<div class="absolute top-0 left-0 w-full h-[2px] bg-primary/50 shadow-[0_0_10px_rgba(0,219,231,0.8)] animate-[scan_4s_linear_infinite] z-20"></div>
+<div class="rounded-2xl overflow-hidden relative group">
+<img class="w-full h-auto object-cover opacity-80 mix-blend-screen grayscale-[20%] group-hover:grayscale-0 transition-all duration-700" data-alt="A highly detailed, futuristic command center UI dashboard shown on a dark screen. It features intricate glowing cyan and blue data visualizations, wireframe building models, graphs, and numeric readouts in a sophisticated glassmorphism style against a deep #0a0e14 background. Tech corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2rR4o7beX4s-_nyy89ClrvGVUXgvKhcFkp1bd47kYimRt3gBHJz1VAY85oBsrxYK2Ni5KG-4L8m-GMRreVcfpWUZgXGeW5IMkmwb1VHWTJ6VyAa-fBUGUwiQnT4Ls-U02a6GbenuG5sB5l-8j8PPNznpcmdasGWtDRiIxd7V30ko1ojxAYHzoTBhG-DQmghjhW-A0my9gSwMhcdCt-tBRlDutEghRasSDLvbfvLYTbXRmSGaSRRP6"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-highest/90 via-transparent to-transparent flex items-end p-8">
+<div>
+<div class="font-mono-data text-primary text-[14px] mb-2 uppercase tracking-widest">Live Telemetry</div>
+<h3 class="font-headline-lg text-[32px] text-white">Full-Spectrum Visibility</h3>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Pricing Section -->
+<section class="px-margin-edge py-36 min-h-[600px] flex items-center justify-center relative" id="pricing">
+<div class="text-center max-w-2xl mx-auto z-10 px-6 py-12 rounded-3xl bg-surface-container/20 backdrop-blur-md border border-outline-variant/20 shadow-2xl">
+<h2 class="font-headline-lg text-[40px] text-on-surface mb-6 drop-shadow-[0_0_12px_rgba(0,219,231,0.15)]">Deploy Control</h2>
+<p class="font-body-md text-on-surface-variant mb-8 leading-relaxed">Enterprise-grade infrastructure requires custom deployment strategies. Contact our engineering team for node licensing.</p>
+<button class="px-8 py-4 bg-transparent border border-primary text-primary font-label-caps rounded-full hover:bg-primary/10 transition-colors shadow-[0_0_15px_rgba(0,219,231,0.2)]">
+                        REQUEST ACCESS PROTOCOL
+                </button>
+</div>
+</section>
+</div>
+</div>
+</main><footer class="w-full bg-[#0a0e14]/80 backdrop-blur-md border-t border-outline-variant/10 py-12 relative z-10"><div class="px-margin-edge flex flex-col md:flex-row justify-between items-center gap-gutter"><div class="flex items-center gap-unit opacity-50"><span class="font-headline-lg text-[16px] text-on-surface">AETHERIS</span></div><div class="font-mono-data text-on-surface-variant text-[12px] uppercase tracking-widest">© 2024 NEURAL ARCHITECTS. SYSTEM STATUS: OPTIMAL</div><div class="flex gap-gutter"><span class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer">terminal</span><span class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer">security</span></div></div></footer>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initLandingThreeJs");
+            await JSRuntime.InvokeVoidAsync("initLandingNav");
+        }
+    }
+}

@@ -1,0 +1,528 @@
+﻿@page "/auth"
+@layout PropFlow.Components.Layout.EmptyLayout
+<!DOCTYPE html>
+
+<html lang="en" style="">
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <style>
+                html, body { margin: 0; padding: 0; }
+                body { overscroll-behavior: none; }
+                main > :first-child { margin-top: 0 !important; }
+                main > :last-child { margin-bottom: 0 !important; }
+            ::-webkit-scrollbar { display: none; }
+    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script id="tailwind-config">
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        "colors": {
+                            "tertiary": "#fcf5ff",
+                            "on-secondary": "#002b75",
+                            "surface": "#10141a",
+                            "surface-container-lowest": "#0a0e14",
+                            "surface-container-low": "#181c22",
+                            "secondary-fixed": "#dae1ff",
+                            "on-secondary-container": "#f9f7ff",
+                            "on-surface": "#dfe2eb",
+                            "surface-bright": "#353940",
+                            "surface-dim": "#10141a",
+                            "inverse-primary": "#00696f",
+                            "background": "#10141a",
+                            "on-primary-fixed-variant": "#004f54",
+                            "on-tertiary-fixed-variant": "#5700c9",
+                            "on-tertiary": "#3c0090",
+                            "surface-variant": "#31353c",
+                            "on-primary-fixed": "#002022",
+                            "on-secondary-fixed-variant": "#003fa4",
+                            "inverse-surface": "#dfe2eb",
+                            "primary-fixed-dim": "#00dbe7",
+                            "on-tertiary-fixed": "#23005b",
+                            "on-tertiary-container": "#7318ff",
+                            "tertiary-fixed": "#e9ddff",
+                            "on-error": "#690005",
+                            "surface-container-high": "#262a31",
+                            "secondary": "#b3c5ff",
+                            "primary-fixed": "#74f5ff",
+                            "error": "#ffb4ab",
+                            "inverse-on-surface": "#2d3137",
+                            "on-primary": "#00363a",
+                            "outline-variant": "#3a494b",
+                            "on-secondary-fixed": "#001849",
+                            "primary": "#e1fdff",
+                            "primary-container": "#00f2ff",
+                            "outline": "#849495",
+                            "tertiary-container": "#e3d4ff",
+                            "error-container": "#93000a",
+                            "surface-container": "#1c2026",
+                            "surface-tint": "#00dbe7",
+                            "secondary-container": "#0266ff",
+                            "tertiary-fixed-dim": "#d1bcff",
+                            "on-error-container": "#ffdad6",
+                            "on-background": "#dfe2eb",
+                            "secondary-fixed-dim": "#b3c5ff",
+                            "on-surface-variant": "#b9cacb",
+                            "on-primary-container": "#006a71",
+                            "surface-container-highest": "#31353c"
+                        },
+                        "borderRadius": {
+                            "DEFAULT": "0.125rem",
+                            "lg": "0.25rem",
+                            "xl": "0.5rem",
+                            "full": "0.75rem"
+                        },
+                        "spacing": {
+                            "unit": "4px",
+                            "gutter": "24px",
+                            "margin-edge": "40px",
+                            "container-gap": "16px"
+                        },
+                        "fontFamily": {
+                            "body-md": ["Inter"],
+                            "headline-lg-mobile": ["Space Grotesk"],
+                            "mono-data": ["Geist"],
+                            "label-caps": ["Geist"],
+                            "display-lg": ["Space Grotesk"],
+                            "headline-lg": ["Space Grotesk"]
+                        },
+                        "fontSize": {
+                            "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                            "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                            "mono-data": ["14px", { "lineHeight": "20px", "fontWeight": "500" }],
+                            "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "600" }],
+                            "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                            "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0.01em", "fontWeight": "600" }]
+                        }
+                    }
+                }
+            }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&amp;family=Inter:wght@400&amp;family=Geist:wght@500;600&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body class="bg-background font-body-md text-on-surface">
+    <header class="fixed top-0 w-full z-50 bg-surface/10 backdrop-blur-md">
+        <div class="h-14 w-full px-margin-edge flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-primary-fixed font-headline-lg text-label-caps tracking-[0.2em] uppercase">Aetheris</span>
+                <div class="h-px w-8 bg-primary/30"></div>
+                <span class="text-on-surface-variant font-label-caps text-label-caps">Control System</span>
+            </div>
+            <div class="flex items-center gap-gutter">
+                <a class="text-label-caps font-label-caps text-on-surface-variant hover:text-primary transition-colors" href="#">System Status</a>
+                <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                    <span class="material-symbols-outlined text-on-primary text-[18px]">person</span>
+                </div>
+            </div>
+        </div>
+    </header>
+    <main class="w-full min-h-screen pt-14 bg-surface-container-lowest relative">
+        <!-- 3D Background Container -->
+        <div class="absolute inset-0 z-0 pointer-events-none opacity-100" id="threejs-bg"><canvas height="640" style="display: block; width: 1280px; height: 1024px;" width="800"></canvas></div>
+        <div class="flex flex-col w-full h-[calc(100vh-56px)] relative overflow-hidden">
+            <div class="relative z-10 w-full h-full flex items-center justify-center p-gutter">
+                <div class="relative w-full max-w-[1200px] h-[700px] backdrop-blur-[2px] rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.5),0_0_20px_rgba(0,242,255,0.15)] overflow-hidden flex transition-all duration-700 ease-in-out border border-primary/30 bg-[#10141a]/20" id="auth-container">
+                    <!-- Left Panel -->
+                    <div class="w-1/2 h-full relative flex flex-col justify-center p-[60px] transition-transform duration-700 ease-in-out transform translate-x-0" id="left-panel">
+                        <!-- Welcome Content (Visible in Login State) -->
+                        <div class="absolute inset-0 p-[60px] flex flex-col justify-center transition-opacity duration-500 opacity-100 z-10 pointer-events-auto" id="welcome-content-left">
+                            <div class="inline-flex items-center gap-2 mb-8 bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
+                                <div class="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_theme(colors.primary)]"></div>
+                                <span class="font-label-caps text-label-caps text-primary tracking-widest uppercase">System Status: Optimal</span>
+                            </div>
+                            <h1 class="font-display-lg text-display-lg text-white mb-6 font-bold leading-tight drop-shadow-md">
+                                AETHERIS<br />
+                                <span class="text-primary bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">CONTROL</span>
+                            </h1>
+                            <p class="font-body-md text-body-md text-white/90 max-w-md border-l-2 border-primary/30 pl-4 py-1" id="left-desc-text">
+                                Establish neural link to manage your global infrastructure. Secure, predictive, and absolute.
+                            </p>
+                        </div>
+                        <!-- Register Form (Visible in Register State) -->
+                        <div class="absolute inset-0 p-[60px] flex flex-col justify-center transition-opacity duration-500 opacity-0 z-0 pointer-events-none" id="register-form-left">
+                            <h2 class="font-headline-lg text-headline-lg text-white mb-2">New Uplink</h2>
+                            <p class="font-body-md text-body-md text-white/90 mb-8">Register identity protocol.</p>
+                            <form class="flex flex-col gap-6" onsubmit="event.preventDefault();">
+                                <div class="flex flex-col gap-2 relative group">
+                                    <label class="font-label-caps text-label-caps text-white/80 uppercase tracking-widest group-focus-within:text-primary transition-colors">Designation</label>
+                                    <div class="relative">
+                                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-primary transition-colors text-[20px]">badge</span>
+                                        <input class="w-full bg-black/20 border-b border-white/20 text-white font-mono-data py-3 pl-12 pr-4 focus:outline-none focus:border-primary focus:bg-black/40 transition-all hover:bg-black/30 placeholder-white/30" placeholder="Operator Name" type="text" />
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2 relative group">
+                                    <label class="font-label-caps text-label-caps text-white/80 uppercase tracking-widest group-focus-within:text-primary transition-colors">Comms Link</label>
+                                    <div class="relative">
+                                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-primary transition-colors text-[20px]">mail</span>
+                                        <input class="w-full bg-black/20 border-b border-white/20 text-white font-mono-data py-3 pl-12 pr-4 focus:outline-none focus:border-primary focus:bg-black/40 transition-all hover:bg-black/30 placeholder-white/30" placeholder="operator@aetheris.net" type="email" />
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2 relative group">
+                                    <label class="font-label-caps text-label-caps text-white/80 uppercase tracking-widest group-focus-within:text-primary transition-colors">Security Key</label>
+                                    <div class="relative">
+                                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-primary transition-colors text-[20px]">lock_reset</span>
+                                        <input class="w-full bg-black/20 border-b border-white/20 text-white font-mono-data py-3 pl-12 pr-4 focus:outline-none focus:border-primary focus:bg-black/40 transition-all hover:bg-black/30 placeholder-white/30" placeholder="••••••••" type="password" />
+                                    </div>
+                                </div>
+                                <button class="mt-4 w-full bg-primary text-on-primary font-label-caps text-label-caps uppercase tracking-widest py-4 rounded hover:bg-white hover:text-surface-lowest transition-all shadow-[0_0_20px_rgba(0,242,255,0.2)] hover:shadow-[0_0_30px_rgba(0,242,255,0.5)] flex items-center justify-center gap-2" type="submit">
+                                    <span class="">Initialize Identity</span>
+                                    <span class="material-symbols-outlined text-[18px]">rocket_launch</span>
+                                </button>
+                            </form>
+                            <div class="mt-8 text-center">
+                                <button class="font-label-caps text-label-caps text-white/80 hover:text-primary transition-colors uppercase tracking-widest" onclick="toggleAuthMode()">
+                                    Return to Login
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Right Panel -->
+                    <div class="w-1/2 h-full relative flex flex-col justify-center p-[60px] transition-transform duration-700 ease-in-out transform translate-x-0 overflow-hidden" id="right-panel">
+                        <!-- Login Form (Visible in Login State) -->
+                        <div class="absolute inset-0 p-[60px] flex flex-col justify-center transition-all duration-500 opacity-100 translate-x-0 z-10 pointer-events-auto" id="login-form-right">
+                            <h2 class="font-headline-lg text-headline-lg text-white mb-2">System Access</h2>
+                            <p class="font-body-md text-body-md text-white/90 mb-12">Authenticate via verified terminal.</p>
+                            <form class="flex flex-col gap-6" onsubmit="event.preventDefault();">
+                                <div class="flex flex-col gap-2 relative group">
+                                    <label class="font-label-caps text-label-caps text-white/80 uppercase tracking-widest group-focus-within:text-primary transition-colors">Node ID</label>
+                                    <div class="relative">
+                                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-primary transition-colors text-[20px]">dns</span>
+                                        <input class="w-full bg-black/20 border-b border-white/20 text-white font-mono-data py-4 pl-12 pr-4 focus:outline-none focus:border-primary focus:bg-black/40 transition-all hover:bg-black/30 placeholder-white/30" placeholder="ND-8492-AX" type="text" />
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2 relative group">
+                                    <div class="flex justify-between items-center">
+                                        <label class="font-label-caps text-label-caps text-white/80 uppercase tracking-widest group-focus-within:text-primary transition-colors">Access Key</label>
+                                        <button class="font-label-caps text-[10px] text-white/70 hover:text-primary transition-colors uppercase tracking-widest focus:outline-none" onclick="showForgotPassword()" type="button">Forgot Key?</button>
+                                    </div>
+                                    <div class="relative">
+                                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-primary transition-colors text-[20px]">key</span>
+                                        <input class="w-full bg-black/20 border-b border-white/20 text-white font-mono-data py-4 pl-12 pr-4 focus:outline-none focus:border-primary focus:bg-black/40 transition-all hover:bg-black/30 placeholder-white/30" placeholder="••••••••" type="password" />
+                                    </div>
+                                </div>
+                                <button class="mt-8 w-full bg-primary text-on-primary font-label-caps text-label-caps uppercase tracking-widest py-4 rounded hover:bg-white hover:text-surface-lowest transition-all shadow-[0_0_20px_rgba(0,242,255,0.2)] hover:shadow-[0_0_30px_rgba(0,242,255,0.4)] flex items-center justify-center gap-2" type="submit">
+                                    <span class="">Authorize Access</span>
+                                    <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                                </button>
+                            </form>
+                            <div class="mt-12 text-center border-t border-white/20 pt-6">
+                                <span class="font-label-caps text-[11px] text-white/70 uppercase tracking-widest mr-2">Unregistered Node?</span>
+                                <button class="font-label-caps text-label-caps text-primary hover:text-white transition-colors uppercase tracking-widest" onclick="toggleAuthMode()">
+                                    Initialize New
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Forgot Key / Password Recovery Form -->
+                        <div class="absolute inset-0 p-[60px] flex flex-col justify-center transition-all duration-500 opacity-0 translate-x-8 z-0 pointer-events-none" id="forgot-form-right">
+                            <div class="inline-flex items-center gap-2 mb-3 self-start bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                                <span class="material-symbols-outlined text-primary text-[14px]">vpn_key_alert</span>
+                                <span class="font-label-caps text-[11px] text-primary tracking-widest uppercase">Protocol: Recovery</span>
+                            </div>
+                            <h2 class="font-headline-lg text-headline-lg text-white mb-2">Khôi Phục Mật Khẩu</h2>
+                            <p class="font-body-md text-[14px] leading-relaxed text-white/90 mb-8 border-l-2 border-primary/30 pl-3">
+                                Nhập địa chỉ Email đăng ký để nhận mã OTP khôi phục quyền truy cập.
+                            </p>
+                            <form class="flex flex-col gap-6" onsubmit="event.preventDefault(); handleForgotSubmit();">
+                                <div class="flex flex-col gap-2 relative group">
+                                    <label class="font-label-caps text-label-caps text-white/80 uppercase tracking-widest group-focus-within:text-primary transition-colors">ĐỊA CHỈ EMAIL / REGISTERED EMAIL</label>
+                                    <div class="relative">
+                                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-white/50 group-focus-within:text-primary transition-colors text-[20px]">mail</span>
+                                        <input class="w-full bg-black/20 border-b border-white/20 text-white font-mono-data py-4 pl-12 pr-4 focus:outline-none focus:border-primary focus:bg-black/40 transition-all hover:bg-black/30 placeholder-white/30" placeholder="resident@aetheris.control" required="" type="email" />
+                                    </div>
+                                </div>
+                                <button class="mt-4 w-full bg-primary text-on-primary font-label-caps text-label-caps uppercase tracking-widest py-4 rounded hover:bg-white hover:text-surface-lowest transition-all shadow-[0_0_20px_rgba(0,242,255,0.25)] hover:shadow-[0_0_30px_rgba(0,242,255,0.5)] flex items-center justify-center gap-2 group" type="submit">
+                                    <span class="font-semibold tracking-wider">GỬI MÃ XÁC THỰC OTP →</span>
+                                    <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">send</span>
+                                </button>
+                            </form>
+                            <div class="mt-10 text-center border-t border-white/20 pt-6">
+                                <button class="inline-flex items-center gap-2 font-label-caps text-label-caps text-white/80 hover:text-primary transition-colors uppercase tracking-widest group focus:outline-none" onclick="hideForgotPassword()" type="button">
+                                    <span class="material-symbols-outlined text-[16px] group-hover:-translate-x-1 transition-transform">arrow_back</span>
+                                    <span>Quay lại đăng nhập</span>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Welcome Content (Visible in Register State) -->
+                        <div class="absolute inset-0 p-[60px] flex flex-col justify-center items-end text-right transition-opacity duration-500 opacity-0 z-0 pointer-events-none" id="welcome-content-right">
+                            <div class="inline-flex items-center gap-2 mb-8 bg-secondary/10 px-4 py-2 rounded-full border border-secondary/20">
+                                <span class="font-label-caps text-label-caps text-secondary tracking-widest uppercase">Network Integration</span>
+                                <div class="w-2 h-2 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_theme(colors.secondary)]"></div>
+                            </div>
+                            <h1 class="font-display-lg text-display-lg text-white mb-6 font-bold leading-tight drop-shadow-md">
+                                JOIN THE<br />
+                                <span class="text-secondary bg-clip-text text-transparent bg-gradient-to-l from-secondary to-primary">NEXUS</span>
+                            </h1>
+                            <p class="font-body-md text-body-md text-white/90 max-w-md border-r-2 border-secondary/30 pr-4 py-1">
+                                Expand the grid. Your computational resources will strengthen the collective capability of Aetheris.
+                            </p>
+                        </div>
+                    </div>
+                    <!-- Center Divider Line -->
+                    <div class="absolute left-1/2 top-[10%] bottom-[10%] w-px bg-gradient-to-b from-transparent via-white/30 to-transparent pointer-events-none z-20"></div><div class="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-primary/60 pointer-events-none z-20"></div><div class="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-primary/60 pointer-events-none z-20"></div><div class="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-primary/60 pointer-events-none z-20"></div><div class="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-primary/60 pointer-events-none z-20"></div>
+                </div>
+            </div>
+        </div>
+        <script>
+                    // --- Split-Screen Authentication Logic ---
+                    let isLogin = true;
+                    let isForgotKey = false;
+
+                    function toggleAuthMode() {
+                        if (isForgotKey) {
+                            hideForgotPassword(false);
+                        }
+
+                        isLogin = !isLogin;
+
+                        const leftPanel = document.getElementById('left-panel');
+                        const rightPanel = document.getElementById('right-panel');
+
+                        const welcomeLeft = document.getElementById('welcome-content-left');
+                        const registerLeft = document.getElementById('register-form-left');
+
+                        const loginRight = document.getElementById('login-form-right');
+                        const welcomeRight = document.getElementById('welcome-content-right');
+                        const forgotRight = document.getElementById('forgot-form-right');
+
+                        if (isLogin) {
+                            leftPanel.style.transform = 'translateX(0)';
+                            rightPanel.style.transform = 'translateX(0)';
+
+                            welcomeLeft.style.opacity = '1';
+                            welcomeLeft.style.zIndex = '10';
+                            welcomeLeft.style.pointerEvents = 'auto';
+
+                            registerLeft.style.opacity = '0';
+                            registerLeft.style.zIndex = '0';
+                            registerLeft.style.pointerEvents = 'none';
+
+                            loginRight.style.opacity = '1';
+                            loginRight.style.transform = 'translateX(0)';
+                            loginRight.style.zIndex = '10';
+                            loginRight.style.pointerEvents = 'auto';
+
+                            welcomeRight.style.opacity = '0';
+                            welcomeRight.style.zIndex = '0';
+                            welcomeRight.style.pointerEvents = 'none';
+
+                            forgotRight.style.opacity = '0';
+                            forgotRight.style.transform = 'translateX(2rem)';
+                            forgotRight.style.zIndex = '0';
+                            forgotRight.style.pointerEvents = 'none';
+                        } else {
+                            leftPanel.style.transform = 'translateX(100%)';
+                            rightPanel.style.transform = 'translateX(-100%)';
+
+                            welcomeLeft.style.opacity = '0';
+                            welcomeLeft.style.zIndex = '0';
+                            welcomeLeft.style.pointerEvents = 'none';
+
+                            registerLeft.style.opacity = '1';
+                            registerLeft.style.zIndex = '10';
+                            registerLeft.style.pointerEvents = 'auto';
+
+                            loginRight.style.opacity = '0';
+                            loginRight.style.zIndex = '0';
+                            loginRight.style.pointerEvents = 'none';
+
+                            welcomeRight.style.opacity = '1';
+                            welcomeRight.style.zIndex = '10';
+                            welcomeRight.style.pointerEvents = 'auto';
+
+                            forgotRight.style.opacity = '0';
+                            forgotRight.style.transform = 'translateX(2rem)';
+                            forgotRight.style.zIndex = '0';
+                            forgotRight.style.pointerEvents = 'none';
+                        }
+                    }
+
+                    // --- Forgot Password View Switchers ---
+                    function showForgotPassword() {
+                        isForgotKey = true;
+                        const loginRight = document.getElementById('login-form-right');
+                        const forgotRight = document.getElementById('forgot-form-right');
+
+                        // Animate Login out to the left
+                        loginRight.style.opacity = '0';
+                        loginRight.style.transform = 'translateX(-2rem)';
+                        loginRight.style.pointerEvents = 'none';
+                        loginRight.style.zIndex = '0';
+
+                        // Animate Forgot form into view from right
+                        forgotRight.style.opacity = '1';
+                        forgotRight.style.transform = 'translateX(0)';
+                        forgotRight.style.pointerEvents = 'auto';
+                        forgotRight.style.zIndex = '10';
+                    }
+
+                    function hideForgotPassword(animated = true) {
+                        isForgotKey = false;
+                        const loginRight = document.getElementById('login-form-right');
+                        const forgotRight = document.getElementById('forgot-form-right');
+
+                        if (!animated) {
+                            loginRight.style.transition = 'none';
+                            forgotRight.style.transition = 'none';
+                        }
+
+                        // Animate Forgot form out to right
+                        forgotRight.style.opacity = '0';
+                        forgotRight.style.transform = 'translateX(2rem)';
+                        forgotRight.style.pointerEvents = 'none';
+                        forgotRight.style.zIndex = '0';
+
+                        // Animate Login back to origin
+                        loginRight.style.opacity = '1';
+                        loginRight.style.transform = 'translateX(0)';
+                        loginRight.style.pointerEvents = 'auto';
+                        loginRight.style.zIndex = '10';
+
+                        if (!animated) {
+                            // restore transitions
+                            setTimeout(() => {
+                                loginRight.style.transition = '';
+                                forgotRight.style.transition = '';
+                            }, 50);
+                        }
+                    }
+
+                    function handleForgotSubmit() {
+                        const forgotRight = document.getElementById('forgot-form-right');
+                        const btn = forgotRight.querySelector('button[type="submit"]');
+                        const origHtml = btn.innerHTML;
+
+                        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">sync</span><span>ĐANG XÁC THỰC...</span>';
+                        btn.disabled = true;
+
+                        setTimeout(() => {
+                            btn.innerHTML = '<span class="material-symbols-outlined text-[18px] text-green-400">check_circle</span><span>MÃ ĐÃ ĐƯỢC GỬI!</span>';
+                            btn.classList.add('border', 'border-primary');
+
+                            setTimeout(() => {
+                                btn.innerHTML = origHtml;
+                                btn.disabled = false;
+                                btn.classList.remove('border', 'border-primary');
+                                hideForgotPassword(true);
+                            }, 1400);
+                        }, 900);
+                    }
+
+                    // --- Three.js Background Initialization ---
+                    function initThreeJsBackground() {
+                        const container = document.getElementById('threejs-bg');
+                        if (!container) return;
+
+                        // Ensure single instance cleanup if called multiple times
+                        container.innerHTML = '';
+
+                        // Scene setup
+                        const scene = new THREE.Scene();
+                        // Add dark fog blending into the background color
+                        scene.fog = new THREE.FogExp2(0x10141a, 0.02);
+
+                        // Camera setup
+                        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                        camera.position.z = 30;
+                        camera.position.y = 10;
+                        camera.lookAt(0, 0, 0);
+
+                        // Renderer setup
+                        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+                        renderer.setSize(window.innerWidth, window.innerHeight);
+                        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // optimize performance
+                        container.appendChild(renderer.domElement);
+
+                        // Create Ghost Building (Abstract wireframe structure)
+                        const group = new THREE.Group();
+
+                        // Base grid
+                        const gridHelper = new THREE.GridHelper(100, 50, 0x00f2ff, 0x00f2ff);
+                        gridHelper.material.opacity = 0.15;
+                        gridHelper.material.transparent = true;
+                        group.add(gridHelper);
+
+                        // Procedural wireframe buildings
+                        const buildingMaterial = new THREE.LineBasicMaterial({
+                            color: 0x00f2ff,
+                            transparent: true,
+                            opacity: 0.2
+                        });
+
+                        for (let i = 0; i < 20; i++) {
+                            const w = Math.random() * 4 + 2;
+                            const h = Math.random() * 20 + 10;
+                            const d = Math.random() * 4 + 2;
+
+                            const geometry = new THREE.BoxGeometry(w, h, d, 1, Math.floor(h/2), 1);
+                            const edges = new THREE.EdgesGeometry(geometry);
+                            const building = new THREE.LineSegments(edges, buildingMaterial);
+
+                            building.position.x = (Math.random() - 0.5) * 60;
+                            building.position.z = (Math.random() - 0.5) * 60;
+                            building.position.y = h / 2;
+
+                            group.add(building);
+                        }
+
+                        scene.add(group);
+
+                        // Ambient floating orbiting particles
+                        const particlesGeometry = new THREE.BufferGeometry();
+                        const particleCount = 1500;
+                        const posArray = new Float32Array(particleCount * 3);
+
+                        for(let i = 0; i < particleCount; i++) {
+                            // Create an orbiting cylinder/sphere distribution
+                            const radius = Math.random() * 30 + 5;
+                            const angle = Math.random() * Math.PI * 2;
+
+                            posArray[i * 3] = Math.cos(angle) * radius;
+                            posArray[i * 3 + 1] = (Math.random() - 0.5) * 60; // Spread vertically
+                            posArray[i * 3 + 2] = Math.sin(angle) * radius;
+                        }
+
+                        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+                        const particlesMaterial = new THREE.PointsMaterial({
+                            size: 0.15,
+                            color: 0x00f2ff,
+                            transparent: true,
+                            opacity: 0.8,
+                            blending: THREE.AdditiveBlending
+                        });
+
+                        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+                        scene.add(particlesMesh);
+
+                        // Animation Loop
+                        function animate() {
+                            requestAnimationFrame(animate);
+
+                            // Slow rotation
+                            group.rotation.y += 0.001;
+
+                            // Orbiting particles
+                            particlesMesh.rotation.y -= 0.002;
+                            particlesMesh.position.y = Math.sin(Date.now() * 0.001) * 2;
+
+                            renderer.render(scene, camera);
+                        }
+
+                        animate();
+
+                        // Window resize handling
+                        window.addEventListener('resize', () => {
+                            camera.aspect = window.innerWidth / window.innerHeight;
+                            camera.updateProjectionMatrix();
+                            renderer.setSize(window.innerWidth, window.innerHeight);
+                        });
+                    }
+
+                    // Initialize Three.js once the DOM is fully loaded
+                    window.addEventListener('DOMContentLoaded', initThreeJsBackground);
+        </script>
+    </main>
+</body></html>
