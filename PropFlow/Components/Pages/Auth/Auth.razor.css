@@ -1,0 +1,6 @@
+::deep ::-webkit-scrollbar { 
+    display: none; 
+}
+#app-body {
+    overscroll-behavior: none;
+}

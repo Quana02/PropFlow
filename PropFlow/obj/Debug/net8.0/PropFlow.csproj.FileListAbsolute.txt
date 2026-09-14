@@ -30,7 +30,11 @@ D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\refint\PropFlow.dll
 D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\PropFlow.pdb
 D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\PropFlow.genruntimeconfig.cache
 D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\ref\PropFlow.dll
-D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\scopedcss\Components\Pages\Auth.razor.rz.scp.css
-D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\scopedcss\Components\Pages\LandingPage.razor.rz.scp.css
+D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\PropFlow.sourcelink.json
 D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
 D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\PropFlow.csproj.Up2Date
+D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\scopedcss\Components\Pages\VerifyOtp.razor.rz.scp.css
+D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\scopedcss\Components\Pages\Auth\Auth.razor.rz.scp.css
+D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\scopedcss\Components\Pages\Auth\ResetPassword.razor.rz.scp.css
+D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\scopedcss\Components\Pages\Home\LandingPage.razor.rz.scp.css
+D:\PRN232\PropFlow\PropFlow\obj\Debug\net8.0\scopedcss\Components\Pages\Resident\ResidentPortal.razor.rz.scp.css

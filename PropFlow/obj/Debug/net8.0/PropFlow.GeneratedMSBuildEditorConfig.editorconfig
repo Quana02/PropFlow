@@ -51,10 +51,22 @@ build_metadata.AdditionalFiles.CssScope = b-shkuk0dx5z
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTmF2TWVudS5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-8kzwv5hvpd
 
-[D:/PRN232/PropFlow/PropFlow/Components/Pages/Auth.razor]
-build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBdXRoLnJhem9y
-build_metadata.AdditionalFiles.CssScope = b-bv4hcuziyz
+[D:/PRN232/PropFlow/PropFlow/Components/Pages/Auth/Auth.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBdXRoXEF1dGgucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-zkpq8r241e
 
-[D:/PRN232/PropFlow/PropFlow/Components/Pages/LandingPage.razor]
-build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xMYW5kaW5nUGFnZS5yYXpvcg==
-build_metadata.AdditionalFiles.CssScope = b-92nx887nss
+[D:/PRN232/PropFlow/PropFlow/Components/Pages/Auth/ResetPassword.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBdXRoXFJlc2V0UGFzc3dvcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-p7384z7j6q
+
+[D:/PRN232/PropFlow/PropFlow/Components/Pages/Auth/VerifyOtp.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBdXRoXFZlcmlmeU90cC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-lgankl16or
+
+[D:/PRN232/PropFlow/PropFlow/Components/Pages/Home/LandingPage.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xIb21lXExhbmRpbmdQYWdlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-v9wfoksv1u
+
+[D:/PRN232/PropFlow/PropFlow/Components/Pages/Resident/ResidentPortal.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSZXNpZGVudFxSZXNpZGVudFBvcnRhbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-zon1cslwzl

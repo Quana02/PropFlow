@@ -1,0 +1,557 @@
+@page "/resident"
+@layout PropFlow.Components.Layout.EmptyLayout
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<div class="resident-root h-full font-sans antialiased text-slate-800 dark:text-slate-100 flex flex-col justify-between selection:bg-sky-500 selection:text-white relative select-none sm:select-auto overflow-x-hidden">
+
+    <!-- Aurora Orbs -->
+    <div class="aurora-orb orb-1"></div>
+    <div class="aurora-orb orb-2"></div>
+    <div class="aurora-orb orb-3"></div>
+
+    <!-- Interactive Ambient Canvas -->
+    <canvas id="ambientCanvas"></canvas>
+
+    <!-- ================================================================= -->
+    <!-- MAIN CONTAINER                                                     -->
+    <!-- ================================================================= -->
+    <div class="relative z-10 min-h-screen w-full flex flex-col justify-between overflow-x-hidden p-4 sm:p-6 lg:p-8">
+
+        <!-- ===== TOP NAVIGATION ===== -->
+        <header class="w-full max-w-7xl mx-auto flex items-center justify-between z-30 mb-4 sm:mb-6">
+            <!-- Left: Logo & Apartment -->
+            <div class="flex items-center space-x-3 sm:space-x-4">
+                <div class="flex items-center space-x-3 glass-panel px-4 py-2.5 rounded-2xl shadow-card dark:shadow-card-dark transition-transform hover:scale-[1.01]">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 via-sky-500 to-indigo-600 flex items-center justify-center text-white font-display font-bold text-lg shadow-md shadow-sky-500/25">P</div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-display font-bold tracking-tight text-slate-900 dark:text-white text-base">PropFlow</span>
+                            <span class="text-[11px] font-semibold uppercase tracking-wider bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-cyan-300 px-2 py-0.5 rounded-full border border-sky-200/50 dark:border-cyan-800/60">Resident</span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Tháp Landmark • Căn hộ P.1804</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Weather, Theme Toggle, Profile -->
+            <div class="flex items-center space-x-3">
+                <!-- Weather Widget -->
+                <div class="hidden md:flex items-center space-x-3 glass-panel px-4 py-2 rounded-2xl shadow-card dark:shadow-card-dark">
+                    <div class="text-amber-500 dark:text-amber-400">
+                        <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-1.5 leading-none">
+                            <span class="font-display font-bold text-slate-900 dark:text-white text-sm">26°C</span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">• Trời quang</span>
+                        </div>
+                        <span class="text-[11px] text-slate-400 dark:text-slate-500">TP. Hồ Chí Minh</span>
+                    </div>
+                </div>
+
+                <!-- Theme Toggle -->
+                <button class="relative z-50 cursor-pointer glass-panel p-2.5 rounded-2xl shadow-card dark:shadow-card-dark text-slate-700 dark:text-amber-300 hover:text-sky-600 dark:hover:text-amber-200 transition-all duration-300 transform active:scale-90 hover:scale-105 focus:outline-none overflow-hidden group border border-white/80 dark:border-cyan-500/40 dark:bg-slate-900/80" id="theme-toggle-btn" onclick="toggleTheme(event)" title="Chuyển đổi chế độ Sáng / Tối" type="button">
+                    <div class="transition-all duration-300 transform flex items-center justify-center" id="sunWrapper">
+                        <svg class="w-5 h-5 text-amber-500 transition-transform duration-300 group-hover:rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="4" stroke-width="2"/>
+                            <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41m14.14-14.14l-1.41 1.41" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center transition-all duration-300 transform opacity-0 scale-50 rotate-90" id="moonWrapper">
+                        <svg class="w-5 h-5 text-cyan-300 transition-transform duration-300 group-hover:-rotate-12" fill="currentColor" stroke="none" viewBox="0 0 24 24">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                    </div>
+                </button>
+
+                <!-- Profile Dropdown -->
+                <div class="relative">
+                    <button class="glass-panel flex items-center space-x-3 p-1.5 pr-3 rounded-2xl shadow-card dark:shadow-card-dark hover:border-sky-300 dark:hover:border-cyan-500/50 transition-all duration-300 focus:outline-none" id="profileDropdownBtn" type="button">
+                        <div class="relative">
+                            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-400 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-inner ring-2 ring-white/80 dark:ring-slate-700">HN</div>
+                            <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-slate-800 rounded-full animate-pulse"></span>
+                        </div>
+                        <div class="text-left hidden sm:block">
+                            <div class="text-xs font-bold text-slate-800 dark:text-slate-100 leading-tight">Nguyễn Hoàng Nam</div>
+                            <div class="text-[11px] text-slate-400 dark:text-slate-400">P.1804 • Chủ hộ</div>
+                        </div>
+                        <svg class="w-4 h-4 text-slate-400 transition-transform duration-300" fill="none" id="dropdownArrow" stroke="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Popover -->
+                    <div class="hidden absolute right-0 mt-3 w-80 glass-panel rounded-3xl p-5 shadow-2xl z-50 transition-all transform origin-top-right border border-white/80 dark:border-slate-700/60" id="profilePopover">
+                        <div class="flex items-center space-x-3.5 pb-4 border-b border-slate-200/60 dark:border-slate-700/50">
+                            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg ring-4 ring-sky-100 dark:ring-sky-950">HN</div>
+                            <div>
+                                <h4 class="font-bold text-slate-900 dark:text-white text-base">Nguyễn Hoàng Nam</h4>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Căn hộ P.1804 • Tháp Park View</p>
+                                <span class="inline-block mt-1 text-[10px] uppercase font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">Cư dân chính thức</span>
+                            </div>
+                        </div>
+                        <div class="py-4 space-y-3">
+                            <div class="flex justify-between items-center bg-slate-100/70 dark:bg-slate-800/50 p-3 rounded-2xl">
+                                <div>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400 block">Số dư ví dịch vụ</span>
+                                    <span class="font-display font-bold text-slate-900 dark:text-white text-base">12.500.000 đ</span>
+                                </div>
+                                <button class="text-xs font-semibold text-sky-600 dark:text-cyan-400 hover:underline">Nạp tiền</button>
+                            </div>
+                            <div class="bg-amber-500/10 border border-amber-500/20 p-3 rounded-2xl flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs font-medium text-amber-700 dark:text-amber-300 block">Phí quản lý cần thanh toán</span>
+                                    <span class="font-display font-bold text-amber-900 dark:text-amber-200 text-sm">1.850.000 đ</span>
+                                </div>
+                                <button class="px-3 py-1.5 text-xs font-semibold bg-amber-500 text-white rounded-xl shadow hover:bg-amber-600 transition-colors">Thanh toán ngay</button>
+                            </div>
+                        </div>
+                        <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/50 space-y-1">
+                            <button class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 transition-colors text-left" id="openProfileModalBtn">
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                                </svg>
+                                <span>Hồ sơ cá nhân &amp; Xe đăng ký</span>
+                            </button>
+                            <button class="w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors text-left">
+                                <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                                </svg>
+                                <span>Đăng xuất khỏi thiết bị</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <!-- ===== END TOP NAVIGATION ===== -->
+
+        <!-- ===== HERO AREA ===== -->
+        <main class="w-full max-w-7xl mx-auto flex-1 flex flex-col justify-center my-2 sm:my-4 z-20">
+            <div class="flex flex-col items-center text-center">
+                <!-- Greeting Capsule -->
+                <div class="inline-flex items-center space-x-2 glass-panel px-4 py-1.5 rounded-full shadow-sm mb-4 border border-white/70 dark:border-cyan-500/25 animate-float-subtle">
+                    <span class="text-sm">👋</span>
+                    <span class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">Xin chào buổi sáng, Anh Nam</span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                </div>
+
+                <!-- Digital Clock -->
+                <div class="flex items-baseline justify-center select-none animate-float-subtle">
+                    <span class="font-display font-semibold text-6xl sm:text-7xl md:text-8xl tracking-tight text-slate-900 dark:text-white drop-shadow-sm transition-all" id="clockTime">11:11</span>
+                    <span class="ml-3 font-display font-medium text-lg sm:text-2xl text-slate-500 dark:text-cyan-400" id="clockPeriod">AM</span>
+                </div>
+                <p class="mt-2 text-sm sm:text-base font-medium text-slate-500 dark:text-slate-400" id="clockDate">Đang tải...</p>
+
+                <!-- Search Bar -->
+                <div class="w-full max-w-2xl mt-7 px-2">
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-sky-500 dark:group-focus-within:text-cyan-400 transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <input class="w-full pl-12 pr-16 py-4 glass-panel rounded-full text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400/40 dark:focus:ring-cyan-400/40 border border-white/80 dark:border-cyan-500/30 transition-all duration-300" placeholder="Tìm kiếm dịch vụ, tiện ích, hóa đơn, thông báo... (Ctrl + K)" type="text"/>
+                        <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                            <kbd class="hidden sm:inline-block px-2.5 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-300 bg-white/70 dark:bg-slate-800/80 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm">⌘K</kbd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB CONTENT ===== -->
+            <div class="w-full mt-10 transition-all duration-300">
+
+                <!-- TAB HOME -->
+                <div class="tab-pane block" id="tabHomeContent">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+
+                        <!-- CARD 1: Request Status -->
+                        <section class="glass-panel rounded-3xl p-6 shadow-card dark:shadow-card-dark flex flex-col justify-between border border-white/70 dark:border-cyan-500/20 transition-all hover:shadow-2xl hover:border-sky-200 dark:hover:border-cyan-500/40">
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="font-display font-bold text-base text-slate-900 dark:text-white">Tiến độ xử lý yêu cầu</h3>
+                                        <p class="text-xs text-slate-400 mt-0.5">Cập nhật thời gian thực</p>
+                                    </div>
+                                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-100 text-sky-700 dark:bg-cyan-950/80 dark:text-cyan-300 border border-sky-200/50 dark:border-cyan-800/60">Đã xong 2 / 5</span>
+                                </div>
+                                <div class="w-full bg-slate-200/70 dark:bg-slate-800 rounded-full h-2 mb-5 overflow-hidden">
+                                    <div class="bg-gradient-to-r from-sky-500 to-indigo-500 dark:from-cyan-400 dark:to-sky-500 h-2 rounded-full transition-all duration-500" style="width: 40%"></div>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="glass-inner p-3 rounded-2xl group cursor-pointer">
+                                        <div class="flex items-start justify-between">
+                                            <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-1">Sửa cấp nước phòng tắm Master</h5>
+                                            <span class="ml-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 whitespace-nowrap">Đang xử lý</span>
+                                        </div>
+                                        <div class="flex items-center justify-between mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                            <span>KTV: Lê Minh Tuấn</span>
+                                            <span class="font-medium text-slate-400">10:30 Hôm nay</span>
+                                        </div>
+                                    </div>
+                                    <div class="glass-inner p-3 rounded-2xl group cursor-pointer">
+                                        <div class="flex items-start justify-between">
+                                            <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-1">Kiểm tra aptomat &amp; nguồn phòng khách</h5>
+                                            <span class="ml-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 whitespace-nowrap">Chờ tiếp nhận</span>
+                                        </div>
+                                        <div class="flex items-center justify-between mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                            <span>Mã phiếu: #YC-8942</span>
+                                            <span class="font-medium text-slate-400">08:15 Sáng nay</span>
+                                        </div>
+                                    </div>
+                                    <div class="glass-inner p-3 rounded-2xl group cursor-pointer opacity-90">
+                                        <div class="flex items-start justify-between">
+                                            <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-1">Hỗ trợ vệ sinh công nghiệp căn hộ</h5>
+                                            <span class="ml-2 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 whitespace-nowrap">Đã xong ★ 5.0</span>
+                                        </div>
+                                        <div class="flex items-center justify-between mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                            <span>Đội Vệ Sinh Tầng 18</span>
+                                            <span class="font-medium text-slate-400">Hôm qua</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-5 pt-4 border-t border-slate-200/50 dark:border-slate-800/80 flex items-center justify-between">
+                                <button class="text-xs font-semibold text-sky-600 dark:text-cyan-400 hover:underline flex items-center space-x-1" onclick="switchTab('processing')">
+                                    <span>Xem tất cả 5 yêu cầu</span>
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                                </button>
+                                <button class="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-900 text-white dark:bg-cyan-400 dark:text-slate-950 hover:opacity-90 transition-opacity shadow-sm flex items-center space-x-1">
+                                    <span>+ Tạo yêu cầu mới</span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <!-- CARD 2: Services Catalog -->
+                        <section class="glass-panel rounded-3xl p-6 shadow-card dark:shadow-card-dark flex flex-col justify-between border border-white/70 dark:border-cyan-500/20 transition-all hover:shadow-2xl hover:border-sky-200 dark:hover:border-cyan-500/40">
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="font-display font-bold text-base text-slate-900 dark:text-white">Danh mục dịch vụ căn hộ</h3>
+                                        <p class="text-xs text-slate-400 mt-0.5">Tiện ích cư dân 1 chạm</p>
+                                    </div>
+                                    <span class="text-xs font-medium text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-200/50 dark:border-slate-700/60">8 Dịch vụ</span>
+                                </div>
+                                <div class="grid grid-cols-4 gap-3 py-1">
+                                    @foreach (var svc in _services)
+                                    {
+                                        <button class="service-btn flex flex-col items-center justify-center p-3 rounded-2xl glass-inner hover:scale-105 active:scale-95 group text-center cursor-pointer transition-all duration-300">
+                                            <div class="service-icon w-10 h-10 rounded-xl @svc.BgClass flex items-center justify-center text-lg mb-2 transition-transform duration-300">@svc.Icon</div>
+                                            <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 line-clamp-1">@svc.Label</span>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                            <div class="mt-5 pt-4 border-t border-slate-200/50 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                                <span class="flex items-center space-x-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                                    <span>Tổng đài hỗ trợ trực tuyến 24/7</span>
+                                </span>
+                                <span class="font-semibold text-sky-600 dark:text-cyan-400">1900 8899</span>
+                            </div>
+                        </section>
+
+                        <!-- CARD 3: Announcements -->
+                        <section class="glass-panel rounded-3xl p-6 shadow-card dark:shadow-card-dark flex flex-col justify-between border border-white/70 dark:border-cyan-500/20 transition-all hover:shadow-2xl hover:border-sky-200 dark:hover:border-cyan-500/40">
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="font-display font-bold text-base text-slate-900 dark:text-white">Thông báo ban quản lý</h3>
+                                        <p class="text-xs text-slate-400 mt-0.5">Bản tin cư dân tòa nhà</p>
+                                    </div>
+                                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200/50 dark:border-rose-800/60">3 tin mới</span>
+                                </div>
+                                <div class="space-y-3">
+                                    <div class="glass-inner p-3 rounded-2xl group cursor-pointer">
+                                        <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                                            <span class="font-bold text-rose-600 dark:text-rose-400 flex items-center space-x-1">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                <span>[Quan trọng]</span>
+                                            </span>
+                                            <span>20 phút trước</span>
+                                        </div>
+                                        <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-1">Bảo trì hệ thống thang máy Tháp B 13:00 – 15:00</h5>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">Kính đề nghị cư dân sử dụng thang hàng hoặc thang Tháp A...</p>
+                                    </div>
+                                    <div class="glass-inner p-3 rounded-2xl group cursor-pointer">
+                                        <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                                            <span class="font-bold text-sky-600 dark:text-cyan-400 flex items-center space-x-1">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-sky-500 dark:bg-cyan-400"></span>
+                                                <span>[Tài chính]</span>
+                                            </span>
+                                            <span>2 giờ trước</span>
+                                        </div>
+                                        <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-1">Nhắc nhở quyết toán phí dịch vụ tháng 10/2024</h5>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">Hạn chót thanh toán ngày 30/10 để đảm bảo các dịch vụ...</p>
+                                    </div>
+                                    <div class="glass-inner p-3 rounded-2xl group cursor-pointer opacity-90">
+                                        <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1">
+                                            <span class="font-medium text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                                <span>[Kế hoạch]</span>
+                                            </span>
+                                            <span>Hôm qua</span>
+                                        </div>
+                                        <h5 class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-sky-600 dark:group-hover:text-cyan-400 transition-colors line-clamp-1">Kiểm tra định kỳ chuông báo cháy tầng 15 – 20</h5>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">Thời gian diễn tập thử nghiệm diễn ra trong khoảng 15 phút.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-5 pt-4 border-t border-slate-200/50 dark:border-slate-800/80 flex items-center justify-between">
+                                <button class="text-xs font-semibold text-sky-600 dark:text-cyan-400 hover:underline flex items-center space-x-1" onclick="switchTab('notifications')">
+                                    <span>Mở bảng tin thông báo chi tiết</span>
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                                </button>
+                                <button class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">Đánh dấu đã đọc</button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- TAB PROCESSING -->
+                <div class="tab-pane hidden" id="tabProcessingContent">
+                    <div class="glass-panel rounded-3xl p-6 sm:p-8 shadow-card dark:shadow-card-dark border border-white/70 dark:border-cyan-500/20">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200/60 dark:border-slate-700/50">
+                            <div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xl">📋</span>
+                                    <h2 class="font-display font-bold text-xl text-slate-900 dark:text-white">Chi tiết yêu cầu dịch vụ kỹ thuật &amp; tiện ích</h2>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Theo dõi tiến độ, phân công nhân sự và phản hồi đánh giá trực tiếp</p>
+                            </div>
+                            <button class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-sky-500 dark:bg-cyan-500 text-white dark:text-slate-950 hover:opacity-90 shadow transition-all flex items-center space-x-1">
+                                <span>+ Đăng ký hỗ trợ mới</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center space-x-2 my-5 overflow-x-auto pb-1">
+                            <button class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm whitespace-nowrap">Tất cả (5)</button>
+                            <button class="px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800 whitespace-nowrap">Chờ xử lý (1)</button>
+                            <button class="px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800 whitespace-nowrap">Đang thi công (2)</button>
+                            <button class="px-3.5 py-1.5 rounded-full text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800 whitespace-nowrap">Đã hoàn tất (2)</button>
+                        </div>
+                        <div class="space-y-3">
+                            @foreach (var req in _serviceRequests)
+                            {
+                                <div class="glass-inner p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div class="flex items-start space-x-3.5">
+                                        <div class="w-10 h-10 rounded-xl @req.IconBgClass text-lg flex items-center justify-center flex-shrink-0">@req.Icon</div>
+                                        <div>
+                                            <div class="flex items-center space-x-2">
+                                                <span class="text-xs font-bold text-slate-400">@req.Code</span>
+                                                <h4 class="font-bold text-sm text-slate-800 dark:text-slate-100">@req.Title</h4>
+                                            </div>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">@req.Description</p>
+                                            <p class="mt-2 text-xs text-slate-400">@req.Meta</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-3 self-end md:self-center">
+                                        <span class="text-xs font-semibold px-3 py-1 rounded-full @req.StatusClass">@req.Status</span>
+                                        <button class="p-2 text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB NOTIFICATIONS -->
+                <div class="tab-pane hidden" id="tabNotificationsContent">
+                    <div class="glass-panel rounded-3xl p-6 sm:p-8 shadow-card dark:shadow-card-dark border border-white/70 dark:border-cyan-500/20">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200/60 dark:border-slate-700/50">
+                            <div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xl">🔔</span>
+                                    <h2 class="font-display font-bold text-xl text-slate-900 dark:text-white">Bản tin thông báo &amp; Hoạt động cư dân</h2>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Thông tin vận hành chính thức từ Ban Quản Lý / PropFlow</p>
+                            </div>
+                            <button class="text-xs font-semibold text-sky-600 dark:text-cyan-400 px-3 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Đánh dấu tất cả là đã đọc</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                            @foreach (var ann in _announcements)
+                            {
+                                <div class="glass-inner p-5 rounded-2xl border-l-4 @ann.BorderClass relative">
+                                    @if (ann.IsNew)
+                                    {
+                                        <span class="absolute top-4 right-4 w-2 h-2 rounded-full @ann.DotClass animate-ping"></span>
+                                    }
+                                    <span class="text-[11px] font-bold uppercase tracking-wider @ann.TagClass">@ann.Tag</span>
+                                    <h4 class="font-bold text-sm text-slate-900 dark:text-white mt-1">@ann.Title</h4>
+                                    <p class="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">@ann.Body</p>
+                                    <div class="mt-4 pt-3 border-t border-slate-200/40 dark:border-slate-700/40 flex justify-between items-center text-[11px] text-slate-400">
+                                        <span>@ann.Author</span>
+                                        <span>@ann.Time</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="w-full max-w-7xl mx-auto pt-6 pb-2 text-center text-xs text-slate-400 dark:text-slate-400 z-10">
+            <p>© 2024 PropFlow Resident Portal • Hệ thống quản trị và kết nối căn hộ thông minh chuẩn quốc tế.</p>
+        </footer>
+    </div>
+
+    <!-- ===== FLOATING VERTICAL NAV ===== -->
+    <aside class="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-40 touch-none select-none" id="floating-nav">
+        <nav class="glass-panel p-2 rounded-3xl shadow-2xl flex flex-col items-center space-y-2 border border-white/80 dark:border-cyan-500/25 dark:bg-slate-900/80 backdrop-blur-2xl transition-all duration-300" id="navContainer">
+            <div class="w-full py-1 px-2 flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-slate-200/40 dark:hover:bg-slate-800/60 rounded-xl transition-colors group" id="navDragHandle" title="Kéo để di chuyển">
+                <div class="flex flex-col items-center space-y-0.5 opacity-40 group-hover:opacity-80 transition-opacity">
+                    <div class="flex space-x-1"><span class="w-1 h-1 rounded-full bg-slate-600 dark:bg-cyan-400"></span><span class="w-1 h-1 rounded-full bg-slate-600 dark:bg-cyan-400"></span></div>
+                    <div class="flex space-x-1"><span class="w-1 h-1 rounded-full bg-slate-600 dark:bg-cyan-400"></span><span class="w-1 h-1 rounded-full bg-slate-600 dark:bg-cyan-400"></span></div>
+                    <div class="flex space-x-1"><span class="w-1 h-1 rounded-full bg-slate-600 dark:bg-cyan-400"></span><span class="w-1 h-1 rounded-full bg-slate-600 dark:bg-cyan-400"></span></div>
+                </div>
+            </div>
+            <button class="nav-tab-btn relative group p-3 rounded-2xl text-white bg-sky-600 dark:bg-cyan-500 dark:text-slate-950 shadow-md shadow-sky-500/30 dark:shadow-cyan-500/30 transition-all duration-300 scale-105" id="navHome" onclick="handleNavTabClick('home')" title="Trang chủ">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                <span class="nav-tooltip absolute right-full mr-3 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">Trang Chủ</span>
+            </button>
+            <button class="nav-tab-btn relative group p-3 rounded-2xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800 transition-all duration-300" id="navProcessing" onclick="handleNavTabClick('processing')" title="Xử lý yêu cầu">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                <span class="nav-tooltip absolute right-full mr-3 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">Xử Lý Yêu Cầu</span>
+            </button>
+            <button class="nav-tab-btn relative group p-3 rounded-2xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800 transition-all duration-300" id="navNotifications" onclick="handleNavTabClick('notifications')" title="Thông báo">
+                <div class="relative">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                    <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                </div>
+                <span class="nav-tooltip absolute right-full mr-3 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">Thông Báo Tòa Nhà</span>
+            </button>
+        </nav>
+    </aside>
+</div>
+
+<!-- ===== PROFILE MODAL ===== -->
+<div class="fixed inset-0 z-50 hidden overflow-y-auto" id="profileModal">
+    <div class="fixed inset-0 bg-slate-900/60 dark:bg-black/70 backdrop-blur-md transition-opacity" id="modalBackdrop"></div>
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div class="relative w-full max-w-lg glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl border border-white dark:border-slate-700 transform transition-all">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-200/60 dark:border-slate-700/50">
+                <div>
+                    <h3 class="font-display font-bold text-lg text-slate-900 dark:text-white">Cập nhật hồ sơ cư dân</h3>
+                    <p class="text-xs text-slate-400">Căn hộ P.1804 • Tháp Landmark</p>
+                </div>
+                <button class="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" id="closeProfileModalBtn">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+                </button>
+            </div>
+            <form class="space-y-4 mt-5" onsubmit="event.preventDefault(); saveProfileModal();">
+                <div class="flex items-center space-x-4">
+                    <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl ring-4 ring-sky-100 dark:ring-sky-950">HN</div>
+                    <div>
+                        <button class="text-xs font-semibold px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-cyan-300 border border-sky-200 dark:border-cyan-800 hover:bg-sky-100 transition-colors" type="button">Thay đổi ảnh đại diện</button>
+                        <p class="text-[11px] text-slate-400 mt-1">Định dạng PNG, JPG tối đa 5MB</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Họ và tên chủ hộ</label>
+                    <input class="w-full px-3.5 py-2.5 rounded-xl glass-inner text-xs sm:text-sm font-medium text-slate-800 dark:text-white focus:ring-2 focus:ring-sky-400 dark:focus:ring-cyan-400 focus:outline-none" type="text" value="Nguyễn Hoàng Nam"/>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Số điện thoại</label>
+                        <input class="w-full px-3.5 py-2.5 rounded-xl glass-inner text-xs sm:text-sm font-medium text-slate-800 dark:text-white focus:ring-2 focus:ring-sky-400 dark:focus:ring-cyan-400 focus:outline-none" type="text" value="0912 345 678"/>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email nhận hóa đơn</label>
+                        <input class="w-full px-3.5 py-2.5 rounded-xl glass-inner text-xs sm:text-sm font-medium text-slate-800 dark:text-white focus:ring-2 focus:ring-sky-400 dark:focus:ring-cyan-400 focus:outline-none" type="email" value="nam.nguyen@@propflow.vn"/>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Biển số xe đã đăng ký</label>
+                    <input class="w-full px-3.5 py-2.5 rounded-xl glass-inner text-xs sm:text-sm font-medium text-slate-800 dark:text-white focus:ring-2 focus:ring-sky-400 dark:focus:ring-cyan-400 focus:outline-none" type="text" value="30K-888.99 (Ô tô), 29B1-992.88 (Xe máy)"/>
+                </div>
+                <div class="pt-4 border-t border-slate-200/60 dark:border-slate-700/50 flex items-center justify-end space-x-3">
+                    <button class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onclick="closeProfileModal()" type="button">Hủy bỏ</button>
+                    <button class="px-5 py-2 rounded-xl text-xs font-semibold bg-sky-600 dark:bg-cyan-500 dark:text-slate-950 text-white hover:bg-sky-500 shadow-md shadow-sky-500/20 transition-all" type="submit">Lưu thay đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@code {
+    // ── Service catalog data ──────────────────────────────────
+    private record ServiceItem(string Icon, string Label, string BgClass);
+
+    private readonly List<ServiceItem> _services = new()
+    {
+        new("🔧", "Sửa chữa",   "bg-sky-100 dark:bg-sky-950/70 text-sky-600 dark:text-cyan-400"),
+        new("🧹", "Vệ sinh",    "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400"),
+        new("🛡️", "Khách...",   "bg-indigo-100 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400"),
+        new("🚗", "Đăng ký..", "bg-amber-100 dark:bg-amber-950/70 text-amber-600 dark:text-amber-400"),
+        new("📦", "Chuyển..",   "bg-purple-100 dark:bg-purple-950/70 text-purple-600 dark:text-purple-400"),
+        new("🔨", "Thi công",   "bg-rose-100 dark:bg-rose-950/70 text-rose-600 dark:text-rose-400"),
+        new("💳", "Hóa đơn",   "bg-teal-100 dark:bg-teal-950/70 text-teal-600 dark:text-teal-400"),
+        new("💬", "Hotline ..", "bg-cyan-100 dark:bg-cyan-950/70 text-cyan-600 dark:text-cyan-400"),
+    };
+
+    // ── Service requests data ─────────────────────────────────
+    private record ServiceRequest(string Icon, string IconBgClass, string Code, string Title, string Description, string Meta, string Status, string StatusClass);
+
+    private readonly List<ServiceRequest> _serviceRequests = new()
+    {
+        new("🔧", "bg-amber-500/10 text-amber-600", "#YC-8945",
+            "Sửa chữa hệ thống cấp nước phòng tắm Master",
+            "Hiện tượng rò rỉ van nước cấp tự động bồn tắm, cần thay gioăng cao su chịu nhiệt.",
+            "Kỹ thuật viên: Lê Minh Tuấn (0988.xxx.112) • Hẹn: 10:30 Hôm nay",
+            "Đang xử lý", "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"),
+
+        new("⚡", "bg-blue-500/10 text-blue-600", "#YC-8942",
+            "Kiểm tra hệ thống điện & aptomat phòng khách",
+            "Aptomat tầng lạnh tự ngắt khi bật hệ thống đèn chùm công suất lớn.",
+            "Trạng thái: Đang điều phối kỹ thuật điện • Tiếp nhận lúc: 08:15",
+            "Chờ tiếp nhận", "bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300"),
+
+        new("✨", "bg-emerald-500/10 text-emerald-600", "#YC-8910",
+            "Hỗ trợ vệ sinh công nghiệp sau tân gia",
+            "Dịch vụ hút bụi sàn gỗ, lau kính ban công tràn viền và khử mùi ozone.",
+            "Đánh giá cư dân: ★★★★★ (5/5) • Hoàn tất: 23/10/2024",
+            "Đã hoàn thành", "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"),
+    };
+
+    // ── Announcement data ─────────────────────────────────────
+    private record Announcement(string Tag, string TagClass, string Title, string Body, string Author, string Time,
+        bool IsNew, string BorderClass, string DotClass);
+
+    private readonly List<Announcement> _announcements = new()
+    {
+        new("[Khẩn cấp] Vận hành", "text-rose-600 dark:text-rose-400",
+            "Bảo trì hệ thống thang máy Tháp B",
+            "Đội ngũ Schindler sẽ tiến hành bảo dưỡng định kỳ hệ thống cáp tải từ 13:00 - 15:00 ngày 25/10/2024. Mong quý cư dân thông cảm và sắp xếp thời gian di chuyển phù hợp.",
+            "Kỹ sư trưởng BQL", "20 phút trước", true, "border-l-rose-500", "bg-rose-500"),
+
+        new("[Tài chính] Phí dịch vụ", "text-sky-600 dark:text-cyan-400",
+            "Thông báo quyết toán phí quản lý tháng 10/2024",
+            "Hệ thống đã phát hành bảng kê phí dịch vụ căn hộ P.1804 bao gồm phí quản lý, tiền nước sạch và phí gửi xe. Quý cư dân có thể thanh toán trực tiếp qua ví cổng thông tin.",
+            "Ban Kế toán Tòa nhà", "2 giờ trước", true, "border-l-sky-500", "bg-sky-500"),
+
+        new("[An toàn] PCCC", "text-amber-600 dark:text-amber-400",
+            "Kiểm tra định kỳ hệ thống PCCC tầng 15 - 20",
+            "Ban Quản lý phối hợp với Cảnh sát PCCC quận kiểm tra áp lực nước đầu phun sprinkler và chuông báo động tầng 18 vào 09:30 ngày 26/10. Hệ thống sẽ phát chuông thử nghiệm trong vòng 3 phút.",
+            "Ban An ninh Tòa nhà", "Hôm qua", false, "border-l-amber-500", ""),
+
+        new("[Cộng đồng] Tiện ích", "text-purple-600 dark:text-purple-400",
+            "Mở đăng ký khu tiệc nướng BBQ ngoài trời",
+            "Khu vườn nướng Sky BBQ tầng thượng tháp Landmark đã hoàn tất nâng cấp. Cư dân có thể đặt lịch trước 48h để tổ chức tiệc gia đình cuối tuần.",
+            "Ban Tiện ích Cư dân", "2 ngày trước", false, "border-l-purple-500", ""),
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initResidentPortal");
+        }
+    }
+}

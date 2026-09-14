@@ -1,0 +1,189 @@
+/* ============================================================
+   ResidentPortal Scoped Styles
+   Aurora orbs, glassmorphism, animations, dark-mode overrides
+   ============================================================ */
+
+/* Smooth transition on all elements within this component */
+::deep * {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- Ambient Canvas ---- */
+::deep #ambientCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ---- Aurora Orbs ---- */
+::deep .aurora-orb {
+    position: fixed;
+    border-radius: 9999px;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.55;
+    mix-blend-mode: multiply;
+    animation: float-orb 22s infinite alternate ease-in-out;
+}
+
+html.dark .aurora-orb,
+[data-theme="dark"] .aurora-orb {
+    opacity: 0.35;
+    mix-blend-mode: screen;
+    filter: blur(120px);
+}
+
+::deep .orb-1 {
+    top: -8%;
+    left: 10%;
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, rgba(125, 211, 252, 0.7) 0%, rgba(186, 230, 253, 0) 70%);
+    animation-duration: 26s;
+}
+
+html.dark .orb-1,
+[data-theme="dark"] .orb-1 {
+    background: radial-gradient(circle, rgba(0, 242, 255, 0.45) 0%, rgba(2, 132, 199, 0) 70%);
+}
+
+::deep .orb-2 {
+    top: 40%;
+    right: -5%;
+    width: 620px;
+    height: 620px;
+    background: radial-gradient(circle, rgba(199, 210, 254, 0.6) 0%, rgba(224, 231, 255, 0) 70%);
+    animation-duration: 32s;
+    animation-delay: -6s;
+}
+
+html.dark .orb-2,
+[data-theme="dark"] .orb-2 {
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, rgba(15, 23, 42, 0) 70%);
+}
+
+::deep .orb-3 {
+    bottom: -10%;
+    left: 25%;
+    width: 580px;
+    height: 580px;
+    background: radial-gradient(circle, rgba(167, 243, 208, 0.5) 0%, rgba(209, 250, 229, 0) 70%);
+    animation-duration: 28s;
+    animation-delay: -12s;
+}
+
+html.dark .orb-3,
+[data-theme="dark"] .orb-3 {
+    background: radial-gradient(circle, rgba(0, 242, 255, 0.25) 0%, rgba(7, 11, 20, 0) 70%);
+}
+
+@keyframes float-orb {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(45px, 35px) scale(1.08); }
+    100% { transform: translate(-35px, 60px) scale(0.95); }
+}
+
+/* ---- Floating Micro-Motion ---- */
+::deep .animate-float-subtle {
+    animation: float-subtle 6s ease-in-out infinite;
+}
+
+@keyframes float-subtle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+/* ---- Glass Panel ---- */
+::deep .glass-panel {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.05), 0 0 15px rgba(255, 255, 255, 0.6) inset;
+}
+
+html.dark .glass-panel,
+[data-theme="dark"] .glass-panel {
+    background: rgba(13, 20, 36, 0.75) !important;
+    border: 1px solid rgba(0, 242, 255, 0.2) !important;
+    box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 242, 255, 0.08) inset !important;
+}
+
+/* ---- Glass Inner ---- */
+::deep .glass-inner {
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html.dark .glass-inner,
+[data-theme="dark"] .glass-inner {
+    background: rgba(20, 29, 48, 0.7) !important;
+    border: 1px solid rgba(0, 242, 255, 0.14) !important;
+}
+
+::deep .glass-inner:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 8px 24px -4px rgba(0, 71, 110, 0.08);
+}
+
+html.dark .glass-inner:hover,
+[data-theme="dark"] .glass-inner:hover {
+    background: rgba(27, 40, 64, 0.9) !important;
+    border-color: rgba(0, 242, 255, 0.4) !important;
+    box-shadow: 0 8px 25px -4px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 242, 255, 0.15) !important;
+}
+
+/* ---- Service Icon Micro-Interactions ---- */
+::deep .service-btn:hover .service-icon {
+    transform: scale(1.14) translateY(-2px);
+    filter: drop-shadow(0 6px 14px rgba(2, 132, 199, 0.35));
+}
+
+html.dark .service-btn:hover .service-icon,
+[data-theme="dark"] .service-btn:hover .service-icon {
+    filter: drop-shadow(0 6px 16px rgba(0, 242, 255, 0.5));
+}
+
+/* ---- Tab Pane Entry Animation ---- */
+::deep .tab-pane {
+    animation: fadeInSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(10px) scale(0.99); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Custom Scrollbar ---- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.55); }
+
+/* ---- Draggable Nav Snap Transition ---- */
+::deep #floating-nav.is-snapping {
+    transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                top 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.3s ease,
+                box-shadow 0.3s ease !important;
+}
+
+/* ---- Body background for resident portal ---- */
+::deep .resident-root {
+    background-color: #f1f6fd;
+    min-height: 100vh;
+}
+
+html.dark .resident-root,
+[data-theme="dark"] .resident-root {
+    background-color: #070b14;
+}

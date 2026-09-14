@@ -201,29 +201,250 @@ main[b-shkuk0dx5z] {
         overflow-y: auto;
     }
 }
-/* /Components/Pages/Auth.razor.rz.scp.css */
-html[b-bv4hcuziyz], body[b-bv4hcuziyz] { margin: 0; padding: 0; }
-body[b-bv4hcuziyz] { overscroll-behavior: none; }
-main > :first-child[b-bv4hcuziyz] { margin-top: 0 !important; }
-main > :last-child[b-bv4hcuziyz] { margin-bottom: 0 !important; }
-[b-bv4hcuziyz]::-webkit-scrollbar { display: none; }
-/* /Components/Pages/LandingPage.razor.rz.scp.css */
-@keyframes translateX-b-92nx887nss {
+/* /Components/Pages/Auth/Auth.razor.rz.scp.css */
+[b-zkpq8r241e] ::-webkit-scrollbar { 
+    display: none; 
+}
+#app-body[b-zkpq8r241e] {
+    overscroll-behavior: none;
+}
+/* /Components/Pages/Auth/ResetPassword.razor.rz.scp.css */
+[b-p7384z7j6q] ::-webkit-scrollbar { 
+    display: none; 
+}
+#app-body[b-p7384z7j6q] {
+    overscroll-behavior: none;
+}
+/* /Components/Pages/Auth/VerifyOtp.razor.rz.scp.css */
+[b-lgankl16or] ::-webkit-scrollbar {
+    display: none;
+}
+#app-body[b-lgankl16or] {
+    overscroll-behavior: none;
+}
+/* /Components/Pages/Home/LandingPage.razor.rz.scp.css */
+[b-v9wfoksv1u] ::-webkit-scrollbar {
+    width: 6px;
+}
+[b-v9wfoksv1u] ::-webkit-scrollbar-track {
+    background: rgba(239, 244, 255, 0.5);
+}
+:global(.dark)[b-v9wfoksv1u]  ::-webkit-scrollbar-track {
+    background: rgba(11, 15, 23, 0.7);
+}
+[b-v9wfoksv1u] ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+:global(.dark)[b-v9wfoksv1u]  ::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+}
+[b-v9wfoksv1u] ::-webkit-scrollbar-thumb:hover {
+    background: #0284c7;
+}
+:global(.dark)[b-v9wfoksv1u]  ::-webkit-scrollbar-thumb:hover {
+    background: #38bdf8;
+}
+
+@keyframes translateX-b-v9wfoksv1u {
     0% { transform: translateX(-100%); }
     100% { transform: translateX(100%); }
 }
-@keyframes scan-b-92nx887nss {
+
+@keyframes scan-b-v9wfoksv1u {
     0% { transform: translateY(0); opacity: 0; }
     10% { opacity: 1; }
     90% { opacity: 1; }
-    100% { transform: translateY(600px); opacity: 0; }
+    100% { transform: translateY(580px); opacity: 0; }
 }
-    0%[b-92nx887nss] { transform: translateX(-100%); }
-    100%[b-92nx887nss] { transform: translateX(100%); }
+/* /Components/Pages/Resident/ResidentPortal.razor.rz.scp.css */
+/* ============================================================
+   ResidentPortal Scoped Styles
+   Aurora orbs, glassmorphism, animations, dark-mode overrides
+   ============================================================ */
+
+/* Smooth transition on all elements within this component */
+[b-zon1cslwzl] * {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
-@keyframes scan-b-92nx887nss {
-    0% { transform: translateY(0); opacity: 0; }
-    10% { opacity: 1; }
-    90% { opacity: 1; }
-    100% { transform: translateY(600px); opacity: 0; }
+
+/* ---- Ambient Canvas ---- */
+[b-zon1cslwzl] #ambientCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ---- Aurora Orbs ---- */
+[b-zon1cslwzl] .aurora-orb {
+    position: fixed;
+    border-radius: 9999px;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.55;
+    mix-blend-mode: multiply;
+    animation: float-orb-b-zon1cslwzl 22s infinite alternate ease-in-out;
+}
+
+html.dark .aurora-orb[b-zon1cslwzl],
+[data-theme="dark"] .aurora-orb[b-zon1cslwzl] {
+    opacity: 0.35;
+    mix-blend-mode: screen;
+    filter: blur(120px);
+}
+
+[b-zon1cslwzl] .orb-1 {
+    top: -8%;
+    left: 10%;
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, rgba(125, 211, 252, 0.7) 0%, rgba(186, 230, 253, 0) 70%);
+    animation-duration: 26s;
+}
+
+html.dark .orb-1[b-zon1cslwzl],
+[data-theme="dark"] .orb-1[b-zon1cslwzl] {
+    background: radial-gradient(circle, rgba(0, 242, 255, 0.45) 0%, rgba(2, 132, 199, 0) 70%);
+}
+
+[b-zon1cslwzl] .orb-2 {
+    top: 40%;
+    right: -5%;
+    width: 620px;
+    height: 620px;
+    background: radial-gradient(circle, rgba(199, 210, 254, 0.6) 0%, rgba(224, 231, 255, 0) 70%);
+    animation-duration: 32s;
+    animation-delay: -6s;
+}
+
+html.dark .orb-2[b-zon1cslwzl],
+[data-theme="dark"] .orb-2[b-zon1cslwzl] {
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, rgba(15, 23, 42, 0) 70%);
+}
+
+[b-zon1cslwzl] .orb-3 {
+    bottom: -10%;
+    left: 25%;
+    width: 580px;
+    height: 580px;
+    background: radial-gradient(circle, rgba(167, 243, 208, 0.5) 0%, rgba(209, 250, 229, 0) 70%);
+    animation-duration: 28s;
+    animation-delay: -12s;
+}
+
+html.dark .orb-3[b-zon1cslwzl],
+[data-theme="dark"] .orb-3[b-zon1cslwzl] {
+    background: radial-gradient(circle, rgba(0, 242, 255, 0.25) 0%, rgba(7, 11, 20, 0) 70%);
+}
+
+@keyframes float-orb-b-zon1cslwzl {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(45px, 35px) scale(1.08); }
+    100% { transform: translate(-35px, 60px) scale(0.95); }
+}
+
+/* ---- Floating Micro-Motion ---- */
+[b-zon1cslwzl] .animate-float-subtle {
+    animation: float-subtle-b-zon1cslwzl 6s ease-in-out infinite;
+}
+
+@keyframes float-subtle-b-zon1cslwzl {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+/* ---- Glass Panel ---- */
+[b-zon1cslwzl] .glass-panel {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.05), 0 0 15px rgba(255, 255, 255, 0.6) inset;
+}
+
+html.dark .glass-panel[b-zon1cslwzl],
+[data-theme="dark"] .glass-panel[b-zon1cslwzl] {
+    background: rgba(13, 20, 36, 0.75) !important;
+    border: 1px solid rgba(0, 242, 255, 0.2) !important;
+    box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 242, 255, 0.08) inset !important;
+}
+
+/* ---- Glass Inner ---- */
+[b-zon1cslwzl] .glass-inner {
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html.dark .glass-inner[b-zon1cslwzl],
+[data-theme="dark"] .glass-inner[b-zon1cslwzl] {
+    background: rgba(20, 29, 48, 0.7) !important;
+    border: 1px solid rgba(0, 242, 255, 0.14) !important;
+}
+
+[b-zon1cslwzl] .glass-inner:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 8px 24px -4px rgba(0, 71, 110, 0.08);
+}
+
+html.dark .glass-inner:hover[b-zon1cslwzl],
+[data-theme="dark"] .glass-inner:hover[b-zon1cslwzl] {
+    background: rgba(27, 40, 64, 0.9) !important;
+    border-color: rgba(0, 242, 255, 0.4) !important;
+    box-shadow: 0 8px 25px -4px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 242, 255, 0.15) !important;
+}
+
+/* ---- Service Icon Micro-Interactions ---- */
+[b-zon1cslwzl] .service-btn:hover .service-icon {
+    transform: scale(1.14) translateY(-2px);
+    filter: drop-shadow(0 6px 14px rgba(2, 132, 199, 0.35));
+}
+
+html.dark .service-btn:hover .service-icon[b-zon1cslwzl],
+[data-theme="dark"] .service-btn:hover .service-icon[b-zon1cslwzl] {
+    filter: drop-shadow(0 6px 16px rgba(0, 242, 255, 0.5));
+}
+
+/* ---- Tab Pane Entry Animation ---- */
+[b-zon1cslwzl] .tab-pane {
+    animation: fadeInSlide-b-zon1cslwzl 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInSlide-b-zon1cslwzl {
+    from { opacity: 0; transform: translateY(10px) scale(0.99); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Custom Scrollbar ---- */
+[b-zon1cslwzl]::-webkit-scrollbar { width: 6px; height: 6px; }
+[b-zon1cslwzl]::-webkit-scrollbar-track { background: transparent; }
+[b-zon1cslwzl]::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 9999px; }
+[b-zon1cslwzl]::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.55); }
+
+/* ---- Draggable Nav Snap Transition ---- */
+[b-zon1cslwzl] #floating-nav.is-snapping {
+    transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                top 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.3s ease,
+                box-shadow 0.3s ease !important;
+}
+
+/* ---- Body background for resident portal ---- */
+[b-zon1cslwzl] .resident-root {
+    background-color: #f1f6fd;
+    min-height: 100vh;
+}
+
+html.dark .resident-root[b-zon1cslwzl],
+[data-theme="dark"] .resident-root[b-zon1cslwzl] {
+    background-color: #070b14;
 }

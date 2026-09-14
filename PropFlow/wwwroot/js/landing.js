@@ -3,7 +3,6 @@ window.initLandingThreeJs = function() {
     let container = document.getElementById('threejs-canvas-container');
     if (!container) return;
     
-    // Check if Three is loaded
     if (typeof THREE === 'undefined') {
       const script = document.createElement('script');
       script.src = 'https://ajax.googleapis.com/ajax/libs/threejs/r125/three.min.js';
@@ -33,15 +32,42 @@ window.initLandingThreeJs = function() {
     const buildingGroup = new THREE.Group();
     scene.add(buildingGroup);
 
-    const cyanColor = 0x00f2ff;
+    // Initial theme check
+    let isDark = document.documentElement.classList.contains('dark');
+
+    // Color definitions
+    const themeColors = {
+      light: {
+        wire: 0x0284c7,     // Deep Royal Blue
+        edge: 0x0369a1,     // Accent Navy
+        particles: 0x38bdf8,// Soft Sky Blue
+        wireOpacity: 0.65,
+        edgeOpacity: 0.95,
+        partOpacity: 0.45,
+        partSize: 0.08
+      },
+      dark: {
+        wire: 0x00f2ff,     // Luminous Cyber Cyan
+        edge: 0x38bdf8,     // Electric Sky Blue
+        particles: 0x00f2ff,// High Glow Cyan
+        wireOpacity: 0.85,
+        edgeOpacity: 1.0,
+        partOpacity: 0.75,
+        partSize: 0.095
+      }
+    };
+
+    const currentPalette = isDark ? themeColors.dark : themeColors.light;
+
     const lineMaterial = new THREE.LineBasicMaterial({ 
-      color: cyanColor, 
+      color: currentPalette.wire, 
       transparent: true, 
-      opacity: 0.55 
+      opacity: currentPalette.wireOpacity 
     });
+
     const edgeMaterial = new THREE.LineBasicMaterial({ 
-      color: 0x38bdf8, 
-      opacity: 0.9, 
+      color: currentPalette.edge, 
+      opacity: currentPalette.edgeOpacity, 
       transparent: true 
     });
 
@@ -66,9 +92,9 @@ window.initLandingThreeJs = function() {
 
     buildingGroup.rotation.set(0, 0.4, 0);
 
-    // Particle System
+    // Particle System floating around
     const particlesGeom = new THREE.BufferGeometry();
-    const particlesCount = 480;
+    const particlesCount = 520;
     const posArray = new Float32Array(particlesCount * 3);
 
     for(let i = 0; i < particlesCount * 3; i += 3) {
@@ -78,13 +104,30 @@ window.initLandingThreeJs = function() {
     }
     particlesGeom.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
     const particlesMaterial = new THREE.PointsMaterial({
-      size: 0.08,
-      color: cyanColor,
+      size: currentPalette.partSize,
+      color: currentPalette.particles,
       transparent: true,
-      opacity: 0.85
+      opacity: currentPalette.partOpacity
     });
     const particlesMesh = new THREE.Points(particlesGeom, particlesMaterial);
     scene.add(particlesMesh);
+
+    // Dynamic Theme Update API
+    window.propflowUpdateTheme = function(isDarkMode) {
+      const pal = isDarkMode ? themeColors.dark : themeColors.light;
+      lineMaterial.color.setHex(pal.wire);
+      lineMaterial.opacity = pal.wireOpacity;
+      lineMaterial.needsUpdate = true;
+
+      edgeMaterial.color.setHex(pal.edge);
+      edgeMaterial.opacity = pal.edgeOpacity;
+      edgeMaterial.needsUpdate = true;
+
+      particlesMaterial.color.setHex(pal.particles);
+      particlesMaterial.opacity = pal.partOpacity;
+      particlesMaterial.size = pal.partSize;
+      particlesMaterial.needsUpdate = true;
+    };
 
     const configs = {
       home: { 
@@ -207,8 +250,8 @@ window.initLandingThreeJs = function() {
       buildingGroup.scale.set(currentModelScale, currentModelScale, currentModelScale);
       buildingGroup.rotation.y = currentModelRotY;
 
-      particlesMesh.rotation.y += 0.0012;
-      particlesMesh.rotation.x += 0.0006;
+      particlesMesh.rotation.y += 0.001;
+      particlesMesh.rotation.x += 0.0005;
 
       renderer.render(scene, camera);
     }
@@ -228,29 +271,38 @@ window.initLandingThreeJs = function() {
 };
 
 window.initLandingNav = function() {
-    const navLinks = document.querySelectorAll('header nav a');
-    
-    navLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const path = link.getAttribute('data-path');
-            
-            // Dispatch custom event for 3D model
-            window.dispatchEvent(new CustomEvent('nav-change', { detail: { section: path } }));
-            
-            // Update active navigation state styling
-            navLinks.forEach(l => {
-                l.classList.remove('text-primary', 'font-bold');
-                l.classList.add('text-on-surface-variant');
-            });
-            link.classList.add('text-primary', 'font-bold');
-            link.classList.remove('text-on-surface-variant');
-            
-            // Smooth scroll to section if it exists on page
-            const targetSection = document.getElementById(path);
-            if(targetSection) {
-                targetSection.scrollIntoView({ behavior: 'smooth' });
-            }
-        });
+  const navLinks = document.querySelectorAll('header nav a');
+  
+  navLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const path = link.getAttribute('data-path');
+      
+      window.dispatchEvent(new CustomEvent('nav-change', { detail: { section: path } }));
+      
+      navLinks.forEach(l => {
+        l.classList.remove('text-sky-600', 'dark:text-cyan-400', 'font-bold');
+        l.classList.add('text-slate-600', 'dark:text-slate-400');
+      });
+      link.classList.add('text-sky-600', 'dark:text-cyan-400', 'font-bold');
+      link.classList.remove('text-slate-600', 'dark:text-slate-400');
+      
+      const targetSection = document.getElementById(path);
+      if (targetSection) {
+        targetSection.scrollIntoView({ behavior: 'smooth' });
+      }
     });
+  });
+
+  const themeToggleBtn = document.getElementById('theme-toggle');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('propflow-theme', isDark ? 'dark' : 'light');
+      
+      if (window.propflowUpdateTheme) {
+        window.propflowUpdateTheme(isDark);
+      }
+    });
+  }
 };

@@ -1,0 +1,6 @@
+[b-lgankl16or] ::-webkit-scrollbar {
+    display: none;
+}
+#app-body[b-lgankl16or] {
+    overscroll-behavior: none;
+}

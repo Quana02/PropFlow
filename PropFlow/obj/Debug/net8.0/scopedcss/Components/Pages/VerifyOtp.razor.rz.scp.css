@@ -1,0 +1,6 @@
+[b-31qy20nxdc] ::-webkit-scrollbar {
+    display: none;
+}
+#app-body[b-31qy20nxdc] {
+    overscroll-behavior: none;
+}

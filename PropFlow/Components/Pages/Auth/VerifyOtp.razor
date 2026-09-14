@@ -1,0 +1,175 @@
+@page "/verify-otp"
+@layout PropFlow.Components.Layout.EmptyLayout
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<div class="antialiased min-h-screen relative overflow-hidden transition-colors duration-700 bg-[#f8f9ff] text-slate-900 font-body-md" id="app-body">
+    <!-- Three.js Ghost Building Canvas Background -->
+    <div class="fixed inset-0 z-0 pointer-events-none" id="threejs-bg"></div>
+    <!-- Ambient Lighting Orbs -->
+    <div class="pointer-events-none fixed inset-0 z-0 transition-opacity duration-700 opacity-100" id="ambient-light-glows">
+        <div class="absolute -top-32 -left-32 w-96 h-96 bg-sky-300/25 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl"></div>
+    </div>
+    <div class="pointer-events-none fixed inset-0 z-0 transition-opacity duration-700 opacity-0" id="ambient-dark-glows">
+        <div class="absolute -top-32 -left-32 w-96 h-96 bg-[#00f2ff]/10 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-[#0284c7]/15 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- HEADER / TOPBAR                                                           -->
+    <!-- ========================================================================= -->
+    <header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-[#0b111a]/80 backdrop-blur-md border-b border-slate-200/60 dark:border-[#00f2ff]/20 transition-all duration-300 pointer-events-auto" id="main-header">
+        <div class="h-16 w-full max-w-7xl mx-auto px-6 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/landing">
+                    <img alt="PropFlow Logo" class="h-9 w-auto object-contain dark:brightness-110 dark:drop-shadow-[0_0_8px_rgba(0,242,255,0.4)] transition-all" src="https://lh3.googleusercontent.com/aida/AEtjO1UiU3-Iz9DCQs6CXI5F_f3pFrTRxpJLYMUA68UWghQHRfQdSRgGrQ4MxOVO6qPyDliwqeLBJwU873lVIPJpEr_Y2NP-zpyjZQqU6k0BVDlAKiAZOeaeTQ6OZwSfyZ-qxjLHRiOVTBkZxE93VxRfmUL-dlzxulDSAk6JFYCQ6t7-x-xs3PXPYy4_jv6JcYgVmt1aLMuGGg9Fsluht9DUTvajgmkY8_7E2GlfLL4wZUFF3wDpVPY6r2f-Kw"/>
+                </a>
+                <div class="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-300 dark:border-slate-700">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">HỆ THỐNG ĐIỀU HÀNH TÒA NHÀ</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="hidden md:flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/30 text-xs font-medium backdrop-blur-sm">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Hệ thống Hoạt động 99.98%</span>
+                </div>
+                <button class="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-sky-300 dark:border-[#00f2ff]/40 bg-white/90 dark:bg-[#00f2ff]/10 hover:bg-white dark:hover:bg-[#00f2ff]/20 text-xs font-mono text-slate-700 dark:text-[#00f2ff] shadow-sm dark:shadow-[0_0_12px_rgba(0,242,255,0.25)] backdrop-blur-md transition-all cursor-pointer select-none active:scale-95" id="theme-toggle-btn" onclick="toggleTheme()" type="button">
+                    <span id="theme-icon">🌙</span>
+                    <span class="font-semibold tracking-wide" id="theme-label">CHẾ ĐỘ TỐI</span>
+                </button>
+                <a class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors uppercase tracking-wider hidden sm:block" href="#">
+                    HỖ TRỢ KỸ THUẬT
+                </a>
+                <a class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-sky-400 border border-slate-200 dark:border-[#00f2ff]/30 flex items-center justify-center hover:bg-sky-50 dark:hover:bg-[#00f2ff]/15 transition-all cursor-pointer" href="/landing">
+                    <span class="material-symbols-outlined text-[20px]">apartment</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- ========================================================================= -->
+    <!-- MAIN CARD VIEW                                                            -->
+    <!-- ========================================================================= -->
+    <main class="relative z-20 w-full min-h-screen pt-16 flex items-center justify-center p-4 sm:p-6 overflow-hidden pointer-events-auto">
+        <!-- Step Indicator Pill -->
+        <div class="fixed top-20 z-30 flex items-center gap-1 bg-white/70 dark:bg-slate-900/80 backdrop-blur-md p-1 rounded-full border border-slate-200/80 dark:border-slate-800 shadow-md">
+            <div class="flex items-center gap-2 px-4 py-1 text-xs font-semibold font-label-caps uppercase text-sky-700 dark:text-[#00f2ff]">
+                <span class="w-2 h-2 rounded-full bg-sky-500 dark:bg-[#00f2ff] animate-pulse"></span>
+                <span>BƯỚC 2: XÁC THỰC BẢO MẬT OTP</span>
+            </div>
+        </div>
+
+        <!-- Glass Hub Card Container -->
+        <div class="relative z-20 w-full max-w-5xl h-[640px] bg-white/50 dark:bg-[#0b111a]/60 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-[#00f2ff]/30 shadow-[0_20px_50px_rgba(2,132,199,0.1),0_4px_12px_rgba(15,23,42,0.05)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.8),0_0_30px_rgba(0,242,255,0.15)] overflow-hidden flex transition-all duration-500" id="propflow-main-card">
+
+            <!-- ======================= LEFT HALF ======================= -->
+            <div class="w-1/2 h-full relative flex flex-col justify-center transition-transform duration-700 ease-in-out pointer-events-auto" id="left-panel">
+                <div class="absolute inset-0 p-8 md:p-12 flex flex-col justify-center transition-all duration-500 opacity-100 translate-x-0 z-20 pointer-events-auto" id="view-left-welcome">
+                    <div class="inline-flex items-center gap-2 mb-6 bg-sky-50 dark:bg-[#00f2ff]/10 px-3.5 py-1.5 rounded-full border border-sky-200 dark:border-[#00f2ff]/30 self-start shadow-sm">
+                        <div class="w-2 h-2 rounded-full bg-sky-500 dark:bg-[#00f2ff] animate-ping"></div>
+                        <span class="font-label-caps text-xs text-sky-700 dark:text-[#00f2ff] tracking-wide uppercase font-semibold">PROPFLOW SMART RESIDENCE OS</span>
+                    </div>
+                    <h1 class="font-display-lg text-3xl md:text-4xl text-navy-slate dark:text-white font-bold leading-tight mb-4 tracking-tight">
+                        Quản Lý Vận Hành<br/>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-blue-800 dark:from-[#00f2ff] dark:via-sky-400 dark:to-blue-400">Chung Cư Đẳng Cấp</span>
+                    </h1>
+                    <p class="font-body-md text-navy-muted dark:text-slate-300 text-xs md:text-sm leading-relaxed max-w-sm mb-6 border-l-2 border-sky-400 dark:border-[#00f2ff] pl-4">
+                        Giải pháp số hóa toàn diện quản lý cư dân, kỹ thuật hạ tầng IoT, giám sát an ninh và tài chính minh bạch cho ban quản trị thông minh.
+                    </p>
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <div class="bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-[#00f2ff]/20 rounded-xl p-3 shadow-sm">
+                            <div class="flex items-center gap-2 text-sky-600 dark:text-[#00f2ff] mb-1">
+                                <span class="material-symbols-outlined text-[18px]">verified_user</span>
+                                <span class="text-xs font-bold font-mono-data text-navy-slate dark:text-white">BẢO MẬT KÉP</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Mã hóa dữ liệu phân cấp 256-bit</p>
+                        </div>
+                        <div class="bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-[#00f2ff]/20 rounded-xl p-3 shadow-sm">
+                            <div class="flex items-center gap-2 text-sky-600 dark:text-[#00f2ff] mb-1">
+                                <span class="material-symbols-outlined text-[18px]">hub</span>
+                                <span class="text-xs font-bold font-mono-data text-navy-slate dark:text-white">IoT SENSOR</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Giám sát tòa nhà thời gian thực</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================= RIGHT HALF ======================= -->
+            <div class="w-1/2 h-full relative flex flex-col justify-center border-l border-slate-200/60 dark:border-[#00f2ff]/20 transition-transform duration-700 ease-in-out overflow-hidden pointer-events-auto" id="right-panel">
+                <!-- OTP Form -->
+                <div class="absolute inset-0 p-8 md:p-12 flex flex-col justify-center transition-all duration-500 opacity-100 translate-x-0 z-20 pointer-events-auto" id="view-right-login">
+                    <div class="mb-5">
+                        <div class="inline-flex items-center gap-2 mb-2 self-start bg-sky-50 dark:bg-[#00f2ff]/10 px-3 py-1 rounded-full border border-sky-200 dark:border-[#00f2ff]/30">
+                            <span class="material-symbols-outlined text-sky-600 dark:text-[#00f2ff] text-[16px]">shield</span>
+                            <span class="font-label-caps text-xs font-semibold text-sky-700 dark:text-[#00f2ff] tracking-wider uppercase">BẢO MẬT &amp; XÁC THỰC HAI LỚP</span>
+                        </div>
+                        <h2 class="font-headline-lg text-2xl md:text-3xl font-bold text-navy-slate dark:text-white mt-1">Xác Thực Mã OTP</h2>
+                        <p class="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                            Mã xác thực gồm 6 chữ số đã được gửi đến email/số điện thoại đăng ký của bạn. Vui lòng kiểm tra và nhập mã bên dưới.
+                        </p>
+                    </div>
+
+                    <form class="flex flex-col gap-5 relative z-30" onsubmit="event.preventDefault(); handleOtpSubmit();">
+                        <div class="flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 tracking-wider uppercase font-label-caps">MÃ XÁC THỰC (6 CHỮ SỐ)</label>
+                                <span class="text-[11px] font-mono font-medium text-slate-400 dark:text-slate-500">
+                                    Hết hạn sau: <span class="text-sky-600 dark:text-[#00f2ff] font-bold" id="otp-timer">02:45</span>
+                                </span>
+                            </div>
+
+                            <!-- 6-digit OTP input boxes -->
+                            <div class="grid grid-cols-6 gap-2 sm:gap-3 py-1" id="otp-inputs-wrapper">
+                                <input autocomplete="one-time-code" class="w-full h-12 text-center text-[20px] font-mono-data font-bold rounded-xl border border-slate-300 dark:border-[#00f2ff]/40 bg-white/70 dark:bg-slate-900/80 text-navy-slate dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-2 focus:ring-sky-200 dark:focus:ring-[#00f2ff]/30 shadow-sm transition-all" maxlength="1" oninput="onOtpInput(this, 0)" onkeydown="onOtpKeydown(this, 0, event)" pattern="[0-9]*" type="text"/>
+                                <input class="w-full h-12 text-center text-[20px] font-mono-data font-bold rounded-xl border border-slate-300 dark:border-[#00f2ff]/40 bg-white/70 dark:bg-slate-900/80 text-navy-slate dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-2 focus:ring-sky-200 dark:focus:ring-[#00f2ff]/30 shadow-sm transition-all" maxlength="1" oninput="onOtpInput(this, 1)" onkeydown="onOtpKeydown(this, 1, event)" pattern="[0-9]*" type="text"/>
+                                <input class="w-full h-12 text-center text-[20px] font-mono-data font-bold rounded-xl border border-slate-300 dark:border-[#00f2ff]/40 bg-white/70 dark:bg-slate-900/80 text-navy-slate dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-2 focus:ring-sky-200 dark:focus:ring-[#00f2ff]/30 shadow-sm transition-all" maxlength="1" oninput="onOtpInput(this, 2)" onkeydown="onOtpKeydown(this, 2, event)" pattern="[0-9]*" type="text"/>
+                                <input class="w-full h-12 text-center text-[20px] font-mono-data font-bold rounded-xl border border-slate-300 dark:border-[#00f2ff]/40 bg-white/70 dark:bg-slate-900/80 text-navy-slate dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-2 focus:ring-sky-200 dark:focus:ring-[#00f2ff]/30 shadow-sm transition-all" maxlength="1" oninput="onOtpInput(this, 3)" onkeydown="onOtpKeydown(this, 3, event)" pattern="[0-9]*" type="text"/>
+                                <input autofocus class="w-full h-12 text-center text-[20px] font-mono-data font-bold rounded-xl border border-slate-300 dark:border-[#00f2ff]/40 bg-white/70 dark:bg-slate-900/80 text-navy-slate dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-2 focus:ring-sky-200 dark:focus:ring-[#00f2ff]/30 shadow-sm transition-all" maxlength="1" oninput="onOtpInput(this, 4)" onkeydown="onOtpKeydown(this, 4, event)" pattern="[0-9]*" type="text"/>
+                                <input class="w-full h-12 text-center text-[20px] font-mono-data font-bold rounded-xl border border-slate-300 dark:border-[#00f2ff]/40 bg-white/70 dark:bg-slate-900/80 text-navy-slate dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-2 focus:ring-sky-200 dark:focus:ring-[#00f2ff]/30 shadow-sm transition-all" maxlength="1" oninput="onOtpInput(this, 5)" onkeydown="onOtpKeydown(this, 5, event)" pattern="[0-9]*" type="text"/>
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs pt-1">
+                                <span class="text-slate-500 dark:text-slate-400">Không nhận được mã?</span>
+                                <button class="font-semibold text-sky-600 dark:text-[#00f2ff] hover:underline flex items-center gap-1 cursor-pointer pointer-events-auto" id="resend-btn" onclick="handleResendOtp()" type="button">
+                                    <span class="material-symbols-outlined text-[16px]">refresh</span>
+                                    <span>Gửi lại mã (<span id="resend-countdown">59s</span>)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button class="mt-1 w-full bg-sky-600 hover:bg-sky-700 dark:bg-[#00f2ff] dark:hover:bg-white text-white dark:text-[#041e2a] font-label-caps text-xs font-bold uppercase tracking-wider py-3.5 rounded-lg transition-all shadow-md shadow-sky-600/25 dark:shadow-[0_0_20px_rgba(0,242,255,0.3)] flex items-center justify-center gap-2 group cursor-pointer pointer-events-auto" id="otp-submit-btn" type="submit">
+                            <span>XÁC NHẬN MÃ OTP</span>
+                            <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                        </button>
+                    </form>
+
+                    <div class="mt-6 text-center border-t border-slate-200/80 dark:border-slate-800 pt-4 relative z-30">
+                        <a class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors uppercase tracking-wider cursor-pointer pointer-events-auto" href="/auth">
+                            <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+                            <span>QUAY LẠI ĐĂNG NHẬP</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Corner HUD Notches -->
+            <div class="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+            <div class="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+            <div class="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+            <div class="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+        </div>
+    </main>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initThreeJsBackground");
+            await JSRuntime.InvokeVoidAsync("initOtpPage");
+        }
+    }
+}

@@ -1,0 +1,6 @@
+[b-zkpq8r241e] ::-webkit-scrollbar { 
+    display: none; 
+}
+#app-body[b-zkpq8r241e] {
+    overscroll-behavior: none;
+}
