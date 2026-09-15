@@ -117,6 +117,9 @@ builder.Services.AddDbContext<CommunicationDbContext>(options =>
             "__EFMigrationsHistory",
             "communication")));
 
+// Register Module Services
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings.Services.IBuildingService, PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService>();
+
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();

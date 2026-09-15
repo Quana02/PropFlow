@@ -9,4 +9,6 @@ builder.Services.AddScoped(sp =>
     return new HttpClient { BaseAddress = new Uri(baseUrl) };
 });
 
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Facility.Services.IBuildingApiClient, PropFlow.Web.Client.Features.Facility.Services.BuildingApiClient>();
+
 await builder.Build().RunAsync();

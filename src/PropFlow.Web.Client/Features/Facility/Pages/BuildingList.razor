@@ -1,0 +1,320 @@
+@page "/buildings"
+@using PropFlow.Web.Client.Features.Facility.Models
+@using PropFlow.Web.Client.Features.Facility.Services
+@using PropFlow.Web.Client.Features.Facility.Components
+@inject IBuildingApiClient BuildingApiClient
+
+<PageTitle>Quản Lý Tòa Nhà - PropFlow</PageTitle>
+
+<div class="container-fluid py-4 px-4">
+    <!-- Header Section -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="bi bi-buildings-fill text-primary me-2"></i> Quản Lý Hồ Sơ Tòa Nhà
+            </h2>
+            <p class="text-muted mb-0">Quản lý thông tin danh mục tòa nhà, số tầng và trạng thái hoạt động trong hệ thống chung cư.</p>
+        </div>
+        <button class="btn btn-primary btn-lg shadow-sm rounded-3 px-4 fw-semibold" @onclick="OpenCreateDialog">
+            <i class="bi bi-plus-circle me-2"></i> Thêm Tòa Nhà Mới
+        </button>
+    </div>
+
+    <!-- Alert Notifications -->
+    @if (!string.IsNullOrEmpty(SuccessMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show rounded-3 shadow-sm mb-4" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @SuccessMessage
+            <button type="button" class="btn-close" @onclick="() => SuccessMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show rounded-3 shadow-sm mb-4" role="alert">
+            <i class="bi bi-exclamation-octagon-fill me-2"></i> @ErrorMessage
+            <button type="button" class="btn-close" @onclick="() => ErrorMessage = null"></button>
+        </div>
+    }
+
+    <!-- Search & Filter Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <div class="col-md-6 col-lg-5">
+                    <label class="form-label fw-semibold text-secondary small">Tìm kiếm từ khóa</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control bg-light border-start-0 ps-0" placeholder="Nhập Mã tòa nhà, Tên tòa nhà hoặc Địa chỉ..."
+                               @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                    </div>
+                </div>
+
+                <div class="col-md-4 col-lg-3">
+                    <label class="form-label fw-semibold text-secondary small">Trạng thái hoạt động</label>
+                    <select class="form-select bg-light" @bind="StatusFilterString">
+                        <option value="">-- Tất cả trạng thái --</option>
+                        <option value="ACTIVE">Đang hoạt động</option>
+                        <option value="INACTIVE">Ngưng hoạt động</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2 col-lg-4 d-flex align-items-end gap-2">
+                    <button class="btn btn-outline-primary px-3 rounded-3" @onclick="ApplyFilter">
+                        <i class="bi bi-funnel me-1"></i> Lọc
+                    </button>
+                    <button class="btn btn-outline-secondary px-3 rounded-3" @onclick="ResetFilter">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Đặt lại
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Data Card -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-body p-0">
+            @if (IsLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Đang tải...</span>
+                    </div>
+                    <p class="mt-3 text-muted fw-semibold">Đang tải danh sách tòa nhà...</p>
+                </div>
+            }
+            else if (PagedResult.Items == null || !PagedResult.Items.Any())
+            {
+                <div class="text-center py-5 px-4">
+                    <div class="mb-3 text-muted display-4"><i class="bi bi-building-x"></i></div>
+                    <h5 class="fw-bold text-dark">Chưa có dữ liệu tòa nhà nào</h5>
+                    <p class="text-muted small">Không tìm thấy thông tin tòa nhà khớp với tiêu chí tìm kiếm của bạn.</p>
+                    <button class="btn btn-primary rounded-3 px-4 mt-2" @onclick="OpenCreateDialog">
+                        <i class="bi bi-plus-lg me-1"></i> Thêm tòa nhà ngay
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary border-bottom">
+                            <tr>
+                                <th class="ps-4 py-3">Mã Tòa Nhà</th>
+                                <th class="py-3">Tên Tòa Nhà</th>
+                                <th class="py-3">Địa Chỉ</th>
+                                <th class="py-3 text-center">Số Tầng</th>
+                                <th class="py-3 text-center">Trạng Thái</th>
+                                <th class="py-3 text-center">Múi Giờ</th>
+                                <th class="pe-4 py-3 text-end">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in PagedResult.Items)
+                            {
+                                <tr>
+                                    <td class="ps-4 py-3 fw-bold text-primary">
+                                        <i class="bi bi-building me-2 text-secondary"></i>@item.Code
+                                    </td>
+                                    <td class="py-3 fw-semibold text-dark">@item.Name</td>
+                                    <td class="py-3 text-muted small text-truncate" style="max-width: 250px;" title="@item.Address">
+                                        <i class="bi bi-geo-alt text-danger me-1"></i>@item.Address
+                                    </td>
+                                    <td class="py-3 text-center">
+                                        @(item.NumberOfFloors.HasValue ? $"{item.NumberOfFloors} tầng" : "-")
+                                    </td>
+                                    <td class="py-3 text-center">
+                                        @if (item.Status == MasterDataStatus.ACTIVE)
+                                        {
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1">
+                                                <i class="bi bi-check-circle-fill me-1"></i> Hoạt động
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1">
+                                                <i class="bi bi-pause-circle-fill me-1"></i> Ngưng hoạt động
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="py-3 text-center text-muted small">@item.TimeZoneId</td>
+                                    <td class="pe-4 py-3 text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-info rounded-2 me-1" title="Xem Chi Tiết" @onclick="() => OpenDetailDialog(item)">
+                                                <i class="bi bi-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-primary rounded-2 me-1" title="Chỉnh Sửa" @onclick="() => OpenEditDialog(item)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            @if (item.Status == MasterDataStatus.ACTIVE)
+                                            {
+                                                <button class="btn btn-outline-danger rounded-2" title="Vô hiệu hóa" @onclick="() => ToggleStatus(item, MasterDataStatus.INACTIVE)">
+                                                    <i class="bi bi-slash-circle"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-outline-success rounded-2" title="Kích hoạt lại" @onclick="() => ToggleStatus(item, MasterDataStatus.ACTIVE)">
+                                                    <i class="bi bi-arrow-repeat"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-center p-4 border-top gap-3">
+                    <div class="text-muted small">
+                        Hiển thị <strong>@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> đến <strong>@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong> trong số <strong>@PagedResult.TotalCount</strong> tòa nhà
+                    </div>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item @(PagedResult.HasPreviousPage ? "" : "disabled")">
+                            <button class="page-link rounded-start-3" @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
+                                <i class="bi bi-chevron-left"></i> Trước
+                            </button>
+                        </li>
+                        @for (int i = 1; i <= PagedResult.TotalPages; i++)
+                        {
+                            var pageNum = i;
+                            <li class="page-item @(pageNum == PagedResult.PageIndex ? "active" : "")">
+                                <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                            </li>
+                        }
+                        <li class="page-item @(PagedResult.HasNextPage ? "" : "disabled")">
+                            <button class="page-link rounded-end-3" @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
+                                Sau <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Form Modal -->
+<BuildingFormDialog IsOpen="IsFormOpen" BuildingToEdit="SelectedBuildingToEdit" OnSaved="LoadData" OnClose="() => IsFormOpen = false" />
+
+<!-- Detail Modal -->
+<BuildingDetailDialog IsOpen="IsDetailOpen" Building="SelectedBuildingToView" OnClose="() => IsDetailOpen = false" />
+
+@code {
+    private PagedResult<BuildingModel> PagedResult { get; set; } = new();
+    private BuildingFilterModel Filter { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+    private string? SuccessMessage { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    // Modal Control
+    private bool IsFormOpen { get; set; }
+    private bool IsDetailOpen { get; set; }
+    private BuildingModel? SelectedBuildingToEdit { get; set; }
+    private BuildingModel? SelectedBuildingToView { get; set; }
+
+    private string StatusFilterString
+    {
+        get => Filter.Status?.ToString() ?? "";
+        set
+        {
+            if (Enum.TryParse<MasterDataStatus>(value, out var status))
+            {
+                Filter.Status = status;
+            }
+            else
+            {
+                Filter.Status = null;
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        try
+        {
+            PagedResult = await BuildingApiClient.GetBuildingsAsync(Filter);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Không thể tải danh sách tòa nhà: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ApplyFilter();
+        }
+    }
+
+    private async Task ApplyFilter()
+    {
+        Filter.PageIndex = 1;
+        await LoadData();
+    }
+
+    private async Task ResetFilter()
+    {
+        Filter = new BuildingFilterModel();
+        await LoadData();
+    }
+
+    private async Task ChangePage(int newPageIndex)
+    {
+        if (newPageIndex >= 1 && newPageIndex <= PagedResult.TotalPages)
+        {
+            Filter.PageIndex = newPageIndex;
+            await LoadData();
+        }
+    }
+
+    private void OpenCreateDialog()
+    {
+        SelectedBuildingToEdit = null;
+        IsFormOpen = true;
+    }
+
+    private void OpenEditDialog(BuildingModel item)
+    {
+        SelectedBuildingToEdit = item;
+        IsFormOpen = true;
+    }
+
+    private async Task OpenDetailDialog(BuildingModel item)
+    {
+        SelectedBuildingToView = await BuildingApiClient.GetBuildingDetailByIdAsync(item.Id) ?? item;
+        IsDetailOpen = true;
+    }
+
+    private async Task ToggleStatus(BuildingModel item, MasterDataStatus targetStatus)
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+        try
+        {
+            var actionText = targetStatus == MasterDataStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
+            await BuildingApiClient.SetBuildingStatusAsync(item.Id, targetStatus);
+            SuccessMessage = $"Đã {actionText} thành công tòa nhà '{item.Name}'.";
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+    }
+}

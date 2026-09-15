@@ -1,0 +1,112 @@
+@using PropFlow.Web.Client.Features.Facility.Models
+
+@if (IsOpen && Building != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content shadow-lg border-0 rounded-4">
+                <div class="modal-header bg-dark text-white rounded-top-4 px-4 py-3">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-building me-2 text-info"></i> Chi Tiết Hồ Sơ Tòa Nhà
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Close" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
+                        <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary me-3 fs-3">
+                            <i class="bi bi-buildings"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-1">@Building.Name</h4>
+                            <span class="badge bg-secondary me-2">Mã: @Building.Code</span>
+                            @if (Building.Status == MasterDataStatus.ACTIVE)
+                            {
+                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Đang hoạt động
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1">
+                                    <i class="bi bi-pause-circle-fill me-1"></i> Ngưng hoạt động
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-muted d-block small">Địa chỉ tòa nhà</span>
+                                <strong class="fs-6 text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i> @Building.Address</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-muted d-block small">Múi giờ vận hành</span>
+                                <strong class="fs-6 text-dark"><i class="bi bi-clock-fill text-warning me-1"></i> @Building.TimeZoneId</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-muted d-block small">Số tầng</span>
+                                <strong class="fs-6 text-dark"><i class="bi bi-layers-fill text-primary me-1"></i> @(Building.NumberOfFloors.HasValue ? $"{Building.NumberOfFloors} tầng" : "Chưa cập nhật")</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-muted d-block small">Mã định danh hệ thống (ID)</span>
+                                <code class="small text-break">@Building.Id</code>
+                            </div>
+                        </div>
+                        @if (Building is BuildingDetailModel detail)
+                        {
+                            <div class="col-md-6">
+                                <div class="p-3 bg-info bg-opacity-10 border border-info-subtle rounded-3">
+                                    <span class="text-info-emphasis d-block small"><i class="bi bi-grid-fill me-1"></i> Tiện ích (Facilities)</span>
+                                    <strong class="fs-5 text-dark">@detail.FacilityCount tiện ích</strong> <span class="text-success small">(@detail.ActiveFacilityCount đang hoạt động)</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 bg-warning bg-opacity-10 border border-warning-subtle rounded-3">
+                                    <span class="text-warning-emphasis d-block small"><i class="bi bi-tools me-1"></i> Thiết bị (Equipment)</span>
+                                    <strong class="fs-5 text-dark">@detail.EquipmentCount thiết bị</strong> <span class="text-success small">(@detail.ActiveEquipmentCount đang hoạt động)</span>
+                                </div>
+                            </div>
+                        }
+                        <div class="col-12">
+                            <div class="p-3 bg-light rounded-3">
+                                <span class="text-muted d-block small mb-1">Mô tả / Ghi chú</span>
+                                <p class="mb-0 text-dark">@(string.IsNullOrWhiteSpace(Building.Description) ? "Không có mô tả bổ sung." : Building.Description)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-2 pt-3 border-top text-muted small">
+                        <div class="col-md-6">
+                            <i class="bi bi-calendar-plus me-1"></i> Ngày khởi tạo: @Building.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <i class="bi bi-calendar-check me-1"></i> Cập nhật gần nhất: @Building.UpdatedAt.ToString("dd/MM/yyyy HH:mm:ss")
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button type="button" class="btn btn-secondary px-4 rounded-3" @onclick="Close">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public BuildingModel? Building { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await OnClose.InvokeAsync();
+    }
+}

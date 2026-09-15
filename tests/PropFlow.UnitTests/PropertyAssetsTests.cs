@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
 using PropFlow.Modules.PropertyAssets.Domain.Equipment;
@@ -92,5 +93,62 @@ public class PropertyAssetsTests
         var time4 = time3.AddDays(1);
         equipment.Deactivate(null, time4);
         Assert.Equal(EquipmentStatus.INACTIVE, equipment.Status);
+    }
+
+    [Fact]
+    public async Task BuildingService_Create_Get_Update_SetStatus_WorksCorrectly()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(dbContext);
+
+        // 1. Create Building
+        var createCommand = new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.CreateBuildingCommand(
+            "TWR-A", "Tòa A", "123 Đường Nguyễn Huệ", "Asia/Ho_Chi_Minh", 30, "Tòa nhà căn hộ cao cấp");
+
+        var created = await service.CreateBuildingAsync(createCommand);
+
+        Assert.NotNull(created);
+        Assert.Equal("TWR-A", created.Code);
+        Assert.Equal("Tòa A", created.Name);
+        Assert.Equal(MasterDataStatus.ACTIVE, created.Status);
+
+        // 2. Duplicate Code throws exception
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateBuildingAsync(createCommand));
+
+        // 3. Get By ID
+        var fetched = await service.GetBuildingByIdAsync(created.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal(created.Id, fetched!.Id);
+
+        // 4. Get Paged List & Filter
+        var paged = await service.GetBuildingsAsync(new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.BuildingFilterQuery("Tòa A", MasterDataStatus.ACTIVE, 1, 10));
+        Assert.Single(paged.Items);
+        Assert.Equal(1, paged.TotalCount);
+
+        // 5. Update Building
+        var updateCommand = new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.UpdateBuildingCommand(
+            "Tòa A - Sài Gòn", "456 Lê Lợi", "Asia/Ho_Chi_Minh", 32, "Căn hộ cao cấp cập nhật");
+
+        var updated = await service.UpdateBuildingAsync(created.Id, updateCommand);
+        Assert.Equal("Tòa A - Sài Gòn", updated.Name);
+        Assert.Equal("456 Lê Lợi", updated.Address);
+        Assert.Equal(32, updated.NumberOfFloors);
+
+        // 6. Set Status Deactivate & Activate
+        var deactivated = await service.SetBuildingStatusAsync(created.Id, new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.SetBuildingStatusCommand(MasterDataStatus.INACTIVE));
+        Assert.Equal(MasterDataStatus.INACTIVE, deactivated.Status);
+
+        var activated = await service.SetBuildingStatusAsync(created.Id, new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.SetBuildingStatusCommand(MasterDataStatus.ACTIVE));
+        Assert.Equal(MasterDataStatus.ACTIVE, activated.Status);
+
+        // 7. Get Building Detail with Facility and Equipment count
+        var detail = await service.GetBuildingDetailByIdAsync(created.Id);
+        Assert.NotNull(detail);
+        Assert.Equal(0, detail!.FacilityCount);
+        Assert.Equal(0, detail.EquipmentCount);
     }
 }
