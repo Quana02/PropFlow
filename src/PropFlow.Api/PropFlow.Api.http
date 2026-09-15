@@ -1,0 +1,6 @@
+@PropFlow.Api_HostAddress = http://localhost:5229
+
+GET {{PropFlow.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

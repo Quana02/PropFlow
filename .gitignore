@@ -1,0 +1,51 @@
+## Build and Tooling Outputs
+bin/
+obj/
+out/
+[Bb]in/
+[Oo]bj/
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userhost
+*.sln.docstates
+
+## OS artifacts
+.DS_Store
+Thumbs.db
+
+## Local configuration and secrets
+appsettings.Local.json
+appsettings.*.Local.json
+appsettings.*.local.json
+*.secrets.json
+.env
+.env.*
+!.env.example
+*.pubxml
+*.publishsettings
+
+## Test and coverage artifacts
+TestResults/
+coverage/
+coverage*/
+*.trx
+*.coverage
+*.coveragexml
+coverage.opencover.xml
+coverage.cobertura.xml
+
+## Logs and temporary files
+logs/
+*.log
+*.tmp
+*.temp

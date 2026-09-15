@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\PropertyAssets\PropFlow.Modules.PropertyAssets.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Apartments\PropFlow.Modules.Apartments.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Authentication\PropFlow.Modules.Authentication.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Residents\PropFlow.Modules.Residents.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Administration\PropFlow.Modules.Administration.csproj" />
+    <ProjectReference Include="..\..\src\Modules\ServiceRequests\PropFlow.Modules.ServiceRequests.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Complaints\PropFlow.Modules.Complaints.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Maintenance\PropFlow.Modules.Maintenance.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Billing\PropFlow.Modules.Billing.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Payments\PropFlow.Modules.Payments.csproj" />
+    <ProjectReference Include="..\..\src\Modules\AiClassification\PropFlow.Modules.AiClassification.csproj" />
+    <ProjectReference Include="..\..\src\Modules\AiRecommendation\PropFlow.Modules.AiRecommendation.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Communication\PropFlow.Modules.Communication.csproj" />
+  </ItemGroup>
+
+</Project>

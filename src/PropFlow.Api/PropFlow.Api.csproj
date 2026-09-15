@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>adbac45b-651b-498f-a797-12585846625f</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Modules\PropertyAssets\PropFlow.Modules.PropertyAssets.csproj" />
+    <ProjectReference Include="..\Modules\Apartments\PropFlow.Modules.Apartments.csproj" />
+    <ProjectReference Include="..\Modules\Authentication\PropFlow.Modules.Authentication.csproj" />
+    <ProjectReference Include="..\Modules\Residents\PropFlow.Modules.Residents.csproj" />
+    <ProjectReference Include="..\Modules\Administration\PropFlow.Modules.Administration.csproj" />
+    <ProjectReference Include="..\Modules\ServiceRequests\PropFlow.Modules.ServiceRequests.csproj" />
+    <ProjectReference Include="..\Modules\Complaints\PropFlow.Modules.Complaints.csproj" />
+    <ProjectReference Include="..\Modules\Maintenance\PropFlow.Modules.Maintenance.csproj" />
+    <ProjectReference Include="..\Modules\Billing\PropFlow.Modules.Billing.csproj" />
+    <ProjectReference Include="..\Modules\Payments\PropFlow.Modules.Payments.csproj" />
+    <ProjectReference Include="..\Modules\AiClassification\PropFlow.Modules.AiClassification.csproj" />
+    <ProjectReference Include="..\Modules\AiRecommendation\PropFlow.Modules.AiRecommendation.csproj" />
+    <ProjectReference Include="..\Modules\Communication\PropFlow.Modules.Communication.csproj" />
+  </ItemGroup>
+
+</Project>
