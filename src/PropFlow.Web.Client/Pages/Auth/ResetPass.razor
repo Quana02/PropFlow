@@ -1,0 +1,218 @@
+@page "/reset-password"
+@layout PropFlow.Web.Client.Layout.LandingLayout
+@inject IJSRuntime JSRuntime
+
+<!-- Three.js Ghost Building Canvas Background (Guaranteed pointer-events-none & strictly z-0) -->
+<div class="fixed inset-0 z-0 pointer-events-none" id="threejs-bg"></div>
+<!-- Ambient Lighting Orbs (Background only, pointer-events-none) -->
+<div class="pointer-events-none fixed inset-0 z-0 transition-opacity duration-700 opacity-100" id="ambient-light-glows">
+<div class="absolute -top-32 -left-32 w-96 h-96 bg-sky-300/25 rounded-full blur-3xl"></div>
+<div class="absolute -bottom-32 -right-32 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl"></div>
+</div>
+<div class="pointer-events-none fixed inset-0 z-0 transition-opacity duration-700 opacity-0" id="ambient-dark-glows">
+<div class="absolute -top-32 -left-32 w-96 h-96 bg-[#00f2ff]/10 rounded-full blur-3xl"></div>
+<div class="absolute -bottom-32 -right-32 w-96 h-96 bg-[#0284c7]/15 rounded-full blur-3xl"></div>
+</div>
+<!-- ========================================================================= -->
+<!-- HEADER / TOPBAR                                                           -->
+<!-- ========================================================================= -->
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-[#0b111a]/80 backdrop-blur-md border-b border-slate-200/60 dark:border-[#00f2ff]/20 transition-all duration-300 pointer-events-auto" id="main-header">
+<div class="h-16 w-full max-w-7xl mx-auto px-6 flex items-center justify-between">
+<!-- Brand Logo PropFlow -->
+<div class="flex items-center gap-3">
+<img alt="PropFlow Logo" class="h-9 w-auto object-contain dark:brightness-110 dark:drop-shadow-[0_0_8px_rgba(0,242,255,0.4)] transition-all" src="https://lh3.googleusercontent.com/aida/AEtjO1UiU3-Iz9DCQs6CXI5F_f3pFrTRxpJLYMUA68UWghQHRfQdSRgGrQ4MxOVO6qPyDliwqeLBJwU873lVIPJpEr_Y2NP-zpyjZQqU6k0BVDlAKiAZOeaeTQ6OZwSfyZ-qxjLHRiOVTBkZxE93VxRfmUL-dlzxulDSAk6JFYCQ6t7-x-xs3PXPYy4_jv6JcYgVmt1aLMuGGg9Fsluht9DUTvajgmkY8_7E2GlfLL4wZUFF3wDpVPY6r2f-Kw">
+<div class="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-300 dark:border-slate-700">
+<span class="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase">HỆ THỐNG ĐIỀU HÀNH TÒA NHÀ</span>
+</div>
+</div>
+<!-- Right Utility & Status -->
+<div class="flex items-center gap-4">
+<div class="hidden md:flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full border border-emerald-200 dark:border-emerald-500/30 text-xs font-medium backdrop-blur-sm">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+<span>Hệ thống Hoạt động 99.98%</span>
+</div>
+<!-- Theme Toggle Button -->
+<button class="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-sky-300 dark:border-[#00f2ff]/40 bg-white/90 dark:bg-[#00f2ff]/10 hover:bg-white dark:hover:bg-[#00f2ff]/20 text-xs font-mono text-slate-700 dark:text-[#00f2ff] shadow-sm dark:shadow-[0_0_12px_rgba(0,242,255,0.25)] backdrop-blur-md transition-all cursor-pointer select-none active:scale-95" id="theme-toggle-btn" onclick="toggleTheme()" type="button">
+<span id="theme-icon">🌙</span>
+<span class="font-semibold tracking-wide" id="theme-label">CHẾ ĐỘ TỐI</span>
+</button>
+<a class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors uppercase tracking-wider hidden sm:block" href="#">
+                HỖ TRỢ KỸ THUẬT
+            </a>
+<div class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-sky-400 border border-slate-200 dark:border-[#00f2ff]/30 flex items-center justify-center hover:bg-sky-50 dark:hover:bg-[#00f2ff]/15 transition-all cursor-pointer">
+<span class="material-symbols-outlined text-[20px]">apartment</span>
+</div>
+</div>
+</div>
+</header>
+<!-- ========================================================================= -->
+<!-- MAIN CARD VIEW WITH SEAMLESS SLIDING ANIMATION                            -->
+<!-- ========================================================================= -->
+<main class="relative z-20 w-full min-h-screen pt-16 flex items-center justify-center p-4 sm:p-6 overflow-hidden pointer-events-auto">
+<!-- Top Interactive Mode Selector Pills (Quick Switcher) -->
+<div class="fixed top-20 z-30 flex items-center gap-1 bg-white/70 dark:bg-slate-900/80 backdrop-blur-md p-1 rounded-full border border-slate-200/80 dark:border-slate-800 shadow-md"><div class="flex items-center gap-2 px-4 py-1 text-xs font-semibold font-label-caps uppercase tracking-wider text-slate-700 dark:text-[#00f2ff]"><span class="material-symbols-outlined text-[16px] text-sky-600 dark:text-[#00f2ff]">security</span><span>Thiết Lập Bảo Mật</span><span class="text-slate-400 dark:text-slate-600">/</span><span class="text-sky-600 dark:text-white">Mật Khẩu Mới</span></div></div>
+<!-- Glass Hub Card Container -->
+<div class="relative z-20 w-full max-w-5xl h-[640px] bg-white/50 dark:bg-[#0b111a]/60 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-[#00f2ff]/30 shadow-[0_20px_50px_rgba(2,132,199,0.1),0_4px_12px_rgba(15,23,42,0.05)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.8),0_0_30px_rgba(0,242,255,0.15)] overflow-hidden flex transition-all duration-500" id="propflow-main-card">
+<!-- ======================= LEFT HALF ======================= -->
+<div class="w-1/2 h-full relative flex flex-col justify-center transition-transform duration-700 ease-in-out pointer-events-auto" id="left-panel">
+<!-- 1. LEFT: Welcome Banner (Visible in LOGIN Mode) -->
+<div class="absolute inset-0 p-8 md:p-12 flex flex-col justify-center transition-all duration-500 opacity-100 translate-x-0 z-20 pointer-events-auto" id="view-left-welcome">
+<div class="inline-flex items-center gap-2 mb-6 bg-sky-50 dark:bg-[#00f2ff]/10 px-3.5 py-1.5 rounded-full border border-sky-200 dark:border-[#00f2ff]/30 self-start shadow-sm">
+<div class="w-2 h-2 rounded-full bg-sky-500 dark:bg-[#00f2ff] animate-ping"></div>
+<span class="font-label-caps text-xs text-sky-700 dark:text-[#00f2ff] tracking-wide uppercase font-semibold">PROPFLOW SMART RESIDENCE OS</span>
+</div>
+<h1 class="font-display-lg text-3xl md:text-4xl text-navy-slate dark:text-white font-bold leading-tight mb-4 tracking-tight">
+                    Quản Lý Vận Hành<br>
+<span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-blue-800 dark:from-[#00f2ff] dark:via-sky-400 dark:to-blue-400">Chung Cư Đẳng Cấp</span>
+</h1>
+<p class="font-body-md text-navy-muted dark:text-slate-300 text-xs md:text-sm leading-relaxed max-w-sm mb-6 border-l-2 border-sky-400 dark:border-[#00f2ff] pl-4">
+                    Giải pháp số hóa toàn diện quản lý cư dân, kỹ thuật hạ tầng IoT, giám sát an ninh và tài chính minh bạch cho ban quản trị thông minh.
+                </p>
+<div class="grid grid-cols-2 gap-3 pt-2">
+<div class="bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-[#00f2ff]/20 rounded-xl p-3 shadow-sm">
+<div class="flex items-center gap-2 text-sky-600 dark:text-[#00f2ff] mb-1">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+<span class="text-xs font-bold font-mono-data text-navy-slate dark:text-white">BẢO MẬT KÉP</span>
+</div>
+<p class="text-[11px] text-slate-500 dark:text-slate-400">Mã hóa dữ liệu phân cấp 256-bit</p>
+</div>
+<div class="bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-slate-200/80 dark:border-[#00f2ff]/20 rounded-xl p-3 shadow-sm">
+<div class="flex items-center gap-2 text-sky-600 dark:text-[#00f2ff] mb-1">
+<span class="material-symbols-outlined text-[18px]">hub</span>
+<span class="text-xs font-bold font-mono-data text-navy-slate dark:text-white">IoT SENSOR</span>
+</div>
+<p class="text-[11px] text-slate-500 dark:text-slate-400">Giám sát tòa nhà thời gian thực</p>
+</div>
+</div>
+</div>
+<!-- 2. LEFT: Register Form (Visible in REGISTER Mode) -->
+<div class="absolute inset-0 p-8 md:p-12 flex flex-col justify-center transition-all duration-500 opacity-0 -translate-x-8 z-10 pointer-events-none overflow-y-auto" id="view-left-register">
+<div class="mb-4">
+<div class="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-600 dark:text-[#00f2ff] uppercase tracking-wider mb-1">
+<span class="material-symbols-outlined text-[16px]">domain_add</span>
+                        Đăng Ký Đơn Vị Quản Lý
+                    </div>
+<h2 class="font-headline-lg text-2xl font-bold text-navy-slate dark:text-white">Khởi Tạo Hệ Thống</h2>
+<p class="text-xs text-slate-500 dark:text-slate-400">Tham gia hệ sinh thái điều hành PropFlow thông minh</p>
+</div>
+<form class="flex flex-col gap-3 relative z-30" onsubmit="event.preventDefault(); handleRegisterSubmit();">
+<div class="grid grid-cols-2 gap-2">
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase font-label-caps">Họ và tên đại diện</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">person</span>
+<input class="w-full bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-lg text-navy-slate dark:text-white text-xs py-2 pl-8 pr-2.5 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff]" placeholder="Nguyễn Văn A" required="" type="text">
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase font-label-caps">Số điện thoại</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">phone</span>
+<input class="w-full bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-lg text-navy-slate dark:text-white text-xs py-2 pl-8 pr-2.5 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff]" placeholder="0912 345 678" required="" type="tel">
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase font-label-caps">Tên Ban Quản Trị / Căn Hộ Tòa Nhà</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">corporate_fare</span>
+<input class="w-full bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-lg text-navy-slate dark:text-white text-xs py-2 pl-8 pr-2.5 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff]" placeholder="VD: BQL Sky Oasis - Căn 1208 Tháp A" required="" type="text">
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase font-label-caps">Email Liên Hệ</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">mail</span>
+<input class="w-full bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-lg text-navy-slate dark:text-white text-xs py-2 pl-8 pr-2.5 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff]" placeholder="banquanly@@propflow.vn" required="" type="email">
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase font-label-caps">Mật Khẩu Quản Trị</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[16px]">lock</span>
+<input class="w-full bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-lg text-navy-slate dark:text-white text-xs py-2 pl-8 pr-2.5 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff]" placeholder="Ít nhất 8 ký tự bảo mật" required="" type="password">
+</div>
+</div>
+<button class="mt-2 w-full bg-sky-600 hover:bg-sky-700 dark:bg-[#00f2ff] dark:hover:bg-white text-white dark:text-[#041e2a] font-label-caps text-xs font-bold uppercase tracking-wider py-2.5 rounded-lg transition-all shadow-md shadow-sky-600/20 dark:shadow-[0_0_16px_rgba(0,242,255,0.4)] flex items-center justify-center gap-2 cursor-pointer pointer-events-auto" type="submit">
+<span>Khởi Tạo Hồ Sơ Ngay</span>
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</form>
+<div class="mt-3 text-center relative z-30">
+<button class="text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors uppercase tracking-wider inline-flex items-center gap-1 cursor-pointer pointer-events-auto" onclick="window.location.href='/login'" type="button">
+<span class="material-symbols-outlined text-[14px]">arrow_back</span>
+                        Đã có tài khoản? Đăng nhập ngay
+                    </button>
+</div>
+</div>
+</div>
+<!-- ======================= RIGHT HALF ======================= -->
+<div class="w-1/2 h-full relative flex flex-col justify-center border-l border-slate-200/60 dark:border-[#00f2ff]/20 transition-transform duration-700 ease-in-out overflow-hidden pointer-events-auto" id="right-panel">
+<!-- 1. RIGHT: Login Form (Default view) -->
+<div class="absolute inset-0 p-8 md:p-12 flex flex-col justify-center transition-all duration-500 opacity-100 translate-x-0 z-20 pointer-events-auto" id="view-right-login"><div class="mb-3"><div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 dark:bg-[#00f2ff]/10 border border-sky-200 dark:border-[#00f2ff]/30 text-sky-700 dark:text-[#00f2ff] text-[11px] font-semibold tracking-wider uppercase font-label-caps mb-1.5"><span class="material-symbols-outlined text-[14px]">lock_reset</span><span>THIẾT LẬP BẢO MẬT MỚI</span></div><h2 class="font-headline-lg text-2xl md:text-3xl font-bold text-navy-slate dark:text-white">Tạo Mật Khẩu Mới</h2><p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">Vui lòng nhập mật khẩu mới với độ bảo mật cao để bảo vệ tài khoản quản lý và căn hộ của bạn.</p></div><form class="flex flex-col gap-3 relative z-30" onsubmit="event.preventDefault(); alert('Mật khẩu của bạn đã được cập nhật thành công!'); window.location.href='/login';"><div class="flex flex-col gap-1"><label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 tracking-wider uppercase font-label-caps">MẬT KHẨU MỚI</label><div class="relative"><span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">key</span><input class="w-full bg-white/70 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-lg text-navy-slate dark:text-white font-mono-data text-xs py-2.5 pl-10 pr-10 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff] transition-all" id="new-pass-input" placeholder="Nhập mật khẩu mới" required="" type="password" value="PropFlow#2025"><button class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors focus:outline-none cursor-pointer" onclick="const inp = document.getElementById('new-pass-input'); const ic = document.getElementById('eye-icon-1'); if(inp.type==='password'){inp.type='text'; ic.textContent='visibility_off';}else{inp.type='password'; ic.textContent='visibility';}" type="button"><span class="material-symbols-outlined text-[18px]" id="eye-icon-1">visibility</span></button></div></div><div class="bg-white/50 dark:bg-slate-900/60 rounded-lg p-2.5 border border-slate-200/70 dark:border-slate-800"><div class="flex items-center justify-between mb-1.5"><span class="text-[10px] uppercase font-semibold text-slate-500 dark:text-slate-400 font-label-caps">Độ mạnh mật khẩu:</span><span class="text-[11px] font-bold text-emerald-700 dark:text-[#00f2ff] font-mono-data uppercase">Khá Mạnh (3/4)</span></div><div class="grid grid-cols-4 gap-1.5 h-1.5 mb-2"><div class="h-full rounded-full bg-emerald-500 dark:bg-[#00f2ff]"></div><div class="h-full rounded-full bg-emerald-500 dark:bg-[#00f2ff]"></div><div class="h-full rounded-full bg-emerald-500 dark:bg-[#00f2ff]"></div><div class="h-full rounded-full bg-slate-200 dark:bg-slate-700"></div></div><div class="grid grid-cols-2 gap-1 text-[10px] text-slate-500 dark:text-slate-400"><span class="flex items-center gap-1 text-emerald-700 dark:text-[#00f2ff]"><span class="material-symbols-outlined text-[12px]">check_circle</span> Tối thiểu 8 ký tự</span><span class="flex items-center gap-1 text-emerald-700 dark:text-[#00f2ff]"><span class="material-symbols-outlined text-[12px]">check_circle</span> Chữ hoa &amp; chữ thường</span><span class="flex items-center gap-1 text-emerald-700 dark:text-[#00f2ff]"><span class="material-symbols-outlined text-[12px]">check_circle</span> Ít nhất 1 chữ số</span><span class="flex items-center gap-1 text-slate-400 dark:text-slate-500"><span class="material-symbols-outlined text-[12px]">radio_button_unchecked</span> Ký tự đặc biệt (!@@#$$)</span></div></div><div class="flex flex-col gap-1"><label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 tracking-wider uppercase font-label-caps">XÁC NHẬN MẬT KHẨU MỚI</label><div class="relative"><span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">lock</span><input class="w-full bg-white/70 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-700/80 rounded-lg text-navy-slate dark:text-white font-mono-data text-xs py-2.5 pl-10 pr-10 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff] transition-all" id="confirm-pass-input" placeholder="Nhập lại mật khẩu mới" required="" type="password" value="PropFlow#2025"><button class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors focus:outline-none cursor-pointer" onclick="const inp = document.getElementById('confirm-pass-input'); const ic = document.getElementById('eye-icon-2'); if(inp.type==='password'){inp.type='text'; ic.textContent='visibility_off';}else{inp.type='password'; ic.textContent='visibility';}" type="button"><span class="material-symbols-outlined text-[18px]" id="eye-icon-2">visibility</span></button></div></div><div class="flex items-center text-xs text-slate-600 dark:text-slate-400 my-0.5"><label class="flex items-center gap-2 cursor-pointer select-none pointer-events-auto"><input checked="" class="rounded border-slate-300 dark:border-slate-700 text-sky-600 dark:text-[#00f2ff] focus:ring-sky-400 dark:bg-slate-900 w-4 h-4 cursor-pointer" type="checkbox"><span>Đăng xuất khỏi tất cả các thiết bị khác</span></label></div><button class="mt-1 w-full bg-sky-600 hover:bg-sky-700 dark:bg-[#00f2ff] dark:hover:bg-white text-white dark:text-[#041e2a] font-label-caps text-xs font-bold uppercase tracking-wider py-3 rounded-lg transition-all shadow-md shadow-sky-600/25 dark:shadow-[0_0_20px_rgba(0,242,255,0.3)] flex items-center justify-center gap-2 group cursor-pointer pointer-events-auto" type="submit"><span>CẬP NHẬT MẬT KHẨU</span><span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">task_alt</span></button></form><div class="mt-4 text-center border-t border-slate-200/80 dark:border-slate-800 pt-3 relative z-30"><a class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors uppercase tracking-wider cursor-pointer pointer-events-auto" href="/login"><span class="material-symbols-outlined text-[16px]">arrow_back</span><span>Quay lại Đăng nhập</span></a></div></div>
+<!-- 2. RIGHT: Forgot Password Form -->
+<div class="absolute inset-0 p-8 md:p-12 flex flex-col justify-center transition-all duration-500 opacity-0 translate-x-8 z-10 pointer-events-none" id="view-right-forgot">
+<div class="inline-flex items-center gap-2 mb-3 self-start bg-sky-50 dark:bg-[#00f2ff]/10 px-3 py-1 rounded-full border border-sky-200 dark:border-[#00f2ff]/30">
+<span class="material-symbols-outlined text-sky-600 dark:text-[#00f2ff] text-[16px]">lock_reset</span>
+<span class="font-label-caps text-[11px] font-semibold text-sky-700 dark:text-[#00f2ff] tracking-wider uppercase">Cấp Lại Mật Khẩu</span>
+</div>
+<h2 class="font-headline-lg text-2xl font-bold text-navy-slate dark:text-white mb-1">Khôi Phục Quyền Truy Cập</h2>
+<p class="font-body-md text-xs text-slate-500 dark:text-slate-400 mb-5 leading-relaxed border-l-2 border-sky-400 dark:border-[#00f2ff] pl-3">
+                    Nhập email đã đăng ký với ban quản trị để nhận mã xác thực OTP khôi phục mật khẩu.
+                </p>
+<form class="flex flex-col gap-4 relative z-30" onsubmit="event.preventDefault(); handleForgotSubmit();">
+<div class="flex flex-col gap-1.5">
+<label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider font-label-caps">Địa Chỉ Email Đăng Ký</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">alternate_email</span>
+<input class="w-full bg-white/70 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-lg text-navy-slate dark:text-white font-mono-data text-xs py-3 pl-10 pr-3 focus:outline-none focus:border-sky-500 dark:focus:border-[#00f2ff] focus:ring-1 focus:ring-sky-200 dark:focus:ring-[#00f2ff] transition-all" placeholder="bql-toanha@@propflow.vn" required="" type="email" value="admin@@toanhasykoasis.vn">
+</div>
+</div>
+<button class="mt-2 w-full bg-sky-600 hover:bg-sky-700 dark:bg-[#00f2ff] dark:hover:bg-white text-white dark:text-[#041e2a] font-label-caps text-xs font-bold uppercase tracking-wider py-3.5 rounded-lg transition-all shadow-md shadow-sky-600/25 dark:shadow-[0_0_20px_rgba(0,242,255,0.3)] flex items-center justify-center gap-2 group cursor-pointer pointer-events-auto" id="forgot-submit-btn" type="submit">
+<span>GỬI MÃ XÁC THỰC OTP →</span>
+<span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">send</span>
+</button>
+</form>
+<div class="mt-6 text-center border-t border-slate-200/80 dark:border-slate-800 pt-4 relative z-30">
+<button class="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-[#00f2ff] transition-colors uppercase tracking-wider group focus:outline-none cursor-pointer pointer-events-auto" onclick="window.location.href='/login'" type="button">
+<span class="material-symbols-outlined text-[16px] group-hover:-translate-x-1 transition-transform">arrow_back</span>
+<span>QUAY LẠI ĐĂNG NHẬP</span>
+</button>
+</div>
+</div>
+<!-- 3. RIGHT: Welcome Banner (Visible in REGISTER Mode) -->
+<div class="absolute inset-0 p-8 md:p-12 flex flex-col justify-center items-end text-right transition-all duration-500 opacity-0 translate-x-8 z-10 pointer-events-none" id="view-right-welcome">
+<div class="inline-flex items-center gap-2 mb-6 bg-sky-50 dark:bg-[#00f2ff]/10 px-3.5 py-1.5 rounded-full border border-sky-200 dark:border-[#00f2ff]/30 shadow-sm">
+<span class="font-label-caps text-xs font-semibold text-sky-700 dark:text-[#00f2ff] tracking-wider uppercase">Kết Nối Cộng Đồng</span>
+<div class="w-2 h-2 rounded-full bg-sky-500 dark:bg-[#00f2ff] animate-ping"></div>
+</div>
+<h1 class="font-display-lg text-3xl font-bold text-navy-slate dark:text-white mb-4 leading-tight">
+                    Cùng Xây Dựng<br>
+<span class="text-transparent bg-clip-text bg-gradient-to-l from-sky-600 to-blue-800 dark:from-[#00f2ff] dark:to-blue-500">Cộng Đồng Tiện Nghi</span>
+</h1>
+<p class="font-body-md text-xs md:text-sm text-slate-600 dark:text-slate-300 max-w-sm border-r-2 border-sky-400 dark:border-[#00f2ff] pr-4 py-1 leading-relaxed">
+                    Hơn 350+ tòa chung cư và khu đô thị cao cấp tin dùng PropFlow để tối ưu chi phí vận hành, gia tăng độ hài lòng của cư dân lên tới 98%.
+                </p>
+<div class="mt-6 flex items-center gap-4 text-xs font-medium text-slate-500 dark:text-slate-400">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sky-600 dark:text-[#00f2ff] text-sm">check_circle</span> Kiểm soát thẻ xe</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sky-600 dark:text-[#00f2ff] text-sm">check_circle</span> Hóa đơn tự động</span>
+</div>
+</div>
+</div>
+<!-- Corner HUD Notches -->
+<div class="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+<div class="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+<div class="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+<div class="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-sky-400/60 dark:border-[#00f2ff]/80 pointer-events-none z-10"></div>
+</div>
+</main>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initLandingPage");
+        }
+    }
+}

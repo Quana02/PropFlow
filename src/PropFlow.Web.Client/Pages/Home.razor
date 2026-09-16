@@ -1,7 +1,264 @@
 @page "/"
+@layout PropFlow.Web.Client.Layout.LandingLayout
+@inject IJSRuntime JSRuntime
 
-<PageTitle>PropFlow</PageTitle>
+<style>
+  @@layer base {
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    body {
+      min-height: 100vh;
+    }
+    main > :first-child {
+      margin-top: 0 !important;
+    }
+    main > :last-child {
+      margin-bottom: 0 !important;
+    }
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(239, 244, 255, 0.5);
+  }
+  .dark ::-webkit-scrollbar-track {
+    background: rgba(11, 15, 23, 0.7);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #0284c7;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #38bdf8;
+  }
 
-<h1>Hệ thống Quản lý Chung cư PropFlow</h1>
+  @@keyframes translateX {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  @@keyframes scan {
+    0% { transform: translateY(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(580px); opacity: 0; }
+  }
+</style>
 
-<p>Chào mừng bạn đến với PropFlow.</p>
+<!-- 3D Ghost Building Scene Layer -->
+<div class="fixed inset-0 w-full h-full pointer-events-none z-0" id="threejs-canvas-container"></div>
+<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-[#0b0f17]/80 backdrop-blur-md h-20 border-b border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors duration-300">
+<div class="w-full h-full px-margin-edge flex items-center justify-between">
+<div class="flex items-center gap-3">
+<a class="flex items-center gap-2 cursor-pointer" href="#home">
+<img alt="PropFlow Logo" class="h-9 w-auto object-contain brightness-100 dark:brightness-110 dark:drop-shadow-[0_0_8px_rgba(56,189,248,0.4)]" src="https://lh3.googleusercontent.com/aida/AEtjO1UiU3-Iz9DCQs6CXI5F_f3pFrTRxpJLYMUA68UWghQHRfQdSRgGrQ4MxOVO6qPyDliwqeLBJwU873lVIPJpEr_Y2NP-zpyjZQqU6k0BVDlAKiAZOeaeTQ6OZwSfyZ-qxjLHRiOVTBkZxE93VxRfmUL-dlzxulDSAk6JFYCQ6t7-x-xs3PXPYy4_jv6JcYgVmt1aLMuGGg9Fsluht9DUTvajgmkY8_7E2GlfLL4wZUFF3wDpVPY6r2f-Kw">
+</a>
+</div>
+<nav class="hidden lg:flex items-center gap-8" data-active-classes="text-sky-600 dark:text-cyan-400 font-bold">
+<a aria-current="page" class="transition-all duration-300 text-sky-600 dark:text-cyan-400 font-bold hover:text-sky-600 dark:hover:text-cyan-300 tracking-wide cursor-pointer font-label-caps" data-path="home" href="#home">TRANG CHỦ</a>
+<a class="font-label-caps text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 transition-all duration-300 tracking-wide cursor-pointer" data-path="features" href="#features">TÍNH NĂNG</a>
+<a class="font-label-caps text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 transition-all duration-300 tracking-wide cursor-pointer" data-path="pricing" href="#pricing">BẢNG GIÁ</a>
+</nav>
+<div class="flex items-center gap-3 md:gap-4">
+<!-- Unified Modern Theme Switcher -->
+<button aria-label="Đổi chế độ sáng tối" class="relative flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white/90 dark:bg-slate-800/80 text-slate-700 dark:text-cyan-400 shadow-sm hover:border-sky-500 dark:hover:border-cyan-400 transition-all duration-300 group" id="theme-toggle" title="Chuyển chế độ Sáng / Tối" type="button">
+<span class="material-symbols-outlined text-[20px] transition-transform duration-300 rotate-0 dark:rotate-90 hidden dark:block text-cyan-300">dark_mode</span>
+<span class="material-symbols-outlined text-[20px] transition-transform duration-300 text-amber-500 block dark:hidden">light_mode</span>
+</button>
+<a class="hidden md:flex items-center px-4 md:px-5 py-2.5 rounded-full border border-sky-600/30 dark:border-cyan-500/30 bg-sky-50/80 dark:bg-cyan-950/40 hover:bg-sky-100 dark:hover:bg-cyan-900/60 text-sky-700 dark:text-cyan-300 font-label-caps transition-all duration-300 shadow-sm text-xs md:text-sm tracking-wide" data-path="portal" href="/login">CỔNG CƯ DÂN</a>
+<a class="flex items-center gap-2 px-4 md:px-5 py-2.5 rounded-full bg-sky-600 dark:bg-cyan-500 hover:bg-sky-700 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-label-caps transition-all duration-300 shadow-md shadow-sky-600/20 dark:shadow-cyan-500/30 text-xs md:text-sm font-semibold tracking-wide" href="/login">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+<span>ĐĂNG NHẬP</span>
+</a>
+</div>
+</div>
+</header>
+<main class="w-full pt-20 relative z-10 bg-transparent">
+<div class="flex flex-col w-full relative min-h-screen">
+<!-- Main Content Canvas (Interactive Layer) -->
+<div class="relative flex flex-col w-full">
+<!-- Hero Section -->
+<section class="min-h-[85vh] flex flex-col justify-center px-margin-edge pt-24 pb-32" id="home">
+<div class="max-w-3xl">
+<!-- Status Badge -->
+<div class="inline-flex items-center gap-2 px-4 py-2 bg-white/85 dark:bg-slate-900/80 backdrop-blur-md rounded-full border border-sky-200/90 dark:border-cyan-500/30 mb-8 shadow-sm transition-colors duration-300">
+<span class="w-2.5 h-2.5 rounded-full bg-sky-600 dark:bg-cyan-400 shadow-[0_0_8px_rgba(2,132,199,0.7)] dark:shadow-[0_0_12px_rgba(0,242,255,0.9)] animate-pulse"></span>
+<span class="font-label-caps text-sky-700 dark:text-cyan-300 tracking-wider text-xs uppercase font-semibold">HỆ THỐNG VẬN HÀNH THÔNG MINH • TRỰC TUYẾN</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-slate-900 dark:text-white mb-6 drop-shadow-sm transition-colors duration-300">
+            PROPFLOW <br>
+<span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 via-cyan-600 to-teal-500 dark:from-cyan-400 dark:via-sky-300 dark:to-teal-300">SMART RESIDENCE.</span>
+</h1>
+<p class="font-body-md text-[19px] text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed mb-12 transition-colors duration-300">
+            Nền tảng quản lý chung cư AI đa phân hệ toàn diện: Kết nối Ban quản lý, Kỹ thuật bảo trì, Cư dân và Hệ thống khóa thông minh IoT trên mô hình số hóa không gian 3D.
+          </p>
+<div class="flex flex-wrap items-center gap-5">
+<button class="px-8 py-4 bg-sky-600 dark:bg-cyan-500 text-white dark:text-slate-950 font-label-caps rounded-full hover:bg-sky-700 dark:hover:bg-cyan-400 hover:shadow-lg hover:shadow-sky-600/30 dark:hover:shadow-cyan-500/40 transition-all duration-300 relative group overflow-hidden flex items-center gap-2 font-semibold">
+<span class="relative z-10 flex items-center gap-2">
+                KHÁM PHÁ GIẢI PHÁP
+                <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</span>
+</button>
+<button class="px-8 py-4 bg-white/80 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 hover:text-sky-700 dark:hover:text-cyan-300 font-label-caps rounded-full backdrop-blur-md hover:bg-sky-50/70 dark:hover:bg-slate-800/80 transition-all duration-300 flex items-center gap-2 font-semibold shadow-sm">
+<span class="material-symbols-outlined text-sky-600 dark:text-cyan-400 text-[20px]">view_in_ar</span>
+              XEM MÔ PHỎNG 3D
+            </button>
+</div>
+</div>
+<!-- Scroll Indicator -->
+<div class="mt-20 flex items-center gap-4 opacity-75">
+<span class="font-mono-data text-[11px] tracking-widest uppercase text-slate-500 dark:text-slate-400">Cuộn để khám phá phân hệ</span>
+<div class="w-12 h-[2px] bg-slate-300 dark:bg-slate-700 relative overflow-hidden rounded-full">
+<div class="absolute top-0 left-0 h-full w-full bg-sky-600 dark:bg-cyan-400 animate-[translateX_2s_ease-in-out_infinite]"></div>
+</div>
+</div>
+</section>
+<!-- Core Systems Grid -->
+<section class="px-margin-edge py-32 relative" id="features">
+<div class="absolute top-0 right-0 w-[700px] h-[700px] bg-sky-100/60 dark:bg-cyan-900/15 rounded-full blur-[130px] -z-10 pointer-events-none transition-colors duration-500"></div>
+<div class="flex justify-between items-end mb-16">
+<div>
+<h2 class="font-headline-lg text-[16px] text-sky-600 dark:text-cyan-400 font-mono-data uppercase tracking-widest mb-2 font-bold">01 // CÔNG NGHỆ QUẢN VẬN HÀNH</h2>
+<h3 class="font-headline-lg text-[36px] text-slate-900 dark:text-white transition-colors duration-300">Phân Hệ Cốt Lõi PropFlow</h3>
+</div>
+<div class="hidden md:flex gap-4">
+<button class="w-12 h-12 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:border-sky-500 dark:hover:border-cyan-400 hover:text-sky-600 dark:hover:text-cyan-400 transition-colors bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-12 h-12 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:border-sky-500 dark:hover:border-cyan-400 hover:text-sky-600 dark:hover:text-cyan-400 transition-colors bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-container-gap">
+<!-- Card 1 -->
+<div class="group relative p-8 bg-white/75 dark:bg-slate-900/65 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/90 rounded-2xl hover:border-sky-400/80 dark:hover:border-cyan-500/50 transition-all duration-500 overflow-hidden flex flex-col justify-between min-h-[400px] shadow-sm hover:shadow-xl dark:shadow-slate-950/50">
+<div class="absolute inset-0 bg-gradient-to-br from-sky-50/50 dark:from-cyan-950/25 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+<div class="relative z-10">
+<div class="w-14 h-14 rounded-xl bg-sky-50 dark:bg-slate-800/90 border border-sky-200 dark:border-cyan-500/30 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-sm">
+<span class="material-symbols-outlined text-sky-600 dark:text-cyan-400 text-[28px]" style="font-variation-settings: 'FILL' 1;">apartment</span>
+</div>
+<h4 class="font-headline-lg text-[22px] text-slate-900 dark:text-white mb-4 transition-colors duration-300">Ban Quản Lý &amp; Cư Dân</h4>
+<p class="font-body-md text-slate-600 dark:text-slate-300 text-[15px] leading-relaxed transition-colors duration-300">
+                Kênh thông tin tức thì, thông báo phí tự động qua ứng dụng, tiếp nhận ý kiến phản hồi 24/7 và kiểm soát thẻ cư dân điện tử liền mạch.
+              </p>
+</div>
+<div class="relative z-10 mt-8">
+<div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+<div class="h-full bg-sky-600 dark:bg-cyan-400 w-[92%] relative rounded-full dark:shadow-[0_0_8px_rgba(0,242,255,0.7)]"></div>
+</div>
+<div class="flex justify-between mt-2">
+<span class="font-mono-data text-[12px] text-slate-500 dark:text-slate-400">MỨC ĐỘ HÀI LÒNG CƯ DÂN</span>
+<span class="font-mono-data text-[12px] text-sky-700 dark:text-cyan-400 font-bold">92%</span>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group relative p-8 bg-white/75 dark:bg-slate-900/65 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/90 rounded-2xl hover:border-sky-400/80 dark:hover:border-cyan-500/50 transition-all duration-500 overflow-hidden flex flex-col justify-between min-h-[400px] shadow-sm hover:shadow-xl dark:shadow-slate-950/50">
+<div class="absolute inset-0 bg-gradient-to-br from-sky-50/50 dark:from-cyan-950/25 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+<div class="relative z-10">
+<div class="w-14 h-14 rounded-xl bg-sky-50 dark:bg-slate-800/90 border border-sky-200 dark:border-cyan-500/30 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-sm">
+<span class="material-symbols-outlined text-sky-600 dark:text-cyan-400 text-[28px]" style="font-variation-settings: 'FILL' 1;">construction</span>
+</div>
+<h4 class="font-headline-lg text-[22px] text-slate-900 dark:text-white mb-4 transition-colors duration-300">Bảo Trì Kỹ Thuật Số</h4>
+<p class="font-body-md text-slate-600 dark:text-slate-300 text-[15px] leading-relaxed transition-colors duration-300">
+                Lập lịch bảo trì dự đoán cho hệ thống bơm nước, thang máy, máy phát điện và kiểm tra kỹ thuật phòng cháy chữa cháy trên sơ đồ 3D trực quan.
+              </p>
+</div>
+<!-- Inline Mini Chart -->
+<div class="relative z-10 mt-8 h-16 w-full flex items-end gap-1.5">
+<div class="w-full bg-sky-200 dark:bg-cyan-950/80 h-[35%] rounded-t-sm hover:h-[45%] transition-all"></div>
+<div class="w-full bg-sky-300 dark:bg-cyan-900/70 h-[55%] rounded-t-sm hover:h-[65%] transition-all"></div>
+<div class="w-full bg-sky-400 dark:bg-cyan-700/80 h-[70%] rounded-t-sm hover:h-[80%] transition-all"></div>
+<div class="w-full bg-sky-600 dark:bg-cyan-400 h-[92%] rounded-t-sm shadow-sm dark:shadow-[0_0_8px_rgba(0,242,255,0.7)]"></div>
+<div class="w-full bg-sky-300 dark:bg-cyan-900/70 h-[60%] rounded-t-sm"></div>
+<div class="w-full bg-sky-200 dark:bg-cyan-950/80 h-[45%] rounded-t-sm"></div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="group relative p-8 bg-white/75 dark:bg-slate-900/65 backdrop-blur-md border border-slate-200/80 dark:border-slate-800/90 rounded-2xl hover:border-sky-400/80 dark:hover:border-cyan-500/50 transition-all duration-500 overflow-hidden flex flex-col justify-between min-h-[400px] shadow-sm hover:shadow-xl dark:shadow-slate-950/50">
+<div class="absolute inset-0 bg-gradient-to-br from-sky-50/50 dark:from-cyan-950/25 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+<div class="relative z-10">
+<div class="w-14 h-14 rounded-xl bg-sky-50 dark:bg-slate-800/90 border border-sky-200 dark:border-cyan-500/30 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500 shadow-sm">
+<span class="material-symbols-outlined text-sky-600 dark:text-cyan-400 text-[28px]" style="font-variation-settings: 'FILL' 1;">fingerprint</span>
+</div>
+<h4 class="font-headline-lg text-[22px] text-slate-900 dark:text-white mb-4 transition-colors duration-300">Khóa Thông Minh &amp; IoT</h4>
+<p class="font-body-md text-slate-600 dark:text-slate-300 text-[15px] leading-relaxed transition-colors duration-300">
+                Kiểm soát ra vào tự động bằng nhận diện khuôn mặt, QR code khách vãng lai, tích hợp barrier đỗ xe thông minh và báo động an ninh lập tức.
+              </p>
+</div>
+<div class="relative z-10 mt-8 flex items-center gap-3 bg-slate-50 dark:bg-slate-800/70 p-3.5 rounded-lg border border-slate-200 dark:border-slate-700/80 transition-colors duration-300">
+<span class="relative flex h-3 w-3">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-600 dark:bg-emerald-400"></span>
+</span>
+<span class="font-mono-data text-[12px] text-slate-700 dark:text-slate-200">100% CẢNH BÁO XỬ LÝ DƯỚI 60 GIÂY</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Data Dashboard Preview -->
+<section class="px-margin-edge py-28 relative">
+<div class="max-w-6xl mx-auto rounded-3xl bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 p-3 md:p-5 backdrop-blur-xl shadow-xl dark:shadow-2xl dark:shadow-cyan-950/40 relative overflow-hidden transition-colors duration-300">
+<!-- Decorative scan line -->
+<div class="absolute top-0 left-0 w-full h-[2px] bg-sky-500 dark:bg-cyan-400 shadow-[0_0_10px_rgba(2,132,199,0.6)] dark:shadow-[0_0_14px_rgba(0,242,255,0.9)] animate-[scan_4s_linear_infinite] z-20"></div>
+<div class="rounded-2xl overflow-hidden relative group border border-slate-200/50 dark:border-slate-700/60">
+<img class="w-full h-auto object-cover opacity-95 group-hover:scale-[1.01] transition-all duration-700" data-alt="Bảng điều khiển trung tâm quản lý chung cư PropFlow với mô hình tòa nhà 3D, số liệu cảm biến IoT, tiêu thụ năng lượng và trạng thái an ninh tòa nhà" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2rR4o7beX4s-_nyy89ClrvGVUXgvKhcFkp1bd47kYimRt3gBHJz1VAY85oBsrxYK2Ni5KG-4L8m-GMRreVcfpWUZgXGeW5IMkmwb1VHWTJ6VyAa-fBUGUwiQnT4Ls-U02a6GbenuG5sB5l-8j8PPNznpcmdasGWtDRiIxd7V30ko1ojxAYHzoTBhG-DQmghjhW-A0my9gSwMhcdCt-tBRlDutEghRasSDLvbfvLYTbXRmSGaSRRP6">
+<div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-transparent flex items-end p-8">
+<div>
+<div class="font-mono-data text-sky-400 dark:text-cyan-400 text-[13px] mb-1.5 uppercase tracking-widest font-bold drop-shadow">Trung Tâm Điều Hành Số 24/7</div>
+<h3 class="font-headline-lg text-[30px] text-white">Bao Quát Toàn Diện Mọi Hoạt Động Tòa Nhà</h3>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Pricing Section -->
+<section class="px-margin-edge py-32 min-h-[550px] flex items-center justify-center relative" id="pricing">
+<div class="text-center max-w-2xl mx-auto z-10 px-8 py-14 rounded-3xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl dark:shadow-2xl dark:shadow-cyan-950/40 transition-colors duration-300">
+<h2 class="font-headline-lg text-[36px] text-slate-900 dark:text-white mb-5 transition-colors duration-300">Triển Khai PropFlow</h2>
+<p class="font-body-md text-slate-600 dark:text-slate-300 mb-8 leading-relaxed transition-colors duration-300">Giải pháp mô-đun linh hoạt cho chung cư cao cấp, khu đô thị phức hợp và chuỗi căn hộ dịch vụ. Đội ngũ chuyên gia sẵn sàng hỗ trợ khảo sát và tích hợp.</p>
+<button class="px-8 py-4 bg-sky-600 dark:bg-cyan-500 hover:bg-sky-700 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-label-caps rounded-full shadow-lg shadow-sky-600/25 dark:shadow-cyan-500/35 transition-all font-semibold">
+            YÊU CẦU TƯ VẤN &amp; BÁO GIÁ
+          </button>
+</div>
+</section>
+</div>
+</div>
+</main>
+<footer class="w-full bg-white/90 dark:bg-[#070b12]/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 py-10 relative z-10 transition-colors duration-300">
+<div class="px-margin-edge flex flex-col md:flex-row justify-between items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="font-headline-lg text-[16px] text-slate-900 dark:text-white tracking-tight font-bold">PROPFLOW</span>
+<span class="text-xs text-slate-500 dark:text-slate-400 font-mono-data">SMART RESIDENCE</span>
+</div>
+<div class="font-mono-data text-slate-500 dark:text-slate-400 text-[12px] uppercase tracking-wider">
+      © 2025 PROPFLOW SMART RESIDENCE. TẤT CẢ QUYỀN ĐƯỢC BẢO LƯU.
+    </div>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 cursor-pointer text-[20px] transition-colors">apartment</span>
+<span class="material-symbols-outlined text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 cursor-pointer text-[20px] transition-colors">verified_user</span>
+</div>
+</div>
+</footer>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initMarketingPage");
+        }
+    }
+}
