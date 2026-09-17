@@ -1,10 +1,142 @@
-<!DOCTYPE html>
-<html lang="vi">
+﻿<!DOCTYPE html>
+<html lang="vi" class="light">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    
+    <title>PropFlow - Hệ Thống Quản Lý Vận Hành Chung Cư Đẳng Cấp</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@@300..700&amp;family=Inter:wght@@400..700&amp;family=Geist:wght@@400..700&amp;family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@@24,400,0,0" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@@100..700,0..1&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@@100..900&amp;family=Inter:wght@@100..900&amp;family=Space+Grotesk:wght@@100..900&amp;display=swap" rel="stylesheet">
+    
+    <!-- Tailwind Configuration and CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#0284c7",
+                        "primary-hover": "#0369a1",
+                        "brand-50": "#f0f7ff",
+                        "brand-100": "#e0effe",
+                        "brand-500": "#0284c7",
+                        "brand-600": "#0369a1",
+                        "brand-700": "#075985",
+                        "navy-slate": "#0f172a",
+                        "navy-muted": "#334155",
+                        "cyan-glow": "#00f2ff",
+                        "dark-bg": "#06090e",
+                        "dark-surface": "#0b111a",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed": "#131b2e",
+                        "secondary": "#0284c7",
+                        "on-background": "#0f172a",
+                        "secondary-fixed-dim": "#93ccff",
+                        "surface-container-low": "#eff4ff",
+                        "surface-bright": "#f8f9ff",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#0369a1",
+                        "on-secondary-fixed-variant": "#004b73",
+                        "surface-container-high": "#dce9ff",
+                        "primary-container": "#0284c7",
+                        "tertiary-container": "#e0f2fe",
+                        "background": "#f8f9ff",
+                        "primary-fixed-dim": "#bae6fd",
+                        "outline": "#94a3b8",
+                        "inverse-primary": "#bae6fd",
+                        "surface-tint": "#0284c7",
+                        "inverse-surface": "#0f172a",
+                        "surface-variant": "#e2e8f0",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed": "#082f49",
+                        "on-secondary-fixed": "#082f49",
+                        "surface": "#ffffff",
+                        "surface-container": "#f1f5f9",
+                        "tertiary-fixed": "#e0f2fe",
+                        "on-secondary-container": "#0369a1",
+                        "primary-fixed": "#e0f2fe",
+                        "on-tertiary-container": "#0369a1",
+                        "on-primary-fixed-variant": "#0369a1",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#f1f5f9",
+                        "on-surface": "#0f172a",
+                        "on-tertiary-fixed-variant": "#075985",
+                        "error-container": "#ffdad6",
+                        "on-primary-container": "#ffffff",
+                        "inverse-on-surface": "#f8fafc",
+                        "tertiary-fixed-dim": "#bae6fd",
+                        "on-surface-variant": "#475569",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#cbd5e1",
+                        "secondary-fixed": "#e0f2fe",
+                        "secondary-container": "#e0f2fe",
+                        "surface-container-highest": "#e2e8f0"
+                    },
+                    boxShadow: {
+                        "glass": "0 20px 40px -15px rgba(0, 50, 150, 0.08), 0 0 15px rgba(255, 255, 255, 0.7) inset",
+                        "glass-dark": "0 20px 50px -10px rgba(0, 0, 0, 0.8), 0 0 25px rgba(0, 242, 255, 0.08) inset",
+                        "card": "0 16px 36px -6px rgba(15, 23, 42, 0.06), 0 4px 14px -2px rgba(15, 23, 42, 0.03)",
+                        "card-dark": "0 20px 45px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 242, 255, 0.25)",
+                        "glow-cyan": "0 0 24px -4px rgba(0, 242, 255, 0.45)",
+                        "drag-glow": "0 25px 50px -12px rgba(14, 165, 233, 0.4), 0 0 25px rgba(56, 189, 248, 0.35)"
+                    },
+                    spacing: {
+                        "gutter-mobile": "1rem",
+                        "unit-3xl": "2.5rem",
+                        "unit-base": "1rem",
+                        "unit-2xl": "2rem",
+                        "unit-xs": "0.25rem",
+                        "margin-page": "2rem",
+                        "unit-2xs": "0.125rem",
+                        "gutter-desktop": "1.5rem",
+                        "unit-xl": "1.5rem",
+                        "unit-lg": "1.25rem",
+                        "unit-4xl": "3rem",
+                        "unit-md": "0.75rem",
+                        "unit-sm": "0.5rem",
+                        "container-gap": "16px",
+                        "margin-edge": "40px",
+                        "unit": "4px",
+                        "gutter": "24px"
+                    },
+                    fontFamily: {
+                        "display-lg": ["Space Grotesk", "sans-serif"],
+                        "headline-lg": ["Space Grotesk", "sans-serif"],
+                        "body-md": ["Inter", "sans-serif"],
+                        "mono-data": ["Geist", "Space Grotesk", "monospace"],
+                        "label-caps": ["Space Grotesk", "sans-serif"],
+                        "headline-lg-mobile": ["Space Grotesk", "sans-serif"]
+                    },
+                    fontSize: {
+                        "display-lg": ["46px", {"lineHeight": "54px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "mono-data": ["13px", {"lineHeight": "18px", "fontWeight": "600"}],
+                        "body-md": ["15px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.06em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @@layer base {
+            html, body { margin: 0; padding: 0; }
+            body { overscroll-behavior: none; }
+        }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
     <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="PropFlow.Web.styles.css" />
@@ -12,9 +144,12 @@
     <HeadOutlet @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
 </head>
 
-<body>
+<body id="app-body" class="antialiased min-h-screen relative transition-colors duration-700 bg-[#f8f9ff] text-slate-900 font-body-md">
     <Routes @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
     <script src="_framework/blazor.web.js"></script>
+    <script src="js/landing.js"></script>
+    <script src="js/marketing.js"></script>
+    <script src="js/resident.js"></script>
 </body>
 
 </html>

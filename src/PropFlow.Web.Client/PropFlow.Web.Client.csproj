@@ -10,6 +10,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.27" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.27" />
+    <ProjectReference Include="../Modules/Authentication.Contracts/PropFlow.Modules.Authentication.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Pages\Resident\" />
   </ItemGroup>
 
 </Project>

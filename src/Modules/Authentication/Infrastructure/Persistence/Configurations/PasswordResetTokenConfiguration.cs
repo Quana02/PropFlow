@@ -11,6 +11,10 @@ public class PasswordResetTokenConfiguration : IEntityTypeConfiguration<Password
         builder.ToTable("password_reset_tokens", "auth");
 
         builder.HasKey(prt => prt.Id);
+        builder.Property(x => x.AttemptCount).HasColumnName("attempt_count").HasDefaultValue(0);
+        builder.Property(x => x.ProofHash).HasColumnName("proof_hash");
+        builder.Property(x => x.ProofExpiresAt).HasColumnName("proof_expires_at");
+        builder.Property(x => x.VerifiedAt).HasColumnName("verified_at");
         builder.Property(prt => prt.Id)
             .HasColumnName("id");
 

@@ -101,6 +101,12 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<int>("AttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("attempt_count");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -110,6 +116,14 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("ProofExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("proof_expires_at");
+
+                    b.Property<string>("ProofHash")
+                        .HasColumnType("text")
+                        .HasColumnName("proof_hash");
 
                     b.Property<string>("RequestedIp")
                         .HasMaxLength(45)
@@ -128,6 +142,10 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at");
 
                     b.HasKey("Id");
 
@@ -301,6 +319,8 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedBy");
+
                     b.HasIndex("Email")
                         .IsUnique();
 
@@ -308,6 +328,8 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("UpdatedBy");
 
                     b.HasIndex("Username")
                         .IsUnique();
@@ -353,6 +375,19 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                     b.Navigation("ReplacedByToken");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Authentication.Domain.Users.UserAccount", b =>
+                {
+                    b.HasOne("PropFlow.Modules.Authentication.Domain.Users.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PropFlow.Modules.Authentication.Domain.Users.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Authentication.Domain.Users.UserAccount", b =>

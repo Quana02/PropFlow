@@ -1,6 +1,23 @@
-﻿<Router AppAssembly="typeof(Program).Assembly">
+@using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Web.Client.Features.Authentication.Components
+<AuthBootstrap>
+<Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.LandingLayout)">
+            <Authorizing><p role="status">Đang kiểm tra quyền truy cập…</p></Authorizing>
+            <NotAuthorized Context="state">
+                @if (state.User.Identity?.IsAuthenticated == true)
+                { <p role="alert">Bạn không có quyền truy cập trang này. <a href="/account">Về tài khoản</a></p> }
+                else { <RequireLogin /> }
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h2" />
     </Found>
+    <NotFound>
+        <PageTitle>Không tìm thấy trang</PageTitle>
+        <LayoutView Layout="typeof(Layout.LandingLayout)">
+            <p>Trang không tồn tại. <a href="/">Quay lại trang chủ</a></p>
+        </LayoutView>
+    </NotFound>
 </Router>
+</AuthBootstrap>

@@ -1,0 +1,106 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+@if (IsLogin) { <PageTitle>Đăng nhập — PropFlow</PageTitle> }
+else if (IsRegister) { <PageTitle>Đăng ký cư dân — PropFlow</PageTitle> }
+else if (IsForgot) { <PageTitle>Quên mật khẩu — PropFlow</PageTitle> }
+
+<div class="auth-shell @(IsRegister ? "register-mode" : IsForgot ? "forgot-mode" : "") @(IsLogin || IsRegister ? "switch-route" : "") @_transition">
+    <div id="threejs-bg" class="auth-three" aria-hidden="true"></div>
+    <header class="auth-header">
+        <a href="/" class="brand">PropFlow <small>HỆ THỐNG ĐIỀU HÀNH TÒA NHÀ</small></a>
+        <div class="header-actions">
+            <button type="button" class="theme-toggle" onclick="toggleTheme()"><span id="theme-icon">🌙</span> <span id="theme-label">CHẾ ĐỘ TỐI</span></button>
+            <a href="/" class="home-icon" aria-label="Trang chủ" title="Trang chủ"><span class="material-symbols-outlined" aria-hidden="true">apartment</span></a>
+        </div>
+    </header>
+    <main class="auth-main">
+        @if (IsOtp) { <div class="auth-step">BƯỚC 2: XÁC THỰC BẢO MẬT OTP</div> }
+        else if (IsReset) { <div class="auth-step">THIẾT LẬP BẢO MẬT / MẬT KHẨU MỚI</div> }
+        else if (!IsForgot)
+        {
+            <nav class="auth-switch" aria-label="Tài khoản">
+                <a class="@(IsRegister ? "" : "selected")" href="/login">ĐĂNG NHẬP</a>
+                <a class="@(IsRegister ? "selected" : "")" href="/register">ĐĂNG KÝ</a>
+            </nav>
+        }
+        <div class="auth-card">
+            <div class="auth-panel auth-panel-left">
+                <aside class="auth-view auth-login-welcome" aria-hidden="@IsRegister">
+                    <span class="auth-badge"><i></i> PROPFLOW SMART RESIDENCE OS</span>
+                    <h1>Quản Lý Vận Hành<br /><span>Chung Cư Đẳng Cấp</span></h1>
+                    <p class="boundary">Giải pháp số hóa toàn diện quản lý cư dân, kỹ thuật hạ tầng và tài chính cho cộng đồng chung cư thông minh.</p>
+                    <div class="auth-benefits" aria-label="Đặc điểm hệ thống">
+                        <div><strong>◈ BẢO MẬT TÀI KHOẢN</strong><span>Quyền truy cập được quản lý theo vai trò</span></div>
+                        <div><strong>◈ KẾT NỐI CƯ DÂN</strong><span>Dịch vụ cư dân trong tầm tay</span></div>
+                    </div>
+                </aside>
+                <section class="auth-content auth-view auth-register-form" aria-hidden="@(!IsRegister)" inert="@(IsRegister ? null : "")"><PropFlow.Web.Client.Features.Authentication.Pages.Register /></section>
+            </div>
+            <div class="auth-panel auth-panel-right">
+                <section class="auth-content auth-view auth-login-form" aria-hidden="@(!IsLogin)" inert="@(IsLogin ? null : "")"><div class="auth-login-inner"><PropFlow.Web.Client.Features.Authentication.Pages.Login /></div></section>
+                <section class="auth-content auth-view auth-forgot-form" aria-hidden="@(!IsForgot)" inert="@(IsForgot ? null : "")"><PropFlow.Web.Client.Features.Authentication.Pages.ForgotPassword /></section>
+                <aside class="auth-view auth-register-welcome" aria-hidden="@(!IsRegister)">
+                        <span class="auth-badge"><i></i> KẾT NỐI CỘNG ĐỒNG</span>
+                        <h1>Cùng Xây Dựng<br /><span>Cộng Đồng Tiện Nghi</span></h1>
+                        <p class="boundary">Đăng ký tài khoản cư dân để sử dụng các dịch vụ trong cộng đồng PropFlow.</p>
+                        <div class="auth-benefits" aria-label="Đặc điểm hệ thống">
+                            <div><strong>◈ TÀI KHOẢN CƯ DÂN</strong><span>Xác minh theo hồ sơ do ban quản lý cung cấp</span></div>
+                            <div><strong>◈ DỊCH VỤ SỐ</strong><span>Truy cập tiện ích cư dân trong tầm tay</span></div>
+                        </div>
+                </aside>
+                @if (!IsLogin && !IsRegister && !IsForgot)
+                {
+                    <section class="auth-content auth-view auth-other">@Body</section>
+                }
+            </div>
+            <span class="auth-corner top-left" aria-hidden="true"></span>
+            <span class="auth-corner top-right" aria-hidden="true"></span>
+            <span class="auth-corner bottom-left" aria-hidden="true"></span>
+            <span class="auth-corner bottom-right" aria-hidden="true"></span>
+        </div>
+    </main>
+</div>
+
+@code {
+    private string _route = "";
+    private string _transition = "";
+    private string Route => _route;
+    private bool IsLogin => Route == "login";
+    private bool IsRegister => Route == "register";
+    private bool IsOtp => Route == "otp";
+    private bool IsReset => Route == "reset-password";
+    private bool IsForgot => Route == "forgot-password";
+
+    protected override void OnInitialized()
+    {
+        _route = RelativeRoute(Navigation.Uri);
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await JSRuntime.InvokeVoidAsync("initLandingPage");
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        var nextRoute = RelativeRoute(args.Location);
+        _transition = (_route, nextRoute) switch
+        {
+            ("login", "register") => "switch-to-register",
+            ("register", "login") => "switch-to-login",
+            ("login", "forgot-password") => "switch-to-forgot",
+            ("forgot-password", "login") => "switch-from-forgot",
+            _ => ""
+        };
+        _route = nextRoute;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string RelativeRoute(string uri) => Navigation.ToBaseRelativePath(uri).Split('?', '#')[0].TrimEnd('/');
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}
