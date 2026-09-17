@@ -1,4 +1,4 @@
-﻿window.currentTheme = "light";
+window.currentTheme = "light";
 window.currentScreen = "login"; // "login" | "register" | "forgot"
 
 // UI Panel Navigation Functions
@@ -102,86 +102,6 @@ window.switchToForgotPassword = function() {
         viewRightForgot.classList.remove("opacity-0", "translate-x-8", "pointer-events-none", "z-10");
         viewRightForgot.classList.add("opacity-100", "translate-x-0", "pointer-events-auto", "z-20");
     }
-};
-
-window.handleLoginSubmit = function() {
-    alert("Đăng nhập thành công! Đang chuyển hướng vào Trung tâm Điều hành PropFlow...");
-};
-
-window.handleRegisterSubmit = function() {
-    alert("Đã gửi yêu cầu khởi tạo tài khoản ban quản lý thành công! Chúng tôi sẽ liên hệ trong 15 phút.");
-    window.switchToLogin();
-};
-
-window.handleForgotSubmit = function() {
-    const btn = document.getElementById("forgot-submit-btn");
-    const origContent = btn.innerHTML;
-    btn.innerHTML = "<span class=\"material-symbols-outlined animate-spin text-[18px]\">sync</span><span>ĐANG XÁC THỰC EMAIL...</span>";
-    btn.disabled = true;
-
-    setTimeout(() => {
-        btn.innerHTML = "<span class=\"material-symbols-outlined text-[18px]\">check_circle</span><span>ĐÃ GỬI MÃ OTP THÀNH CÔNG!</span>";
-        setTimeout(() => {
-            btn.innerHTML = origContent;
-            btn.disabled = false;
-            window.location.href = '/otp';
-        }, 1200);
-    }, 800);
-};
-
-window.handleOtpSubmit = function() {
-    const btn = document.getElementById("otp-submit-btn");
-    if (!btn) return;
-    const origContent = btn.innerHTML;
-    btn.innerHTML = "<span class=\"material-symbols-outlined animate-spin text-[18px]\">sync</span><span>ĐANG KIỂM TRA MÃ OTP...</span>";
-    btn.disabled = true;
-
-    setTimeout(() => {
-        btn.innerHTML = "<span class=\"material-symbols-outlined text-[18px]\">check_circle</span><span>XÁC THỰC THÀNH CÔNG!</span>";
-        setTimeout(() => {
-            alert('Xác thực OTP thành công! Đang chuyển hướng...');
-            window.location.href = '/auth/reset-password'; // Redirect somewhere
-        }, 800);
-    }, 1500);
-};
-
-window.onOtpInput = function(input, index) {
-    if (input.value.length === 1) {
-        const nextInput = input.nextElementSibling;
-        if (nextInput && nextInput.tagName === 'INPUT') {
-            nextInput.focus();
-        }
-    } else if (input.value.length === 0) {
-        const prevInput = input.previousElementSibling;
-        if (prevInput && prevInput.tagName === 'INPUT') {
-            prevInput.focus();
-        }
-    }
-};
-
-window.handleResendOtp = function() {
-    const btn = document.getElementById("resend-btn");
-    const countdown = document.getElementById("resend-countdown");
-    if (!btn || !countdown) return;
-    
-    alert("Đã gửi lại mã OTP mới!");
-    
-    // Simple reset countdown logic visual
-    countdown.innerText = "60s";
-    let timeLeft = 60;
-    btn.disabled = true;
-    btn.classList.add("opacity-50", "cursor-not-allowed");
-    
-    const timer = setInterval(() => {
-        timeLeft--;
-        countdown.innerText = timeLeft + "s";
-        if (timeLeft <= 0) {
-            clearInterval(timer);
-            btn.disabled = false;
-            btn.classList.remove("opacity-50", "cursor-not-allowed");
-            countdown.innerText = "Gửi lại ngay";
-        }
-    }, 1000);
 };
 
 // --- THREE.JS GHOST SKYSCRAPERS & PARTICLES SYSTEM ---
@@ -388,4 +308,8 @@ window.toggleTheme = function() {
 
         window.updateThreeJsTheme("light");
     }
+};
+
+window.focusOtpInput = function(index) {
+    document.getElementById(`otp-digit-${index}`)?.focus();
 };

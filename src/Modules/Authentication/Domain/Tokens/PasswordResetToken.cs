@@ -39,6 +39,36 @@ public class PasswordResetToken
     public DateTimeOffset? UsedAt { get; private set; }
     public string? RequestedIp { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
+    public int AttemptCount { get; private set; }
+    public string? ProofHash { get; private set; }
+    public DateTimeOffset? ProofExpiresAt { get; private set; }
+    public DateTimeOffset? VerifiedAt { get; private set; }
+
+    public void RecordFailedAttempt(DateTimeOffset now)
+    {
+        if (!IsActiveAt(now) || VerifiedAt != null) throw new InvalidOperationException("Recovery challenge is not pending.");
+        AttemptCount++;
+    }
+
+    public void AuthorizeReset(string proofHash, DateTimeOffset proofExpiresAt, DateTimeOffset now)
+    {
+        if (!IsActiveAt(now) || VerifiedAt != null) throw new InvalidOperationException("Recovery challenge is not pending.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(proofHash);
+        if (proofExpiresAt <= now) throw new ArgumentException("Invalid proof expiry.", nameof(proofExpiresAt));
+        ProofHash = proofHash;
+        ProofExpiresAt = proofExpiresAt;
+        VerifiedAt = now;
+    }
+
+    public bool CanResetAt(DateTimeOffset now) => !IsUsed && VerifiedAt != null && ProofExpiresAt > now;
+
+    public void ConsumeProof(DateTimeOffset now)
+    {
+        if (!CanResetAt(now)) throw new InvalidOperationException("Reset proof is not active.");
+        UsedAt = now;
+    }
+
+    public void Cancel(DateTimeOffset now) => UsedAt ??= now;
 
     // Within-module navigation
     public UserAccount? User { get; private set; }

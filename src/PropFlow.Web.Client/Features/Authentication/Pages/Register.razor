@@ -1,0 +1,29 @@
+@page "/register"
+@layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
+@inject AuthenticationService Auth
+@inject OnboardingState State
+@inject NavigationManager Navigation
+<span class="auth-form-eyebrow">ĐĂNG KÝ TÀI KHOẢN CƯ DÂN</span>
+<h2>Khởi Tạo Tài Khoản</h2>
+<p>Đăng ký bằng email đã có trong hồ sơ cư dân.</p>
+<ApiFeedback Result="result" />
+@if (message != null) { <p class="feedback" role="status">@message</p> }
+<EditForm Model="form" OnValidSubmit="Submit"><DataAnnotationsValidator /><ValidationSummary />
+    <div class="auth-register-grid">
+        <div><label for="reg-name">Tên hiển thị</label><div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">person</span><InputText id="reg-name" @bind-Value="form.DisplayName" autocomplete="name" placeholder="Họ và tên của bạn" /></div></div>
+        <div><label for="reg-phone">Số điện thoại</label><div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">phone</span><InputText id="reg-phone" type="tel" @bind-Value="form.PhoneNumber" autocomplete="tel" placeholder="Không bắt buộc" /></div></div>
+        <div><label for="reg-user">Tên đăng nhập</label><div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">badge</span><InputText id="reg-user" @bind-Value="form.Username" autocomplete="username" placeholder="Tên dùng để đăng nhập" /></div></div>
+        <div><label for="reg-email">Email đăng ký với ban quản lý</label><div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">mail</span><InputText id="reg-email" type="email" @bind-Value="form.Email" autocomplete="email" placeholder="Email trong hồ sơ cư dân" /></div></div>
+        <div><label for="reg-pass">Mật khẩu (12–128 ký tự)</label><div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">lock</span><InputText id="reg-pass" type="password" @bind-Value="form.Password" autocomplete="new-password" placeholder="Ít nhất 12 ký tự" /></div></div>
+        <div><label for="reg-confirm">Xác nhận mật khẩu</label><div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">lock_reset</span><InputText id="reg-confirm" type="password" @bind-Value="form.Confirmation" autocomplete="new-password" placeholder="Nhập lại mật khẩu" /></div></div>
+    </div>
+    <button disabled="@busy" type="submit">@(busy ? "Đang đăng ký…" : "Đăng ký")</button>
+</EditForm>
+<nav class="auth-links auth-links-register"><a href="/login">← Đã có tài khoản? Đăng nhập</a><a class="auth-resume" href="/registration/resume">Tiếp tục xác minh tài khoản đã đăng ký</a></nav>
+@code {
+    private readonly RegistrationForm form = new(); private bool busy; private ApiResult? result; private string? message;
+    private async Task Submit() { if (busy) return; busy = true; try {
+        var response = await Auth.RegisterAsync(new(form.Username, form.DisplayName, form.Email, form.Password, form.PhoneNumber)); result = response;
+        if (response.IsSuccess) { State.Clear(); State.Challenge = response.Data; message = response.Data!.Message; if (response.Data.ChallengeId != Guid.Empty) Navigation.NavigateTo("/otp"); }
+    } finally { form.Password = form.Confirmation = ""; busy = false; } }
+}

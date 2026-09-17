@@ -358,6 +358,10 @@ Table auth.password_reset_tokens {
   expires_at timestamptz [not null]
   used_at timestamptz
   requested_ip varchar(45)
+  attempt_count int [not null, default: 0]
+  verified_at timestamptz
+  proof_hash text [note: 'Hash of the one-use reset authorization proof; separate from the email OTP hash in token_hash.']
+  proof_expires_at timestamptz
   created_at timestamptz [not null, default: `now()`]
 
   Indexes {
