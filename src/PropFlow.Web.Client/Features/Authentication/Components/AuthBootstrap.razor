@@ -1,0 +1,36 @@
+@inject AuthSession Session
+@inject NavigationManager Navigation
+@implements IDisposable
+@if (ready || IsPublicRoute) { @ChildContent }
+else { <p role="status" style="padding:2rem">Đang kiểm tra phiên đăng nhập…</p> }
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private bool ready;
+    private bool IsPublicRoute => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/') switch
+    {
+        "" or "login" or "register" or "registration/resume" or "otp" or "account-activated"
+            or "forgot-password" or "reset-password" or "forbidden" => true,
+        _ => false
+    };
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        _ = RestoreSessionAsync();
+    }
+
+    private async Task RestoreSessionAsync()
+    {
+        try { await Session.InitializeAsync(); }
+        finally
+        {
+            ready = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+        => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

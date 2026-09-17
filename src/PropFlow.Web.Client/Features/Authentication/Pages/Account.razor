@@ -1,0 +1,31 @@
+@page "/account"
+@layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
+@attribute [Authorize]
+@inject AuthenticationService Auth
+@inject AuthSession Session
+@inject NavigationManager Navigation
+<PageTitle>Tài khoản của tôi — PropFlow</PageTitle><h2>Tài khoản của tôi</h2>
+<ApiFeedback Result="result" />
+@if (loading) { <p role="status">Đang tải thông tin…</p> }
+else if (account != null)
+{
+    <dl><dt>Tên đăng nhập</dt><dd>@account.Username</dd><dt>Email</dt><dd>@account.Email</dd><dt>Xác minh email</dt><dd>@(account.EmailVerified ? "Đã xác minh" : "Chưa xác minh")</dd><dt>Vai trò</dt><dd>@RoleName(account.Role)</dd><dt>Trạng thái</dt><dd>@StatusName(account.Status)</dd></dl>
+    <EditForm Model="form" OnValidSubmit="Save"><DataAnnotationsValidator /><ValidationSummary />
+        <label for="profile-name">Tên hiển thị</label><InputText id="profile-name" @bind-Value="form.DisplayName" autocomplete="name" />
+        <label for="profile-phone">Điện thoại liên hệ</label><InputText id="profile-phone" type="tel" @bind-Value="form.PhoneNumber" autocomplete="tel" />
+        <button type="submit" disabled="@busy">@(busy ? "Đang lưu…" : "Lưu thay đổi")</button>
+    </EditForm>
+    @if (saved) { <p class="feedback" role="status">Đã cập nhật thông tin tài khoản.</p> }
+    <p>Thông tin cư dân và quan hệ căn hộ do ban quản lý quản lý, không thay đổi tại đây.</p>
+}
+else { <button @onclick="Load">Thử tải lại</button> }
+<nav class="auth-links"><a href="/account/change-password">Đổi mật khẩu</a></nav><button class="secondary" disabled="@busy" @onclick="Logout">Đăng xuất</button>
+@code {
+    private readonly ProfileForm form = new(); private AccountResponse? account; private ApiResult? result; private bool busy, saved, loading = true;
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load() { loading = true; try { var response = await Auth.MeAsync(); result = response; account = response.Data; if (account != null) { form.DisplayName = account.DisplayName; form.PhoneNumber = account.PhoneNumber; } } finally { loading = false; } }
+    private async Task Save() { if (busy) return; busy = true; saved = false; try { var response = await Auth.UpdateAsync(new(form.DisplayName, form.PhoneNumber)); result = response; if (response.IsSuccess) { account = response.Data; saved = true; } } finally { busy = false; } }
+    private async Task Logout() { busy = true; try { await Session.LogoutAsync(); Navigation.NavigateTo("/login"); } finally { busy = false; } }
+    private static string RoleName(string role) => role switch { "RESIDENT" => "Cư dân", "STAFF" => "Nhân viên", "ACCOUNTANT" => "Kế toán", "MANAGER" => "Quản lý", "ADMIN" => "Quản trị viên", _ => "Chưa xác định" };
+    private static string StatusName(string status) => status switch { "ACTIVE" => "Đang hoạt động", "PENDING" => "Chờ xác minh", "LOCKED" => "Đã khóa", "SUSPENDED" => "Tạm ngưng", "DISABLED" => "Đã vô hiệu hóa", _ => "Chưa xác định" };
+}

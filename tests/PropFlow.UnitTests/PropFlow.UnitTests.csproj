@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\PropFlow.Web.Client\PropFlow.Web.Client.csproj" />
     <ProjectReference Include="..\..\src\Modules\PropertyAssets\PropFlow.Modules.PropertyAssets.csproj" />
     <ProjectReference Include="..\..\src\Modules\Apartments\PropFlow.Modules.Apartments.csproj" />
     <ProjectReference Include="..\..\src\Modules\Authentication\PropFlow.Modules.Authentication.csproj" />

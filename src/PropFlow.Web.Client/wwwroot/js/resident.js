@@ -349,32 +349,6 @@ window.initResidentPortal = function() {
         });
     }
     
-    const openProfileModalBtn = document.getElementById('openProfileModalBtn');
-    const closeProfileModalBtn = document.getElementById('closeProfileModalBtn');
-    const modalBackdrop = document.getElementById('modalBackdrop');
-    const profileModal = document.getElementById('profileModal');
-    
-    window.openProfileModal = function() {
-        if (profilePopover) profilePopover.classList.add('hidden');
-        if (dropdownArrow) dropdownArrow.classList.remove('rotate-180');
-        if (profileModal) profileModal.classList.remove('hidden');
-        document.body.classList.add('overflow-hidden');
-    };
-    
-    window.closeProfileModal = function() {
-        if (profileModal) profileModal.classList.add('hidden');
-        document.body.classList.remove('overflow-hidden');
-    };
-    
-    window.saveProfileModal = function() {
-        alert('Đã cập nhật thông tin cư dân thành công!');
-        window.closeProfileModal();
-    };
-    
-    if (openProfileModalBtn) openProfileModalBtn.addEventListener('click', window.openProfileModal);
-    if (closeProfileModalBtn) closeProfileModalBtn.addEventListener('click', window.closeProfileModal);
-    if (modalBackdrop) modalBackdrop.addEventListener('click', window.closeProfileModal);
-
     // 5. Tabs
     let hasDragged = false;
     window.handleNavTabClick = function(tabId) {

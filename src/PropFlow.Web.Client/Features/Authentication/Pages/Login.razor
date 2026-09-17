@@ -1,0 +1,24 @@
+@page "/login"
+@layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
+@inject AuthSession Session
+@inject NavigationManager Navigation
+<span class="auth-form-eyebrow">CỔNG THÔNG TIN TÀI KHOẢN</span>
+<h2>Đăng Nhập Hệ Thống</h2>
+<p class="auth-form-description">Truy cập tài khoản PropFlow của bạn.</p>
+@if (Session.Notice != null) { <p class="feedback" role="status">@Session.Notice</p> }
+<ApiFeedback Result="result" />
+<EditForm Model="form" OnValidSubmit="Submit">
+    <DataAnnotationsValidator /><ValidationSummary />
+    <label for="username">Tên đăng nhập</label>
+    <div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">badge</span><InputText id="username" @bind-Value="form.Username" autocomplete="username" placeholder="Nhập tên đăng nhập" /></div>
+    <div class="auth-password-heading"><label for="password">Mật khẩu truy cập</label><a href="/forgot-password">QUÊN MẬT KHẨU?</a></div>
+    <div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">lock</span><InputText id="password" type="password" @bind-Value="form.Password" autocomplete="current-password" placeholder="Nhập mật khẩu" /></div>
+    <button disabled="@busy" type="submit">@(busy ? "ĐANG ĐĂNG NHẬP…" : "XÁC THỰC & TRUY CẬP →")</button>
+</EditForm>
+<nav class="auth-links auth-links-login"><span>Chưa có tài khoản?</span><a href="/register">Tạo tài khoản</a><a class="auth-resume" href="/registration/resume">Đã đăng ký? Tiếp tục xác minh</a></nav>
+@if (Session.Notice?.Contains("chưa xác nhận") == true) { <button class="secondary" disabled="@busy" @onclick="RetryLogout">Thử thu hồi phiên lại</button> }
+@code {
+    private readonly LoginForm form = new(); private bool busy; private ApiResult? result;
+    private async Task Submit() { if (busy) return; busy = true; try { result = await Session.LoginAsync(new(form.Username, form.Password)); if (result.IsSuccess) Navigation.NavigateTo("/account"); } finally { form.Password = ""; busy = false; } }
+    private async Task RetryLogout() { busy = true; try { result = await Session.LogoutAsync(); } finally { busy = false; } }
+}

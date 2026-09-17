@@ -1,0 +1,53 @@
+@page "/otp"
+@layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
+@implements IDisposable
+@inject AuthenticationService Auth
+@inject OnboardingState State
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+<PageTitle>Xác minh email — PropFlow</PageTitle>
+<span class="auth-form-eyebrow">BẢO MẬT & XÁC THỰC</span>
+<h2>@(State.Recovery ? "Xác Thực Khôi Phục" : "Xác Thực Mã OTP")</h2>
+@if (State.Challenge == null || State.Challenge.ChallengeId == Guid.Empty)
+{
+    <p class="feedback">Không có yêu cầu xác minh hiện tại. Nếu bạn vừa tải lại trang, hãy bắt đầu lại để yêu cầu mã mới.</p>
+    <nav class="auth-links"><a href="/registration/resume">Xác minh cư dân</a><a href="/forgot-password">Khôi phục mật khẩu</a></nav>
+}
+else
+{
+    <p>@State.Challenge.Message</p>
+    <div class="otp-heading"><label>MÃ XÁC THỰC (6 CHỮ SỐ)</label><span role="status">@(Remaining <= 0 ? "Mã đã hết hạn" : "Hết hạn sau: ")<strong>@(Remaining > 0 ? $"{Remaining / 60:00}:{Remaining % 60:00}" : "")</strong></span></div>
+    <ApiFeedback Result="result" />
+    <EditForm Model="form" OnValidSubmit="Submit"><DataAnnotationsValidator /><ValidationSummary />
+        <div class="otp-inputs" role="group" aria-label="Mã email gồm 6 chữ số">
+            @for (var i = 0; i < 6; i++)
+            {
+                var index = i;
+                <input id="@($"otp-digit-{index}")" aria-label="@($"Chữ số {index + 1}")" value="@digits[index]" inputmode="numeric" autocomplete="@(index == 0 ? "one-time-code" : "off")" maxlength="1" @oninput="e => UpdateDigit(index, e)" />
+            }
+        </div>
+        <button type="submit" disabled="@(busy || Remaining <= 0)">@(busy ? "Đang xác minh…" : "XÁC NHẬN MÃ OTP →")</button>
+    </EditForm>
+    <button class="secondary otp-resend" disabled="@(busy || ResendWait > 0)" @onclick="Resend">@(ResendWait > 0 ? $"Gửi lại mã sau {ResendWait}s" : "Gửi lại mã")</button>
+}
+<nav class="auth-links"><a href="/login">Quay lại đăng nhập</a></nav>
+@code {
+    private readonly OtpForm form = new(); private readonly string[] digits = new string[6]; private ApiResult? result; private bool busy; private readonly CancellationTokenSource lifetime = new();
+    private int Remaining => Math.Max(0, (int)((State.Challenge?.ExpiresAt ?? DateTimeOffset.UtcNow) - DateTimeOffset.UtcNow).TotalSeconds);
+    private int ResendWait => Math.Max(0, (int)((State.Challenge?.ResendAfter ?? DateTimeOffset.UtcNow) - DateTimeOffset.UtcNow).TotalSeconds);
+    protected override void OnInitialized() { _ = Tick(); }
+    private async Task Tick() { try { using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1)); while (await timer.WaitForNextTickAsync(lifetime.Token)) await InvokeAsync(StateHasChanged); } catch (OperationCanceledException) { } }
+    private void Resend() { if (ResendWait == 0) Navigation.NavigateTo(State.Recovery ? "/forgot-password" : "/registration/resume"); }
+    private async Task UpdateDigit(int index, ChangeEventArgs e)
+    {
+        digits[index] = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).TakeLast(1).ToArray());
+        form.Code = string.Concat(digits);
+        if (digits[index].Length == 1 && index < 5) await JSRuntime.InvokeVoidAsync("focusOtpInput", index + 1);
+    }
+    private async Task Submit() { if (busy || State.Challenge == null) return; busy = true; try {
+        var request = new VerifyChallengeRequest(State.Challenge.ChallengeId, form.Code);
+        if (State.Recovery) { var response = await Auth.VerifyRecoveryAsync(request); result = response; if (response.IsSuccess) { State.ResetProof = response.Data; Navigation.NavigateTo("/reset-password"); } }
+        else { result = await Auth.ActivateAsync(request); if (result.IsSuccess) { State.Clear(); Navigation.NavigateTo("/account-activated"); } }
+    } finally { form.Code = ""; Array.Fill(digits, ""); busy = false; } }
+    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); }
+}
