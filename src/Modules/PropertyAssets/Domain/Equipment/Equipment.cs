@@ -81,6 +81,7 @@ public class Equipment
         string name,
         Guid? facilityId,
         string? equipmentType,
+        EquipmentStatus? status,
         string? manufacturer,
         string? model,
         string? serialNumber,
@@ -96,6 +97,10 @@ public class Equipment
         Name = name.Trim();
         FacilityId = facilityId;
         EquipmentType = equipmentType?.Trim();
+        if (status.HasValue)
+        {
+            Status = status.Value;
+        }
         Manufacturer = manufacturer?.Trim();
         Model = model?.Trim();
         SerialNumber = serialNumber?.Trim();

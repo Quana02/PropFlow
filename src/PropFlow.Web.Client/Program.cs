@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using PropFlow.Web.Client.Features.Facility.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -9,6 +10,7 @@ builder.Services.AddScoped(sp =>
     return new HttpClient { BaseAddress = new Uri(baseUrl) };
 });
 
-builder.Services.AddScoped<PropFlow.Web.Client.Features.Facility.Services.IBuildingApiClient, PropFlow.Web.Client.Features.Facility.Services.BuildingApiClient>();
-
+builder.Services.AddScoped<IBuildingApiClient, BuildingApiClient>();
+builder.Services.AddScoped<IFacilityApiClient, FacilityApiClient>();
+builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 await builder.Build().RunAsync();

@@ -1,18 +1,60 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
+<link rel="stylesheet" href="css/fe041.css" />
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="js/fe041-tailwind.js"></script>
+
+<div class="flex flex-col md:flex-row h-screen overflow-hidden bg-[#f8f9fc] font-sans text-slate-800 antialiased">
+    <!-- Sidebar Navigation -->
+    <div class="w-full md:w-[280px] flex-shrink-0">
         <NavMenu />
     </div>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <!-- Top Header -->
+        <header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 z-10">
+            <!-- Breadcrumb -->
+            <!-- Global Actions: Search, Notify & Theme -->
+            <div class="flex items-center gap-3 ml-auto">
+                <!-- Quick search bar -->
+                <div class="relative hidden sm:block w-64">
+                    <!-- Search input placeholder -->
+                </div>
+                <!-- Notification button -->
+                <button aria-label="Thông báo hệ thống" class="relative p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">notifications</span>
+                    <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+                </button>
+                <!-- Help icon -->
+                <button aria-label="Trợ giúp" class="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">help_outline</span>
+                </button>
+                <div class="h-5 w-px bg-slate-200 mx-1"></div>
+                <!-- System status pill -->
+                <div class="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-xs font-medium">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Online
+                </div>
+                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                <!-- User profile -->
+                <div class="flex items-center gap-2.5 pl-1">
+                    <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow-xs ring-2 ring-slate-100">QL</div>
+                    <div class="hidden sm:block text-left min-w-0">
+                        <div class="text-xs font-bold text-slate-900 truncate leading-tight">Trần Mạnh Dũng</div>
+                        <div class="text-[10px] text-slate-500 truncate">Trưởng Ban Quản Lý Tòa Nhà</div>
+                    </div>
+                    <button class="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors ml-1" title="Đăng xuất">
+                        <span class="material-symbols-outlined text-[18px]">logout</span>
+                    </button>
+                </div>
+            </div>
+        </header>
 
-        <article class="content px-4">
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-6 md:p-8">
             @Body
-        </article>
+        </div>
     </main>
 </div>
 

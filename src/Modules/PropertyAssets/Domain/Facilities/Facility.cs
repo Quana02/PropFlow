@@ -20,7 +20,8 @@ public class Facility
         string? facilityType = null,
         string? locationDescription = null,
         string? description = null,
-        Guid? createdBy = null)
+        Guid? createdBy = null,
+        MasterDataStatus initialStatus = MasterDataStatus.ACTIVE)
     {
         if (buildingId == Guid.Empty)
         {
@@ -37,7 +38,7 @@ public class Facility
         FacilityType = facilityType?.Trim();
         LocationDescription = locationDescription?.Trim();
         Description = description?.Trim();
-        Status = MasterDataStatus.ACTIVE;
+        Status = initialStatus;
         CreatedBy = createdBy;
         UpdatedBy = createdBy;
         CreatedAt = now;
@@ -62,33 +63,38 @@ public class Facility
     public IReadOnlyCollection<EquipmentEntity> Equipment => _equipment.AsReadOnly();
 
     public void Update(
+        Guid buildingId,
         string name,
         string? facilityType,
         string? locationDescription,
         string? description,
+        MasterDataStatus? status,
         Guid? updatedBy,
         DateTimeOffset now)
     {
+        if (buildingId == Guid.Empty)
+        {
+            throw new ArgumentException("BuildingId cannot be empty.", nameof(buildingId));
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
+        BuildingId = buildingId;
         Name = name.Trim();
         FacilityType = facilityType?.Trim();
         LocationDescription = locationDescription?.Trim();
         Description = description?.Trim();
+        if (status.HasValue)
+        {
+            Status = status.Value;
+        }
         UpdatedBy = updatedBy;
         UpdatedAt = now;
     }
 
-    public void Deactivate(Guid? updatedBy, DateTimeOffset now)
+    public void SetStatus(MasterDataStatus status, Guid? updatedBy, DateTimeOffset now)
     {
-        Status = MasterDataStatus.INACTIVE;
-        UpdatedBy = updatedBy;
-        UpdatedAt = now;
-    }
-
-    public void Activate(Guid? updatedBy, DateTimeOffset now)
-    {
-        Status = MasterDataStatus.ACTIVE;
+        Status = status;
         UpdatedBy = updatedBy;
         UpdatedAt = now;
     }

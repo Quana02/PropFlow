@@ -5,7 +5,10 @@ namespace PropFlow.Web.Client.Features.Facility.Models;
 public enum MasterDataStatus
 {
     ACTIVE,
-    INACTIVE
+    INACTIVE,
+    UNDER_MAINTENANCE,
+    UNAVAILABLE,
+    OUT_OF_SERVICE
 }
 
 public class BuildingModel

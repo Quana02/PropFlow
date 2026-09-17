@@ -6,8 +6,8 @@
 {
     <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
         <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-            <div class="modal-content shadow-lg border-0 rounded-4">
-                <div class="modal-header bg-primary text-white rounded-top-4 px-4 py-3">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 1.5rem;">
+                <div class="modal-header bg-primary text-white px-4 py-3" style="border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem;">
                     <h5 class="modal-title fw-bold">
                         <i class="@(IsEditMode ? "bi bi-pencil-square" : "bi bi-building-add") me-2"></i>
                         @(IsEditMode ? "Chỉnh Sửa Thông Tin Tòa Nhà" : "Thêm Tòa Nhà Mới")
@@ -17,7 +17,7 @@
                 <div class="modal-body p-4">
                     @if (!string.IsNullOrEmpty(ErrorMessage))
                     {
-                        <div class="alert alert-danger alert-dismissible fade show rounded-3" role="alert">
+                        <div class="alert alert-danger alert-dismissible fade show" style="border-radius: 1rem;" role="alert">
                             <i class="bi bi-exclamation-triangle-fill me-2"></i> @ErrorMessage
                             <button type="button" class="btn-close" @onclick="() => ErrorMessage = null"></button>
                         </div>
@@ -30,26 +30,26 @@
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold text-secondary">Mã Tòa Nhà</label>
-                                <input type="text" class="form-control bg-light" value="@BuildingToEdit?.Code" disabled readOnly />
+                                <input type="text" class="form-control bg-light" style="border-radius: 1rem;" value="@BuildingToEdit?.Code" disabled readOnly />
                                 <small class="text-muted">Mã tòa nhà là duy nhất và không thể thay đổi sau khi tạo.</small>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Tên Tòa Nhà <span class="text-danger">*</span></label>
-                                <InputText @bind-Value="UpdateModel.Name" class="form-control form-control-lg rounded-3" placeholder="Ví dụ: Tòa A, Block Sunshine..." />
+                                <InputText @bind-Value="UpdateModel.Name" class="form-control form-control-lg" style="border-radius: 1rem;" placeholder="Ví dụ: Tòa A, Block Sunshine..." />
                                 <ValidationMessage For="() => UpdateModel.Name" class="text-danger small mt-1" />
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Địa Chỉ <span class="text-danger">*</span></label>
-                                <InputText @bind-Value="UpdateModel.Address" class="form-control rounded-3" placeholder="Địa chỉ chi tiết của tòa nhà..." />
+                                <InputText @bind-Value="UpdateModel.Address" class="form-control" style="border-radius: 1rem;" placeholder="Địa chỉ chi tiết của tòa nhà..." />
                                 <ValidationMessage For="() => UpdateModel.Address" class="text-danger small mt-1" />
                             </div>
 
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">Múi Giờ <span class="text-danger">*</span></label>
-                                    <InputSelect @bind-Value="UpdateModel.TimeZoneId" class="form-select rounded-3">
+                                    <InputSelect @bind-Value="UpdateModel.TimeZoneId" class="form-select" style="border-radius: 1rem;">
                                         <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
                                         <option value="UTC">UTC (Coordinated Universal Time)</option>
                                     </InputSelect>
@@ -57,20 +57,20 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">Số Tầng</label>
-                                    <InputNumber @bind-Value="UpdateModel.NumberOfFloors" class="form-control rounded-3" placeholder="Tùy chọn (Ví dụ: 25)" />
+                                    <InputNumber @bind-Value="UpdateModel.NumberOfFloors" class="form-control" style="border-radius: 1rem;" placeholder="Tùy chọn (Ví dụ: 25)" />
                                     <ValidationMessage For="() => UpdateModel.NumberOfFloors" class="text-danger small mt-1" />
                                 </div>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Mô Tả / Ghi Chú</label>
-                                <InputTextArea @bind-Value="UpdateModel.Description" class="form-control rounded-3" rows="3" placeholder="Thông tin ghi chú thêm về tòa nhà..." />
+                                <InputTextArea @bind-Value="UpdateModel.Description" class="form-control" style="border-radius: 1rem;" rows="3" placeholder="Thông tin ghi chú thêm về tòa nhà..." />
                                 <ValidationMessage For="() => UpdateModel.Description" class="text-danger small mt-1" />
                             </div>
 
                             <div class="modal-footer border-0 px-0 pb-0 pt-3">
-                                <button type="button" class="btn btn-light px-4 me-2 rounded-3" @onclick="Close" disabled="@IsSubmitting">Hủy Bỏ</button>
-                                <button type="submit" class="btn btn-primary px-4 rounded-3" disabled="@IsSubmitting">
+                                <button type="button" class="btn btn-light px-4 me-2" style="border-radius: 1rem;" @onclick="Close" disabled="@IsSubmitting">Hủy Bỏ</button>
+                                <button type="submit" class="btn btn-primary px-4" style="border-radius: 1rem;" disabled="@IsSubmitting">
                                     @if (IsSubmitting)
                                     {
                                         <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -92,26 +92,26 @@
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Mã Tòa Nhà <span class="text-danger">*</span></label>
-                                <InputText @bind-Value="CreateModel.Code" class="form-control form-control-lg rounded-3" placeholder="Ví dụ: TWR-A, BLD-01..." />
+                                <InputText @bind-Value="CreateModel.Code" class="form-control form-control-lg" style="border-radius: 1rem;" placeholder="Ví dụ: TWR-A, BLD-01..." />
                                 <ValidationMessage For="() => CreateModel.Code" class="text-danger small mt-1" />
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Tên Tòa Nhà <span class="text-danger">*</span></label>
-                                <InputText @bind-Value="CreateModel.Name" class="form-control form-control-lg rounded-3" placeholder="Ví dụ: Tòa A, Block Sunshine..." />
+                                <InputText @bind-Value="CreateModel.Name" class="form-control form-control-lg" style="border-radius: 1rem;" placeholder="Ví dụ: Tòa A, Block Sunshine..." />
                                 <ValidationMessage For="() => CreateModel.Name" class="text-danger small mt-1" />
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Địa Chỉ <span class="text-danger">*</span></label>
-                                <InputText @bind-Value="CreateModel.Address" class="form-control rounded-3" placeholder="Địa chỉ chi tiết của tòa nhà..." />
+                                <InputText @bind-Value="CreateModel.Address" class="form-control" style="border-radius: 1rem;" placeholder="Địa chỉ chi tiết của tòa nhà..." />
                                 <ValidationMessage For="() => CreateModel.Address" class="text-danger small mt-1" />
                             </div>
 
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">Múi Giờ <span class="text-danger">*</span></label>
-                                    <InputSelect @bind-Value="CreateModel.TimeZoneId" class="form-select rounded-3">
+                                    <InputSelect @bind-Value="CreateModel.TimeZoneId" class="form-select" style="border-radius: 1rem;">
                                         <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
                                         <option value="UTC">UTC (Coordinated Universal Time)</option>
                                     </InputSelect>
@@ -119,20 +119,20 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">Số Tầng</label>
-                                    <InputNumber @bind-Value="CreateModel.NumberOfFloors" class="form-control rounded-3" placeholder="Tùy chọn (Ví dụ: 25)" />
+                                    <InputNumber @bind-Value="CreateModel.NumberOfFloors" class="form-control" style="border-radius: 1rem;" placeholder="Tùy chọn (Ví dụ: 25)" />
                                     <ValidationMessage For="() => CreateModel.NumberOfFloors" class="text-danger small mt-1" />
                                 </div>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Mô Tả / Ghi Chú</label>
-                                <InputTextArea @bind-Value="CreateModel.Description" class="form-control rounded-3" rows="3" placeholder="Thông tin ghi chú thêm về tòa nhà..." />
+                                <InputTextArea @bind-Value="CreateModel.Description" class="form-control" style="border-radius: 1rem;" rows="3" placeholder="Thông tin ghi chú thêm về tòa nhà..." />
                                 <ValidationMessage For="() => CreateModel.Description" class="text-danger small mt-1" />
                             </div>
 
                             <div class="modal-footer border-0 px-0 pb-0 pt-3">
-                                <button type="button" class="btn btn-light px-4 me-2 rounded-3" @onclick="Close" disabled="@IsSubmitting">Hủy Bỏ</button>
-                                <button type="submit" class="btn btn-primary px-4 rounded-3" disabled="@IsSubmitting">
+                                <button type="button" class="btn btn-light px-4 me-2" style="border-radius: 1rem;" @onclick="Close" disabled="@IsSubmitting">Hủy Bỏ</button>
+                                <button type="submit" class="btn btn-primary px-4" style="border-radius: 1rem;" disabled="@IsSubmitting">
                                     @if (IsSubmitting)
                                     {
                                         <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>

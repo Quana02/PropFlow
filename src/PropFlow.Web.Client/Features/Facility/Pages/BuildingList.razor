@@ -6,193 +6,307 @@
 
 <PageTitle>Quản Lý Tòa Nhà - PropFlow</PageTitle>
 
-<div class="container-fluid py-4 px-4">
-    <!-- Header Section -->
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
-        <div>
-            <h2 class="fw-bold text-dark mb-1">
-                <i class="bi bi-buildings-fill text-primary me-2"></i> Quản Lý Hồ Sơ Tòa Nhà
-            </h2>
-            <p class="text-muted mb-0">Quản lý thông tin danh mục tòa nhà, số tầng và trạng thái hoạt động trong hệ thống chung cư.</p>
+<div class="min-h-screen bg-[#f8f9fc] font-sans text-slate-800 antialiased">
+
+    <!-- ===== PAGE HEADER ===== -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
+        <div class="flex items-start gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shadow-xs mt-0.5">
+                <span class="material-symbols-outlined text-2xl">apartment</span>
+            </div>
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight">Danh Mục Tòa Nhà</h1>
+                <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+                    Quản lý định danh các Tòa nhà, phân bổ số tầng, múi giờ vận hành và giám sát trạng thái hoạt động.
+                </p>
+            </div>
         </div>
-        <button class="btn btn-primary btn-lg shadow-sm rounded-3 px-4 fw-semibold" @onclick="OpenCreateDialog">
-            <i class="bi bi-plus-circle me-2"></i> Thêm Tòa Nhà Mới
-        </button>
+        <div class="flex items-center gap-2.5 flex-wrap">
+            
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors"
+                    @onclick="OpenCreateDialog">
+                <span class="material-symbols-outlined text-[17px]">add_circle</span>
+                <span>Thêm Tòa Nhà Mới</span>
+            </button>
+        </div>
     </div>
 
-    <!-- Alert Notifications -->
-    @if (!string.IsNullOrEmpty(SuccessMessage))
-    {
-        <div class="alert alert-success alert-dismissible fade show rounded-3 shadow-sm mb-4" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i> @SuccessMessage
-            <button type="button" class="btn-close" @onclick="() => SuccessMessage = null"></button>
+    <!-- ===== KPI STAT CARDS ===== -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-stitch-card flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+                <span class="material-symbols-outlined text-[26px]">corporate_fare</span>
+            </div>
+            <div>
+                <span class="text-xs text-slate-500 font-medium block">Tổng số căn hộ</span>
+                <span class="text-2xl font-bold font-display text-slate-900">@PagedResult.TotalCount</span>
+            </div>
         </div>
-    }
-
-    @if (!string.IsNullOrEmpty(ErrorMessage))
-    {
-        <div class="alert alert-danger alert-dismissible fade show rounded-3 shadow-sm mb-4" role="alert">
-            <i class="bi bi-exclamation-octagon-fill me-2"></i> @ErrorMessage
-            <button type="button" class="btn-close" @onclick="() => ErrorMessage = null"></button>
+        <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-stitch-card flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <span class="material-symbols-outlined text-[26px]">check_circle</span>
+            </div>
+            <div>
+                <span class="text-xs text-slate-500 font-medium block">Đang hoạt động</span>
+                <span class="text-2xl font-bold font-display text-emerald-600">
+                    @(PagedResult.Items?.Count(x => x.Status == MasterDataStatus.ACTIVE) ?? 0)
+                </span>
+            </div>
         </div>
-    }
-
-    <!-- Search & Filter Card -->
-    <div class="card border-0 shadow-sm rounded-4 mb-4">
-        <div class="card-body p-4">
-            <div class="row g-3">
-                <div class="col-md-6 col-lg-5">
-                    <label class="form-label fw-semibold text-secondary small">Tìm kiếm từ khóa</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control bg-light border-start-0 ps-0" placeholder="Nhập Mã tòa nhà, Tên tòa nhà hoặc Địa chỉ..."
-                               @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
-                    </div>
-                </div>
-
-                <div class="col-md-4 col-lg-3">
-                    <label class="form-label fw-semibold text-secondary small">Trạng thái hoạt động</label>
-                    <select class="form-select bg-light" @bind="StatusFilterString">
-                        <option value="">-- Tất cả trạng thái --</option>
-                        <option value="ACTIVE">Đang hoạt động</option>
-                        <option value="INACTIVE">Ngưng hoạt động</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2 col-lg-4 d-flex align-items-end gap-2">
-                    <button class="btn btn-outline-primary px-3 rounded-3" @onclick="ApplyFilter">
-                        <i class="bi bi-funnel me-1"></i> Lọc
-                    </button>
-                    <button class="btn btn-outline-secondary px-3 rounded-3" @onclick="ResetFilter">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i> Đặt lại
-                    </button>
-                </div>
+        <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-stitch-card flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <span class="material-symbols-outlined text-[26px]">layers</span>
+            </div>
+            <div>
+                <span class="text-xs text-slate-500 font-medium block">Trang hiện tại</span>
+                <span class="text-2xl font-bold font-display text-slate-900">@PagedResult.PageIndex / @PagedResult.TotalPages</span>
+            </div>
+        </div>
+        <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-stitch-card flex items-center gap-4">
+            <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                <span class="material-symbols-outlined text-[26px]">pause_circle</span>
+            </div>
+            <div>
+                <span class="text-xs text-slate-500 font-medium block">Ngưng hoạt động</span>
+                <span class="text-2xl font-bold font-display text-rose-600">
+                    @(PagedResult.Items?.Count(x => x.Status != MasterDataStatus.ACTIVE) ?? 0)
+                </span>
             </div>
         </div>
     </div>
 
-    <!-- Table Data Card -->
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-        <div class="card-body p-0">
-            @if (IsLoading)
-            {
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="visually-hidden">Đang tải...</span>
-                    </div>
-                    <p class="mt-3 text-muted fw-semibold">Đang tải danh sách tòa nhà...</p>
-                </div>
-            }
-            else if (PagedResult.Items == null || !PagedResult.Items.Any())
-            {
-                <div class="text-center py-5 px-4">
-                    <div class="mb-3 text-muted display-4"><i class="bi bi-building-x"></i></div>
-                    <h5 class="fw-bold text-dark">Chưa có dữ liệu tòa nhà nào</h5>
-                    <p class="text-muted small">Không tìm thấy thông tin tòa nhà khớp với tiêu chí tìm kiếm của bạn.</p>
-                    <button class="btn btn-primary rounded-3 px-4 mt-2" @onclick="OpenCreateDialog">
-                        <i class="bi bi-plus-lg me-1"></i> Thêm tòa nhà ngay
-                    </button>
-                </div>
-            }
-            else
-            {
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light text-secondary border-bottom">
-                            <tr>
-                                <th class="ps-4 py-3">Mã Tòa Nhà</th>
-                                <th class="py-3">Tên Tòa Nhà</th>
-                                <th class="py-3">Địa Chỉ</th>
-                                <th class="py-3 text-center">Số Tầng</th>
-                                <th class="py-3 text-center">Trạng Thái</th>
-                                <th class="py-3 text-center">Múi Giờ</th>
-                                <th class="pe-4 py-3 text-end">Thao Tác</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in PagedResult.Items)
-                            {
-                                <tr>
-                                    <td class="ps-4 py-3 fw-bold text-primary">
-                                        <i class="bi bi-building me-2 text-secondary"></i>@item.Code
-                                    </td>
-                                    <td class="py-3 fw-semibold text-dark">@item.Name</td>
-                                    <td class="py-3 text-muted small text-truncate" style="max-width: 250px;" title="@item.Address">
-                                        <i class="bi bi-geo-alt text-danger me-1"></i>@item.Address
-                                    </td>
-                                    <td class="py-3 text-center">
-                                        @(item.NumberOfFloors.HasValue ? $"{item.NumberOfFloors} tầng" : "-")
-                                    </td>
-                                    <td class="py-3 text-center">
+    <!-- ===== ALERT NOTIFICATIONS ===== -->
+    @if (!string.IsNullOrEmpty(SuccessMessage))
+    {
+        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium shadow-sm">
+            <span class="material-symbols-outlined text-emerald-500 text-[20px]">check_circle</span>
+            <span>@SuccessMessage</span>
+            <button class="ml-auto text-emerald-500 hover:text-emerald-700 transition-stitch" @onclick="() => SuccessMessage = null">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium shadow-sm">
+            <span class="material-symbols-outlined text-rose-500 text-[20px]">error</span>
+            <span>@ErrorMessage</span>
+            <button class="ml-auto text-rose-500 hover:text-rose-700 transition-stitch" @onclick="() => ErrorMessage = null">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+    }
+
+    <!-- ===== SEARCH & FILTER TOOLBAR ===== -->
+    <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-stitch-card flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div class="flex-1 flex flex-col sm:flex-row items-center gap-3">
+            <!-- Search -->
+            <div class="relative w-full sm:w-80">
+                <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
+                <input type="text"
+                       placeholder="Tìm theo mã, tên tòa, địa chỉ..."
+                       class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-stitch"
+                       @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+            </div>
+            <!-- Status Filter -->
+            <div class="relative w-full sm:w-56">
+                <select class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-stitch cursor-pointer"
+                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                        @bind="StatusFilterString">
+                    <option value="" style="padding: 8px 12px; font-weight: 500;">Tất cả trạng thái</option>
+                    <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500;">Đang hoạt động </option>
+                    <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500;">Ngưng hoạt động </option>
+                </select>
+            </div>
+            <!-- Filter Buttons -->
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <button type="button"
+                        class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 text-xs sm:text-sm font-semibold transition-stitch"
+                        @onclick="ApplyFilter">
+                    <span class="material-symbols-outlined text-[18px]">filter_alt</span>
+                    <span>Lọc</span>
+                </button>
+                <button type="button"
+                        class="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs sm:text-sm font-medium transition-stitch"
+                        @onclick="ResetFilter">
+                    <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+                    <span>Đặt lại</span>
+                </button>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- ===== DATA TABLE ===== -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-stitch-card overflow-hidden">
+        @if (IsLoading)
+        {
+            <div class="flex flex-col items-center justify-center py-20 gap-4">
+                <div class="w-12 h-12 rounded-full border-4 border-sky-200 border-t-sky-600 animate-spin"></div>
+                <p class="text-sm text-slate-500 font-medium">Đang tải danh sách Căn Hộ...</p>
+            </div>
+        }
+        else if (PagedResult.Items == null || !PagedResult.Items.Any())
+        {
+            <div class="flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
+                <span class="material-symbols-outlined text-[64px] text-slate-300">domain_disabled</span>
+                <h5 class="text-lg font-bold font-display text-slate-700">Chưa có dữ liệu tòa nhà nào</h5>
+                <p class="text-sm text-slate-400 max-w-sm">Không tìm thấy thông tin tòa nhà khớp với tiêu chí tìm kiếm của bạn.</p>
+                <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow-md transition-stitch"
+                        @onclick="OpenCreateDialog">
+                    <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                    <span>Thêm tòa nhà ngay</span>
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto w-full">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500 font-display">
+                            <th class="py-3.5 px-4 sm:px-6">Mã Tòa Nhà</th>
+                            <th class="py-3.5 px-4">Tên Tòa Nhà</th>
+                            <th class="py-3.5 px-4">Địa Chỉ</th>
+                            <th class="py-3.5 px-4 text-center">Số Tầng</th>
+                            <th class="py-3.5 px-4 text-center">Múi Giờ</th>
+                            <th class="py-3.5 px-4 text-center">Trạng Thái</th>
+                            <th class="py-3.5 px-4 sm:px-6 text-right">Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-xs sm:text-sm text-slate-700">
+                        @foreach (var item in PagedResult.Items)
+                        {
+                            <tr class="hover:bg-sky-50/40 transition-stitch group">
+                                <td class="py-4 px-4 sm:px-6 font-semibold text-sky-700 font-display">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-2 h-2 rounded-full @(item.Status == MasterDataStatus.ACTIVE ? "bg-emerald-500" : "bg-rose-500")"></div>
+                                        <span class="px-2 py-0.5 @(item.Status == MasterDataStatus.ACTIVE ? "bg-sky-50 border-sky-200" : "bg-slate-100 border-slate-200") rounded-md border text-xs">@item.Code</span>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <div class="font-bold text-slate-900 group-hover:text-sky-600 transition-colors">@item.Name</div>
+                                </td>
+                                <td class="py-4 px-4 max-w-xs text-slate-600" title="@item.Address">
+                                    <div class="flex items-center gap-1.5 truncate">
+                                        <span class="material-symbols-outlined text-[16px] text-slate-400 flex-shrink-0">pin_drop</span>
+                                        <span class="truncate">@item.Address</span>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-4 text-center font-display font-semibold">
+                                    <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800">
+                                        @(item.NumberOfFloors.HasValue ? $"{item.NumberOfFloors} Tầng" : "-")
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4 text-center text-slate-500 text-xs">
+                                    <span class="inline-flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[14px]">schedule</span>
+                                        <span>@(string.IsNullOrEmpty(item.TimeZoneId) ? "-" : item.TimeZoneId)</span>
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4 text-center">
+                                    @if (item.Status == MasterDataStatus.ACTIVE)
+                                    {
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            <span>Đang hoạt động</span>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-sm">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                            <span>Ngưng hoạt động</span>
+                                        </span>
+                                    }
+                                </td>
+                                <td class="py-4 px-4 sm:px-6 text-right">
+                                    <div class="flex items-center justify-end gap-1 text-slate-500">
+                                        <button type="button"
+                                                class="p-1.5 rounded-lg hover:bg-sky-100 hover:text-sky-700 transition-stitch"
+                                                title="Xem chi tiết"
+                                                @onclick="() => OpenDetailDialog(item)">
+                                            <span class="material-symbols-outlined text-[18px]">visibility</span>
+                                        </button>
+                                        <button type="button"
+                                                class="p-1.5 rounded-lg hover:bg-amber-100 hover:text-amber-700 transition-stitch"
+                                                title="Chỉnh sửa hồ sơ"
+                                                @onclick="() => OpenEditDialog(item)">
+                                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                                        </button>
                                         @if (item.Status == MasterDataStatus.ACTIVE)
                                         {
-                                            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1">
-                                                <i class="bi bi-check-circle-fill me-1"></i> Hoạt động
-                                            </span>
+                                            <button type="button"
+                                                    class="p-1.5 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition-stitch"
+                                                    title="Vô hiệu hóa"
+                                                    @onclick="() => ToggleStatus(item, MasterDataStatus.INACTIVE)">
+                                                <span class="material-symbols-outlined text-[18px]">power_settings_new</span>
+                                            </button>
                                         }
                                         else
                                         {
-                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1">
-                                                <i class="bi bi-pause-circle-fill me-1"></i> Ngưng hoạt động
-                                            </span>
+                                            <button type="button"
+                                                    class="p-1.5 rounded-lg hover:bg-emerald-100 hover:text-emerald-700 transition-stitch"
+                                                    title="Kích hoạt lại"
+                                                    @onclick="() => ToggleStatus(item, MasterDataStatus.ACTIVE)">
+                                                <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                                            </button>
                                         }
-                                    </td>
-                                    <td class="py-3 text-center text-muted small">@item.TimeZoneId</td>
-                                    <td class="pe-4 py-3 text-end">
-                                        <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-info rounded-2 me-1" title="Xem Chi Tiết" @onclick="() => OpenDetailDialog(item)">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-outline-primary rounded-2 me-1" title="Chỉnh Sửa" @onclick="() => OpenEditDialog(item)">
-                                                <i class="bi bi-pencil"></i>
-                                            </button>
-                                            @if (item.Status == MasterDataStatus.ACTIVE)
-                                            {
-                                                <button class="btn btn-outline-danger rounded-2" title="Vô hiệu hóa" @onclick="() => ToggleStatus(item, MasterDataStatus.INACTIVE)">
-                                                    <i class="bi bi-slash-circle"></i>
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <button class="btn btn-outline-success rounded-2" title="Kích hoạt lại" @onclick="() => ToggleStatus(item, MasterDataStatus.ACTIVE)">
-                                                    <i class="bi bi-arrow-repeat"></i>
-                                                </button>
-                                            }
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination Footer -->
-                <div class="d-flex flex-column flex-md-row justify-content-between align-items-center p-4 border-top gap-3">
-                    <div class="text-muted small">
-                        Hiển thị <strong>@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> đến <strong>@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong> trong số <strong>@PagedResult.TotalCount</strong> tòa nhà
-                    </div>
-                    <ul class="pagination pagination-sm mb-0">
-                        <li class="page-item @(PagedResult.HasPreviousPage ? "" : "disabled")">
-                            <button class="page-link rounded-start-3" @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
-                                <i class="bi bi-chevron-left"></i> Trước
-                            </button>
-                        </li>
-                        @for (int i = 1; i <= PagedResult.TotalPages; i++)
-                        {
-                            var pageNum = i;
-                            <li class="page-item @(pageNum == PagedResult.PageIndex ? "active" : "")">
-                                <button class="page-link" @onclick="() => ChangePage(pageNum)">@pageNum</button>
-                            </li>
+                                    </div>
+                                </td>
+                            </tr>
                         }
-                        <li class="page-item @(PagedResult.HasNextPage ? "" : "disabled")">
-                            <button class="page-link rounded-end-3" @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
-                                Sau <i class="bi bi-chevron-right"></i>
-                            </button>
-                        </li>
-                    </ul>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- PAGINATION -->
+            <div class="p-4 sm:px-6 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-600">
+                <div>
+                    Bản ghi <strong class="text-slate-800">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> -
+                    <strong class="text-slate-800">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong>
+                    trong tổng số <strong class="text-slate-800">@PagedResult.TotalCount</strong>
                 </div>
-            }
-        </div>
+                <div class="flex items-center gap-1.5 self-center sm:self-auto">
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasPreviousPage)"
+                            @onclick="() => ChangePage(1)">
+                        <span class="material-symbols-outlined text-[18px]">first_page</span>
+                    </button>
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasPreviousPage)"
+                            @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
+                        <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+
+                    @for (int i = 1; i <= PagedResult.TotalPages; i++)
+                    {
+                        var pageNum = i;
+                        @if (pageNum == PagedResult.PageIndex)
+                        {
+                            <button class="w-8 h-8 rounded-lg bg-sky-600 text-white font-bold text-xs shadow-sm flex items-center justify-center">@pageNum</button>
+                        }
+                        else
+                        {
+                            <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-xs transition-stitch flex items-center justify-center"
+                                    @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                        }
+                    }
+
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasNextPage)"
+                            @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasNextPage)"
+                            @onclick="() => ChangePage(PagedResult.TotalPages)">
+                        <span class="material-symbols-outlined text-[18px]">last_page</span>
+                    </button>
+                </div>
+            </div>
+        }
     </div>
 </div>
 
