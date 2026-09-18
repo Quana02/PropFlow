@@ -192,21 +192,12 @@
 
         try
         {
-            if (IsEditMode && BuildingToEdit != null)
-            {
-                await BuildingApiClient.UpdateBuildingAsync(BuildingToEdit.Id, UpdateModel);
-            }
-            else
-            {
-                await BuildingApiClient.CreateBuildingAsync(CreateModel);
-            }
-
+            var result = IsEditMode && BuildingToEdit != null
+                ? await BuildingApiClient.UpdateBuildingAsync(BuildingToEdit.Id, UpdateModel)
+                : await BuildingApiClient.CreateBuildingAsync(CreateModel);
+            if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu tòa nhà."; return; }
             await OnSaved.InvokeAsync();
             await Close();
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = ex.Message;
         }
         finally
         {

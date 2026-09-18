@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Services;
@@ -7,6 +8,7 @@ using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 namespace PropFlow.Modules.PropertyAssets.Presentation.Controllers;
 
 [ApiController]
+[Authorize(Roles = "MANAGER")]
 [Route("api/v1/buildings")]
 [Produces("application/json")]
 public class BuildingsController : ControllerBase

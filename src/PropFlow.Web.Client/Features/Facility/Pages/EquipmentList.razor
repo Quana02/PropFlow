@@ -1,4 +1,6 @@
 @page "/equipment"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @inject IEquipmentApiClient EquipmentApiClient
@@ -132,8 +134,35 @@
                        @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
             </div>
 
+            <!-- Lọc theo Tòa nhà -->
+            <div class="w-full sm:w-48 relative">
+                <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none font-medium cursor-pointer outline-none"
+                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                        @bind="FilterBuildingIdString">
+                    <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">Tất cả tòa nhà</option>
+                    @foreach (var building in BuildingList)
+                    {
+                        <option value="@building.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@building.Name</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Lọc theo Cơ sở vật chất -->
+            <div class="w-full sm:w-48 relative">
+                <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none font-medium cursor-pointer outline-none"
+                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                        @bind="FilterFacilityIdString"
+                        disabled="@(Filter.BuildingId == null)">
+                    <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">Tất cả CSVT</option>
+                    @foreach (var facility in FilteredFacilityList)
+                    {
+                        <option value="@facility.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@facility.Name</option>
+                    }
+                </select>
+            </div>
+
             <!-- Lọc theo Trạng thái -->
-            <div class="w-full sm:w-60 relative">
+            <div class="w-full sm:w-48 relative">
                 <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none font-medium cursor-pointer outline-none"
                         style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
                         @bind="StatusFilterString">
@@ -452,6 +481,7 @@
             </div>
 
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                @if (ErrorMessage != null) { <p class="text-rose-700 bg-rose-50 p-3 rounded-lg" role="alert">@ErrorMessage</p> }
                 <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                         <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng Thái Vận Hành</dt>
@@ -495,7 +525,7 @@
 
                     <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 sm:col-span-2">
                         <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vị Trí Cụ Thể (Nơi Đặt)</dt>
-                        <dd class="mt-1.5 text-sm font-semibold text-slate-800 flex items-center gap-2">
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800 space-y-2">
                             @if (string.IsNullOrEmpty(SelectedEquipmentToEdit.FacilityName))
                             {
                                 <div class="flex items-center gap-1.5">
@@ -514,6 +544,13 @@
                                         <span>Trực thuộc:</span>
                                         <span class="text-slate-600 font-medium">@SelectedEquipmentToEdit.BuildingName</span>
                                     </div>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(SelectedEquipmentToEdit.LocationDescription))
+                            {
+                                <div class="flex items-start gap-1.5 text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-200">
+                                    <span class="material-symbols-outlined text-sm text-slate-400 mt-0.5">location_on</span>
+                                    <span>@SelectedEquipmentToEdit.LocationDescription</span>
                                 </div>
                             }
                         </dd>
@@ -626,14 +663,19 @@
                                 </label>
                                 <div class="relative">
                                     <select @bind="BuildingIdString"
-                                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer"
-                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer @((SelectedEquipmentToEdit != null) ? "bg-slate-50 text-slate-500" : "")"
+                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                                            disabled="@(SelectedEquipmentToEdit != null)">
                                         <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">  Không gắn trực tiếp Tòa nhà  </option>
                                         @foreach (var b in BuildingList)
                                         {
                                             <option value="@b.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@b.Name</option>
                                         }
                                     </select>
+                                    @if (SelectedEquipmentToEdit != null)
+                                    {
+                                        <p class="text-[11px] text-amber-600 mt-1">* Không thể thay đổi tòa nhà khi chỉnh sửa thiết bị</p>
+                                    }
                                 </div>
                             </div>
 
@@ -644,9 +686,10 @@
                                 <div class="relative">
                                     <select @bind="FacilityIdString"
                                             class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer"
-                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                                            disabled="@(FormModel.BuildingId == Guid.Empty)">
                                         <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Không thuộc CSVT (Đặt độc lập) --</option>
-                                        @foreach (var f in FacilityList)
+                                        @foreach (var f in FormFilteredFacilityList)
                                         {
                                             <option value="@f.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@f.Name</option>
                                         }
@@ -710,12 +753,33 @@
         }
     }
 
-    private string LocationFilterString
+    private string FilterBuildingIdString
     {
-        get => "";
+        get => Filter.BuildingId?.ToString() ?? "";
         set
         {
-            // TODO: Implement location filter logic
+            Filter.BuildingId = Guid.TryParse(value, out var g) ? g : null;
+            // Reset facility filter when building changes
+            Filter.FacilityId = null;
+        }
+    }
+
+    private string FilterFacilityIdString
+    {
+        get => Filter.FacilityId?.ToString() ?? "";
+        set
+        {
+            Filter.FacilityId = Guid.TryParse(value, out var g) ? g : null;
+        }
+    }
+
+    private List<FacilityModel> FilteredFacilityList
+    {
+        get
+        {
+            if (Filter.BuildingId == null)
+                return new List<FacilityModel>();
+            return FacilityList.Where(f => f.BuildingId == Filter.BuildingId.Value).ToList();
         }
     }
 
@@ -734,7 +798,16 @@
     private string BuildingIdString
     {
         get => FormModel.BuildingId == Guid.Empty ? "" : FormModel.BuildingId.ToString();
-        set => FormModel.BuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
+        set
+        {
+            var newBuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
+            if (FormModel.BuildingId != newBuildingId)
+            {
+                FormModel.BuildingId = newBuildingId;
+                // Reset facility when building changes
+                FormModel.FacilityId = null;
+            }
+        }
     }
 
     private string FacilityIdString
@@ -743,13 +816,25 @@
         set => FormModel.FacilityId = Guid.TryParse(value, out var g) ? g : null;
     }
 
+    private List<FacilityModel> FormFilteredFacilityList
+    {
+        get
+        {
+            if (FormModel.BuildingId == Guid.Empty)
+                return new List<FacilityModel>();
+            return FacilityList.Where(f => f.BuildingId == FormModel.BuildingId).ToList();
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         var buildingResult = await BuildingApiClient.GetBuildingsAsync(new BuildingFilterModel { PageSize = 1000 });
-        BuildingList = buildingResult.Items?.ToList() ?? new List<BuildingModel>();
-        
+        if (buildingResult.IsSuccess) BuildingList = buildingResult.Data?.Items?.ToList() ?? new();
+        else ErrorMessage = buildingResult.Message ?? "Không thể tải danh sách tòa nhà.";
+
         var facilityResult = await FacilityApiClient.GetFacilitiesAsync(new FacilityFilterModel { PageSize = 1000 });
-        FacilityList = facilityResult.Items?.ToList() ?? new List<FacilityModel>();
+        if (facilityResult.IsSuccess) FacilityList = facilityResult.Data?.Items?.ToList() ?? new();
+        else ErrorMessage = facilityResult.Message ?? "Không thể tải danh sách cơ sở vật chất.";
         
         await LoadData();
     }
@@ -758,8 +843,12 @@
     {
         IsLoading = true;
         ErrorMessage = null;
-        try { PagedResult = await EquipmentApiClient.GetEquipmentsAsync(Filter); }
-        catch (Exception ex) { ErrorMessage = $"Không thể tải dữ liệu: {ex.Message}"; }
+        try
+        {
+            var result = await EquipmentApiClient.GetEquipmentsAsync(Filter);
+            if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
+            else ErrorMessage = result.Message ?? "Không thể tải thiết bị.";
+        }
         finally { IsLoading = false; }
     }
 
@@ -817,7 +906,8 @@
         {
             if (SelectedEquipmentToEdit == null)
             {
-                await EquipmentApiClient.CreateEquipmentAsync(FormModel);
+                var createResult = await EquipmentApiClient.CreateEquipmentAsync(FormModel);
+                if (!createResult.IsSuccess) { ErrorMessage = createResult.Message; return; }
                 SuccessMessage = $"Đã thêm mới thiết bị '{FormModel.Name}' thành công!";
             }
             else
@@ -836,13 +926,13 @@
                     LocationDescription = FormModel.LocationDescription,
                     Description = FormModel.Description
                 };
-                await EquipmentApiClient.UpdateEquipmentAsync(SelectedEquipmentToEdit.Id, updateModel);
+                var updateResult = await EquipmentApiClient.UpdateEquipmentAsync(SelectedEquipmentToEdit.Id, updateModel);
+                if (!updateResult.IsSuccess) { ErrorMessage = updateResult.Message; return; }
                 SuccessMessage = $"Đã cập nhật '{FormModel.Name}' thành công!";
             }
             CloseDialog();
             await LoadData();
         }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
         finally { IsSaving = false; }
     }
 
@@ -855,12 +945,9 @@
     {
         OpenStatusDropdownId = null;
         ErrorMessage = null; SuccessMessage = null;
-        try
-        {
-            await EquipmentApiClient.SetEquipmentStatusAsync(item.Id, newStatus);
-            SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
-            await LoadData();
-        }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
+        var result = await EquipmentApiClient.SetEquipmentStatusAsync(item.Id, newStatus);
+        if (!result.IsSuccess) { ErrorMessage = result.Message; return; }
+        await LoadData();
+        if (ErrorMessage == null) SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
     }
 }

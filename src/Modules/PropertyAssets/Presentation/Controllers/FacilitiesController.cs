@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
@@ -6,6 +8,7 @@ using PropFlow.Modules.PropertyAssets.Application.Facilities.Services;
 namespace PropFlow.Modules.PropertyAssets.Presentation.Controllers;
 
 [ApiController]
+[Authorize(Roles = "MANAGER")]
 [Route("api/v1/[controller]")]
 public class FacilitiesController : ControllerBase
 {
@@ -44,7 +47,21 @@ public class FacilitiesController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Dữ liệu không hợp lệ",
+                Detail = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Xung đột dữ liệu",
+                Detail = ex.Message
+            });
         }
     }
 
@@ -58,7 +75,30 @@ public class FacilitiesController : ControllerBase
         }
         catch (KeyNotFoundException ex)
         {
-            return NotFound(new { message = ex.Message });
+            return NotFound(new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Không tìm thấy dữ liệu",
+                Detail = ex.Message
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Dữ liệu không hợp lệ",
+                Detail = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Xung đột dữ liệu",
+                Detail = ex.Message
+            });
         }
     }
 

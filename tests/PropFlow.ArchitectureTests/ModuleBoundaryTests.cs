@@ -19,7 +19,27 @@ namespace PropFlow.ArchitectureTests;
 
 public class ModuleBoundaryTests
 {
-    private static readonly string SolutionDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+    private static readonly string SolutionDirectory = FindSolutionDirectory();
+
+    private static string FindSolutionDirectory()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)
+            if (File.Exists(Path.Combine(directory.FullName, "PropFlow.sln"))) return directory.FullName;
+        throw new DirectoryNotFoundException("Không tìm thấy PropFlow.sln từ thư mục kiểm thử.");
+    }
+
+    [Fact]
+    public void PropertyAssets_Application_ShouldNotDependOnEfOrInfrastructure()
+    {
+        var application = Path.Combine(SolutionDirectory, "src", "Modules", "PropertyAssets", "Application");
+        foreach (var file in Directory.EnumerateFiles(application, "*.cs", SearchOption.AllDirectories))
+        {
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain("using Microsoft.EntityFrameworkCore", source);
+            Assert.DoesNotContain("PropertyAssets.Infrastructure", source);
+            Assert.DoesNotContain("PropertyAssetsDbContext", source);
+        }
+    }
 
     [Fact]
     public void Solution_ShouldContainMainProjectsAndPublicContracts()

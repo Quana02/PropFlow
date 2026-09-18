@@ -1,4 +1,6 @@
 @page "/buildings"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @using PropFlow.Web.Client.Features.Facility.Components
@@ -356,11 +358,9 @@
         ErrorMessage = null;
         try
         {
-            PagedResult = await BuildingApiClient.GetBuildingsAsync(Filter);
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Không thể tải danh sách tòa nhà: {ex.Message}";
+            var result = await BuildingApiClient.GetBuildingsAsync(Filter);
+            if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
+            else ErrorMessage = result.Message ?? "Không thể tải danh sách tòa nhà.";
         }
         finally
         {
@@ -411,7 +411,13 @@
 
     private async Task OpenDetailDialog(BuildingModel item)
     {
-        SelectedBuildingToView = await BuildingApiClient.GetBuildingDetailByIdAsync(item.Id) ?? item;
+        var result = await BuildingApiClient.GetBuildingDetailByIdAsync(item.Id);
+        if (!result.IsSuccess || result.Data == null)
+        {
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tòa nhà.";
+            return;
+        }
+        SelectedBuildingToView = result.Data;
         IsDetailOpen = true;
     }
 
@@ -419,16 +425,10 @@
     {
         ErrorMessage = null;
         SuccessMessage = null;
-        try
-        {
-            var actionText = targetStatus == MasterDataStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
-            await BuildingApiClient.SetBuildingStatusAsync(item.Id, targetStatus);
-            SuccessMessage = $"Đã {actionText} thành công tòa nhà '{item.Name}'.";
-            await LoadData();
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = ex.Message;
-        }
+        var actionText = targetStatus == MasterDataStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
+        var result = await BuildingApiClient.SetBuildingStatusAsync(item.Id, targetStatus);
+        if (!result.IsSuccess) { ErrorMessage = result.Message; return; }
+        await LoadData();
+        if (ErrorMessage == null) SuccessMessage = $"Đã {actionText} thành công tòa nhà '{item.Name}'.";
     }
 }

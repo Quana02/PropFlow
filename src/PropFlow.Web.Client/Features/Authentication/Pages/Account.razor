@@ -19,7 +19,7 @@ else if (account != null)
     <p>Thông tin cư dân và quan hệ căn hộ do ban quản lý quản lý, không thay đổi tại đây.</p>
 }
 else { <button @onclick="Load">Thử tải lại</button> }
-<nav class="auth-links"><a href="/account/change-password">Đổi mật khẩu</a></nav><button class="secondary" disabled="@busy" @onclick="Logout">Đăng xuất</button>
+<nav class="auth-links">@if (account?.Role == "MANAGER") { <a href="/buildings">Vào quản lý tòa nhà (FE4)</a> }<a href="/account/change-password">Đổi mật khẩu</a></nav><button class="secondary" disabled="@busy" @onclick="Logout">Đăng xuất</button>
 @code {
     private readonly ProfileForm form = new(); private AccountResponse? account; private ApiResult? result; private bool busy, saved, loading = true;
     protected override Task OnInitializedAsync() => Load();
