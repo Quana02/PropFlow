@@ -67,8 +67,10 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
     public AuthFlowFactory Factory { get; private set; } = null!;
     public async Task InitializeAsync()
     {
-        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-        var config = new ConfigurationBuilder().AddJsonFile(Path.Combine(root, "src/PropFlow.Api/appsettings.Testing.json")).Build();
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root != null && !File.Exists(Path.Combine(root.FullName, "PropFlow.sln"))) root = root.Parent;
+        if (root == null) throw new DirectoryNotFoundException("Không tìm thấy PropFlow.sln từ thư mục kiểm thử.");
+        var config = new ConfigurationBuilder().AddJsonFile(Path.Combine(root.FullName, "src/PropFlow.Api/appsettings.Testing.json")).Build();
         var configured = new NpgsqlConnectionStringBuilder(config.GetConnectionString("PropFlowDatabase"));
         if (configured.Database != "propflow_test") throw new InvalidOperationException("Auth tests require the configured propflow_test connection as the isolated test server source.");
         databaseName = "propflow_fe01_test_" + Guid.NewGuid().ToString("N");

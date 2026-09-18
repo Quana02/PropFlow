@@ -5,6 +5,7 @@ using PropFlow.Web.Client.Services.Api;
 using PropFlow.Web.Client.Services.Authentication;
 using PropFlow.Web.Client.Features.Authentication.Services;
 using PropFlow.Web.Client.Features.Authentication.State;
+using PropFlow.Web.Client.Features.Facility.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -25,4 +26,7 @@ builder.Services.AddScoped(sp =>
 builder.Services.AddScoped<AuthenticationService>();
 builder.Services.AddScoped<OnboardingState>();
 
+builder.Services.AddScoped<IBuildingApiClient, BuildingApiClient>();
+builder.Services.AddScoped<IFacilityApiClient, FacilityApiClient>();
+builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 await builder.Build().RunAsync();

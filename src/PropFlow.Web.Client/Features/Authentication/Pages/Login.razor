@@ -19,6 +19,6 @@
 @if (Session.Notice?.Contains("chưa xác nhận") == true) { <button class="secondary" disabled="@busy" @onclick="RetryLogout">Thử thu hồi phiên lại</button> }
 @code {
     private readonly LoginForm form = new(); private bool busy; private ApiResult? result;
-    private async Task Submit() { if (busy) return; busy = true; try { result = await Session.LoginAsync(new(form.Username, form.Password)); if (result.IsSuccess) Navigation.NavigateTo("/account"); } finally { form.Password = ""; busy = false; } }
+    private async Task Submit() { if (busy) return; busy = true; try { result = await Session.LoginAsync(new(form.Username, form.Password)); if (result.IsSuccess) Navigation.NavigateTo(Session.User?.Role == "MANAGER" ? "/buildings" : "/account"); } finally { form.Password = ""; busy = false; } }
     private async Task RetryLogout() { busy = true; try { result = await Session.LogoutAsync(); } finally { busy = false; } }
 }
