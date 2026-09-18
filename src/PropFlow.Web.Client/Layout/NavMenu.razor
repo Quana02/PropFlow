@@ -1,48 +1,29 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Web.Client.Layout.Navigation.Accountant
+@using PropFlow.Web.Client.Layout.Navigation.Operations
 
-<nav class="app-rail" aria-label="Điều hướng ứng dụng">
-    <a class="rail-logo" href="/" aria-label="PropFlow">P</a>
-
-    <div class="rail-links">
-        <AuthorizeView Roles="ACCOUNTANT">
-            <NavLink href="/finance/dashboard" Match="NavLinkMatch.All" class="rail-link"
-                     title="Tổng quan kế toán" aria-label="Tổng quan kế toán">
-                <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
-            </NavLink>
-            <NavLink href="/finance/payments/pending" Match="NavLinkMatch.All" class="rail-link"
-                     title="Chờ xác minh thanh toán" aria-label="Chờ xác minh thanh toán">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
-                </svg>
-            </NavLink>
-            <NavLink href="/finance/invoices/unpaid" Match="NavLinkMatch.All" class="rail-link"
-                     title="Hóa đơn chưa thu" aria-label="Hóa đơn chưa thu">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                    <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2V3Z" /><path d="M9 8h6M9 12h6" />
-                </svg>
-            </NavLink>
-            <NavLink href="/finance/payments/overdue" Match="NavLinkMatch.All" class="rail-link"
-                     title="Xử lý nợ quá hạn" aria-label="Xử lý nợ quá hạn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                    <path d="M12 3 22 21H2L12 3Z" /><path d="M12 9v5M12 18h.01" />
-                </svg>
-            </NavLink>
-            <NavLink href="/finance/payments/confirmed" Match="NavLinkMatch.All" class="rail-link"
-                     title="Đã xác nhận và sổ cái" aria-label="Đã xác nhận và sổ cái">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" />
-                </svg>
-            </NavLink>
+<AuthorizeView Roles="ACCOUNTANT">
+    <Authorized><AccountantNavMenu /></Authorized>
+    <NotAuthorized>
+        <AuthorizeView Roles="MANAGER,STAFF" Context="operationsContext">
+            <Authorized><OperationsNavMenu /></Authorized>
+            <NotAuthorized>
+                <div class="top-row ps-3 navbar navbar-dark">
+                    <div class="container-fluid">
+                        <a class="navbar-brand" href="">PropFlow</a>
+                    </div>
+                </div>
+                <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+                <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+                    <nav class="flex-column">
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Trang chủ
+                            </NavLink>
+                        </div>
+                    </nav>
+                </div>
+            </NotAuthorized>
         </AuthorizeView>
-    </div>
-
-    <div class="rail-bottom">
-        <NavLink href="/account"
-                 class="rail-link"
-                 title="Tài khoản"
-                 aria-label="Tài khoản"
-                 Match="NavLinkMatch.All">
-            <span class="material-symbols-outlined" aria-hidden="true">person</span>
-        </NavLink>
-    </div>
-</nav>
+    </NotAuthorized>
+</AuthorizeView>
