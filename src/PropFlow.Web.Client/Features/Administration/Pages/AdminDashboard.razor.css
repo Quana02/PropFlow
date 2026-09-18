@@ -1,0 +1,193 @@
+.admin-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    color: var(--admin-text, #17243a);
+    transition: color var(--theme-duration, 620ms) var(--theme-ease, ease);
+}
+
+.dashboard-heading,
+.metric-card,
+.overview-card,
+.account-panel {
+    border: 1px solid var(--admin-line, #dce8f1);
+    border-radius: 1.25rem;
+    background: var(--admin-surface, #fff);
+    box-shadow: 0 0.5rem 1.75rem rgba(12, 74, 110, 0.06);
+    backdrop-filter: blur(1rem);
+    transition: background-color var(--theme-duration, 620ms) var(--theme-ease, ease),
+                border-color var(--theme-duration, 620ms) var(--theme-ease, ease),
+                color var(--theme-duration, 620ms) var(--theme-ease, ease);
+}
+
+.dashboard-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.eyebrow {
+    margin: 0 0 0.5rem;
+    color: var(--admin-accent, #0284c7);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+h1,
+h2,
+p {
+    margin-top: 0;
+}
+
+h1 {
+    margin-bottom: 0.4rem;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+h2 {
+    margin-bottom: 0.4rem;
+    font-size: 1rem;
+}
+
+.dashboard-heading p:last-child,
+.overview-card p,
+.account-panel p:last-child,
+.overview-card small {
+    color: var(--admin-muted, #64748b);
+    font-size: 0.82rem;
+    transition: color var(--theme-duration, 620ms) var(--theme-ease, ease);
+}
+
+.session-status {
+    flex: none;
+    padding: 0.55rem 0.75rem;
+    border-radius: 99rem;
+    background: rgba(16, 185, 129, 0.11);
+    color: #047857;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.metrics-grid,
+.overview-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.metric-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+    padding: 1rem;
+}
+
+.metric-card h2 {
+    color: var(--admin-muted, #64748b);
+    font-size: 0.75rem;
+    transition: color var(--theme-duration, 620ms) var(--theme-ease, ease);
+}
+
+.metric-card strong {
+    display: block;
+    font-size: 1.5rem;
+}
+
+.metric-card small {
+    color: var(--admin-muted, #64748b);
+    font-size: 0.7rem;
+    transition: color var(--theme-duration, 620ms) var(--theme-ease, ease);
+}
+
+.overview-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 1.25rem;
+}
+
+.card-icon {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    margin-bottom: 1rem;
+    border-radius: 0.8rem;
+    background: rgba(2, 132, 199, 0.12);
+    color: var(--admin-accent, #0284c7);
+    font-size: 1.25rem;
+}
+
+.metric-card .card-icon {
+    margin-bottom: 0;
+}
+
+.overview-card strong {
+    margin-top: auto;
+    font-size: 1.2rem;
+}
+
+.overview-card small {
+    display: block;
+    margin-top: 0.4rem;
+}
+
+.account-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.account-panel dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+}
+
+.account-panel dl div {
+    min-width: 0;
+    padding: 0.75rem;
+    border: 1px solid var(--admin-line, #dce8f1);
+    border-radius: 0.75rem;
+}
+
+.account-panel dt {
+    color: var(--admin-muted, #64748b);
+    font-size: 0.7rem;
+    transition: color var(--theme-duration, 620ms) var(--theme-ease, ease);
+}
+
+.account-panel dd {
+    overflow-wrap: anywhere;
+    margin: 0.3rem 0 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+@media (max-width: 58rem) {
+    .metrics-grid,
+    .overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .account-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 36rem) {
+    .dashboard-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .account-panel dl {
+        grid-template-columns: 1fr;
+    }
+}

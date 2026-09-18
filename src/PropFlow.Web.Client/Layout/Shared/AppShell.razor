@@ -1,0 +1,201 @@
+@using PropFlow.Web.Client.Layout.Navigation.Shared
+@using PropFlow.Web.Client.Services.Authentication
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject AuthSession Session
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<div class="app-shell @(dark ? "app-shell-dark" : "") @(ShowAmbientBackground ? "app-shell-ambient" : "")">
+    <div class="app-aurora app-aurora-one" aria-hidden="true"></div>
+    <div class="app-aurora app-aurora-two" aria-hidden="true"></div>
+    @if (ShowAmbientBackground)
+    {
+        <canvas class="app-ambient-canvas" @ref="ambientCanvas" aria-hidden="true"></canvas>
+    }
+
+    <header class="app-header">
+        <div class="app-brand" aria-label="PropFlow">
+            <span class="app-brand-mark" aria-hidden="true">P</span>
+            <span class="app-brand-copy">
+                <strong>PropFlow <span class="app-badge">@RoleLabel</span></strong>
+                <small>@SectionDescription</small>
+            </span>
+        </div>
+
+        <div class="app-header-actions">
+            @if (ShowWeatherAndClock)
+            {
+                <div class="app-weather" aria-label="Thời tiết Thành phố Hồ Chí Minh">
+                    <span class="app-weather-icon" @ref="weatherIcon" aria-hidden="true">☀</span>
+                    <span class="app-weather-copy">
+                        <strong @ref="weatherTemperature">--°C</strong>
+                        <small @ref="weatherDescription">TP.HCM · Đang tải</small>
+                    </span>
+                </div>
+            }
+            @if (ShowAmbientBackground)
+            {
+                <button type="button" class="app-motion-button" @ref="motionButton"
+                        aria-label="Bật chuyển động nền" title="Bật chuyển động nền">✦</button>
+            }
+            <button type="button" class="app-theme-button" @onclick="ToggleTheme"
+                    aria-label="@(dark ? "Bật chế độ sáng" : "Bật chế độ tối")"
+                    title="Chuyển giao diện sáng tối">
+                <span aria-hidden="true">@(dark ? "☀" : "☾")</span>
+            </button>
+
+            <details class="app-profile">
+                <summary aria-label="Mở menu tài khoản">
+                    <span class="app-avatar" aria-hidden="true">@Initials</span>
+                    <span class="app-profile-name">
+                        <strong>@(Session.User?.DisplayName ?? "Tài khoản")</strong>
+                        <small>@(Session.User?.Role ?? "")</small>
+                    </span>
+                    <span aria-hidden="true">⌄</span>
+                </summary>
+                <div class="app-profile-options">
+                    <strong>@(Session.User?.DisplayName ?? "Tài khoản")</strong>
+                    <small>@Session.User?.Email</small>
+                    <a href="/account">Xem tài khoản</a>
+                    <a href="/account/change-password">Đổi mật khẩu</a>
+                    <button type="button" disabled="@busy" @onclick="Logout">Đăng xuất</button>
+                </div>
+            </details>
+        </div>
+    </header>
+
+    <div class="app-workspace">
+        <AppNavMenu />
+        <main class="app-main">
+            <div class="app-page-heading">
+                <span class="app-page-icon" aria-hidden="true">◆</span>
+                <div>
+                    <strong>@SectionHeading</strong>
+                    <span>@SectionDescription</span>
+                </div>
+                @if (ShowWeatherAndClock)
+                {
+                    <div class="app-local-time" aria-label="Ngày giờ Thành phố Hồ Chí Minh">
+                        <span @ref="dateLabel"></span>
+                        <strong @ref="clockLabel">--:--</strong>
+                    </div>
+                }
+            </div>
+            <div class="app-page-body">@ChildContent</div>
+            <footer class="app-footer">© @DateTime.Now.Year PropFlow · Hệ thống quản lý vận hành bất động sản</footer>
+        </main>
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool ShowAmbientBackground { get; set; } = true;
+    [Parameter] public bool ShowWeatherAndClock { get; set; } = true;
+
+    private bool dark;
+    private bool busy;
+    private ElementReference ambientCanvas;
+    private ElementReference motionButton;
+    private ElementReference weatherIcon;
+    private ElementReference weatherTemperature;
+    private ElementReference weatherDescription;
+    private ElementReference dateLabel;
+    private ElementReference clockLabel;
+    private IJSObjectReference? ambientModule;
+    private IJSObjectReference? ambientHandle;
+    private IJSObjectReference? infoModule;
+    private IJSObjectReference? infoHandle;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (ShowAmbientBackground)
+        {
+            ambientModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-ambient.js");
+            ambientHandle = await ambientModule.InvokeAsync<IJSObjectReference>("initialize", ambientCanvas, motionButton);
+        }
+        if (ShowWeatherAndClock)
+        {
+            infoModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-info.js");
+            infoHandle = await infoModule.InvokeAsync<IJSObjectReference>("initialize",
+                weatherIcon, weatherTemperature, weatherDescription, dateLabel, clockLabel);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (ambientHandle is not null)
+            {
+                await ambientHandle.InvokeVoidAsync("dispose");
+                await ambientHandle.DisposeAsync();
+            }
+            if (ambientModule is not null) await ambientModule.DisposeAsync();
+            if (infoHandle is not null)
+            {
+                await infoHandle.InvokeVoidAsync("dispose");
+                await infoHandle.DisposeAsync();
+            }
+            if (infoModule is not null) await infoModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser may already be gone when the layout is disposed.
+        }
+    }
+
+    private string RoleLabel => Session.User?.Role switch
+    {
+        "ADMIN" => "SYSTEM ADMIN",
+        "ACCOUNTANT" => "KẾ TOÁN",
+        "MANAGER" => "QUẢN LÝ",
+        "STAFF" => "NHÂN VIÊN",
+        _ => "PROPFLOW"
+    };
+
+    private string SectionHeading => Session.User?.Role switch
+    {
+        "ADMIN" => "Trung tâm quản trị hệ thống",
+        "ACCOUNTANT" => "Tổng quan kế toán",
+        "MANAGER" or "STAFF" => "Quản lý vận hành",
+        _ => "Không gian làm việc"
+    };
+
+    private string SectionDescription => Session.User?.Role switch
+    {
+        "ADMIN" => "Quản trị tài khoản và phân quyền",
+        "ACCOUNTANT" => "Theo dõi tài chính và công nợ",
+        "MANAGER" or "STAFF" => "Tòa nhà, cơ sở vật chất và thiết bị",
+        _ => "Hệ thống điều hành tòa nhà"
+    };
+
+    private string Initials
+    {
+        get
+        {
+            var name = Session.User?.DisplayName;
+            if (string.IsNullOrWhiteSpace(name)) return "?";
+            return string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .TakeLast(2).Select(part => part[0])).ToUpperInvariant();
+        }
+    }
+
+    private void ToggleTheme() => dark = !dark;
+
+    private async Task Logout()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            await Session.LogoutAsync();
+            Navigation.NavigateTo("/login");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

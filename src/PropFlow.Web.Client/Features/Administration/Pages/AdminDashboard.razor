@@ -1,0 +1,84 @@
+@page "/admin/dashboard"
+@layout PropFlow.Web.Client.Layout.AdminLayout
+@using Microsoft.AspNetCore.Authorization
+@using PropFlow.Web.Client.Services.Authentication
+@attribute [Authorize(Roles = "ADMIN")]
+@inject AuthSession Session
+
+<PageTitle>Trung tâm quản trị — PropFlow</PageTitle>
+
+<div class="admin-dashboard">
+    <header class="dashboard-heading">
+        <div>
+            <p class="eyebrow">SYSTEM ADMIN</p>
+            <h1>Xin chào, @(Session.User?.DisplayName ?? "quản trị viên")</h1>
+            <p>Quản lý tài khoản, phân quyền và theo dõi hoạt động hệ thống.</p>
+        </div>
+        <span class="session-status">Phiên quản trị đang hoạt động</span>
+    </header>
+
+    <section class="metrics-grid" aria-label="Chỉ số hệ thống">
+        <article class="metric-card">
+            <span class="card-icon" aria-hidden="true">♙</span>
+            <div>
+                <h2>Tổng tài khoản</h2>
+                <strong>—</strong>
+                <small>Chưa có số liệu tài khoản</small>
+            </div>
+        </article>
+        <article class="metric-card">
+            <span class="card-icon" aria-hidden="true">♧</span>
+            <div>
+                <h2>Tài khoản nhân viên</h2>
+                <strong>—</strong>
+                <small>Chưa có số liệu nhân viên</small>
+            </div>
+        </article>
+        <article class="metric-card">
+            <span class="card-icon" aria-hidden="true">◇</span>
+            <div>
+                <h2>Tài khoản bị hạn chế</h2>
+                <strong>—</strong>
+                <small>Chưa có số liệu trạng thái</small>
+            </div>
+        </article>
+    </section>
+
+    <section class="overview-grid" aria-label="Tổng quan quản trị">
+        <article class="overview-card">
+            <span class="card-icon" aria-hidden="true">♙</span>
+            <h2>Tài khoản</h2>
+            <p>Quản lý danh tính và trạng thái truy cập.</p>
+            <strong>Chưa có dữ liệu</strong>
+            <small>Chức năng quản lý tài khoản chưa được kết nối.</small>
+        </article>
+        <article class="overview-card">
+            <span class="card-icon" aria-hidden="true">◇</span>
+            <h2>Phân quyền RBAC</h2>
+            <p>Vai trò và quyền truy cập trong hệ thống.</p>
+            <strong>Chưa có dữ liệu</strong>
+            <small>Chức năng phân quyền chưa được kết nối.</small>
+        </article>
+        <article class="overview-card">
+            <span class="card-icon" aria-hidden="true">☷</span>
+            <h2>Nhật ký kiểm toán</h2>
+            <p>Theo dõi các thay đổi và sự kiện quản trị.</p>
+            <strong>Chưa có dữ liệu</strong>
+            <small>Chức năng audit log chưa được kết nối.</small>
+        </article>
+    </section>
+
+    <section class="account-panel" aria-labelledby="account-heading">
+        <div>
+            <p class="eyebrow">PHIÊN HIỆN TẠI</p>
+            <h2 id="account-heading">Tài khoản quản trị của bạn</h2>
+            <p>Thông tin lấy từ phiên đăng nhập hiện tại.</p>
+        </div>
+        <dl>
+            <div><dt>Tên hiển thị</dt><dd>@(Session.User?.DisplayName ?? "Chưa có")</dd></div>
+            <div><dt>Email</dt><dd>@(Session.User?.Email ?? "Chưa có")</dd></div>
+            <div><dt>Vai trò</dt><dd>@(Session.User?.Role ?? "Chưa có")</dd></div>
+            <div><dt>Quyền được cấp</dt><dd>@(Session.User?.Permissions.Length.ToString() ?? "0")</dd></div>
+        </dl>
+    </section>
+</div>

@@ -1,0 +1,12 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<AuthorizeView Roles="ADMIN">
+    <nav class="admin-nav" aria-label="Điều hướng quản trị hệ thống">
+        <div class="admin-nav-mark" aria-hidden="true">P</div>
+        <div class="admin-nav-divider"></div>
+        <NavLink href="/admin/dashboard" Match="NavLinkMatch.All" class="admin-nav-link"
+                 title="Tổng quan quản trị" aria-label="Tổng quan quản trị">
+            <span aria-hidden="true">▦</span>
+        </NavLink>
+    </nav>
+</AuthorizeView>

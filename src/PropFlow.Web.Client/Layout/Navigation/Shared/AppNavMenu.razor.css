@@ -1,0 +1,98 @@
+.app-floating-nav {
+    position: fixed;
+    z-index: 50;
+    top: 50%;
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-height: min(85vh, 40rem);
+    overflow-y: auto;
+    border: 1px solid var(--app-line, #dce8f1);
+    border-radius: 1.4rem;
+    background: var(--app-surface, #fff);
+    box-shadow: 0 1rem 2.5rem rgba(12, 43, 70, 0.18);
+    backdrop-filter: blur(1rem);
+    transform: translateY(-50%);
+}
+
+.app-nav-drag {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    min-height: 2.25rem;
+    color: var(--app-muted, #64748b);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.app-nav-drag:active {
+    cursor: grabbing;
+}
+
+.app-nav-drag:focus-visible {
+    outline: 2px solid var(--app-accent, #0284c7);
+    outline-offset: -2px;
+}
+
+.app-floating-nav ::deep .app-rail,
+.app-floating-nav ::deep .admin-nav,
+.app-floating-nav ::deep .operations-nav {
+    position: static;
+    width: auto;
+    min-height: 0;
+    max-height: none;
+    padding: 0.35rem 0.5rem 0.7rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.app-floating-nav ::deep .app-rail,
+.app-floating-nav ::deep .admin-nav {
+    flex-direction: column;
+}
+
+.app-floating-nav ::deep .operations-brand,
+.app-floating-nav ::deep .operations-heading {
+    display: none;
+}
+
+.app-floating-nav ::deep .operations-link {
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    overflow: hidden;
+    padding: 0;
+    color: var(--app-text, #17243a);
+    font-size: 0;
+}
+
+.app-floating-nav ::deep .operations-link:hover,
+.app-floating-nav ::deep .operations-link.active {
+    background: var(--app-accent, #0284c7);
+    color: #fff;
+}
+
+.app-floating-nav ::deep .operations-link span {
+    font-size: 1.3rem;
+}
+
+.app-floating-nav ::deep .rail-links,
+.app-floating-nav ::deep .rail-bottom {
+    flex-direction: column;
+    min-width: 0;
+    overflow: visible;
+}
+
+@media (max-width: 42rem) {
+    .app-floating-nav {
+        top: auto;
+        right: 0.75rem;
+        bottom: 0.75rem;
+        max-height: min(70vh, 32rem);
+        transform: none;
+    }
+}

@@ -1,0 +1,47 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Web.Client.Layout.Navigation.Admin
+@using PropFlow.Web.Client.Layout.Navigation.Accountant
+@using PropFlow.Web.Client.Layout.Navigation.Operations
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="app-floating-nav" @ref="railRef" aria-label="Điều hướng ứng dụng">
+    <div class="app-nav-drag" role="button" tabindex="0"
+         title="Kéo để di chuyển menu" aria-label="Di chuyển menu bằng cách kéo hoặc phím mũi tên">
+        <span aria-hidden="true">⋮⋮</span>
+    </div>
+    <AuthorizeView Roles="ADMIN"><AdminNavMenu /></AuthorizeView>
+    <AuthorizeView Roles="ACCOUNTANT"><AccountantNavMenu /></AuthorizeView>
+    <AuthorizeView Roles="MANAGER,STAFF"><OperationsNavMenu /></AuthorizeView>
+</div>
+
+@code {
+    private ElementReference railRef;
+    private IJSObjectReference? module;
+    private IJSObjectReference? dragHandle;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-nav.js");
+        dragHandle = await module.InvokeAsync<IJSObjectReference>("initialize", railRef);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (dragHandle is not null)
+            {
+                await dragHandle.InvokeVoidAsync("dispose");
+                await dragHandle.DisposeAsync();
+            }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser may already be gone when the layout is disposed.
+        }
+    }
+}
