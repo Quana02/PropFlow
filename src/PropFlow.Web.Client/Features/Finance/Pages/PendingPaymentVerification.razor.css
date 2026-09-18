@@ -1,0 +1,319 @@
+.pending-page {
+    --pending-surface: var(--surface, #fff);
+    --pending-text: var(--text, #17243a);
+    --pending-muted: var(--muted, #64748b);
+    --pending-line: var(--line, #e1e8f0);
+    --pending-accent: var(--accent, #07966a);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 5px 0 28px;
+    color: var(--pending-text);
+    font-family: Inter, sans-serif;
+}
+
+.pending-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.pending-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+    color: var(--pending-muted);
+    font-size: 11px;
+}
+
+.pending-breadcrumb ::deep a {
+    color: var(--pending-muted);
+    text-decoration: none;
+}
+
+.pending-breadcrumb ::deep a:hover,
+.pending-breadcrumb [aria-current] {
+    color: var(--pending-accent);
+}
+
+.pending-breadcrumb [aria-current] {
+    font-weight: 700;
+}
+
+.pending-heading h1 {
+    margin: 0 0 5px;
+    font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif;
+    letter-spacing: -0.025em;
+}
+
+.pending-heading p {
+    max-width: 700px;
+    margin: 0;
+    color: var(--pending-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.pending-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 8px 13px;
+    border: 1px solid var(--pending-line);
+    border-radius: 10px;
+    background: var(--pending-surface);
+    color: var(--pending-muted);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
+.pending-actions .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.pending-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.pending-card,
+.pending-toolbar,
+.pending-table-card {
+    border: 1px solid var(--pending-line);
+    border-radius: 16px;
+    background: var(--pending-surface);
+    box-shadow: 0 12px 30px rgba(29, 49, 82, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.pending-card {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-height: 112px;
+    padding: 16px 18px;
+}
+
+.pending-card-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--pending-muted);
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.04em;
+}
+
+.pending-card-label .material-symbols-outlined {
+    color: var(--pending-accent);
+    font-size: 18px;
+}
+
+.pending-card strong {
+    margin-top: auto;
+    color: var(--pending-text);
+    font: 700 27px/1.1 'Space Grotesk', sans-serif;
+}
+
+.pending-amount strong {
+    color: var(--pending-accent);
+}
+
+.pending-card small {
+    color: var(--pending-muted);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.pending-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pending-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+}
+
+.pending-filters {
+    display: grid;
+    grid-template-columns: minmax(230px, 1.6fr) repeat(2, minmax(135px, 0.75fr));
+    gap: 8px;
+}
+
+.pending-search,
+.pending-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 37px;
+    padding: 6px 10px;
+    border: 1px solid var(--pending-line);
+    border-radius: 10px;
+    background: rgba(148, 163, 184, 0.05);
+    color: var(--pending-muted);
+    font-size: 11px;
+}
+
+.pending-search .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.pending-search input,
+.pending-field input {
+    min-width: 0;
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--pending-muted);
+    font: inherit;
+}
+
+.pending-field span {
+    flex: none;
+    white-space: nowrap;
+}
+
+.pending-filters :disabled {
+    cursor: not-allowed;
+}
+
+.pending-filter-note {
+    margin: 0;
+    color: var(--pending-muted);
+    font-size: 10px;
+}
+
+.pending-table-card {
+    overflow: hidden;
+    padding: 14px 16px 0;
+}
+
+.pending-table-heading {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 2px 14px;
+}
+
+.pending-table-heading h2 {
+    margin: 0 0 3px;
+    font-size: 13px;
+    font-weight: 750;
+}
+
+.pending-table-heading p {
+    margin: 0;
+    color: var(--pending-muted);
+    font-size: 10px;
+}
+
+.pending-table-heading ::deep a {
+    flex: none;
+    color: var(--pending-accent);
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 750;
+}
+
+.pending-table-heading ::deep a:hover {
+    text-decoration: underline;
+}
+
+.pending-table-scroll {
+    overflow-x: auto;
+}
+
+.pending-table-card table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 11px;
+}
+
+.pending-table-card th {
+    padding: 12px 9px;
+    border-top: 1px solid var(--pending-line);
+    border-bottom: 1px solid var(--pending-line);
+    color: var(--pending-muted);
+    font-size: 10px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.pending-table-card th:nth-child(5),
+.pending-table-card th:last-child {
+    text-align: right;
+}
+
+.pending-unavailable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 220px;
+    padding: 18px;
+    color: var(--pending-muted);
+    text-align: center;
+}
+
+.pending-unavailable .material-symbols-outlined {
+    color: var(--pending-accent);
+    font-size: 30px;
+}
+
+.pending-unavailable strong {
+    color: var(--pending-text);
+    font-size: 13px;
+}
+
+.pending-unavailable span:last-child {
+    max-width: 480px;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.pending-table-footer {
+    padding: 11px 2px;
+    border-top: 1px solid var(--pending-line);
+    color: var(--pending-muted);
+    font-size: 10px;
+}
+
+@media (max-width: 1100px) {
+    .pending-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .pending-heading {
+        align-items: start;
+        flex-direction: column;
+    }
+
+    .pending-summary,
+    .pending-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .pending-table-heading {
+        flex-direction: column;
+    }
+}

@@ -1,0 +1,92 @@
+@page "/finance/payments/pending"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "ACCOUNTANT")]
+
+<PageTitle>Thanh toán chờ xác minh — PropFlow</PageTitle>
+
+<div class="pending-page">
+    <header class="pending-heading">
+        <div>
+            <nav class="pending-breadcrumb" aria-label="Đường dẫn trang">
+                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
+                <span aria-hidden="true">›</span>
+                <span aria-current="page">Đối soát thanh toán</span>
+            </nav>
+            <h1>Các khoản thanh toán chờ xác minh</h1>
+            <p>Rà soát từng khoản thanh toán đang chờ trước khi xác nhận hoặc từ chối theo quyền được cấp.</p>
+        </div>
+        <div class="pending-actions">
+            <span title="Chưa khả dụng: chưa có API xuất danh sách thanh toán"><button type="button" disabled><span class="material-symbols-outlined" aria-hidden="true">download</span> Xuất danh sách (Excel)</button></span>
+        </div>
+    </header>
+
+    <section class="pending-summary" aria-label="Tổng quan thanh toán chờ xác minh">
+        <article class="pending-card">
+            <div class="pending-card-label"><span>TỔNG GIAO DỊCH CHỜ</span><span class="material-symbols-outlined" aria-hidden="true">pending_actions</span></div>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Chờ API tổng hợp giao dịch PENDING</small>
+        </article>
+        <article class="pending-card pending-amount">
+            <div class="pending-card-label"><span>TỔNG SỐ TIỀN CHỜ XÁC MINH</span><span class="material-symbols-outlined" aria-hidden="true">payments</span></div>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Số tiền chỉ hiển thị khi backend trả về</small>
+        </article>
+    </section>
+
+    <section class="pending-content" aria-labelledby="pending-list-title">
+        <div class="pending-toolbar">
+            <div class="pending-filters">
+                <label class="pending-search" title="Chưa khả dụng: chưa có API tìm kiếm thanh toán">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <span class="visually-hidden">Tìm khoản thanh toán</span>
+                    <input type="search" disabled placeholder="Tìm theo mã hoặc tham chiếu giao dịch..." />
+                </label>
+                <label class="pending-field" title="Chưa khả dụng: chưa có API lọc thời gian">
+                    <span>Từ ngày</span><input type="date" disabled />
+                </label>
+                <label class="pending-field" title="Chưa khả dụng: chưa có API lọc thời gian">
+                    <span>Đến ngày</span><input type="date" disabled />
+                </label>
+            </div>
+            <p class="pending-filter-note">Bộ lọc sẽ hoạt động khi Payments cung cấp API tìm kiếm và phân trang theo phạm vi được cấp quyền.</p>
+        </div>
+
+        <div class="pending-table-card">
+            <div class="pending-table-heading">
+                <div>
+                    <h2 id="pending-list-title">Danh sách thanh toán chờ xác minh</h2>
+                    <p>Mỗi giao dịch cần được kế toán rà soát và quyết định riêng. Thanh toán PENDING chưa giảm công nợ.</p>
+                </div>
+                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
+            </div>
+            <div class="pending-table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Mã giao dịch &amp; thời gian</th>
+                            <th scope="col">Mã tham chiếu</th>
+                            <th scope="col">Phương thức</th>
+                            <th scope="col">Hóa đơn liên quan</th>
+                            <th scope="col">Số tiền</th>
+                            <th scope="col">Trạng thái</th>
+                            <th scope="col">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="7">
+                                <div class="pending-unavailable" role="status">
+                                    <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+                                    <strong>Danh sách chờ xác minh chưa sẵn sàng</strong>
+                                    <span>Chưa có API và quyền thao tác Payments cho màn hình này. Không thể xác nhận hoặc từ chối giao dịch trước khi backend cung cấp contract.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <footer class="pending-table-footer">Chưa có tổng số bản ghi và phân trang từ API.</footer>
+        </div>
+    </section>
+</div>

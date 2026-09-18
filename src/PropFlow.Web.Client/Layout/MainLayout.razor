@@ -1,23 +1,167 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using PropFlow.Web.Client.Services.Authentication
+@inject AuthSession Session
+@inject NavigationManager Navigation
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<div class="app-shell @(dark ? "app-shell-dark" : "")">
+    <div class="app-decoration" aria-hidden="true"></div>
+    <NavMenu />
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+    <main class="app-main">
+        <header class="app-header">
+            <div class="app-brand">
+                <strong>PropFlow</strong>
+                <span>@(Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("finance/", StringComparison.OrdinalIgnoreCase) ? "KẾ TOÁN TÀI CHÍNH" : "CỔNG ĐIỀU HÀNH")</span>
+            </div>
 
-        <article class="content px-4">
-            @Body
-        </article>
+            <div class="app-actions">
+                <div class="notification-menu">
+                    <button type="button"
+                            class="notification-button"
+                            @onclick="ToggleNotifications"
+                            aria-expanded="@showNotifications"
+                            aria-label="Thông báo"
+                            title="Thông báo">
+                        <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+                    </button>
+                    @if (showNotifications)
+                    {
+                        <div class="notification-popover" role="status">
+                            <strong>Thông báo</strong>
+                            <p>Thông báo hiện chưa khả dụng.</p>
+                        </div>
+                    }
+                </div>
+
+                <button type="button"
+                        class="theme-button"
+                        @onclick="ToggleTheme"
+                        aria-label="@(dark ? "Bật chế độ sáng" : "Bật chế độ tối")"
+                        title="Chuyển giao diện sáng tối">
+                    <span class="material-symbols-outlined" aria-hidden="true">@(dark ? "light_mode" : "dark_mode")</span>
+                </button>
+
+                <details class="profile-menu">
+                    <summary aria-label="Mở menu tài khoản">
+                        <span class="avatar" aria-hidden="true">@Initials</span>
+                        <span class="profile-identity">
+                            <strong>@Session.User?.DisplayName</strong>
+                            <small>@Session.User?.Email</small>
+                        </span>
+                        <span class="material-symbols-outlined menu-chevron" aria-hidden="true">expand_more</span>
+                    </summary>
+                    <div class="profile-options">
+                        <div class="profile-options-heading">
+                            <strong>@Session.User?.DisplayName</strong>
+                            <small>@Session.User?.Email</small>
+                        </div>
+                        <button type="button" @onclick="OpenProfile">Xem thông tin tài khoản</button>
+                        <a href="/account">Chỉnh sửa hồ sơ</a>
+                        <a href="/account/change-password">Đổi mật khẩu</a>
+                        <button type="button" class="logout-button" disabled="@busy" @onclick="Logout">Đăng xuất</button>
+                    </div>
+                </details>
+            </div>
+        </header>
+
+        <section class="app-page-body">@Body</section>
+        <footer class="app-footer">© @DateTime.Now.Year PropFlow · Hệ thống quản lý vận hành bất động sản</footer>
     </main>
 </div>
 
-<div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
+@if (showProfile)
+{
+    <div class="profile-overlay @(dark ? "profile-overlay-dark" : "")" @onclick="CloseProfile">
+        <section class="profile-dialog"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="profile-dialog-title"
+                 tabindex="-1"
+                 @ref="profileDialogRef"
+                 @onkeydown="HandleDialogKey"
+                 @onclick:stopPropagation="true">
+            <div class="profile-dialog-heading">
+                <h2 id="profile-dialog-title">Thông tin tài khoản</h2>
+                <button type="button" @onclick="CloseProfile" aria-label="Đóng thông tin tài khoản">×</button>
+            </div>
+            <div class="profile-dialog-user">
+                <span class="avatar avatar-large" aria-hidden="true">@Initials</span>
+                <div>
+                    <strong>@Session.User?.DisplayName</strong>
+                    <span>@Session.User?.Email</span>
+                </div>
+            </div>
+            <dl class="profile-fields">
+                <div><dt>Tên đăng nhập</dt><dd>@Session.User?.Username</dd></div>
+                <div><dt>Điện thoại liên hệ</dt><dd>@(Session.User?.PhoneNumber ?? "Chưa cập nhật")</dd></div>
+                <div><dt>Trạng thái</dt><dd>@StatusLabel</dd></div>
+                <div><dt>Xác minh email</dt><dd>@(Session.User?.EmailVerified == true ? "Đã xác minh" : "Chưa xác minh")</dd></div>
+            </dl>
+            <div class="profile-dialog-actions">
+                <a href="/account">Chỉnh sửa hồ sơ</a>
+                <button type="button" @onclick="CloseProfile">Đóng</button>
+            </div>
+        </section>
+    </div>
+}
+
+<div id="blazor-error-ui" role="alert">
+    Đã xảy ra lỗi không mong muốn. <a href="" class="reload">Tải lại</a>
+    <a class="dismiss" aria-label="Đóng">×</a>
 </div>
+
+@code {
+    private bool dark;
+    private bool busy;
+    private bool showProfile;
+    private bool showNotifications;
+    private bool focusProfile;
+    private ElementReference profileDialogRef;
+
+    private string Initials => string.Concat((Session.User?.DisplayName ?? "?")
+        .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        .TakeLast(2)
+        .Select(part => part[0])).ToUpperInvariant();
+
+    private string StatusLabel => Session.User?.Status switch
+    {
+        "ACTIVE" => "Đang hoạt động",
+        "PENDING" => "Chờ xác minh",
+        "LOCKED" => "Đã khóa",
+        "SUSPENDED" => "Tạm ngưng",
+        "DISABLED" => "Đã vô hiệu hóa",
+        _ => "Chưa xác định"
+    };
+
+    private void ToggleTheme() => dark = !dark;
+    private void ToggleNotifications() => showNotifications = !showNotifications;
+    private void OpenProfile() { showProfile = true; focusProfile = true; }
+    private void CloseProfile() => showProfile = false;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusProfile && showProfile)
+        {
+            focusProfile = false;
+            await profileDialogRef.FocusAsync();
+        }
+    }
+    private void HandleDialogKey(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") CloseProfile();
+    }
+
+    private async Task Logout()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            await Session.LogoutAsync();
+            Navigation.NavigateTo("/login");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}
