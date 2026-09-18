@@ -1,0 +1,60 @@
+namespace PropFlow.Web.Client.Features.Facility.Models;
+
+public enum EquipmentStatus { ACTIVE, INACTIVE, OUT_OF_SERVICE, UNDER_MAINTENANCE }
+
+public class FacilityModel
+{
+    public Guid Id { get; set; }
+    public Guid BuildingId { get; set; }
+    public string BuildingName { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? FacilityType { get; set; }
+    public string? LocationDescription { get; set; }
+    public string? Description { get; set; }
+    public MasterDataStatus Status { get; set; }
+    public Guid? CreatedBy { get; set; }
+    public Guid? UpdatedBy { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+public class FacilityDetailModel : FacilityModel
+{
+    public int TotalEquipment { get; set; }
+    public int ActiveEquipment { get; set; }
+}
+
+public class CreateFacilityModel
+{
+    public Guid BuildingId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? FacilityType { get; set; }
+    public string? LocationDescription { get; set; }
+    public string? Description { get; set; }
+    public MasterDataStatus InitialStatus { get; set; } = MasterDataStatus.ACTIVE;
+}
+
+public class UpdateFacilityModel
+{
+    public Guid BuildingId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? FacilityType { get; set; }
+    public string? LocationDescription { get; set; }
+    public string? Description { get; set; }
+    public MasterDataStatus Status { get; set; }
+}
+
+public class FacilityFilterModel
+{
+    public Guid? BuildingId { get; set; }
+    public string? SearchKeyword { get; set; }
+    public MasterDataStatus? Status { get; set; }
+    public int PageIndex { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+public class SetFacilityStatusModel
+{
+    public MasterDataStatus Status { get; set; }
+}

@@ -1,0 +1,782 @@
+@page "/facilities"
+@using PropFlow.Web.Client.Features.Facility.Models
+@using PropFlow.Web.Client.Features.Facility.Services
+@inject IFacilityApiClient FacilityApiClient
+@inject IBuildingApiClient BuildingApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
+
+<div class="min-h-screen bg-[#f8f9fc] font-sans text-slate-800 antialiased">
+
+    <!-- Page Header & Title Section -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
+        <div class="flex items-start gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shadow-xs mt-0.5">
+                <span class="material-symbols-outlined text-2xl">pool</span>
+            </div>
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight">Danh Mục Cơ Sở Vật Chất</h1>
+                <p class="text-xs text-slate-500 mt-1">
+                    Quản lý danh sách, vòng đời sử dụng và cập nhật trạng thái vận hành của các tiện ích công cộng chung cư
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2.5 flex-wrap">
+            
+            <button class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors" @onclick="OpenCreateDialog">
+                <span class="material-symbols-outlined text-[17px]">add_circle</span>
+                Thêm Cơ Sở Vật Chất
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Metric Cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <!-- Total -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+            <div class="flex items-center justify-between text-[#64748b]">
+                <span class="text-xs font-semibold uppercase tracking-wider">Tổng CSVT</span>
+                <span class="material-symbols-outlined text-sky-600 text-xl">domain</span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-2xl font-bold font-display text-[#0f172a]">@PagedResult.TotalCount</span>
+                
+            </div>
+        </div>
+
+        <!-- Active -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+            <div class="flex items-center justify-between text-[#64748b]">
+                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-700">Đang hoạt động</span>
+                <span class="material-symbols-outlined text-emerald-600 text-xl">check_circle</span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-2xl font-bold font-display text-emerald-600">
+                    @(PagedResult.Items?.Count(x => x.Status == MasterDataStatus.ACTIVE) ?? 0)
+                </span>
+                
+            </div>
+        </div>
+
+        <!-- Maintenance -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+            <div class="flex items-center justify-between text-[#64748b]">
+                <span class="text-xs font-semibold uppercase tracking-wider text-amber-700">Đang bảo trì</span>
+                <span class="material-symbols-outlined text-amber-600 text-xl">engineering</span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-2xl font-bold font-display text-amber-600">
+                    @(PagedResult.Items?.Count(x => x.Status == MasterDataStatus.UNDER_MAINTENANCE) ?? 0)
+                </span>
+                
+            </div>
+        </div>
+
+        <!-- Inactive / Unavailable -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
+            <div class="flex items-center justify-between text-[#64748b]">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-600">Tạm ngưng / Kín</span>
+                <span class="material-symbols-outlined text-slate-500 text-xl">do_not_disturb_on</span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-2xl font-bold font-display text-slate-600">
+                    @(PagedResult.Items?.Count(x => x.Status == MasterDataStatus.UNAVAILABLE) ?? 0)
+                </span>
+                
+            </div>
+        </div>
+
+        <!-- Out of Service -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all col-span-2 lg:col-span-1">
+            <div class="flex items-center justify-between text-[#64748b]">
+                <span class="text-xs font-semibold uppercase tracking-wider text-rose-700">Ngừng phục vụ</span>
+                <span class="material-symbols-outlined text-rose-600 text-xl">cancel</span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-2xl font-bold font-display text-rose-600">
+                    @(PagedResult.Items?.Count(x => x.Status == MasterDataStatus.OUT_OF_SERVICE) ?? 0)
+                </span>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Notifications -->
+    @if (!string.IsNullOrEmpty(SuccessMessage))
+    {
+        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium shadow-sm">
+            <span class="material-symbols-outlined text-emerald-500 text-[20px]">check_circle</span>
+            <span>@SuccessMessage</span>
+            <button class="ml-auto text-emerald-500 hover:text-emerald-700 transition-stitch" @onclick="() => SuccessMessage = null">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium shadow-sm">
+            <span class="material-symbols-outlined text-rose-500 text-[20px]">error</span>
+            <span>@ErrorMessage</span>
+            <button class="ml-auto text-rose-500 hover:text-rose-700 transition-stitch" @onclick="() => ErrorMessage = null">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+    }
+
+    <!-- Main Table Container Card -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        
+        <!-- Table Toolbar (Search, Filter, Actions) -->
+        <div class="p-5 border-b border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-50/50">
+            
+            <!-- Left: Search Box & Status quick filter -->
+            <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-2xl">
+                <!-- Search Bar -->
+                <div class="relative flex-1">
+                    <span class="material-symbols-outlined text-slate-400 absolute left-3.5 top-2.5 text-lg">search</span>
+                    <input type="text"
+                           placeholder="Tìm theo Mã CSVT, Tên cơ sở vật chất, Vị trí..."
+                           class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all"
+                           @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                </div>
+
+                <!-- Status Dropdown Filter -->
+                <div class="w-full sm:w-56 relative">
+                    <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all appearance-none font-medium cursor-pointer"
+                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                            @bind="StatusFilterString">
+                        <option value="" style="padding: 8px 12px; font-weight: 500;">Tất cả trạng thái</option>
+                        <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500;">● Đang hoạt động</option>
+                        <option value="UNDER_MAINTENANCE" style="padding: 8px 12px; font-weight: 500;">● Đang bảo trì</option>
+                        <option value="UNAVAILABLE" style="padding: 8px 12px; font-weight: 500;">● Tạm ngưng / Kín lịch</option>
+                        <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500;">● Ngừng kích hoạt</option>
+                        <option value="OUT_OF_SERVICE" style="padding: 8px 12px; font-weight: 500;">● Ngừng phục vụ</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Right: Filter actions & View counts -->
+            <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-[#64748b]">
+                <span class="font-medium">Hiển thị <b class="text-[#0f172a]">@(PagedResult.Items?.Count ?? 0)</b> / @PagedResult.TotalCount hạng mục</span>
+                <button class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs" title="Đặt lại bộ lọc" @onclick="ResetFilter">
+                    <span class="material-symbols-outlined text-base">refresh</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Loading State Overlay -->
+        @if (IsLoading)
+        {
+            <div class="py-12 flex-col items-center justify-center space-y-3 bg-white/80">
+                <div class="w-8 h-8 border-3 border-sky-200 border-t-[#0284c7] rounded-full animate-spin"></div>
+                <p class="text-xs font-semibold text-[#0284c7]">Đang tải dữ liệu Cơ sở vật chất...</p>
+            </div>
+        }
+        else if (PagedResult.Items == null || !PagedResult.Items.Any())
+        {
+            <div class="py-12 flex-col items-center justify-center space-y-3 bg-white/80">
+                <span class="material-symbols-outlined text-[64px] text-slate-300">domain_disabled</span>
+                <p class="text-sm text-slate-500">Không có cơ sở vật chất nào</p>
+                <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] text-white text-sm font-semibold shadow-sm transition-all" @onclick="OpenCreateDialog">
+                    <span class="material-symbols-outlined text-lg">add_circle</span>
+                    <span>Thêm mới ngay</span>
+                </button>
+            </div>
+        }
+        else
+        {
+            <!-- Data Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-[#64748b]">
+                            <th class="py-3.5 px-5">Mã CSVT</th>
+                            <th class="py-3.5 px-4">Tên Cơ Sở Vật Chất</th>
+                            <th class="py-3.5 px-4">Tòa Nhà</th>
+                            <th class="py-3.5 px-4">Phân Loại</th>
+                            <th class="py-3.5 px-4">Vị Trí Cụ Thể</th>
+                            <th class="py-3.5 px-4 text-center">Trạng Thái </th>
+                            <th class="py-3.5 px-5 text-right">Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-sm">
+                        @foreach (var item in PagedResult.Items)
+                        {
+                            <tr class="hover:bg-sky-50/40 transition-colors group">
+                                <td class="py-4 px-5">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold font-display bg-sky-50 text-[#0284c7] border border-sky-200/70">
+                                        @item.Code
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <div class="font-semibold text-[#0f172a] group-hover:text-[#0284c7] transition-colors">
+                                        @item.Name
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(item.Description))
+                                    {
+                                        <div class="text-xs text-[#64748b] line-clamp-1">@item.Description</div>
+                                    }
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200/60">
+                                        <span class="material-symbols-outlined text-sm text-[#0284c7]">apartment</span>
+                                        @item.BuildingName
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span class="text-xs font-medium text-slate-600 bg-blue-50/70 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
+                                        @(string.IsNullOrEmpty(item.FacilityType) ? "-" : item.FacilityType)
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4 text-xs text-slate-600">
+                                    <div class="flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-xs text-slate-400">pin_drop</span>
+                                        @(string.IsNullOrEmpty(item.LocationDescription) ? "-" : item.LocationDescription)
+                                    </div>
+                                </td>
+                                <td class="py-4 px-4 text-center">
+                                    @switch (item.Status)
+                                    {
+                                        case MasterDataStatus.ACTIVE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>Đang hoạt động
+                                            </span>
+                                            break;
+                                        case MasterDataStatus.INACTIVE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200/70 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-slate-400"></span>Ngừng kích hoạt
+                                            </span>
+                                            break;
+                                        case MasterDataStatus.UNDER_MAINTENANCE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>Đang bảo trì
+                                            </span>
+                                            break;
+                                        case MasterDataStatus.UNAVAILABLE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/70 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>Tạm ngưng / Kín lịch
+                                            </span>
+                                            break;
+                                        case MasterDataStatus.OUT_OF_SERVICE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/70 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-rose-500"></span>Ngừng phục vụ
+                                            </span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="py-4 px-5 text-right">
+                                    <div class="inline-flex items-center gap-1.5 justify-end">
+                                        <!-- Xem chi tiết -->
+                                        <button @onclick="() => OpenDetailDialog(item)" class="p-1.5 text-slate-500 hover:text-[#0284c7] hover:bg-sky-50 rounded-lg transition-all" title="Xem chi tiết">
+                                            <span class="material-symbols-outlined text-lg">visibility</span>
+                                        </button>
+                                        <!-- Sửa -->
+                                        <button @onclick="() => OpenEditDialog(item)" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Chỉnh sửa">
+                                            <span class="material-symbols-outlined text-lg">edit</span>
+                                        </button>
+                                        <!-- Đổi trạng thái Dropdown -->
+                                        <div class="relative inline-block text-left status-dropdown-container">
+                                            <button @onclick="() => ToggleStatusDropdown(item.Id)" class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all" title="Đổi trạng thái ">
+                                                <span class="material-symbols-outlined text-lg">sync_saved_locally</span>
+                                            </button>
+                                            @if (OpenStatusDropdownId == item.Id)
+                                            {
+                                                <div class="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-20 text-left text-xs divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150">
+                                                    <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Chọn trạng thái mới</div>
+                                                    <div class="py-1">
+                                                        <button @onclick="() => ChangeStatus(item, MasterDataStatus.ACTIVE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-emerald-50 text-emerald-700 font-medium transition-colors">
+                                                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Đang hoạt động
+                                                        </button>
+                                                        <button @onclick="() => ChangeStatus(item, MasterDataStatus.UNDER_MAINTENANCE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-amber-50 text-amber-700 font-medium transition-colors">
+                                                            <span class="w-2 h-2 rounded-full bg-amber-500"></span> Đang bảo trì
+                                                        </button>
+                                                        <button @onclick="() => ChangeStatus(item, MasterDataStatus.UNAVAILABLE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-50 text-indigo-700 font-medium transition-colors">
+                                                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Tạm ngưng / Kín lịch
+                                                        </button>
+                                                        <button @onclick="() => ChangeStatus(item, MasterDataStatus.INACTIVE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100 text-slate-700 font-medium transition-colors">
+                                                            <span class="w-2 h-2 rounded-full bg-slate-400"></span> Ngừng kích hoạt
+                                                        </button>
+                                                        <button @onclick="() => ChangeStatus(item, MasterDataStatus.OUT_OF_SERVICE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-rose-50 text-rose-700 font-medium transition-colors">
+                                                            <span class="w-2 h-2 rounded-full bg-rose-500"></span> Ngừng phục vụ
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Footer -->
+            <div class="p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
+                <!-- Page size info -->
+                <div class="flex items-center gap-2">
+                    <span>Bản ghi <strong class="text-[#0f172a]">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> - <strong class="text-[#0f172a]">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong> trong tổng số <strong class="text-[#0f172a]">@PagedResult.TotalCount</strong> CSVT</span>
+                </div>
+
+                <!-- Pagination Controls -->
+                <div class="flex items-center gap-1">
+                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(1)">
+                        <span class="material-symbols-outlined text-base">first_page</span>
+                    </button>
+                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
+                        <span class="material-symbols-outlined text-base">chevron_left</span>
+                    </button>
+                    
+                    @for (int i = 1; i <= PagedResult.TotalPages; i++)
+                    {
+                        var pageNum = i;
+                        @if (pageNum == PagedResult.PageIndex)
+                        {
+                            <button class="w-8 h-8 rounded-lg bg-[#0284c7] text-white font-semibold text-xs shadow-xs">@pageNum</button>
+                        }
+                        else
+                        {
+                            <button class="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-xs transition-colors" @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                        }
+                    }
+
+                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-[#0284c7] hover:bg-slate-50 transition-colors disabled:opacity-40"
+                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
+                        <span class="material-symbols-outlined text-base">chevron_right</span>
+                    </button>
+                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-[#0284c7] hover:bg-slate-50 transition-colors disabled:opacity-40"
+                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.TotalPages)">
+                        <span class="material-symbols-outlined text-base">last_page</span>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Quick Legend for Status Colors -->
+    <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-2xs flex flex-wrap items-center justify-between gap-4 mt-6">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-slate-400 text-lg">palette</span>
+            <span class="text-xs font-bold font-display uppercase tracking-wider text-[#64748b]">Quy chuẩn nhãn trạng thái:</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 text-xs font-medium">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Đang hoạt động
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span> Đang bảo trì
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Tạm ngưng / Kín lịch
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                <span class="w-2 h-2 rounded-full bg-slate-400"></span> Ngừng kích hoạt
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                <span class="w-2 h-2 rounded-full bg-rose-500"></span> Ngừng phục vụ
+            </span>
+        </div>
+    </div>
+</div>
+
+@if (IsFormOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm transition-opacity">
+        <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden font-sans text-[#0f172a] animate-in fade-in zoom-in duration-200">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-100/70 text-[#0284c7] flex items-center justify-center shadow-2xs">
+                        <span class="material-symbols-outlined text-2xl">edit_square</span>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold font-display tracking-tight text-[#0f172a]">
+                            @(SelectedFacilityToEdit == null ? "Thêm Cơ Sở Vật Chất Mới" : "Cập Nhật Cơ Sở Vật Chất")
+                        </h3>
+                        <p class="text-xs text-[#64748b]">Cấu hình hạ tầng tiện ích và phân bổ tòa nhà </p>
+                    </div>
+                </div>
+
+                
+            </div>
+
+            <!-- Modal Body (Form Grid) -->
+            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    
+                    @if (SelectedFacilityToEdit == null)
+                    {
+                        <!-- Field 1: Mã CSVT (Required) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Mã Cơ Sở Vật Chất <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <input @bind="CreateFormModel.Code" type="text" placeholder="VD: FAC-LMK-03" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all font-mono" />
+                            </div>
+                        </div>
+
+                        <!-- Field 2: Tên CSVT (Required) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Tên Cơ Sở Vật Chất <span class="text-rose-500">*</span>
+                            </label>
+                            <input @bind="CreateFormModel.Name" type="text" placeholder="VD: Khu vui chơi trẻ em KidZone" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
+                        </div>
+
+                        <!-- Field 3: Tòa Nhà Dropdown (BuildingId Guid -> BuildingName) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Tòa Nhà Trực Thuộc <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <select @bind="BuildingIdString" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;"> Chọn tòa nhà </option>
+                                    @foreach (var b in Buildings)
+                                    {
+                                        <option value="@b.Id" style="padding: 8px 12px; font-weight: 500;">@b.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Field 4: Loại CSVT (FacilityType) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Phân Loại Tiện Ích <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <select @bind="CreateFormModel.FacilityType" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;"> Chọn phân loại </option>
+                                    <option value="Thể Thao & Giải Trí" style="padding: 8px 12px; font-weight: 500;">Thể Thao & Giải Trí</option>
+                                    <option value="Sức Khỏe & Fitness" style="padding: 8px 12px; font-weight: 500;">Sức Khỏe & Fitness</option>
+                                    <option value="Tiện Ích Chung" style="padding: 8px 12px; font-weight: 500;">Tiện Ích Chung</option>
+                                    <option value="Hạ Tầng Kỹ Thuật" style="padding: 8px 12px; font-weight: 500;">Hạ Tầng Kỹ Thuật</option>
+                                    <option value="An Ninh & PCCC" style="padding: 8px 12px; font-weight: 500;">An Ninh & PCCC</option>
+                                    <option value="Cảnh Quan & Môi Trường" style="padding: 8px 12px; font-weight: 500;">Cảnh Quan & Môi Trường</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Field 5: Trạng thái ban đầu (Status Enum) -->
+                        <div class="space-y-1.5 sm:col-span-2">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Trạng Thái Vận Hành Ban Đầu  <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                @foreach (var (status, label, color, subLabel) in new[]
+                                {
+                                    (MasterDataStatus.ACTIVE, "Đang hoạt động", "emerald", "Hoạt động tốt"),
+                                    (MasterDataStatus.UNDER_MAINTENANCE, "Đang bảo trì", "amber", "Bảo dưỡng kỹ thuật"),
+                                    (MasterDataStatus.UNAVAILABLE, "Tạm ngưng / Kín", "indigo", "Kín chỗ/Hạn chế"),
+                                    (MasterDataStatus.INACTIVE, "Ngừng kích hoạt", "slate", "Tạm ngưng sử dụng"),
+                                    (MasterDataStatus.OUT_OF_SERVICE, "Ngừng phục vụ", "rose", "Hỏng / Thay thế")
+                                })
+                                {
+                                    var s = status;
+                                    var isSelected = CreateFormModel.InitialStatus == s;
+                                    <button type="button"
+                                            class="cursor-pointer border rounded-xl p-2.5 text-center transition-all @(isSelected ? $"bg-{color}-50 border-{color}-500" : $"border-{color}-200 hover:bg-{color}-50")"
+                                            @onclick="() => CreateFormModel.InitialStatus = s">
+                                        <span class="block text-xs font-bold text-@(color)-700">@label</span>
+                                        <span class="text-[10px] text-@(color)-600">@subLabel</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Field 6: Vị trí cụ thể (LocationDescription) -->
+                        <div class="sm:col-span-2 space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Mô Tả Vị Trí Cụ Thể <span class="text-rose-500">*</span>
+                            </label>
+                            <input @bind="CreateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 3 - Cánh Tây, Liền kề phòng sinh hoạt cộng đồng" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
+                        </div>
+
+                        <!-- Field 7: Mô tả chi tiết (Description) -->
+                        <div class="sm:col-span-2 space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Ghi Chú / Mô Tả Kỹ Thuật 
+                            </label>
+                            <textarea @bind="CreateFormModel.Description" rows="3" placeholder="Nhập thông số kỹ thuật, quy định sử dụng hoặc lịch bảo dưỡng định kỳ..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all resize-none leading-relaxed"></textarea>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Edit Mode-->
+                        <!-- Field 1: Mã CSVT (Readonly) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Mã Cơ Sở Vật Chất <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <input value="@SelectedFacilityToEdit.Code" disabled class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-500 placeholder-slate-400 focus:outline-none transition-all font-mono cursor-not-allowed" />
+                            </div>
+                        </div>
+
+                        <!-- Field 2: Tên CSVT (Required) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Tên Cơ Sở Vật Chất <span class="text-rose-500">*</span>
+                            </label>
+                            <input @bind="UpdateFormModel.Name" type="text" placeholder="VD: Khu vui chơi trẻ em KidZone" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
+                        </div>
+
+                        <!-- Field 3: Tòa Nhà Dropdown (BuildingId Guid -> BuildingName) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Tòa Nhà Trực Thuộc <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <select @bind="UpdateBuildingIdString" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;">-- Chọn tòa nhà --</option>
+                                    @foreach (var b in Buildings)
+                                    {
+                                        <option value="@b.Id" style="padding: 8px 12px; font-weight: 500;">@b.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Field 4: Loại CSVT (FacilityType) -->
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Phân Loại Tiện Ích <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <select @bind="UpdateFormModel.FacilityType" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;">-- Chọn phân loại --</option>
+                                    <option value="Thể Thao & Giải Trí" style="padding: 8px 12px; font-weight: 500;">Thể Thao & Giải Trí</option>
+                                    <option value="Sức Khỏe & Fitness" style="padding: 8px 12px; font-weight: 500;">Sức Khỏe & Fitness</option>
+                                    <option value="Tiện Ích Chung" style="padding: 8px 12px; font-weight: 500;">Tiện Ích Chung</option>
+                                    <option value="Hạ Tầng Kỹ Thuật" style="padding: 8px 12px; font-weight: 500;">Hạ Tầng Kỹ Thuật</option>
+                                    <option value="An Ninh & PCCC" style="padding: 8px 12px; font-weight: 500;">An Ninh & PCCC</option>
+                                    <option value="Cảnh Quan & Môi Trường" style="padding: 8px 12px; font-weight: 500;">Cảnh Quan & Môi Trường</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Field 5: Trạng thái vận hành (Status Enum) -->
+                        <div class="space-y-1.5 sm:col-span-2">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Trạng Thái Vận Hành  <span class="text-rose-500">*</span>
+                            </label>
+                            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                @foreach (var (status, label, color, subLabel) in new[]
+                                {
+                                    (MasterDataStatus.ACTIVE, "Đang hoạt động", "emerald", "Hoạt động tốt"),
+                                    (MasterDataStatus.UNDER_MAINTENANCE, "Đang bảo trì", "amber", "Bảo dưỡng kỹ thuật"),
+                                    (MasterDataStatus.UNAVAILABLE, "Tạm ngưng / Kín", "indigo", "Kín chỗ/Hạn chế"),
+                                    (MasterDataStatus.INACTIVE, "Ngừng kích hoạt", "slate", "Tạm ngưng sử dụng"),
+                                    (MasterDataStatus.OUT_OF_SERVICE, "Ngừng phục vụ", "rose", "Hỏng / Thay thế")
+                                })
+                                {
+                                    var s = status;
+                                    var isSelected = UpdateFormModel.Status == s;
+                                    <button type="button"
+                                            class="cursor-pointer border rounded-xl p-2.5 text-center transition-all @(isSelected ? $"bg-{color}-50 border-{color}-500" : $"border-{color}-200 hover:bg-{color}-50")"
+                                            @onclick="() => UpdateFormModel.Status = s">
+                                        <span class="block text-xs font-bold text-@(color)-700">@label</span>
+                                        <span class="text-[10px] text-@(color)-600">@subLabel</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Field 6: Vị trí cụ thể (LocationDescription) -->
+                        <div class="sm:col-span-2 space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Mô Tả Vị Trí Cụ Thể  <span class="text-rose-500">*</span>
+                            </label>
+                            <input @bind="UpdateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 3 - Cánh Tây" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
+                        </div>
+
+                        <!-- Field 7: Mô tả chi tiết (Description) -->
+                        <div class="sm:col-span-2 space-y-1.5">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
+                                Ghi Chú / Mô Tả Kỹ Thuật 
+                            </label>
+                            <textarea @bind="UpdateFormModel.Description" rows="3" placeholder="Nhập thông số kỹ thuật, quy định sử dụng hoặc lịch bảo dưỡng định kỳ..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all resize-none leading-relaxed"></textarea>
+                        </div>
+                    }
+
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                    <button @onclick="CloseDialog" class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 text-sm font-medium transition-all">
+                        Hủy Bỏ
+                    </button>
+                    <button @onclick="SaveFacility" disabled="@IsSaving" class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] active:scale-[0.99] text-white text-sm font-semibold shadow-sm transition-all disabled:opacity-60">
+                        <span class="material-symbols-outlined text-lg">save</span>
+                        <span>@(IsSaving ? "Đang lưu..." : "Lưu thông tin")</span>
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+}
+
+<PropFlow.Web.Client.Features.Facility.Components.FacilityDetailDialog IsOpen="IsDetailOpen" Facility="SelectedFacilityToView" OnClose="() => IsDetailOpen = false" />
+
+@code {
+    private PagedResult<FacilityModel> PagedResult { get; set; } = new();
+    private FacilityFilterModel Filter { get; set; } = new();
+    private List<BuildingModel> Buildings { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+    private bool IsFormOpen { get; set; }
+    private bool IsSaving { get; set; }
+    private string? SuccessMessage { get; set; }
+    private string? ErrorMessage { get; set; }
+    private FacilityModel? SelectedFacilityToEdit { get; set; }
+    private CreateFacilityModel CreateFormModel { get; set; } = new();
+    private UpdateFacilityModel UpdateFormModel { get; set; } = new();
+    private Guid? OpenStatusDropdownId { get; set; }
+    
+    private bool IsDetailOpen { get; set; }
+    private FacilityModel? SelectedFacilityToView { get; set; }
+
+    private string StatusFilterString
+    {
+        get => Filter.Status?.ToString() ?? "";
+        set
+        {
+            Filter.Status = Enum.TryParse<MasterDataStatus>(value, out var s) ? s : null;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        try
+        {
+            var result = await BuildingApiClient.GetBuildingsAsync(new BuildingFilterModel { PageSize = 200 });
+            Buildings = result.Items?.ToList() ?? new();
+        }
+        catch { Buildings = new(); }
+    }
+
+    private async Task LoadData()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        try { PagedResult = await FacilityApiClient.GetFacilitiesAsync(Filter); }
+        catch (Exception ex) { ErrorMessage = $"Không thể tải dữ liệu: {ex.Message}"; }
+        finally { IsLoading = false; }
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ApplyFilter();
+    }
+
+    private async Task ApplyFilter() { Filter.PageIndex = 1; await LoadData(); }
+    private async Task ResetFilter() { Filter = new(); await LoadData(); }
+    private async Task ChangePage(int p) { if (p >= 1 && p <= PagedResult.TotalPages) { Filter.PageIndex = p; await LoadData(); } }
+
+    private void OpenCreateDialog()
+    {
+        SelectedFacilityToEdit = null;
+        CreateFormModel = new CreateFacilityModel();
+        IsFormOpen = true;
+    }
+
+    private void OpenDetailDialog(FacilityModel item)
+    {
+        SelectedFacilityToView = item;
+        IsDetailOpen = true;
+    }
+
+    private void OpenEditDialog(FacilityModel item)
+    {
+        SelectedFacilityToEdit = item;
+        UpdateFormModel = new UpdateFacilityModel
+        {
+            BuildingId = item.BuildingId,
+            Name = item.Name,
+            FacilityType = item.FacilityType,
+            LocationDescription = item.LocationDescription,
+            Description = item.Description,
+            Status = item.Status
+        };
+        IsFormOpen = true;
+    }
+
+    private void CloseDialog() { IsFormOpen = false; IsSaving = false; }
+
+    private async Task SaveFacility()
+    {
+        IsSaving = true;
+        ErrorMessage = null;
+        try
+        {
+            if (SelectedFacilityToEdit == null)
+            {
+                await FacilityApiClient.CreateFacilityAsync(CreateFormModel);
+                SuccessMessage = $"Đã thêm mới cơ sở vật chất '{CreateFormModel.Name}' thành công!";
+            }
+            else
+            {
+                await FacilityApiClient.UpdateFacilityAsync(SelectedFacilityToEdit.Id, UpdateFormModel);
+                SuccessMessage = $"Đã cập nhật '{UpdateFormModel.Name}' thành công!";
+            }
+            CloseDialog();
+            await LoadData();
+        }
+        catch (Exception ex) { ErrorMessage = ex.Message; }
+        finally { IsSaving = false; }
+    }
+
+    private void ToggleStatusDropdown(Guid id)
+    {
+        OpenStatusDropdownId = OpenStatusDropdownId == id ? null : id;
+    }
+
+    private async Task ChangeStatus(FacilityModel item, MasterDataStatus newStatus)
+    {
+        OpenStatusDropdownId = null;
+        ErrorMessage = null; SuccessMessage = null;
+        try
+        {
+            await FacilityApiClient.SetFacilityStatusAsync(item.Id, newStatus);
+            SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
+            await LoadData();
+        }
+        catch (Exception ex) { ErrorMessage = ex.Message; }
+    }
+
+    private async Task ToggleStatus(FacilityModel item, MasterDataStatus targetStatus)
+    {
+        ErrorMessage = null; SuccessMessage = null;
+        try
+        {
+            var actionText = targetStatus == MasterDataStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
+            await FacilityApiClient.SetFacilityStatusAsync(item.Id, targetStatus);
+            SuccessMessage = $"Đã {actionText} thành công '{item.Name}'.";
+            await LoadData();
+        }
+        catch (Exception ex) { ErrorMessage = ex.Message; }
+    }
+    private string BuildingIdString
+{
+    get => CreateFormModel.BuildingId == Guid.Empty ? "" : CreateFormModel.BuildingId.ToString();
+    set => CreateFormModel.BuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
+}
+
+private string UpdateBuildingIdString
+{
+    get => UpdateFormModel.BuildingId == Guid.Empty ? "" : UpdateFormModel.BuildingId.ToString();
+    set => UpdateFormModel.BuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
+}
+}

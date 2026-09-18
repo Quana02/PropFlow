@@ -1,0 +1,866 @@
+@page "/equipment"
+@using PropFlow.Web.Client.Features.Facility.Models
+@using PropFlow.Web.Client.Features.Facility.Services
+@inject IEquipmentApiClient EquipmentApiClient
+@inject IBuildingApiClient BuildingApiClient
+@inject IFacilityApiClient FacilityApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Quản Lý Thiết Bị - PropFlow</PageTitle>
+
+<div class="min-h-screen bg-[#f8f9fc] font-sans text-slate-800 antialiased">
+
+    <!-- ===== PAGE HEADER ===== -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
+        <div class="flex items-start gap-3.5">
+            <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shadow-xs mt-0.5">
+                <span class="material-symbols-outlined text-2xl">precision_manufacturing</span>
+            </div>
+            <div>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <h1 class="text-2xl font-black text-slate-900 tracking-tight">Quản Lý Hồ Sơ và Trạng Thái Thiết Bị</h1>
+                    
+                </div>
+                <p class="text-xs text-slate-500 mt-1 max-w-2xl">
+                    Theo dõi danh mục máy móc kỹ thuật, phân cấp vị trí theo Tòa nhà / Cơ sở vật chất cụ thể và cập nhật trạng thái vận hành tức thì.
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2.5 flex-wrap">
+            
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors"
+                    @onclick="OpenCreateDialog">
+                <span class="material-symbols-outlined text-[17px]">add_circle</span>
+                <span>Thêm Thiết Bị Mới</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== KPI STAT CARDS ===== -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-sky-300 hover:shadow-sm transition-all group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Tổng Thiết Bị</span>
+                <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <span class="material-symbols-outlined text-xl">devices_other</span>
+                </div>
+            </div>
+            
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-emerald-300 hover:shadow-sm transition-all group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">Đang Hoạt Động</span>
+                <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <span class="material-symbols-outlined text-xl">check_circle</span>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-3xl font-bold font-display text-emerald-600">
+                    @(PagedResult.Items?.Count(x => x.Status == EquipmentStatus.ACTIVE) ?? 0)
+                </span>
+                
+            </div>
+            
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-sm transition-all group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-700">Đang Bảo Trì</span>
+                <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <span class="material-symbols-outlined text-xl">build_circle</span>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-3xl font-bold font-display text-amber-600">
+                    @(PagedResult.Items?.Count(x => x.Status == EquipmentStatus.UNDER_MAINTENANCE) ?? 0)
+                </span>
+                
+            </div>
+            
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-sm transition-all group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-rose-700">Tạm Ngưng</span>
+                <div class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <span class="material-symbols-outlined text-xl">cancel</span>
+                </div>
+            </div>
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-3xl font-bold font-display text-rose-600">
+                    @((PagedResult.Items?.Count(x => x.Status == EquipmentStatus.INACTIVE) ?? 0) + (PagedResult.Items?.Count(x => x.Status == EquipmentStatus.OUT_OF_SERVICE) ?? 0))
+                </span>
+               
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- ===== ALERT NOTIFICATIONS ===== -->
+    @if (!string.IsNullOrEmpty(SuccessMessage))
+    {
+        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium shadow-sm">
+            <span class="material-symbols-outlined text-emerald-500 text-[20px]">check_circle</span>
+            <span>@SuccessMessage</span>
+            <button class="ml-auto text-emerald-500 hover:text-emerald-700 transition-stitch" @onclick="() => SuccessMessage = null">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium shadow-sm">
+            <span class="material-symbols-outlined text-rose-500 text-[20px]">error</span>
+            <span>@ErrorMessage</span>
+            <button class="ml-auto text-rose-500 hover:text-rose-700 transition-stitch" @onclick="() => ErrorMessage = null">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+    }
+
+    <!-- ===== SEARCH & FILTER TOOLBAR ===== -->
+    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-50/50">
+        <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-3xl">
+            <!-- Search Box -->
+            <div class="relative flex-1">
+                <span class="material-symbols-outlined text-slate-400 absolute left-3.5 top-2.5 text-lg pointer-events-none">search</span>
+                <input type="text"
+                       placeholder="Tìm theo Mã thiết bị, Tên thiết bị, Vị trí nơi đặt..."
+                       class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-900 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all outline-none"
+                       @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+            </div>
+
+            <!-- Lọc theo Trạng thái -->
+            <div class="w-full sm:w-60 relative">
+                <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none font-medium cursor-pointer outline-none"
+                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                        @bind="StatusFilterString">
+                    <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">Tất cả trạng thái</option>
+                    <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Đang hoạt động </option>
+                    <option value="UNDER_MAINTENANCE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Đang bảo trì </option>
+                    <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Ngừng hoạt động </option>
+                    <option value="OUT_OF_SERVICE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Ngừng phục vụ </option>
+                </select>
+            </div>
+
+            
+        </div>
+
+        <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500">
+            <span>Hiển thị <b class="text-slate-900">@(PagedResult.Items?.Count ?? 0)</b> trên <b>@PagedResult.TotalCount</b> thiết bị</span>
+            <button type="button"
+                    class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs"
+                    title="Đặt lại bộ lọc"
+                    @onclick="ResetFilter">
+                <span class="material-symbols-outlined text-base">refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== DATA TABLE ===== -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-stitch-card overflow-hidden">
+        @if (IsLoading)
+        {
+            <div class="flex flex-col items-center justify-center py-20 gap-4">
+                <div class="w-12 h-12 rounded-full border-4 border-sky-200 border-t-sky-600 animate-spin"></div>
+                <p class="text-sm text-slate-500 font-medium">Đang tải danh sách thiết bị...</p>
+            </div>
+        }
+        else if (PagedResult.Items == null || !PagedResult.Items.Any())
+        {
+            <div class="flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
+                <span class="material-symbols-outlined text-[64px] text-slate-300">precision_manufacturing</span>
+                <h5 class="text-lg font-bold font-display text-slate-700">Chưa có thiết bị nào</h5>
+                <p class="text-sm text-slate-400 max-w-sm">Không tìm thấy thiết bị khớp với tiêu chí tìm kiếm.</p>
+                <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow-md transition-stitch"
+                        @onclick="OpenCreateDialog">
+                    <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                    <span>Thêm mới ngay</span>
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <th class="py-3.5 px-5">Mã Thiết Bị</th>
+                            <th class="py-3.5 px-4">Tên Thiết Bị & Mô Tả</th>
+                            <th class="py-3.5 px-4">Phân Loại</th>
+                            <th class="py-3.5 px-4">Nơi Đặt (Tòa Nhà / CSVT)</th>
+                            <th class="py-3.5 px-4 text-center">Trạng Thái Vận Hành (FE-04.6)</th>
+                            <th class="py-3.5 px-5 text-right">Thao Tác Quản Lý</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-xs sm:text-sm text-slate-700">
+                        @foreach (var item in PagedResult.Items)
+                        {
+                            <tr class="hover:bg-sky-50/40 transition-colors group">
+                                <td class="py-4 px-5">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-sky-50 text-sky-700 border border-sky-200/70">
+                                        @item.Code
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4 max-w-xs">
+                                    <div class="font-bold text-slate-900 group-hover:text-sky-600 transition-colors">@item.Name</div>
+                                    @if (!string.IsNullOrEmpty(item.Description))
+                                    {
+                                        <div class="text-xs text-slate-500 line-clamp-1 mt-0.5">@item.Description</div>
+                                    }
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span class="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60">
+                                        @(string.IsNullOrEmpty(item.EquipmentType) ? "-" : item.EquipmentType)
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4">
+                                    @if (string.IsNullOrEmpty(item.FacilityName))
+                                    {
+                                        <div class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/80">
+                                            <span class="material-symbols-outlined text-sm text-slate-500">domain</span>
+                                            <span>@item.BuildingName (Trực tiếp)</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="space-y-1">
+                                            <div class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-800 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-100">
+                                                <span class="material-symbols-outlined text-sm text-sky-600">apartment</span>
+                                                <span>@item.FacilityName</span>
+                                            </div>
+                                            <div class="text-[11px] text-slate-400 flex items-center gap-1 pl-1">
+                                                <span>Trực thuộc:</span>
+                                                <span class="text-slate-600 font-medium">@item.BuildingName</span>
+                                            </div>
+                                        </div>
+                                    }
+                                </td>
+                                <td class="py-4 px-4 text-center">
+                                    @switch (item.Status)
+                                    {
+                                        case EquipmentStatus.ACTIVE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                <span>Đang hoạt động</span>
+                                            </span>
+                                            break;
+                                        case EquipmentStatus.UNDER_MAINTENANCE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                                <span>Đang bảo trì</span>
+                                            </span>
+                                            break;
+                                        case EquipmentStatus.INACTIVE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                                                <span>Ngừng hoạt động</span>
+                                            </span>
+                                            break;
+                                        case EquipmentStatus.OUT_OF_SERVICE:
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs">
+                                                <span class="w-2 h-2 rounded-full bg-rose-600"></span>
+                                                <span>Ngừng phục vụ</span>
+                                            </span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="py-4 px-5 text-right">
+                                    <div class="inline-flex items-center gap-1.5 justify-end">
+                                        <button type="button"
+                                                class="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-all"
+                                                title="Xem chi tiết thiết bị"
+                                                @onclick="() => OpenDetailDialog(item)">
+                                            <span class="material-symbols-outlined text-lg">visibility</span>
+                                        </button>
+
+                                        <button type="button"
+                                                class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                                                title="Chỉnh sửa hồ sơ"
+                                                @onclick="() => OpenEditDialog(item)">
+                                            <span class="material-symbols-outlined text-lg">edit</span>
+                                        </button>
+
+                                        <div class="relative inline-block text-left">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-slate-700 hover:text-sky-700 bg-slate-100 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-200 transition-all shadow-2xs"
+                                                    title="Đổi trạng thái vận hành"
+                                                    @onclick="() => ToggleStatusDropdown(item.Id)">
+                                                <span class="material-symbols-outlined text-base text-sky-600">sync_alt</span>
+                                                <span class="hidden sm:inline">Đổi trạng thái</span>
+                                            </button>
+
+                                            @if (OpenStatusDropdownId == item.Id)
+                                            {
+                                                <div class="absolute right-0 mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-left text-xs divide-y divide-slate-100">
+                                                    <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                                        <span>Quyền Quản Lý (FE-04.6)</span>
+                                                        <span class="material-symbols-outlined text-xs">tune</span>
+                                                    </div>
+                                                    <div class="py-1">
+                                                        <button type="button"
+                                                                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 transition-colors"
+                                                                @onclick="() => ChangeStatus(item, EquipmentStatus.ACTIVE)">
+                                                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                                            <div class="text-left">
+                                                                <div class="font-bold">Đang hoạt động</div>
+                                                                <div class="text-[10px] text-slate-400">Vận hành tốt</div>
+                                                            </div>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-800 transition-colors"
+                                                                @onclick="() => ChangeStatus(item, EquipmentStatus.UNDER_MAINTENANCE)">
+                                                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                                            <div class="text-left">
+                                                                <div class="font-bold">Đang bảo trì</div>
+                                                                
+                                                            </div>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-rose-50 text-slate-700 hover:text-rose-800 transition-colors"
+                                                                @onclick="() => ChangeStatus(item, EquipmentStatus.INACTIVE)">
+                                                            <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                                            <div class="text-left">
+                                                                <div class="font-bold">Ngừng hoạt động</div>
+                                                                <div class="text-[10px] text-slate-400">Tạm ngắt</div>
+                                                            </div>
+                                                        </button>
+                                                        <button type="button"
+                                                                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-rose-50 text-slate-700 hover:text-rose-900 transition-colors"
+                                                                @onclick="() => ChangeStatus(item, EquipmentStatus.OUT_OF_SERVICE)">
+                                                            <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                                                            <div class="text-left">
+                                                                <div class="font-bold">Ngừng phục vụ</div>
+                                                                <div class="text-[10px] text-slate-400">Hỏng/Hủy</div>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- PAGINATION -->
+            <div class="p-4 sm:px-6 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-600">
+                <div>
+                    Bản ghi <strong class="text-slate-800">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> -
+                    <strong class="text-slate-800">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong>
+                    trong tổng số <strong class="text-slate-800">@PagedResult.TotalCount</strong>
+                </div>
+                <div class="flex items-center gap-1.5 self-center sm:self-auto">
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(1)">
+                        <span class="material-symbols-outlined text-[18px]">first_page</span>
+                    </button>
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
+                        <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+                    @for (int i = 1; i <= PagedResult.TotalPages; i++)
+                    {
+                        var pageNum = i;
+                        @if (pageNum == PagedResult.PageIndex)
+                        {
+                            <button class="w-8 h-8 rounded-lg bg-sky-600 text-white font-bold text-xs shadow-sm flex items-center justify-center">@pageNum</button>
+                        }
+                        else
+                        {
+                            <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-xs transition-stitch flex items-center justify-center"
+                                    @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                        }
+                    }
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
+                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
+                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.TotalPages)">
+                        <span class="material-symbols-outlined text-[18px]">last_page</span>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- ===== STATUS GUIDELINES SECTION ===== -->
+    <section class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 mt-6">
+        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <span class="material-symbols-outlined text-base text-sky-600">verified_user</span>
+            <span>Quy chuẩn nhãn trạng thái vận hành thiết bị:</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <div class="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200/60 flex items-start gap-2.5">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 mt-0.5 shrink-0 animate-pulse"></span>
+                <div>
+                    <div class="font-bold text-emerald-800">Đang hoạt động </div>
+                    <div class="text-[11px] text-emerald-700 mt-0.5">Thiết bị hoạt động ổn định, đạt kiểm định an toàn kỹ thuật định kỳ.</div>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-amber-50/60 border border-amber-200/60 flex items-start gap-2.5">
+                <span class="w-3 h-3 rounded-full bg-amber-500 mt-0.5 shrink-0"></span>
+                <div>
+                    <div class="font-bold text-amber-800">Đang bảo trì </div>
+                    <div class="text-[11px] text-amber-700 mt-0.5">Đang trong quy trình bảo dưỡng hoặc kỹ thuật viên đang sửa chữa hiện trường.</div>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-slate-100/70 border border-slate-200 flex items-start gap-2.5">
+                <span class="w-3 h-3 rounded-full bg-rose-500 mt-0.5 shrink-0"></span>
+                <div>
+                    <div class="font-bold text-slate-800">Ngừng hoạt động </div>
+                    <div class="text-[11px] text-slate-600 mt-0.5">Tạm dừng vận hành theo mùa, ngắt nguồn tiết kiệm điện hoặc bảo lưu.</div>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-rose-50/60 border border-rose-200/60 flex items-start gap-2.5">
+                <span class="w-3 h-3 rounded-full bg-rose-600 mt-0.5 shrink-0"></span>
+                <div>
+                    <div class="font-bold text-rose-800">Ngừng phục vụ </div>
+                    <div class="text-[11px] text-rose-700 mt-0.5">Hỏng hóc nghiêm trọng, ngừng hoạt động vĩnh viễn chờ lập biên bản thanh lý.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+@if (IsDetailOpen && SelectedEquipmentToEdit != null)
+{
+    <div class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+                        <span class="material-symbols-outlined text-2xl">info</span>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold font-display text-slate-900">Chi Tiết Thiết Bị</h3>
+                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">Mã: @SelectedEquipmentToEdit.Code</p>
+                    </div>
+                </div>
+                <button @onclick="() => IsDetailOpen = false" class="text-slate-400 hover:text-slate-700 p-2 rounded-xl transition-all">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng Thái Vận Hành</dt>
+                        <dd class="mt-1.5">
+                            @switch (SelectedEquipmentToEdit.Status)
+                            {
+                                case EquipmentStatus.ACTIVE:
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        <span>Đang hoạt động</span>
+                                    </span>
+                                    break;
+                                case EquipmentStatus.UNDER_MAINTENANCE:
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                        <span>Đang bảo trì</span>
+                                    </span>
+                                    break;
+                                case EquipmentStatus.INACTIVE:
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs">
+                                        <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                                        <span>Ngừng hoạt động</span>
+                                    </span>
+                                    break;
+                                case EquipmentStatus.OUT_OF_SERVICE:
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs">
+                                        <span class="w-2 h-2 rounded-full bg-rose-600"></span>
+                                        <span>Ngừng phục vụ</span>
+                                    </span>
+                                    break;
+                            }
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Phân Loại Kỹ Thuật</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.EquipmentType) ? "-" : SelectedEquipmentToEdit.EquipmentType)
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 sm:col-span-2">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vị Trí Cụ Thể (Nơi Đặt)</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800 flex items-center gap-2">
+                            @if (string.IsNullOrEmpty(SelectedEquipmentToEdit.FacilityName))
+                            {
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-sm text-slate-500">domain</span>
+                                    <span>@SelectedEquipmentToEdit.BuildingName (Trực tiếp)</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-sm text-sky-600">apartment</span>
+                                        <span>@SelectedEquipmentToEdit.FacilityName</span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 flex items-center gap-1">
+                                        <span>Trực thuộc:</span>
+                                        <span class="text-slate-600 font-medium">@SelectedEquipmentToEdit.BuildingName</span>
+                                    </div>
+                                </div>
+                            }
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 sm:col-span-2">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Thông Số Kỹ Thuật & Ghi Chú</dt>
+                        <dd class="mt-2 text-xs sm:text-sm text-slate-700 leading-relaxed">
+                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.Description) ? "Không có mô tả chi tiết." : SelectedEquipmentToEdit.Description)
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
+                
+            </div>
+        </div>
+    </div>
+}
+
+@if (IsFormOpen)
+{
+    <div class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+            <div class="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+                        <span class="material-symbols-outlined text-2xl">@(SelectedEquipmentToEdit == null ? "add_circle" : "edit")</span>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold font-display text-slate-900">
+                            @(SelectedEquipmentToEdit == null ? "Thêm Thiết Bị Mới " : "Cập Nhật Thiết Bị ")
+                        </h3>
+                        <p class="text-xs text-slate-500">Khai báo hồ sơ kỹ thuật, phân cấp nơi đặt và tình trạng thiết bị</p>
+                    </div>
+                </div>
+                <button @onclick="CloseDialog" class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-xl transition-all" title="Đóng">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Mã Thiết Bị <span class="text-rose-500">*</span>
+                        </label>
+                        <input @bind="FormModel.Code" type="text" placeholder="VD: EQP-PUMP-01"
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-mono focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all uppercase"
+                               disabled="@(SelectedEquipmentToEdit != null)" />
+                        <p class="text-[11px] text-slate-400">Mã định danh duy nhất (in mã vạch/QR)</p>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Tên Thiết Bị <span class="text-rose-500">*</span>
+                        </label>
+                        <input @bind="FormModel.Name" type="text" placeholder="VD: Bơm nhiệt tuần hoàn nước nóng 75kW"
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all" />
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Phân Loại Thiết Bị <span class="text-rose-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <select @bind="FormModel.EquipmentType"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer"
+                                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">  Chọn phân loại  </option>
+                                <option value="Hệ Thống Cơ Điện (MEP)" style="padding: 8px 12px; font-weight: 500; background-color: white;">Hệ Thống Cơ Điện (MEP)</option>
+                                <option value="Hệ Thống PCCC & Cứu Hộ" style="padding: 8px 12px; font-weight: 500; background-color: white;">Hệ Thống PCCC & Cứu Hộ</option>
+                                <option value="Thang Máy & Nâng Hạ" style="padding: 8px 12px; font-weight: 500; background-color: white;">Thang Máy & Nâng Hạ</option>
+                                <option value="Thiết Bị Tiện Ích Cư Dân" style="padding: 8px 12px; font-weight: 500; background-color: white;">Thiết Bị Tiện Ích Cư Dân</option>
+                                <option value="Hạ Tầng Thông Gió & HVAC" style="padding: 8px 12px; font-weight: 500; background-color: white;">Hạ Tầng Thông Gió & HVAC</option>
+                                <option value="An Ninh & Kiểm Soát Ra Vào" style="padding: 8px 12px; font-weight: 500; background-color: white;">An Ninh & Kiểm Soát Ra Vào</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Trạng Thái Vận Hành <span class="text-rose-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <select @bind="StatusString"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer font-medium"
+                                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Đang hoạt động </option>
+                                <option value="UNDER_MAINTENANCE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Đang bảo trì </option>
+                                <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Ngừng hoạt động </option>
+                                <option value="OUT_OF_SERVICE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Ngừng phục vụ </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-2 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sky-600 text-lg">location_city</span>
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-800">Cấu Hình Vị Trí Lắp Đặt (Nơi Đặt)</span>
+                            <span class="text-[11px] text-slate-500">(Chọn Tòa nhà hoặc gắn vào CSVT cụ thể)</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-700">
+                                    1. Chọn Tòa Nhà Trực Thuộc:
+                                </label>
+                                <div class="relative">
+                                    <select @bind="BuildingIdString"
+                                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer"
+                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                        <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">  Không gắn trực tiếp Tòa nhà  </option>
+                                        @foreach (var b in BuildingList)
+                                        {
+                                            <option value="@b.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@b.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-700">
+                                    2. Chọn Cơ Sở Vật Chất (Nếu có):
+                                </label>
+                                <div class="relative">
+                                    <select @bind="FacilityIdString"
+                                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer"
+                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                        <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Không thuộc CSVT (Đặt độc lập) --</option>
+                                        @foreach (var f in FacilityList)
+                                        {
+                                            <option value="@f.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@f.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-[11px] text-slate-500 italic">
+                            * Lưu ý: Thiết bị có thể gắn vào riêng Tòa nhà (ví dụ trạm biến áp chung) hoặc nằm bên trong một Cơ sở vật chất cụ thể (ví dụ máy chạy bộ trong Phòng Gym).
+                        </p>
+                    </div>
+
+                    <div class="sm:col-span-2 space-y-1.5">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                            Mô Tả Kỹ Thuật / Thông Số Vận Hành
+                        </label>
+                        <textarea @bind="FormModel.Description" rows="3" placeholder="Ghi chú công suất, hạn bảo hành, hãng sản xuất, quy chuẩn bảo trì..."
+                                  class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all resize-none leading-relaxed"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 p-6">
+                <button @onclick="CloseDialog"
+                        class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 text-xs sm:text-sm font-medium transition-all">
+                    Hủy Bỏ
+                </button>
+                <button @onclick="SaveEquipment" disabled="@IsSaving"
+                        class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-all">
+                    <span class="material-symbols-outlined text-lg">save</span>
+                    <span>@(IsSaving ? "Đang lưu..." : "Lưu Thông Tin")</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private PagedResult<EquipmentModel> PagedResult { get; set; } = new();
+    private EquipmentFilterModel Filter { get; set; } = new();
+    private bool IsLoading { get; set; } = true;
+    private bool IsFormOpen { get; set; }
+    private bool IsDetailOpen { get; set; }
+    private bool IsSaving { get; set; }
+    private string? SuccessMessage { get; set; }
+    private string? ErrorMessage { get; set; }
+    private EquipmentModel? SelectedEquipmentToEdit { get; set; }
+    private CreateEquipmentModel FormModel { get; set; } = new();
+    private Guid? OpenStatusDropdownId { get; set; }
+
+    private List<BuildingModel> BuildingList { get; set; } = new();
+    private List<FacilityModel> FacilityList { get; set; } = new();
+
+    private string StatusFilterString
+    {
+        get => Filter.Status?.ToString() ?? "";
+        set
+        {
+            Filter.Status = Enum.TryParse<EquipmentStatus>(value, out var s) ? s : null;
+        }
+    }
+
+    private string LocationFilterString
+    {
+        get => "";
+        set
+        {
+            // TODO: Implement location filter logic
+        }
+    }
+
+    private string StatusString
+    {
+        get => FormModel.Status.ToString();
+        set
+        {
+            if (Enum.TryParse<EquipmentStatus>(value, out var s))
+            {
+                FormModel.Status = s;
+            }
+        }
+    }
+
+    private string BuildingIdString
+    {
+        get => FormModel.BuildingId == Guid.Empty ? "" : FormModel.BuildingId.ToString();
+        set => FormModel.BuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
+    }
+
+    private string FacilityIdString
+    {
+        get => FormModel.FacilityId?.ToString() ?? "";
+        set => FormModel.FacilityId = Guid.TryParse(value, out var g) ? g : null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var buildingResult = await BuildingApiClient.GetBuildingsAsync(new BuildingFilterModel { PageSize = 1000 });
+        BuildingList = buildingResult.Items?.ToList() ?? new List<BuildingModel>();
+        
+        var facilityResult = await FacilityApiClient.GetFacilitiesAsync(new FacilityFilterModel { PageSize = 1000 });
+        FacilityList = facilityResult.Items?.ToList() ?? new List<FacilityModel>();
+        
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        try { PagedResult = await EquipmentApiClient.GetEquipmentsAsync(Filter); }
+        catch (Exception ex) { ErrorMessage = $"Không thể tải dữ liệu: {ex.Message}"; }
+        finally { IsLoading = false; }
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await ApplyFilter();
+    }
+
+    private async Task ApplyFilter() { Filter.PageIndex = 1; await LoadData(); }
+    private async Task ResetFilter() { Filter = new(); await LoadData(); }
+    private async Task ChangePage(int p) { if (p >= 1 && p <= PagedResult.TotalPages) { Filter.PageIndex = p; await LoadData(); } }
+
+    private void OpenCreateDialog()
+    {
+        SelectedEquipmentToEdit = null;
+        FormModel = new CreateEquipmentModel();
+        IsFormOpen = true;
+    }
+
+    private void OpenDetailDialog(EquipmentModel item)
+    {
+        SelectedEquipmentToEdit = item;
+        IsDetailOpen = true;
+    }
+
+    private void OpenEditDialog(EquipmentModel item)
+    {
+        SelectedEquipmentToEdit = item;
+        FormModel = new CreateEquipmentModel
+        {
+            BuildingId = item.BuildingId,
+            Code = item.Code,
+            Name = item.Name,
+            FacilityId = item.FacilityId,
+            EquipmentType = item.EquipmentType,
+            Status = item.Status,
+            Manufacturer = item.Manufacturer,
+            Model = item.Model,
+            SerialNumber = item.SerialNumber,
+            InstallationDate = item.InstallationDate,
+            WarrantyExpiryDate = item.WarrantyExpiryDate,
+            LocationDescription = item.LocationDescription,
+            Description = item.Description
+        };
+        IsFormOpen = true;
+    }
+
+    private void CloseDialog() { IsFormOpen = false; IsSaving = false; }
+
+    private async Task SaveEquipment()
+    {
+        IsSaving = true;
+        ErrorMessage = null;
+        try
+        {
+            if (SelectedEquipmentToEdit == null)
+            {
+                await EquipmentApiClient.CreateEquipmentAsync(FormModel);
+                SuccessMessage = $"Đã thêm mới thiết bị '{FormModel.Name}' thành công!";
+            }
+            else
+            {
+                var updateModel = new UpdateEquipmentModel
+                {
+                    Name = FormModel.Name,
+                    FacilityId = FormModel.FacilityId,
+                    EquipmentType = FormModel.EquipmentType,
+                    Status = FormModel.Status,
+                    Manufacturer = FormModel.Manufacturer,
+                    Model = FormModel.Model,
+                    SerialNumber = FormModel.SerialNumber,
+                    InstallationDate = FormModel.InstallationDate,
+                    WarrantyExpiryDate = FormModel.WarrantyExpiryDate,
+                    LocationDescription = FormModel.LocationDescription,
+                    Description = FormModel.Description
+                };
+                await EquipmentApiClient.UpdateEquipmentAsync(SelectedEquipmentToEdit.Id, updateModel);
+                SuccessMessage = $"Đã cập nhật '{FormModel.Name}' thành công!";
+            }
+            CloseDialog();
+            await LoadData();
+        }
+        catch (Exception ex) { ErrorMessage = ex.Message; }
+        finally { IsSaving = false; }
+    }
+
+    private void ToggleStatusDropdown(Guid id)
+    {
+        OpenStatusDropdownId = OpenStatusDropdownId == id ? null : id;
+    }
+
+    private async Task ChangeStatus(EquipmentModel item, EquipmentStatus newStatus)
+    {
+        OpenStatusDropdownId = null;
+        ErrorMessage = null; SuccessMessage = null;
+        try
+        {
+            await EquipmentApiClient.SetEquipmentStatusAsync(item.Id, newStatus);
+            SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
+            await LoadData();
+        }
+        catch (Exception ex) { ErrorMessage = ex.Message; }
+    }
+}
