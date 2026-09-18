@@ -1,0 +1,213 @@
+@using PropFlow.Web.Client.Features.Facility.Models
+@using PropFlow.Web.Client.Features.Facility.Services
+@inject IBuildingApiClient BuildingApiClient
+
+@if (IsOpen)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content shadow-lg border-0" style="border-radius: 1.5rem;">
+                <div class="modal-header bg-primary text-white px-4 py-3" style="border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem;">
+                    <h5 class="modal-title fw-bold">
+                        <i class="@(IsEditMode ? "bi bi-pencil-square" : "bi bi-building-add") me-2"></i>
+                        @(IsEditMode ? "Chỉnh Sửa Thông Tin Tòa Nhà" : "Thêm Tòa Nhà Mới")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Close" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    @if (!string.IsNullOrEmpty(ErrorMessage))
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" style="border-radius: 1rem;" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i> @ErrorMessage
+                            <button type="button" class="btn-close" @onclick="() => ErrorMessage = null"></button>
+                        </div>
+                    }
+
+                    @if (IsEditMode)
+                    {
+                        <EditForm Model="UpdateModel" OnValidSubmit="HandleSubmit">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold text-secondary">Mã Tòa Nhà</label>
+                                <input type="text" class="form-control bg-light" style="border-radius: 1rem;" value="@BuildingToEdit?.Code" disabled readOnly />
+                                <small class="text-muted">Mã tòa nhà là duy nhất và không thể thay đổi sau khi tạo.</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Tên Tòa Nhà <span class="text-danger">*</span></label>
+                                <InputText @bind-Value="UpdateModel.Name" class="form-control form-control-lg" style="border-radius: 1rem;" placeholder="Ví dụ: Tòa A, Block Sunshine..." />
+                                <ValidationMessage For="() => UpdateModel.Name" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Địa Chỉ <span class="text-danger">*</span></label>
+                                <InputText @bind-Value="UpdateModel.Address" class="form-control" style="border-radius: 1rem;" placeholder="Địa chỉ chi tiết của tòa nhà..." />
+                                <ValidationMessage For="() => UpdateModel.Address" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Múi Giờ <span class="text-danger">*</span></label>
+                                    <InputSelect @bind-Value="UpdateModel.TimeZoneId" class="form-select" style="border-radius: 1rem;">
+                                        <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
+                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                    </InputSelect>
+                                    <ValidationMessage For="() => UpdateModel.TimeZoneId" class="text-danger small mt-1" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Số Tầng</label>
+                                    <InputNumber @bind-Value="UpdateModel.NumberOfFloors" class="form-control" style="border-radius: 1rem;" placeholder="Tùy chọn (Ví dụ: 25)" />
+                                    <ValidationMessage For="() => UpdateModel.NumberOfFloors" class="text-danger small mt-1" />
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Mô Tả / Ghi Chú</label>
+                                <InputTextArea @bind-Value="UpdateModel.Description" class="form-control" style="border-radius: 1rem;" rows="3" placeholder="Thông tin ghi chú thêm về tòa nhà..." />
+                                <ValidationMessage For="() => UpdateModel.Description" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="modal-footer border-0 px-0 pb-0 pt-3">
+                                <button type="button" class="btn btn-light px-4 me-2" style="border-radius: 1rem;" @onclick="Close" disabled="@IsSubmitting">Hủy Bỏ</button>
+                                <button type="submit" class="btn btn-primary px-4" style="border-radius: 1rem;" disabled="@IsSubmitting">
+                                    @if (IsSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        <span>Đang lưu...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-lg me-1"></i>
+                                        <span>Cập Nhật</span>
+                                    }
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <EditForm Model="CreateModel" OnValidSubmit="HandleSubmit">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Mã Tòa Nhà <span class="text-danger">*</span></label>
+                                <InputText @bind-Value="CreateModel.Code" class="form-control form-control-lg" style="border-radius: 1rem;" placeholder="Ví dụ: TWR-A, BLD-01..." />
+                                <ValidationMessage For="() => CreateModel.Code" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Tên Tòa Nhà <span class="text-danger">*</span></label>
+                                <InputText @bind-Value="CreateModel.Name" class="form-control form-control-lg" style="border-radius: 1rem;" placeholder="Ví dụ: Tòa A, Block Sunshine..." />
+                                <ValidationMessage For="() => CreateModel.Name" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Địa Chỉ <span class="text-danger">*</span></label>
+                                <InputText @bind-Value="CreateModel.Address" class="form-control" style="border-radius: 1rem;" placeholder="Địa chỉ chi tiết của tòa nhà..." />
+                                <ValidationMessage For="() => CreateModel.Address" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Múi Giờ <span class="text-danger">*</span></label>
+                                    <InputSelect @bind-Value="CreateModel.TimeZoneId" class="form-select" style="border-radius: 1rem;">
+                                        <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
+                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                    </InputSelect>
+                                    <ValidationMessage For="() => CreateModel.TimeZoneId" class="text-danger small mt-1" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">Số Tầng</label>
+                                    <InputNumber @bind-Value="CreateModel.NumberOfFloors" class="form-control" style="border-radius: 1rem;" placeholder="Tùy chọn (Ví dụ: 25)" />
+                                    <ValidationMessage For="() => CreateModel.NumberOfFloors" class="text-danger small mt-1" />
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Mô Tả / Ghi Chú</label>
+                                <InputTextArea @bind-Value="CreateModel.Description" class="form-control" style="border-radius: 1rem;" rows="3" placeholder="Thông tin ghi chú thêm về tòa nhà..." />
+                                <ValidationMessage For="() => CreateModel.Description" class="text-danger small mt-1" />
+                            </div>
+
+                            <div class="modal-footer border-0 px-0 pb-0 pt-3">
+                                <button type="button" class="btn btn-light px-4 me-2" style="border-radius: 1rem;" @onclick="Close" disabled="@IsSubmitting">Hủy Bỏ</button>
+                                <button type="submit" class="btn btn-primary px-4" style="border-radius: 1rem;" disabled="@IsSubmitting">
+                                    @if (IsSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        <span>Đang lưu...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-plus-lg me-1"></i>
+                                        <span>Tạo Mới Tòa Nhà</span>
+                                    }
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public BuildingModel? BuildingToEdit { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool IsEditMode => BuildingToEdit != null;
+    private CreateBuildingModel CreateModel { get; set; } = new();
+    private UpdateBuildingModel UpdateModel { get; set; } = new();
+    private bool IsSubmitting { get; set; }
+    private string? ErrorMessage { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        ErrorMessage = null;
+        if (BuildingToEdit != null)
+        {
+            UpdateModel = new UpdateBuildingModel
+            {
+                Name = BuildingToEdit.Name,
+                Address = BuildingToEdit.Address,
+                TimeZoneId = BuildingToEdit.TimeZoneId,
+                NumberOfFloors = BuildingToEdit.NumberOfFloors,
+                Description = BuildingToEdit.Description
+            };
+        }
+        else
+        {
+            CreateModel = new CreateBuildingModel();
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        IsSubmitting = true;
+        ErrorMessage = null;
+
+        try
+        {
+            var result = IsEditMode && BuildingToEdit != null
+                ? await BuildingApiClient.UpdateBuildingAsync(BuildingToEdit.Id, UpdateModel)
+                : await BuildingApiClient.CreateBuildingAsync(CreateModel);
+            if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu tòa nhà."; return; }
+            await OnSaved.InvokeAsync();
+            await Close();
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await OnClose.InvokeAsync();
+    }
+}
