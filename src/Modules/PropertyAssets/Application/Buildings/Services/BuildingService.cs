@@ -1,74 +1,38 @@
-using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
+using PropFlow.Modules.PropertyAssets.Application;
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
-using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Buildings.Services;
 
 public class BuildingService : IBuildingService
 {
-    private readonly PropertyAssetsDbContext _dbContext;
+    private readonly IPropertyAssetsStore _store;
 
-    public BuildingService(PropertyAssetsDbContext dbContext)
+    public BuildingService(IPropertyAssetsStore store)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
     public async Task<PagedResult<BuildingDto>> GetBuildingsAsync(BuildingFilterQuery query, CancellationToken cancellationToken = default)
     {
-        var dbQuery = _dbContext.Buildings.AsNoTracking();
-
-        if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
-        {
-            var keyword = query.SearchKeyword.Trim().ToLower();
-            dbQuery = dbQuery.Where(b =>
-                b.Code.ToLower().Contains(keyword) ||
-                b.Name.ToLower().Contains(keyword) ||
-                b.Address.ToLower().Contains(keyword));
-        }
-
-        if (query.Status.HasValue)
-        {
-            dbQuery = dbQuery.Where(b => b.Status == query.Status.Value);
-        }
-
-        var totalCount = await dbQuery.CountAsync(cancellationToken);
-
-        var pageIndex = query.PageIndex < 1 ? 1 : query.PageIndex;
-        var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
-
-        var items = await dbQuery
-            .OrderByDescending(b => b.CreatedAt)
-            .Skip((pageIndex - 1) * pageSize)
-            .Take(pageSize)
-            .Select(b => MapToDto(b))
-            .ToListAsync(cancellationToken);
-
-        return new PagedResult<BuildingDto>(items, totalCount, pageIndex, pageSize);
+        var page = await _store.BuildingsAsync(query, cancellationToken);
+        return new PagedResult<BuildingDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.PageIndex, page.PageSize);
     }
 
     public async Task<BuildingDto?> GetBuildingByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var building = await _dbContext.Buildings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+        var building = await _store.BuildingAsync(id, false, cancellationToken);
 
         return building is null ? null : MapToDto(building);
     }
 
     public async Task<BuildingDetailDto?> GetBuildingDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var building = await _dbContext.Buildings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+        var building = await _store.BuildingAsync(id, false, cancellationToken);
 
         if (building is null) return null;
 
-        var facilityCount = await _dbContext.Facilities.CountAsync(f => f.BuildingId == id, cancellationToken);
-        var activeFacilityCount = await _dbContext.Facilities.CountAsync(f => f.BuildingId == id && f.Status == MasterDataStatus.ACTIVE, cancellationToken);
-
-        var equipmentCount = await _dbContext.Equipment.CountAsync(e => e.BuildingId == id, cancellationToken);
-        var activeEquipmentCount = await _dbContext.Equipment.CountAsync(e => e.BuildingId == id && e.Status == Domain.Equipment.EquipmentStatus.ACTIVE, cancellationToken);
+        var counts = await _store.BuildingAssetCountsAsync(id, cancellationToken);
 
         return new BuildingDetailDto(
             building.Id,
@@ -79,10 +43,10 @@ public class BuildingService : IBuildingService
             building.NumberOfFloors,
             building.Description,
             building.Status,
-            facilityCount,
-            equipmentCount,
-            activeFacilityCount,
-            activeEquipmentCount,
+            counts.Facilities,
+            counts.Equipment,
+            counts.ActiveFacilities,
+            counts.ActiveEquipment,
             building.CreatedBy,
             building.UpdatedBy,
             building.CreatedAt,
@@ -94,8 +58,7 @@ public class BuildingService : IBuildingService
         ArgumentNullException.ThrowIfNull(command);
 
         var codeUpper = command.Code.Trim();
-        var existingBuilding = await _dbContext.Buildings
-            .AnyAsync(b => b.Code.ToLower() == codeUpper.ToLower(), cancellationToken);
+        var existingBuilding = await _store.BuildingCodeExistsAsync(codeUpper, cancellationToken);
 
         if (existingBuilding)
         {
@@ -113,8 +76,8 @@ public class BuildingService : IBuildingService
             command.Description,
             command.CreatedBy);
 
-        _dbContext.Buildings.Add(building);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _store.Add(building);
+        await _store.SaveAsync(cancellationToken);
 
         return MapToDto(building);
     }
@@ -123,7 +86,7 @@ public class BuildingService : IBuildingService
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var building = await _dbContext.Buildings.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+        var building = await _store.BuildingAsync(id, true, cancellationToken);
         if (building is null)
         {
             throw new KeyNotFoundException($"Không tìm thấy tòa nhà với mã định danh ID = {id}.");
@@ -139,7 +102,7 @@ public class BuildingService : IBuildingService
             command.UpdatedBy,
             now);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _store.SaveAsync(cancellationToken);
 
         return MapToDto(building);
     }
@@ -148,7 +111,7 @@ public class BuildingService : IBuildingService
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var building = await _dbContext.Buildings.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
+        var building = await _store.BuildingAsync(id, true, cancellationToken);
         if (building is null)
         {
             throw new KeyNotFoundException($"Không tìm thấy tòa nhà với mã định danh ID = {id}.");
@@ -164,7 +127,7 @@ public class BuildingService : IBuildingService
             building.Activate(command.UpdatedBy, now);
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _store.SaveAsync(cancellationToken);
 
         return MapToDto(building);
     }

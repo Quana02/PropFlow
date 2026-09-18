@@ -1,107 +1,32 @@
-using System.Net.Http.Json;
 using PropFlow.Web.Client.Features.Facility.Models;
+using PropFlow.Web.Client.Services.Api;
 
 namespace PropFlow.Web.Client.Features.Facility.Services;
 
-public class BuildingApiClient : IBuildingApiClient
+public sealed class BuildingApiClient(AuthenticatedApiClient api) : IBuildingApiClient
 {
-    private readonly HttpClient _httpClient;
-
-    public BuildingApiClient(HttpClient httpClient)
+    public Task<ApiResult<PagedResult<BuildingModel>>> GetBuildingsAsync(BuildingFilterModel filter, CancellationToken cancellationToken = default)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
+        if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
+        query.Add($"pageIndex={filter.PageIndex}");
+        query.Add($"pageSize={filter.PageSize}");
+        return api.SendAsync<PagedResult<BuildingModel>>(HttpMethod.Get, $"api/v1/buildings?{string.Join("&", query)}", ct: cancellationToken);
     }
 
-    public async Task<PagedResult<BuildingModel>> GetBuildingsAsync(BuildingFilterModel filter, CancellationToken cancellationToken = default)
-    {
-        var queryParams = new List<string>();
+    public Task<ApiResult<BuildingModel>> GetBuildingByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        api.SendAsync<BuildingModel>(HttpMethod.Get, $"api/v1/buildings/{id}", ct: cancellationToken);
 
-        if (!string.IsNullOrWhiteSpace(filter.SearchKeyword))
-        {
-            queryParams.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
-        }
+    public Task<ApiResult<BuildingDetailModel>> GetBuildingDetailByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        api.SendAsync<BuildingDetailModel>(HttpMethod.Get, $"api/v1/buildings/{id}/detail", ct: cancellationToken);
 
-        if (filter.Status.HasValue)
-        {
-            queryParams.Add($"status={filter.Status.Value}");
-        }
+    public Task<ApiResult<BuildingModel>> CreateBuildingAsync(CreateBuildingModel model, CancellationToken cancellationToken = default) =>
+        api.SendAsync<BuildingModel>(HttpMethod.Post, "api/v1/buildings", model, ct: cancellationToken);
 
-        queryParams.Add($"pageIndex={filter.PageIndex}");
-        queryParams.Add($"pageSize={filter.PageSize}");
+    public Task<ApiResult<BuildingModel>> UpdateBuildingAsync(Guid id, UpdateBuildingModel model, CancellationToken cancellationToken = default) =>
+        api.SendAsync<BuildingModel>(HttpMethod.Put, $"api/v1/buildings/{id}", model, ct: cancellationToken);
 
-        var queryString = string.Join("&", queryParams);
-        var url = $"/api/v1/buildings?{queryString}";
-
-        var result = await _httpClient.GetFromJsonAsync<PagedResult<BuildingModel>>(url, cancellationToken);
-        return result ?? new PagedResult<BuildingModel>();
-    }
-
-    public async Task<BuildingModel?> GetBuildingByIdAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        var response = await _httpClient.GetAsync($"/api/v1/buildings/{id}", cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<BuildingModel>(cancellationToken: cancellationToken);
-    }
-
-    public async Task<BuildingDetailModel?> GetBuildingDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        var response = await _httpClient.GetAsync($"/api/v1/buildings/{id}/detail", cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<BuildingDetailModel>(cancellationToken: cancellationToken);
-    }
-
-    public async Task<BuildingModel> CreateBuildingAsync(CreateBuildingModel model, CancellationToken cancellationToken = default)
-    {
-        var response = await _httpClient.PostAsJsonAsync("/api/v1/buildings", model, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException($"Lỗi tạo tòa nhà: {response.StatusCode} - {errorJson}");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<BuildingModel>(cancellationToken: cancellationToken);
-        return result ?? throw new InvalidOperationException("Không nhận được dữ liệu phản hồi từ server.");
-    }
-
-    public async Task<BuildingModel> UpdateBuildingAsync(Guid id, UpdateBuildingModel model, CancellationToken cancellationToken = default)
-    {
-        var response = await _httpClient.PutAsJsonAsync($"/api/v1/buildings/{id}", model, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException($"Lỗi cập nhật tòa nhà: {response.StatusCode} - {errorJson}");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<BuildingModel>(cancellationToken: cancellationToken);
-        return result ?? throw new InvalidOperationException("Không nhận được dữ liệu phản hồi từ server.");
-    }
-
-    public async Task<BuildingModel> SetBuildingStatusAsync(Guid id, MasterDataStatus status, CancellationToken cancellationToken = default)
-    {
-        var body = new SetBuildingStatusModel { Status = status };
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/v1/buildings/{id}/status")
-        {
-            Content = JsonContent.Create(body)
-        };
-
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new HttpRequestException($"Lỗi chuyển trạng thái tòa nhà: {response.StatusCode} - {errorJson}");
-        }
-
-        var result = await response.Content.ReadFromJsonAsync<BuildingModel>(cancellationToken: cancellationToken);
-        return result ?? throw new InvalidOperationException("Không nhận được dữ liệu phản hồi từ server.");
-    }
+    public Task<ApiResult<BuildingModel>> SetBuildingStatusAsync(Guid id, MasterDataStatus status, CancellationToken cancellationToken = default) =>
+        api.SendAsync<BuildingModel>(HttpMethod.Patch, $"api/v1/buildings/{id}/status", new SetBuildingStatusModel { Status = status }, ct: cancellationToken);
 }

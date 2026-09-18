@@ -1,4 +1,6 @@
 @page "/facilities"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @inject IFacilityApiClient FacilityApiClient
@@ -407,6 +409,7 @@
 
             <!-- Modal Body (Form Grid) -->
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                @if (ErrorMessage != null) { <p class="text-rose-700 bg-rose-50 p-3 rounded-lg" role="alert">@ErrorMessage</p> }
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     
                     @if (SelectedFacilityToEdit == null)
@@ -659,20 +662,21 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
-        try
-        {
-            var result = await BuildingApiClient.GetBuildingsAsync(new BuildingFilterModel { PageSize = 200 });
-            Buildings = result.Items?.ToList() ?? new();
-        }
-        catch { Buildings = new(); }
+        var buildingsResult = await BuildingApiClient.GetBuildingsAsync(new BuildingFilterModel { PageSize = 200 });
+        if (buildingsResult.IsSuccess) Buildings = buildingsResult.Data?.Items?.ToList() ?? new();
+        else ErrorMessage = buildingsResult.Message ?? "Không thể tải danh sách tòa nhà.";
     }
 
     private async Task LoadData()
     {
         IsLoading = true;
         ErrorMessage = null;
-        try { PagedResult = await FacilityApiClient.GetFacilitiesAsync(Filter); }
-        catch (Exception ex) { ErrorMessage = $"Không thể tải dữ liệu: {ex.Message}"; }
+        try
+        {
+            var result = await FacilityApiClient.GetFacilitiesAsync(Filter);
+            if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
+            else ErrorMessage = result.Message ?? "Không thể tải cơ sở vật chất.";
+        }
         finally { IsLoading = false; }
     }
 
@@ -721,20 +725,15 @@
         ErrorMessage = null;
         try
         {
-            if (SelectedFacilityToEdit == null)
-            {
-                await FacilityApiClient.CreateFacilityAsync(CreateFormModel);
-                SuccessMessage = $"Đã thêm mới cơ sở vật chất '{CreateFormModel.Name}' thành công!";
-            }
-            else
-            {
-                await FacilityApiClient.UpdateFacilityAsync(SelectedFacilityToEdit.Id, UpdateFormModel);
-                SuccessMessage = $"Đã cập nhật '{UpdateFormModel.Name}' thành công!";
-            }
+            var result = SelectedFacilityToEdit == null
+                ? await FacilityApiClient.CreateFacilityAsync(CreateFormModel)
+                : await FacilityApiClient.UpdateFacilityAsync(SelectedFacilityToEdit.Id, UpdateFormModel);
+            if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu cơ sở vật chất."; return; }
+            var name = SelectedFacilityToEdit == null ? CreateFormModel.Name : UpdateFormModel.Name;
             CloseDialog();
             await LoadData();
+            if (ErrorMessage == null) SuccessMessage = $"Đã lưu cơ sở vật chất '{name}' thành công!";
         }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
         finally { IsSaving = false; }
     }
 
@@ -747,26 +746,20 @@
     {
         OpenStatusDropdownId = null;
         ErrorMessage = null; SuccessMessage = null;
-        try
-        {
-            await FacilityApiClient.SetFacilityStatusAsync(item.Id, newStatus);
-            SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
-            await LoadData();
-        }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
+        var result = await FacilityApiClient.SetFacilityStatusAsync(item.Id, newStatus);
+        if (!result.IsSuccess) { ErrorMessage = result.Message; return; }
+        await LoadData();
+        if (ErrorMessage == null) SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
     }
 
     private async Task ToggleStatus(FacilityModel item, MasterDataStatus targetStatus)
     {
         ErrorMessage = null; SuccessMessage = null;
-        try
-        {
-            var actionText = targetStatus == MasterDataStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
-            await FacilityApiClient.SetFacilityStatusAsync(item.Id, targetStatus);
-            SuccessMessage = $"Đã {actionText} thành công '{item.Name}'.";
-            await LoadData();
-        }
-        catch (Exception ex) { ErrorMessage = ex.Message; }
+        var actionText = targetStatus == MasterDataStatus.ACTIVE ? "kích hoạt" : "vô hiệu hóa";
+        var result = await FacilityApiClient.SetFacilityStatusAsync(item.Id, targetStatus);
+        if (!result.IsSuccess) { ErrorMessage = result.Message; return; }
+        await LoadData();
+        if (ErrorMessage == null) SuccessMessage = $"Đã {actionText} thành công '{item.Name}'.";
     }
     private string BuildingIdString
 {

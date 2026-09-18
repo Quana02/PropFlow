@@ -1,53 +1,31 @@
-using System.Net.Http.Json;
 using PropFlow.Web.Client.Features.Facility.Models;
+using PropFlow.Web.Client.Services.Api;
 
 namespace PropFlow.Web.Client.Features.Facility.Services;
 
-public class EquipmentApiClient : IEquipmentApiClient
+public sealed class EquipmentApiClient(AuthenticatedApiClient api) : IEquipmentApiClient
 {
-    private readonly HttpClient _httpClient;
-
-    public EquipmentApiClient(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
-
-    public async Task<PagedResult<EquipmentModel>> GetEquipmentsAsync(EquipmentFilterModel filter, CancellationToken cancellationToken = default)
+    public Task<ApiResult<PagedResult<EquipmentModel>>> GetEquipmentsAsync(EquipmentFilterModel filter, CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
         if (filter.BuildingId.HasValue) query.Add($"buildingId={filter.BuildingId}");
         if (filter.FacilityId.HasValue) query.Add($"facilityId={filter.FacilityId}");
-        if (!string.IsNullOrEmpty(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
-        if (filter.Status.HasValue) query.Add($"status={filter.Status}");
+        if (!string.IsNullOrWhiteSpace(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
+        if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
         query.Add($"pageIndex={filter.PageIndex}");
         query.Add($"pageSize={filter.PageSize}");
-        var url = $"api/v1/equipments?{string.Join("&", query)}";
-        return await _httpClient.GetFromJsonAsync<PagedResult<EquipmentModel>>(url, cancellationToken) ?? new PagedResult<EquipmentModel>();
+        return api.SendAsync<PagedResult<EquipmentModel>>(HttpMethod.Get, $"api/v1/equipments?{string.Join("&", query)}", ct: cancellationToken);
     }
 
-    public async Task<EquipmentDetailModel?> GetEquipmentByIdAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        return await _httpClient.GetFromJsonAsync<EquipmentDetailModel>($"api/v1/equipments/{id}", cancellationToken);
-    }
+    public Task<ApiResult<EquipmentDetailModel>> GetEquipmentByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        api.SendAsync<EquipmentDetailModel>(HttpMethod.Get, $"api/v1/equipments/{id}", ct: cancellationToken);
 
-    public async Task<EquipmentModel> CreateEquipmentAsync(CreateEquipmentModel model, CancellationToken cancellationToken = default)
-    {
-        var response = await _httpClient.PostAsJsonAsync("api/v1/equipments", model, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<EquipmentModel>(cancellationToken) ?? new EquipmentModel();
-    }
+    public Task<ApiResult<EquipmentModel>> CreateEquipmentAsync(CreateEquipmentModel model, CancellationToken cancellationToken = default) =>
+        api.SendAsync<EquipmentModel>(HttpMethod.Post, "api/v1/equipments", model, ct: cancellationToken);
 
-    public async Task<EquipmentModel> UpdateEquipmentAsync(Guid id, UpdateEquipmentModel model, CancellationToken cancellationToken = default)
-    {
-        var response = await _httpClient.PutAsJsonAsync($"api/v1/equipments/{id}", model, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<EquipmentModel>(cancellationToken) ?? new EquipmentModel();
-    }
+    public Task<ApiResult<EquipmentModel>> UpdateEquipmentAsync(Guid id, UpdateEquipmentModel model, CancellationToken cancellationToken = default) =>
+        api.SendAsync<EquipmentModel>(HttpMethod.Put, $"api/v1/equipments/{id}", model, ct: cancellationToken);
 
-    public async Task<EquipmentModel> SetEquipmentStatusAsync(Guid id, EquipmentStatus status, CancellationToken cancellationToken = default)
-    {
-        var response = await _httpClient.PatchAsJsonAsync($"api/v1/equipments/{id}/status", new SetEquipmentStatusModel { Status = status }, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<EquipmentModel>(cancellationToken) ?? new EquipmentModel();
-    }
+    public Task<ApiResult<EquipmentModel>> SetEquipmentStatusAsync(Guid id, EquipmentStatus status, CancellationToken cancellationToken = default) =>
+        api.SendAsync<EquipmentModel>(HttpMethod.Patch, $"api/v1/equipments/{id}/status", new SetEquipmentStatusModel { Status = status }, ct: cancellationToken);
 }

@@ -1,84 +1,35 @@
-using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.PropertyAssets.Application;
 using PropFlow.Modules.PropertyAssets.Application.Equipment.Dtos;
 using PropFlow.Modules.PropertyAssets.Domain.Equipment;
 using EquipmentEntity = PropFlow.Modules.PropertyAssets.Domain.Equipment.Equipment;
-using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Equipment.Services;
 
 public class EquipmentService : IEquipmentService
 {
-    private readonly PropertyAssetsDbContext _dbContext;
+    private readonly IPropertyAssetsStore _store;
 
-    public EquipmentService(PropertyAssetsDbContext dbContext)
+    public EquipmentService(IPropertyAssetsStore store)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
     public async Task<PagedResult<EquipmentDto>> GetEquipmentsAsync(EquipmentFilterQuery query, CancellationToken cancellationToken = default)
     {
-        var dbQuery = _dbContext.Equipment.AsNoTracking();
-
-        if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
-        {
-            var keyword = query.SearchKeyword.Trim().ToLower();
-            dbQuery = dbQuery.Where(e =>
-                e.Code.ToLower().Contains(keyword) ||
-                e.Name.ToLower().Contains(keyword) ||
-                (e.Manufacturer != null && e.Manufacturer.ToLower().Contains(keyword)) ||
-                (e.Model != null && e.Model.ToLower().Contains(keyword)));
-        }
-
-        if (query.BuildingId.HasValue)
-        {
-            dbQuery = dbQuery.Where(e => e.BuildingId == query.BuildingId.Value);
-        }
-
-        if (query.FacilityId.HasValue)
-        {
-            dbQuery = dbQuery.Where(e => e.FacilityId == query.FacilityId.Value);
-        }
-
-        if (query.Status.HasValue)
-        {
-            dbQuery = dbQuery.Where(e => e.Status == query.Status.Value);
-        }
-
-        var totalCount = await dbQuery.CountAsync(cancellationToken);
-
-        var pageIndex = query.PageIndex < 1 ? 1 : query.PageIndex;
-        var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
-
-        var items = await dbQuery
-            .Include(e => e.Building)
-            .Include(e => e.Facility)
-            .OrderByDescending(e => e.CreatedAt)
-            .Skip((pageIndex - 1) * pageSize)
-            .Take(pageSize)
-            .Select(e => MapToDto(e))
-            .ToListAsync(cancellationToken);
-
-        return new PagedResult<EquipmentDto>(items, totalCount, pageIndex, pageSize);
+        var page = await _store.EquipmentAsync(query, cancellationToken);
+        return new PagedResult<EquipmentDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.PageIndex, page.PageSize);
     }
 
     public async Task<EquipmentDto?> GetEquipmentByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var equipment = await _dbContext.Equipment
-            .AsNoTracking()
-            .Include(e => e.Building)
-            .Include(e => e.Facility)
-            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        var equipment = await _store.EquipmentAsync(id, false, cancellationToken);
 
         return equipment is null ? null : MapToDto(equipment);
     }
 
     public async Task<EquipmentDetailDto?> GetEquipmentDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var equipment = await _dbContext.Equipment
-            .AsNoTracking()
-            .Include(e => e.Building)
-            .Include(e => e.Facility)
-            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        var equipment = await _store.EquipmentAsync(id, false, cancellationToken);
 
         if (equipment is null) return null;
 
@@ -109,9 +60,29 @@ public class EquipmentService : IEquipmentService
     {
         ArgumentNullException.ThrowIfNull(command);
 
+        // Validate Building exists
+        var building = await _store.BuildingAsync(command.BuildingId, false, cancellationToken);
+        if (building is null)
+        {
+            throw new ArgumentException($"Tòa nhà với ID = {command.BuildingId} không tồn tại.");
+        }
+
+        // Validate Facility exists and belongs to the same Building if FacilityId is provided
+        if (command.FacilityId.HasValue)
+        {
+            var facility = await _store.FacilityAsync(command.FacilityId.Value, false, false, cancellationToken);
+            if (facility is null)
+            {
+                throw new ArgumentException($"Cơ sở vật chất với ID = {command.FacilityId.Value} không tồn tại.");
+            }
+            if (facility.BuildingId != command.BuildingId)
+            {
+                throw new ArgumentException($"Cơ sở vật chất '{facility.Name}' không thuộc tòa nhà '{building.Name}'. Không thể gắn thiết bị vào cơ sở vật chất của tòa nhà khác.");
+            }
+        }
+
         var codeUpper = command.Code.Trim();
-        var existingEquipment = await _dbContext.Equipment
-            .AnyAsync(e => e.BuildingId == command.BuildingId && e.Code.ToLower() == codeUpper.ToLower(), cancellationToken);
+        var existingEquipment = await _store.EquipmentCodeExistsAsync(command.BuildingId, codeUpper, cancellationToken);
 
         if (existingEquipment)
         {
@@ -135,8 +106,8 @@ public class EquipmentService : IEquipmentService
             command.Description,
             command.CreatedBy);
 
-        _dbContext.Equipment.Add(equipment);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _store.Add(equipment);
+        await _store.SaveAsync(cancellationToken);
 
         return await MapToDtoWithIncludesAsync(equipment.Id, cancellationToken);
     }
@@ -145,10 +116,24 @@ public class EquipmentService : IEquipmentService
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var equipment = await _dbContext.Equipment.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        var equipment = await _store.EquipmentAsync(id, true, cancellationToken);
         if (equipment is null)
         {
             throw new KeyNotFoundException($"Không tìm thấy thiết bị với mã định danh ID = {id}.");
+        }
+
+        // Validate Facility exists and belongs to the same Building if FacilityId is provided
+        if (command.FacilityId.HasValue)
+        {
+            var facility = await _store.FacilityAsync(command.FacilityId.Value, false, false, cancellationToken);
+            if (facility is null)
+            {
+                throw new ArgumentException($"Cơ sở vật chất với ID = {command.FacilityId.Value} không tồn tại.");
+            }
+            if (facility.BuildingId != equipment.BuildingId)
+            {
+                throw new ArgumentException($"Cơ sở vật chất '{facility.Name}' không thuộc tòa nhà '{equipment.Building?.Name}'. Không thể gắn thiết bị vào cơ sở vật chất của tòa nhà khác.");
+            }
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -167,7 +152,7 @@ public class EquipmentService : IEquipmentService
             command.UpdatedBy,
             now);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _store.SaveAsync(cancellationToken);
 
         return await MapToDtoWithIncludesAsync(equipment.Id, cancellationToken);
     }
@@ -176,10 +161,7 @@ public class EquipmentService : IEquipmentService
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var equipment = await _dbContext.Equipment
-            .Include(e => e.Building)
-            .Include(e => e.Facility)
-            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        var equipment = await _store.EquipmentAsync(id, true, cancellationToken);
 
         if (equipment is null)
         {
@@ -204,7 +186,7 @@ public class EquipmentService : IEquipmentService
                 throw new ArgumentException($"Trạng thái không hợp lệ: {command.Status}");
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _store.SaveAsync(cancellationToken);
 
         return MapToDto(equipment);
     }
@@ -236,11 +218,7 @@ public class EquipmentService : IEquipmentService
 
     private async Task<EquipmentDto> MapToDtoWithIncludesAsync(Guid id, CancellationToken cancellationToken)
     {
-        var equipment = await _dbContext.Equipment
-            .AsNoTracking()
-            .Include(e => e.Building)
-            .Include(e => e.Facility)
-            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        var equipment = await _store.EquipmentAsync(id, false, cancellationToken);
 
         return MapToDto(equipment ?? throw new InvalidOperationException("Equipment not found"));
     }

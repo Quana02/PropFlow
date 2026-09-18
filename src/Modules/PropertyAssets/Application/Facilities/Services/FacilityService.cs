@@ -1,50 +1,23 @@
-using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.PropertyAssets.Application;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
-using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Facilities.Services;
 
 public class FacilityService : IFacilityService
 {
-    private readonly PropertyAssetsDbContext _dbContext;
+    private readonly IPropertyAssetsStore _store;
 
-    public FacilityService(PropertyAssetsDbContext dbContext)
+    public FacilityService(IPropertyAssetsStore store)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
     public async Task<PagedResult<FacilityDto>> GetFacilitiesAsync(FacilityFilterQuery query, CancellationToken cancellationToken = default)
     {
-        var dbQuery = _dbContext.Facilities.Include(f => f.Building).AsNoTracking();
-
-        if (query.BuildingId.HasValue && query.BuildingId != Guid.Empty)
-        {
-            dbQuery = dbQuery.Where(f => f.BuildingId == query.BuildingId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
-        {
-            var keyword = query.SearchKeyword.Trim().ToLower();
-            dbQuery = dbQuery.Where(f =>
-                f.Code.ToLower().Contains(keyword) ||
-                f.Name.ToLower().Contains(keyword) ||
-                (f.FacilityType != null && f.FacilityType.ToLower().Contains(keyword)));
-        }
-
-        if (query.Status.HasValue)
-        {
-            dbQuery = dbQuery.Where(f => f.Status == query.Status.Value);
-        }
-
-        var totalCount = await dbQuery.CountAsync(cancellationToken);
-
-        var items = await dbQuery
-            .OrderByDescending(f => f.CreatedAt)
-            .Skip((query.PageIndex - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(f => new FacilityDto(
+        var page = await _store.FacilitiesAsync(query, cancellationToken);
+        var items = page.Items.Select(f => new FacilityDto(
                 f.Id,
                 f.BuildingId,
                 f.Building != null ? f.Building.Name : string.Empty,
@@ -57,19 +30,14 @@ public class FacilityService : IFacilityService
                 f.CreatedBy,
                 f.UpdatedBy,
                 f.CreatedAt,
-                f.UpdatedAt))
-            .ToListAsync(cancellationToken);
+                f.UpdatedAt)).ToList();
 
-        return new PagedResult<FacilityDto>(items, totalCount, query.PageIndex, query.PageSize);
+        return new PagedResult<FacilityDto>(items, page.TotalCount, page.PageIndex, page.PageSize);
     }
 
     public async Task<FacilityDetailDto?> GetFacilityByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var facility = await _dbContext.Facilities
-            .Include(f => f.Building)
-            .Include(f => f.Equipment)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        var facility = await _store.FacilityAsync(id, false, true, cancellationToken);
 
         if (facility == null)
             return null;
@@ -97,13 +65,13 @@ public class FacilityService : IFacilityService
 
     public async Task<FacilityDto> CreateFacilityAsync(CreateFacilityCommand command, CancellationToken cancellationToken = default)
     {
-        var buildingExists = await _dbContext.Buildings.AnyAsync(b => b.Id == command.BuildingId, cancellationToken);
+        var buildingExists = await _store.BuildingExistsAsync(command.BuildingId, cancellationToken);
         if (!buildingExists)
         {
             throw new ArgumentException("Tòa nhà không tồn tại.");
         }
 
-        var codeExists = await _dbContext.Facilities.AnyAsync(f => f.Code.ToLower() == command.Code.Trim().ToLower(), cancellationToken);
+        var codeExists = await _store.FacilityCodeExistsAsync(command.Code.Trim(), cancellationToken);
         if (codeExists)
         {
             throw new ArgumentException($"Mã tiện ích '{command.Code}' đã tồn tại.");
@@ -120,21 +88,32 @@ public class FacilityService : IFacilityService
             command.CreatedBy,
             command.InitialStatus);
 
-        _dbContext.Facilities.Add(facility);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _store.Add(facility);
+        await _store.SaveAsync(cancellationToken);
 
         return await MapToDtoAsync(facility, cancellationToken);
     }
 
     public async Task<FacilityDto> UpdateFacilityAsync(Guid id, UpdateFacilityCommand command, CancellationToken cancellationToken = default)
     {
-        var facility = await _dbContext.Facilities
-            .Include(f => f.Building)
-            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        var facility = await _store.FacilityAsync(id, true, true, cancellationToken);
 
         if (facility == null)
         {
             throw new KeyNotFoundException("Không tìm thấy tiện ích.");
+        }
+
+        // Validate Building exists
+        var buildingExists = await _store.BuildingExistsAsync(command.BuildingId, cancellationToken);
+        if (!buildingExists)
+        {
+            throw new ArgumentException("Tòa nhà không tồn tại.");
+        }
+
+        // Prevent moving Facility to a different Building if it has Equipment
+        if (facility.BuildingId != command.BuildingId && facility.Equipment.Any())
+        {
+            throw new InvalidOperationException($"Không thể chuyển cơ sở vật chất '{facility.Name}' sang tòa nhà khác vì có {facility.Equipment.Count} thiết bị đang gắn với cơ sở vật chất này. Vui lòng chuyển hoặc xóa các thiết bị trước khi thay đổi tòa nhà.");
         }
 
         facility.Update(
@@ -147,16 +126,14 @@ public class FacilityService : IFacilityService
             command.UpdatedBy,
             DateTimeOffset.UtcNow);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _store.SaveAsync(cancellationToken);
 
         return await MapToDtoAsync(facility, cancellationToken);
     }
 
     public async Task<FacilityDto> SetFacilityStatusAsync(Guid id, SetFacilityStatusCommand command, CancellationToken cancellationToken = default)
     {
-        var facility = await _dbContext.Facilities
-            .Include(f => f.Building)
-            .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
+        var facility = await _store.FacilityAsync(id, true, false, cancellationToken);
 
         if (facility == null)
         {
@@ -165,24 +142,21 @@ public class FacilityService : IFacilityService
 
         facility.SetStatus(command.Status, command.UpdatedBy, DateTimeOffset.UtcNow);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _store.SaveAsync(cancellationToken);
 
         return await MapToDtoAsync(facility, cancellationToken);
     }
 
     private async Task<FacilityDto> MapToDtoAsync(Facility facility, CancellationToken cancellationToken)
     {
-        var buildingName = facility.Building?.Name;
-        if (buildingName == null && facility.BuildingId != Guid.Empty)
-        {
-            var b = await _dbContext.Buildings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == facility.BuildingId, cancellationToken);
-            buildingName = b?.Name ?? string.Empty;
-        }
+        var buildingName = facility.BuildingId == Guid.Empty
+            ? string.Empty
+            : await _store.BuildingNameAsync(facility.BuildingId, cancellationToken) ?? string.Empty;
 
         return new FacilityDto(
             facility.Id,
             facility.BuildingId,
-            buildingName ?? string.Empty,
+            buildingName,
             facility.Code,
             facility.Name,
             facility.FacilityType,

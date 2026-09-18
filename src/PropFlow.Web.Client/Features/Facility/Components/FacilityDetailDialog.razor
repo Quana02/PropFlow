@@ -14,6 +14,7 @@
                     <button type="button" class="btn-close btn-close-white" @onclick="Close" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
+                    @if (AssetError != null) { <p class="alert alert-danger" role="alert">@AssetError</p> }
                     <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
                         <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary me-3 fs-3" style="border-radius: 1.25rem;">
                             <i class="bi bi-grid-1x2-fill"></i>
@@ -66,7 +67,7 @@
                     <!-- Danh sách thiết bị -->
                     <div class="row g-3 mt-3">
                         <div class="col-12">
-                            <h6 class="fw-bold mb-3 border-bottom pb-2"><i class="bi bi-tools text-warning me-2"></i>Danh sách thiết bị trực thuộc (@Equipments.Count)</h6>
+                            <h6 class="fw-bold mb-3 border-bottom pb-2"><i class="bi bi-tools text-warning me-2"></i>Danh sách thiết bị trực thuộc (@TotalEquipments)</h6>
                             <div class="border rounded p-3 bg-white" style="max-height: 250px; overflow-y: auto;">
                                 @if (IsLoadingAssets)
                                 {
@@ -100,11 +101,28 @@
                                                         </td>
                                                     </tr>
                                                 }
+                                                @if (TotalEquipments > Equipments.Count)
+                                                {
+                                                    <tr>
+                                                        <td colspan="4" class="text-center text-muted small py-2">
+                                                            <i class="bi bi-info-circle me-1"></i>
+                                                            Hiển thị @Equipments.Count trên @TotalEquipments thiết bị
+                                                        </td>
+                                                    </tr>
+                                                }
                                             </tbody>
                                         </table>
                                     </div>
                                 }
                             </div>
+                            @if (TotalEquipments > PageSize)
+                            {
+                                <div class="d-flex align-items-center justify-content-between mt-2 small">
+                                    <button class="btn btn-sm btn-outline-secondary" disabled="@(EquipmentPage == 1 || IsLoadingAssets)" @onclick="() => ChangeEquipmentPage(-1)">Trước</button>
+                                    <span>Trang @EquipmentPage / @((TotalEquipments + PageSize - 1) / PageSize)</span>
+                                    <button class="btn btn-sm btn-outline-secondary" disabled="@(EquipmentPage * PageSize >= TotalEquipments || IsLoadingAssets)" @onclick="() => ChangeEquipmentPage(1)">Sau</button>
+                                </div>
+                            }
                         </div>
                     </div>
 
@@ -131,28 +149,51 @@
     [Parameter] public EventCallback OnClose { get; set; }
 
     private List<EquipmentModel> Equipments { get; set; } = new();
+    private int TotalEquipments { get; set; }
+    private const int PageSize = 20;
+    private int EquipmentPage = 1;
     private bool IsLoadingAssets { get; set; }
+    private string? AssetError { get; set; }
+    private Guid? LoadedFacilityId { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && Facility != null)
+        if (!IsOpen) { LoadedFacilityId = null; return; }
+        if (Facility != null && LoadedFacilityId != Facility.Id)
         {
+            LoadedFacilityId = Facility.Id;
+            EquipmentPage = 1;
             IsLoadingAssets = true;
-            
+            AssetError = null;
+
             try
             {
-                var eResult = await EquipmentApiClient.GetEquipmentsAsync(new EquipmentFilterModel { FacilityId = Facility.Id, PageSize = 100 });
-                Equipments = eResult.Items?.ToList() ?? new List<EquipmentModel>();
-            }
-            catch
-            {
-                Equipments = new();
+                var eResult = await EquipmentApiClient.GetEquipmentsAsync(new EquipmentFilterModel { FacilityId = Facility.Id, PageIndex = EquipmentPage, PageSize = PageSize });
+                if (eResult.IsSuccess && eResult.Data != null) { Equipments = eResult.Data.Items?.ToList() ?? new(); TotalEquipments = eResult.Data.TotalCount; }
+                else AssetError = eResult.Message ?? "Không thể tải thiết bị.";
             }
             finally
             {
                 IsLoadingAssets = false;
             }
         }
+    }
+
+    private async Task ChangeEquipmentPage(int delta)
+    {
+        if (Facility == null) return;
+        var next = EquipmentPage + delta;
+        if (next < 1 || (next - 1) * PageSize >= TotalEquipments) return;
+        IsLoadingAssets = true;
+        try
+        {
+            var result = await EquipmentApiClient.GetEquipmentsAsync(new EquipmentFilterModel { FacilityId = Facility.Id, PageIndex = next, PageSize = PageSize });
+            if (!result.IsSuccess || result.Data == null) { AssetError = result.Message ?? "Không thể tải thiết bị."; return; }
+            Equipments = result.Data.Items?.ToList() ?? new();
+            TotalEquipments = result.Data.TotalCount;
+            EquipmentPage = next;
+        }
+        finally { IsLoadingAssets = false; }
     }
 
     private async Task Close()

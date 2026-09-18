@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
 using PropFlow.Modules.PropertyAssets.Domain.Equipment;
+using PropFlow.Modules.PropertyAssets.Application.Equipment.Dtos;
+using PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
 
 namespace PropFlow.UnitTests;
 
@@ -103,7 +105,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(dbContext);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
 
         // 1. Create Building
         var createCommand = new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.CreateBuildingCommand(
@@ -150,5 +152,268 @@ public class PropertyAssetsTests
         Assert.NotNull(detail);
         Assert.Equal(0, detail!.FacilityCount);
         Assert.Equal(0, detail.EquipmentCount);
+    }
+
+    [Fact]
+    public async Task EquipmentService_CreateEquipment_ThrowsWhenBuildingDoesNotExist()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        var nonExistentBuildingId = Guid.NewGuid();
+        var command = new CreateEquipmentCommand(
+            nonExistentBuildingId,
+            "EQ-01",
+            "Test Equipment",
+            EquipmentType: "TEST");
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.CreateEquipmentAsync(command));
+        Assert.Contains("không tồn tại", exception.Message);
+    }
+
+    [Fact]
+    public async Task EquipmentService_CreateEquipment_ThrowsWhenFacilityDoesNotExist()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        // Create a valid building
+        var building = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        dbContext.Buildings.Add(building);
+        await dbContext.SaveChangesAsync();
+
+        var nonExistentFacilityId = Guid.NewGuid();
+        var command = new CreateEquipmentCommand(
+            building.Id,
+            "EQ-01",
+            "Test Equipment",
+            FacilityId: nonExistentFacilityId,
+            EquipmentType: "TEST");
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.CreateEquipmentAsync(command));
+        Assert.Contains("không tồn tại", exception.Message);
+    }
+
+    [Fact]
+    public async Task EquipmentService_CreateEquipment_ThrowsWhenFacilityBelongsToDifferentBuilding()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        // Create two buildings
+        var building1 = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        var building2 = new Building("BLD-02", "Tower B", "456 Oak Ave", _now);
+        dbContext.Buildings.AddRange(building1, building2);
+        await dbContext.SaveChangesAsync();
+
+        // Create a facility in building1
+        var facility = new Facility(building1.Id, "FAC-01", "Gym", _now);
+        dbContext.Facilities.Add(facility);
+        await dbContext.SaveChangesAsync();
+
+        // Try to create equipment in building2 but link to facility in building1
+        var command = new CreateEquipmentCommand(
+            building2.Id,
+            "EQ-01",
+            "Test Equipment",
+            FacilityId: facility.Id,
+            EquipmentType: "TEST");
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.CreateEquipmentAsync(command));
+        Assert.Contains("không thuộc tòa nhà", exception.Message);
+    }
+
+    [Fact]
+    public async Task EquipmentService_CreateEquipment_DuplicateCodeThrowsException()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        // Create a building
+        var building = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        dbContext.Buildings.Add(building);
+        await dbContext.SaveChangesAsync();
+
+        // Create first equipment
+        var command1 = new CreateEquipmentCommand(
+            building.Id,
+            "EQ-01",
+            "First Equipment",
+            EquipmentType: "TEST");
+        await service.CreateEquipmentAsync(command1);
+
+        // Try to create second equipment with same code
+        var command2 = new CreateEquipmentCommand(
+            building.Id,
+            "EQ-01",
+            "Second Equipment",
+            EquipmentType: "TEST");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateEquipmentAsync(command2));
+        Assert.Contains("đã tồn tại", exception.Message);
+    }
+
+    [Fact]
+    public async Task EquipmentService_UpdateEquipment_ThrowsWhenFacilityBelongsToDifferentBuilding()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        // Create two buildings
+        var building1 = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        var building2 = new Building("BLD-02", "Tower B", "456 Oak Ave", _now);
+        dbContext.Buildings.AddRange(building1, building2);
+        await dbContext.SaveChangesAsync();
+
+        // Create a facility in building1
+        var facility = new Facility(building1.Id, "FAC-01", "Gym", _now);
+        dbContext.Facilities.Add(facility);
+        await dbContext.SaveChangesAsync();
+
+        // Create equipment in building2
+        var command = new CreateEquipmentCommand(
+            building2.Id,
+            "EQ-01",
+            "Test Equipment",
+            EquipmentType: "TEST");
+        var equipment = await service.CreateEquipmentAsync(command);
+
+        // Try to update equipment to link to facility in building1
+        var updateCommand = new UpdateEquipmentCommand(
+            "Updated Equipment",
+            FacilityId: facility.Id,
+            EquipmentType: "TEST",
+            Status: EquipmentStatus.ACTIVE);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.UpdateEquipmentAsync(equipment.Id, updateCommand));
+        Assert.Contains("không thuộc tòa nhà", exception.Message);
+    }
+
+    [Fact]
+    public async Task FacilityService_UpdateFacility_ThrowsWhenMovingWithEquipment()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        // Create two buildings
+        var building1 = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        var building2 = new Building("BLD-02", "Tower B", "456 Oak Ave", _now);
+        dbContext.Buildings.AddRange(building1, building2);
+        await dbContext.SaveChangesAsync();
+
+        // Create a facility in building1
+        var facility = new Facility(building1.Id, "FAC-01", "Gym", _now);
+        dbContext.Facilities.Add(facility);
+        await dbContext.SaveChangesAsync();
+
+        // Create equipment in the facility
+        var equipment = new Equipment(building1.Id, "EQ-01", "Treadmill", _now, facilityId: facility.Id, equipmentType: "FITNESS");
+        dbContext.Equipment.Add(equipment);
+        await dbContext.SaveChangesAsync();
+
+        // Try to move facility to building2
+        var updateCommand = new UpdateFacilityCommand(
+            building2.Id,
+            "Gym Updated",
+            FacilityType: "FITNESS",
+            LocationDescription: "Updated location",
+            Description: "Updated description",
+            Status: MasterDataStatus.ACTIVE);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.UpdateFacilityAsync(facility.Id, updateCommand));
+        Assert.Contains("Không thể chuyển", exception.Message);
+        Assert.Contains("thiết bị", exception.Message);
+    }
+
+    [Fact]
+    public async Task FacilityService_UpdateFacility_AllowsMovingWhenNoEquipment()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        // Create two buildings
+        var building1 = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        var building2 = new Building("BLD-02", "Tower B", "456 Oak Ave", _now);
+        dbContext.Buildings.AddRange(building1, building2);
+        await dbContext.SaveChangesAsync();
+
+        // Create a facility in building1 (no equipment)
+        var facility = new Facility(building1.Id, "FAC-01", "Gym", _now);
+        dbContext.Facilities.Add(facility);
+        await dbContext.SaveChangesAsync();
+
+        // Move facility to building2 should succeed
+        var updateCommand = new UpdateFacilityCommand(
+            building2.Id,
+            "Gym Updated",
+            FacilityType: "FITNESS",
+            LocationDescription: "Updated location",
+            Description: "Updated description",
+            Status: MasterDataStatus.ACTIVE);
+
+        var updated = await service.UpdateFacilityAsync(facility.Id, updateCommand);
+        Assert.Equal(building2.Id, updated.BuildingId);
+    }
+
+    [Fact]
+    public async Task EquipmentService_CreateEquipment_ValidBuildingAndFacilitySucceeds()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+
+        using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        // Create a building
+        var building = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        dbContext.Buildings.Add(building);
+        await dbContext.SaveChangesAsync();
+
+        // Create a facility in the same building
+        var facility = new Facility(building.Id, "FAC-01", "Gym", _now);
+        dbContext.Facilities.Add(facility);
+        await dbContext.SaveChangesAsync();
+
+        // Create equipment linked to the same building's facility - should succeed
+        var command = new CreateEquipmentCommand(
+            building.Id,
+            "EQ-01",
+            "Treadmill",
+            FacilityId: facility.Id,
+            EquipmentType: "FITNESS");
+
+        var result = await service.CreateEquipmentAsync(command);
+        Assert.NotNull(result);
+        Assert.Equal("EQ-01", result.Code);
+        Assert.Equal(facility.Id, result.FacilityId);
     }
 }
