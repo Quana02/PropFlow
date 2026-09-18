@@ -22,7 +22,7 @@ public class ModuleBoundaryTests
     private static readonly string SolutionDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     [Fact]
-    public void Solution_ShouldContainExactly22Projects()
+    public void Solution_ShouldContainMainProjectsAndPublicContracts()
     {
         var solutionFile = Path.Combine(SolutionDirectory, "PropFlow.sln");
         Assert.True(File.Exists(solutionFile), $"Solution file not found at: {solutionFile}");
@@ -35,7 +35,8 @@ public class ModuleBoundaryTests
             .Where(l => l.StartsWith("Project(") && !l.Contains(SolutionFolderGuid))
             .ToList();
 
-        Assert.Equal(22, projectLines.Count);
+        Assert.Equal(25, projectLines.Count);
+        Assert.Equal(3, projectLines.Count(x => x.Contains(".Contracts.csproj")));
     }
 
     [Fact]
@@ -63,7 +64,7 @@ public class ModuleBoundaryTests
             // No module-to-module project references allowed
             foreach (var pr in projectReferences)
             {
-                Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+                Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase) || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal), $"Forbidden implementation reference: {pr}");
             }
         }
     }
@@ -152,7 +153,8 @@ public class ModuleBoundaryTests
             .Where(v => v != null)
             .ToList();
 
-        Assert.DoesNotContain(projectReferences, pr => pr!.Contains("Residents", StringComparison.OrdinalIgnoreCase));
+        // Public Contracts are permitted; the Residents implementation project is not.
+        Assert.DoesNotContain(projectReferences, pr => pr!.EndsWith("PropFlow.Modules.Residents.csproj", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -239,7 +241,9 @@ public class ModuleBoundaryTests
 
         foreach (var pr in projectReferences)
         {
-            Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+            Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase)
+                || pr.EndsWith("PropFlow.Modules.Administration.Contracts.csproj", StringComparison.Ordinal),
+                $"Administration may reference its own public contract, not another implementation: {pr}");
         }
     }
 

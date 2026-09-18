@@ -1,0 +1,21 @@
+@page "/registration/resume"
+@layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
+@inject AuthenticationService Auth
+@inject OnboardingState State
+@inject NavigationManager Navigation
+<PageTitle>Tiếp tục xác minh — PropFlow</PageTitle><h2>Tiếp tục xác minh cư dân</h2>
+<p>Nhập thông tin tài khoản đã đăng ký để yêu cầu mã mới. Mã cũ sẽ không còn hiệu lực.</p>
+<ApiFeedback Result="result" />
+@if (message != null) { <p class="feedback" role="status">@message</p> }
+<EditForm Model="form" OnValidSubmit="Submit"><DataAnnotationsValidator /><ValidationSummary />
+    <label for="resume-user">Tên đăng nhập</label><InputText id="resume-user" @bind-Value="form.Username" autocomplete="username" />
+    <label for="resume-pass">Mật khẩu</label><InputText id="resume-pass" type="password" @bind-Value="form.Password" autocomplete="current-password" />
+    <button type="submit" disabled="@busy">@(busy ? "Đang xử lý…" : "Yêu cầu mã xác minh")</button>
+</EditForm><nav class="auth-links"><a href="/login">Quay lại đăng nhập</a></nav>
+@code {
+    private readonly LoginForm form = new(); private ApiResult? result; private bool busy; private string? message;
+    private async Task Submit() { if (busy) return; busy = true; try {
+        var response = await Auth.ResumeAsync(new(form.Username, form.Password)); result = response;
+        if (response.IsSuccess) { State.Clear(); State.Challenge = response.Data; message = response.Data!.Message; if (response.Data.ChallengeId != Guid.Empty) Navigation.NavigateTo("/otp"); }
+    } finally { form.Password = ""; busy = false; } }
+}

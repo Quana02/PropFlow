@@ -8,6 +8,11 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.22" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../Authentication.Contracts/PropFlow.Modules.Authentication.Contracts.csproj" />
+    <ProjectReference Include="../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj" />
+    <ProjectReference Include="../Administration.Contracts/PropFlow.Modules.Administration.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

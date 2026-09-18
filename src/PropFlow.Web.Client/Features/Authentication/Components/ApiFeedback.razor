@@ -1,0 +1,12 @@
+@if (Result is { IsSuccess: false })
+{
+    <div class="feedback error" role="alert">
+        <p>@Result.Message</p>
+        @if (Result.ValidationErrors != null)
+        {
+            <ul>@foreach (var message in Result.ValidationErrors.Values.SelectMany(x => x).Distinct()) { <li>@message</li> }</ul>
+        }
+        @if (!string.IsNullOrWhiteSpace(Result.TraceId)) { <small>Mã hỗ trợ: @Result.TraceId</small> }
+    </div>
+}
+@code { [Parameter] public ApiResult? Result { get; set; } }
