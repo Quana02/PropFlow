@@ -24,6 +24,11 @@ public sealed class WebShellRouteTests : IClassFixture<WebApplicationFactory<Web
     [InlineData("/account/change-password")]
     [InlineData("/resident")]
     [InlineData("/forbidden")]
+    [InlineData("/finance/dashboard")]
+    [InlineData("/finance/payments/pending")]
+    [InlineData("/finance/payments/confirmed")]
+    [InlineData("/finance/payments/overdue")]
+    [InlineData("/finance/invoices/unpaid")]
     public async Task Direct_navigation_serves_only_the_non_prerendered_shell(string route)
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new("https://localhost"), AllowAutoRedirect = false });

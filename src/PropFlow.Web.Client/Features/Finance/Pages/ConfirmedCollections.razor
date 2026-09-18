@@ -1,0 +1,109 @@
+@page "/finance/payments/confirmed"
+@layout PropFlow.Web.Client.Layout.AccountantLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "ACCOUNTANT")]
+
+<PageTitle>Các khoản thu đã xác nhận — PropFlow</PageTitle>
+
+<div class="collections-page">
+    <header class="collections-heading">
+        <div>
+            <nav class="collections-breadcrumb" aria-label="Đường dẫn trang">
+                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
+                <span aria-hidden="true">›</span>
+                <span aria-current="page">Thu phí đã xác nhận</span>
+            </nav>
+            <h1>Các khoản thu đã xác nhận</h1>
+            <p>Theo dõi giao dịch thu tiền đã được xác nhận trong phạm vi được cấp quyền.</p>
+        </div>
+        <div class="collections-actions">
+            <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ cái"><button type="button" disabled>Xuất sổ cái thu tiền (Excel)</button></span>
+            <span title="Chưa khả dụng: chưa có tích hợp ERP kế toán"><button type="button" disabled>Đồng bộ ERP kế toán</button></span>
+        </div>
+    </header>
+
+    <section class="collections-summary" aria-label="Tổng quan khoản thu đã xác nhận">
+        <article class="summary-card">
+            <div class="summary-label"><span>TỔNG CĂN ĐÃ HOÀN THÀNH</span><span class="material-symbols-outlined" aria-hidden="true">apartment</span></div>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Dữ liệu chưa sẵn sàng</small>
+        </article>
+        <article class="summary-card revenue">
+            <div class="summary-label"><span>TỔNG DOANH THU THỰC THU</span><span class="material-symbols-outlined" aria-hidden="true">payments</span></div>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Dữ liệu chưa sẵn sàng</small>
+        </article>
+        <article class="summary-card matching">
+            <div class="summary-label"><span>TỶ LỆ KHỚP VIETQR &amp; POS</span><span class="material-symbols-outlined" aria-hidden="true">bolt</span></div>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Dữ liệu chưa sẵn sàng</small>
+        </article>
+    </section>
+
+    <section class="collections-content" aria-labelledby="collections-list-title">
+        <div class="collections-toolbar">
+            <div class="collections-filters">
+                <label class="search-field">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <span class="visually-hidden">Tìm khoản thu đã xác nhận</span>
+                    <input type="search" disabled placeholder="Tìm theo mã phiếu thu, căn hộ..." title="Chưa khả dụng: chưa có API tìm kiếm thanh toán" />
+                </label>
+                <label class="filter-field">
+                    <span>Từ ngày</span>
+                    <input type="date" disabled title="Chưa khả dụng: chưa có API lọc theo kỳ hạch toán" />
+                </label>
+                <label class="filter-field">
+                    <span>Đến ngày</span>
+                    <input type="date" disabled title="Chưa khả dụng: chưa có API lọc theo kỳ hạch toán" />
+                </label>
+                <label class="filter-field building-field">
+                    <span>Tòa nhà</span>
+                    <select disabled title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền"><option>Chọn tòa nhà</option></select>
+                </label>
+            </div>
+            <div class="method-filters" aria-label="Lọc theo phương thức thanh toán" title="Chưa khả dụng: chưa có API lọc thanh toán">
+                <button type="button" disabled title="Chưa khả dụng">Tất cả</button>
+                <button type="button" disabled title="Chưa khả dụng">VietQR</button>
+                <button type="button" disabled title="Chưa khả dụng">POS</button>
+                <button type="button" disabled title="Chưa khả dụng">Chuyển khoản</button>
+                <button type="button" disabled title="Chưa khả dụng">Tiền mặt</button>
+            </div>
+        </div>
+
+        <div class="collections-table-card">
+            <div class="table-heading">
+                <div>
+                    <h2 id="collections-list-title">Danh sách khoản thu đã xác nhận</h2>
+                    <p>Chỉ các giao dịch được hệ thống xác nhận mới xuất hiện trong danh sách.</p>
+                </div>
+                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Mã phiếu thu &amp; thời gian</th>
+                            <th scope="col">Căn hộ &amp; người nộp</th>
+                            <th scope="col">Khoản phí hạch toán</th>
+                            <th scope="col">Phương thức</th>
+                            <th scope="col">Số tiền đã thu</th>
+                            <th scope="col">Trạng thái sổ cái</th>
+                            <th scope="col">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="7">
+                                <div class="collections-unavailable" role="status">
+                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                                    <strong>Danh sách khoản thu chưa sẵn sàng</strong>
+                                    <span>Dữ liệu và quyền truy cập sẽ được kết nối khi dịch vụ thanh toán hỗ trợ màn hình này.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>

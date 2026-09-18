@@ -1,0 +1,99 @@
+@page "/finance/payments/overdue"
+@layout PropFlow.Web.Client.Layout.AccountantLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "ACCOUNTANT")]
+
+<PageTitle>Xử lý nợ quá hạn — PropFlow</PageTitle>
+
+<div class="overdue-page">
+    <header class="overdue-heading">
+        <div>
+            <nav class="overdue-breadcrumb" aria-label="Đường dẫn trang">
+                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
+                <span aria-hidden="true">›</span>
+                <span aria-current="page">Công nợ quá hạn</span>
+            </nav>
+            <h1>Xử lý nợ quá hạn</h1>
+            <p>Theo dõi hóa đơn còn dư nợ sau ngày đến hạn trong phạm vi được cấp quyền.</p>
+        </div>
+        <div class="overdue-actions">
+            <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ nợ"><button type="button" disabled>Xuất sổ nợ (Excel)</button></span>
+            <span title="Chưa khả dụng — chờ xác nhận nghiệp vụ và API gửi nhắc nợ"><button type="button" disabled>Gửi nhắc nợ</button></span>
+        </div>
+    </header>
+
+    <section class="overdue-summary" aria-label="Tổng quan nợ quá hạn">
+        <article class="overdue-card">
+            <div class="overdue-card-label"><span>SỐ CĂN QUÁ HẠN</span><span class="material-symbols-outlined" aria-hidden="true">apartment</span></div>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Dữ liệu chưa sẵn sàng</small>
+        </article>
+        <article class="overdue-card principal">
+            <div class="overdue-card-label"><span>TỔNG NỢ GỐC QUÁ HẠN</span><span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span></div>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Dữ liệu chưa sẵn sàng</small>
+        </article>
+    </section>
+
+    <section class="overdue-content" aria-labelledby="overdue-list-title">
+        <div class="overdue-toolbar">
+            <div class="overdue-filters">
+                <label class="overdue-search" title="Chưa khả dụng: chưa có API tìm kiếm công nợ">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <span class="visually-hidden">Tìm hóa đơn quá hạn</span>
+                    <input type="search" disabled placeholder="Tìm theo số hóa đơn hoặc mã căn hộ..." />
+                </label>
+                <label class="overdue-field" title="Chưa khả dụng: chưa có API lọc theo ngày đến hạn">
+                    <span>Từ ngày</span><input type="date" disabled />
+                </label>
+                <label class="overdue-field" title="Chưa khả dụng: chưa có API lọc theo ngày đến hạn">
+                    <span>Đến ngày</span><input type="date" disabled />
+                </label>
+                <label class="overdue-field" title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền">
+                    <span>Tòa nhà</span><select disabled><option>Chọn tòa nhà</option></select>
+                </label>
+            </div>
+            <div class="overdue-range-filters" aria-label="Lọc theo số ngày quá hạn" title="Chưa khả dụng: chưa có API lọc theo số ngày quá hạn">
+                <button type="button" disabled>Tất cả</button>
+                <button type="button" disabled>30–60 ngày</button>
+                <button type="button" disabled>60–90 ngày</button>
+                <button type="button" disabled>Trên 90 ngày</button>
+            </div>
+        </div>
+
+        <div class="overdue-table-card">
+            <div class="overdue-table-heading">
+                <div>
+                    <h2 id="overdue-list-title">Hóa đơn có dư nợ quá hạn</h2>
+                    <p>Dư nợ chỉ giảm khi thanh toán được hệ thống xác nhận.</p>
+                </div>
+                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
+            </div>
+            <div class="overdue-table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Số hóa đơn</th>
+                            <th scope="col">Căn hộ</th>
+                            <th scope="col">Khoản phí tồn đọng</th>
+                            <th scope="col">Nợ gốc</th>
+                            <th scope="col">Ngày đến hạn</th>
+                            <th scope="col">Số ngày quá hạn</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6">
+                                <div class="overdue-unavailable" role="status">
+                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                                    <strong>Danh sách công nợ chưa sẵn sàng</strong>
+                                    <span>Thông tin sẽ hiển thị khi dữ liệu hóa đơn và thanh toán được kết nối.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>

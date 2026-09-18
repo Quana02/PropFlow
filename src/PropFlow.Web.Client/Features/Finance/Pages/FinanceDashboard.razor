@@ -1,0 +1,123 @@
+@page "/finance/dashboard"
+@layout PropFlow.Web.Client.Layout.AccountantLayout
+@using Microsoft.AspNetCore.Authorization
+@using PropFlow.Web.Client.Services.Authentication
+@attribute [Authorize(Roles = "ACCOUNTANT")]
+@inject AuthSession Session
+
+<PageTitle>Cổng điều hành kế toán — PropFlow</PageTitle>
+
+<div class="finance-dashboard">
+    <header class="finance-heading">
+        <div>
+            <p class="finance-eyebrow">TỔNG QUAN TÀI CHÍNH</p>
+            <h1>Xin chào, <strong>@(Session.User?.DisplayName ?? "bạn")</strong></h1>
+            <p>Theo dõi hóa đơn, thanh toán và công nợ trong phạm vi được cấp quyền.</p>
+        </div>
+        <div class="finance-period" aria-label="Kỳ báo cáo chưa sẵn sàng">
+            <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+            <span>Chưa có kỳ báo cáo</span>
+        </div>
+    </header>
+
+    <section class="finance-metrics" aria-label="Chỉ số tài chính">
+        <article class="finance-metric pending">
+            <div class="metric-top">
+                <span class="metric-icon material-symbols-outlined" aria-hidden="true">schedule</span>
+                <span class="metric-tag"><span aria-hidden="true">•</span> Chờ đối soát</span>
+            </div>
+            <h2>Các khoản thanh toán chờ xác minh</h2>
+            <p>Khoản thanh toán cần kiểm tra và ghi nhận</p>
+            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
+            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <NavLink class="metric-link" href="/finance/payments/pending">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
+        </article>
+
+        <article class="finance-metric invoices">
+            <div class="metric-top">
+                <span class="metric-icon material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                <span class="metric-tag">Hóa đơn</span>
+            </div>
+            <h2>Hóa đơn chưa thanh toán</h2>
+            <p>Hóa đơn cần theo dõi nghĩa vụ tài chính</p>
+            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
+            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <NavLink class="metric-link" href="/finance/invoices/unpaid">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
+        </article>
+
+        <article class="finance-metric overdue">
+            <div class="metric-top">
+                <span class="metric-icon material-symbols-outlined" aria-hidden="true">warning</span>
+                <span class="metric-tag">Quá hạn</span>
+            </div>
+            <h2>Nợ quá hạn</h2>
+            <p>Nghĩa vụ quá hạn trong phạm vi được phép</p>
+            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
+            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <NavLink class="metric-link" href="/finance/payments/overdue">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
+        </article>
+
+        <article class="finance-metric confirmed">
+            <div class="metric-top">
+                <span class="metric-icon material-symbols-outlined" aria-hidden="true">check_circle</span>
+                <span class="metric-tag">Đã xác nhận</span>
+            </div>
+            <h2>Các khoản thu đã xác nhận</h2>
+            <p>Thanh toán được hệ thống xác nhận</p>
+            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
+            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <NavLink class="metric-link" href="/finance/payments/confirmed">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
+        </article>
+    </section>
+
+    <div class="finance-details">
+        <section class="finance-panel finance-transactions" aria-labelledby="transactions-title">
+            <div class="panel-heading">
+                <div>
+                    <h2 id="transactions-title">Lịch sử giao dịch thu phí mới nhất</h2>
+                    <p>Giao dịch trong phạm vi tòa nhà được cấp quyền</p>
+                </div>
+                <span class="panel-mark material-symbols-outlined" aria-hidden="true">north_east</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Căn hộ / Cư dân</th>
+                            <th scope="col">Ngày ghi nhận</th>
+                            <th scope="col">Trạng thái</th>
+                            <th scope="col">Số tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="4">
+                                <div class="finance-empty" role="status">
+                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                                    <strong>Lịch sử giao dịch chưa sẵn sàng</strong>
+                                    <span>Thông tin sẽ hiển thị khi dữ liệu tài chính được kết nối.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="finance-panel finance-debt" aria-labelledby="debt-title">
+            <div class="panel-heading">
+                <div>
+                    <h2 id="debt-title">Công nợ tồn đọng quá hạn</h2>
+                    <p>Tổng hợp khoản quá hạn cần theo dõi</p>
+                </div>
+                <span class="panel-mark material-symbols-outlined" aria-hidden="true">north_east</span>
+            </div>
+            <div class="debt-value" aria-label="Chưa có số liệu công nợ">—</div>
+            <p class="debt-caption">Dữ liệu công nợ chưa sẵn sàng.</p>
+            <div class="debt-empty" role="status">
+                <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
+                <span>Thông tin công nợ sẽ hiển thị tại đây.</span>
+            </div>
+        </section>
+    </div>
+</div>
