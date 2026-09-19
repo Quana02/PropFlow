@@ -35,7 +35,9 @@ export function initialize(canvas, toggle) {
         canvas.height = Math.round(height * ratio);
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
 
-        const count = width < 768 ? 48 : 105;
+        const count = width < 768
+            ? Math.min(Math.max(Math.floor((width * height) / 14000) + 35, 52), 65)
+            : Math.min(Math.max(Math.floor((width * height) / 9500) + 40, 105), 120);
         while (particles.length < count) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 0.38 + Math.random() * 0.55;
@@ -70,11 +72,15 @@ export function initialize(canvas, toggle) {
                 const dx = pointer.x - particle.x;
                 const dy = pointer.y - particle.y;
                 const distance = Math.hypot(dx, dy);
-                if (distance > 1 && distance < 175) {
-                    const force = distance < 48 ? -0.28 : 0.07;
-                    const strength = (1 - distance / 175) * force;
+                if (distance > 28 && distance < 240) {
+                    const proximity = 1 - distance / 240;
+                    const strength = 0.24 * proximity * proximity;
                     particle.fx += dx / distance * strength * step;
                     particle.fy += dy / distance * strength * step;
+                } else if (distance > 1 && distance <= 28) {
+                    const strength = 0.12 * (1 - distance / 28);
+                    particle.fx -= dx / distance * strength * step;
+                    particle.fy -= dy / distance * strength * step;
                 }
             }
             particle.fx *= Math.pow(0.92, step);
@@ -87,13 +93,18 @@ export function initialize(canvas, toggle) {
             if (particle.y > height + 20) particle.y = -20;
         }
 
+        const connectionDistance = width < 768 ? 150 : 172;
+        const connectionDistanceSquared = connectionDistance * connectionDistance;
         for (let i = 0; i < particles.length; i++) {
             const a = particles[i];
             for (let j = i + 1; j < particles.length; j++) {
                 const b = particles[j];
-                const distance = Math.hypot(a.x - b.x, a.y - b.y);
-                if (distance > 145) continue;
-                const alpha = (1 - distance / 145) * (dark ? 0.32 : 0.22);
+                const dx = a.x - b.x;
+                const dy = a.y - b.y;
+                const distanceSquared = dx * dx + dy * dy;
+                if (distanceSquared > connectionDistanceSquared) continue;
+                const distance = Math.sqrt(distanceSquared);
+                const alpha = (1 - distance / connectionDistance) * (dark ? 0.34 : 0.2);
                 context.strokeStyle = dark ? `rgba(56, 189, 248, ${alpha})` : `rgba(2, 132, 199, ${alpha})`;
                 context.lineWidth = 0.9;
                 context.beginPath();

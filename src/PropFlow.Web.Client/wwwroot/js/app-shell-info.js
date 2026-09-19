@@ -1,20 +1,47 @@
-export function initialize(icon, temperature, description, date, clock) {
-    const zone = "Asia/Ho_Chi_Minh";
-    const dateFormatter = new Intl.DateTimeFormat("vi-VN", {
-        timeZone: zone, weekday: "long", day: "2-digit", month: "2-digit", year: "numeric"
-    });
-    const timeFormatter = new Intl.DateTimeFormat("vi-VN", {
-        timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23"
-    });
-    let disposed = false;
-    let weatherRequest;
+export function initialize(icon, temperature, description, date, clock, period) {
+  const zone = "Asia/Ho_Chi_Minh";
+  const weekdayFormatter = new Intl.DateTimeFormat("vi-VN", { timeZone: zone, weekday: "long" });
+  const dayFormatter = new Intl.DateTimeFormat("vi-VN", { timeZone: zone, day: "numeric" });
+  const monthFormatter = new Intl.DateTimeFormat("vi-VN", { timeZone: zone, month: "numeric" });
+  const yearFormatter = new Intl.DateTimeFormat("vi-VN", { timeZone: zone, year: "numeric" });
+  const hourFormatter = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h12"
+  });
+  let disposed = false;
+  let weatherRequest;
 
-    function updateClock() {
-        const now = new Date();
-        date.textContent = dateFormatter.format(now);
-        clock.textContent = timeFormatter.format(now);
-    }
+  function capitalize(text) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
 
+  function formatDate(now) {
+    const weekday = capitalize(weekdayFormatter.format(now));
+    const day = dayFormatter.format(now);
+    const month = monthFormatter.format(now);
+    const year = yearFormatter.format(now);
+    return `${weekday}, ${day} Tháng ${month}, ${year}`;
+  }
+
+  function formatTimeParts(now) {
+    // hourFormatter với hourCycle "h12" trả về dạng "9:12 CH" hoặc "9:12 SA"
+    // (vi-VN dùng SA/CH thay vì AM/PM). Tách phần giờ:phút và phần buổi ra riêng.
+    const parts = hourFormatter.formatToParts(now);
+    const hour = parts.find(p => p.type === "hour")?.value ?? "--";
+    const minute = parts.find(p => p.type === "minute")?.value ?? "--";
+    const dayPeriod = parts.find(p => p.type === "dayPeriod")?.value ?? "";
+    const normalizedPeriod = dayPeriod.toUpperCase().includes("CH") ? "PM"
+      : dayPeriod.toUpperCase().includes("SA") ? "AM"
+        : dayPeriod.toUpperCase();
+    return { time: `${hour.padStart(2, "0")}:${minute}`, period: normalizedPeriod };
+  }
+
+  function updateClock() {
+    const now = new Date();
+    date.textContent = formatDate(now);
+    const { time, period: dayPeriod } = formatTimeParts(now);
+    clock.textContent = time;
+    if (period) period.textContent = dayPeriod;
+  }
     function weatherSymbol(code, isDay) {
         if (code === 0) return isDay ? "☀" : "☾";
         if (code <= 3) return "☁";

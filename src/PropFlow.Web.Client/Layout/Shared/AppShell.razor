@@ -37,12 +37,31 @@
             @if (ShowAmbientBackground)
             {
                 <button type="button" class="app-motion-button" @ref="motionButton"
-                        aria-label="Bật chuyển động nền" title="Bật chuyển động nền">✦</button>
+                        aria-label="Bật chuyển động nền" title="Bật chuyển động nền">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" />
+                    </svg>
+                </button>
             }
             <button type="button" class="app-theme-button" @onclick="ToggleTheme"
                     aria-label="@(dark ? "Bật chế độ sáng" : "Bật chế độ tối")"
                     title="Chuyển giao diện sáng tối">
-                <span aria-hidden="true">@(dark ? "☀" : "☾")</span>
+                @if (dark)
+                {
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4" />
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                    </svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                    </svg>
+                }
             </button>
 
             <details class="app-profile">
@@ -71,14 +90,26 @@
             <div class="app-page-heading">
                 <span class="app-page-icon" aria-hidden="true">◆</span>
                 <div>
-                    <strong>@SectionHeading</strong>
+                    <div class="app-page-heading-title">
+                        <strong>@SectionHeading</strong>
+                        <span class="app-status-badge">
+                            <span class="app-status-dot" aria-hidden="true"></span>
+                            Phiên đang hoạt động
+                        </span>
+                    </div>
                     <span>@SectionDescription</span>
                 </div>
                 @if (ShowWeatherAndClock)
                 {
                     <div class="app-local-time" aria-label="Ngày giờ Thành phố Hồ Chí Minh">
-                        <span @ref="dateLabel"></span>
-                        <strong @ref="clockLabel">--:--</strong>
+                        <div class="app-local-time-date">
+                            <span @ref="dateLabel"></span>
+                            <small>Múi giờ TP. Hồ Chí Minh</small>
+                        </div>
+                        <div class="app-local-time-clock">
+                            <strong @ref="clockLabel">--:--</strong>
+                            <span @ref="periodLabel"></span>
+                        </div>
                     </div>
                 }
             </div>
@@ -102,6 +133,7 @@
     private ElementReference weatherDescription;
     private ElementReference dateLabel;
     private ElementReference clockLabel;
+    private ElementReference periodLabel;
     private IJSObjectReference? ambientModule;
     private IJSObjectReference? ambientHandle;
     private IJSObjectReference? infoModule;
@@ -112,14 +144,14 @@
         if (!firstRender) return;
         if (ShowAmbientBackground)
         {
-            ambientModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-ambient.js");
+            ambientModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-ambient.js?v=20260919-2");
             ambientHandle = await ambientModule.InvokeAsync<IJSObjectReference>("initialize", ambientCanvas, motionButton);
         }
         if (ShowWeatherAndClock)
         {
             infoModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-info.js");
             infoHandle = await infoModule.InvokeAsync<IJSObjectReference>("initialize",
-                weatherIcon, weatherTemperature, weatherDescription, dateLabel, clockLabel);
+                weatherIcon, weatherTemperature, weatherDescription, dateLabel, clockLabel, periodLabel);
         }
     }
 

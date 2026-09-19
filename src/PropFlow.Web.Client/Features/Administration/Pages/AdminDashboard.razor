@@ -5,80 +5,80 @@
 @attribute [Authorize(Roles = "ADMIN")]
 @inject AuthSession Session
 
-<PageTitle>Trung tâm quản trị — PropFlow</PageTitle>
+<PageTitle>Quản lý phân quyền — PropFlow</PageTitle>
 
 <div class="admin-dashboard">
-    <header class="dashboard-heading">
-        <div>
-            <p class="eyebrow">SYSTEM ADMIN</p>
-            <h1>Xin chào, @(Session.User?.DisplayName ?? "quản trị viên")</h1>
-            <p>Quản lý tài khoản, phân quyền và theo dõi hoạt động hệ thống.</p>
-        </div>
-        <span class="session-status">Phiên quản trị đang hoạt động</span>
-    </header>
-
     <section class="metrics-grid" aria-label="Chỉ số hệ thống">
-        <article class="metric-card">
-            <span class="card-icon" aria-hidden="true">♙</span>
-            <div>
-                <h2>Tổng tài khoản</h2>
-                <strong>—</strong>
-                <small>Chưa có số liệu tài khoản</small>
-            </div>
-        </article>
-        <article class="metric-card">
-            <span class="card-icon" aria-hidden="true">♧</span>
-            <div>
-                <h2>Tài khoản nhân viên</h2>
-                <strong>—</strong>
-                <small>Chưa có số liệu nhân viên</small>
-            </div>
-        </article>
-        <article class="metric-card">
-            <span class="card-icon" aria-hidden="true">◇</span>
-            <div>
-                <h2>Tài khoản bị hạn chế</h2>
-                <strong>—</strong>
-                <small>Chưa có số liệu trạng thái</small>
-            </div>
-        </article>
+        <article class="metric-card metric-accounts"><span class="metric-icon" aria-hidden="true">♙</span><div class="metric-copy"><span>Tổng tài khoản</span><strong>—</strong><small>Chưa kết nối API tài khoản</small></div></article>
+        <article class="metric-card metric-staff"><span class="metric-icon" aria-hidden="true">♧</span><div class="metric-copy"><span>Tài khoản nhân viên</span><strong>—</strong><small>Chưa kết nối API nhân sự</small></div></article>
+        <article class="metric-card metric-restricted"><span class="metric-icon" aria-hidden="true">◇</span><div class="metric-copy"><span>Tài khoản bị hạn chế</span><strong>—</strong><small>Chưa kết nối API trạng thái</small></div></article>
     </section>
 
-    <section class="overview-grid" aria-label="Tổng quan quản trị">
-        <article class="overview-card">
-            <span class="card-icon" aria-hidden="true">♙</span>
-            <h2>Tài khoản</h2>
-            <p>Quản lý danh tính và trạng thái truy cập.</p>
-            <strong>Chưa có dữ liệu</strong>
-            <small>Chức năng quản lý tài khoản chưa được kết nối.</small>
-        </article>
-        <article class="overview-card">
-            <span class="card-icon" aria-hidden="true">◇</span>
-            <h2>Phân quyền RBAC</h2>
-            <p>Vai trò và quyền truy cập trong hệ thống.</p>
-            <strong>Chưa có dữ liệu</strong>
-            <small>Chức năng phân quyền chưa được kết nối.</small>
-        </article>
-        <article class="overview-card">
-            <span class="card-icon" aria-hidden="true">☷</span>
-            <h2>Nhật ký kiểm toán</h2>
-            <p>Theo dõi các thay đổi và sự kiện quản trị.</p>
-            <strong>Chưa có dữ liệu</strong>
-            <small>Chức năng audit log chưa được kết nối.</small>
-        </article>
-    </section>
+    <section class="rbac-panel" aria-labelledby="rbac-heading">
+        <header class="rbac-header">
+            <div class="rbac-title">
+                <span class="section-icon" aria-hidden="true">♢</span>
+                <div>
+                    <div class="title-line"><h1 id="rbac-heading">Quản lý Phân quyền &amp; Vai trò Hệ thống</h1><span class="catalog-badge">5 vai trò hệ thống</span></div>
+                    <p>Danh mục vai trò theo RBAC của PropFlow và quyền của phiên quản trị hiện tại.</p>
+                </div>
+            </div>
+            <div class="rbac-actions">
+                <button type="button" disabled title="API xuất ma trận quyền chưa được triển khai">⇩ Xuất ma trận quyền</button>
+                <button type="button" class="primary" disabled title="API quản lý vai trò chưa được triển khai">♙ Tạo vai trò mới</button>
+            </div>
+        </header>
 
-    <section class="account-panel" aria-labelledby="account-heading">
-        <div>
-            <p class="eyebrow">PHIÊN HIỆN TẠI</p>
-            <h2 id="account-heading">Tài khoản quản trị của bạn</h2>
-            <p>Thông tin lấy từ phiên đăng nhập hiện tại.</p>
+        <div class="policy-strip" aria-label="Trạng thái chính sách">
+            <span><i class="status-dot green"></i>Danh mục mặc định: <strong>5 role hệ thống</strong></span>
+            <span><i class="status-dot blue"></i>Phiên hiện tại: <strong>@(Session.User?.Role ?? "Chưa xác định")</strong></span>
+            <span class="policy-note">Dữ liệu quyền đầy đủ chờ API Administration</span>
         </div>
-        <dl>
-            <div><dt>Tên hiển thị</dt><dd>@(Session.User?.DisplayName ?? "Chưa có")</dd></div>
-            <div><dt>Email</dt><dd>@(Session.User?.Email ?? "Chưa có")</dd></div>
-            <div><dt>Vai trò</dt><dd>@(Session.User?.Role ?? "Chưa có")</dd></div>
-            <div><dt>Quyền được cấp</dt><dd>@(Session.User?.Permissions.Length.ToString() ?? "0")</dd></div>
-        </dl>
+
+        <div class="table-tools">
+            <label class="role-search"><span aria-hidden="true">⌕</span><input @bind="search" @bind:event="oninput" placeholder="Tìm kiếm theo tên vai trò hoặc mã role…" /></label>
+            <span class="result-count">Hiển thị @FilteredRoles.Count / @RoleRows.Length vai trò</span>
+        </div>
+
+        <div class="role-table-wrap">
+            <table class="role-table">
+                <thead><tr><th>Vai trò &amp; mã role</th><th>Phạm vi hoạt động</th><th>Quyền được cấp</th><th>Trạng thái dữ liệu</th><th><span class="visually-hidden">Hành động</span></th></tr></thead>
+                <tbody>
+                    @foreach (var role in FilteredRoles)
+                    {
+                        <tr>
+                            <td><div class="role-identity"><span class="role-avatar @role.Tone">@role.Initials</span><div><strong>@role.Name</strong><span>@role.Description</span></div><code>@role.Code</code></div></td>
+                            <td><span class="scope-pill @role.Tone">@role.Scope</span></td>
+                            <td>
+                                @if (role.Code == "ADMIN")
+                                { <div class="permission-value"><strong>@CurrentPermissionCount quyền trong phiên</strong><span>Thông tin từ token đăng nhập</span></div> }
+                                else
+                                { <div class="permission-value"><strong>Chưa có dữ liệu</strong><span>Chờ API ma trận quyền</span></div> }
+                            </td>
+                            <td><span class="data-state @(role.Code == "ADMIN" ? "connected" : "pending")">@(role.Code == "ADMIN" ? "Đã đọc phiên" : "Chưa kết nối")</span></td>
+                            <td><button type="button" class="row-action" disabled aria-label="Chi tiết @role.Name" title="Chức năng chi tiết chưa được kết nối">•••</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (FilteredRoles.Count == 0) { <p class="empty-state">Không tìm thấy vai trò phù hợp.</p> }
+        </div>
+
+        <footer class="table-footer"><span>Danh mục vai trò chuẩn được định nghĩa trong Administration domain.</span><span>Trang 1 / 1</span></footer>
     </section>
 </div>
+
+@code {
+    private string search = string.Empty;
+    private int CurrentPermissionCount => Session.User?.Permissions.Length ?? 0;
+    private static readonly RoleRow[] RoleRows =
+    [
+        new("SA", "Super Admin", "ADMIN", "Quản trị hệ thống và chính sách", "Toàn hệ thống", "red"),
+        new("MG", "Trưởng Ban Quản lý", "MANAGER", "Điều hành hoạt động tòa nhà", "Vận hành tòa nhà", "blue"),
+        new("FN", "Kế toán", "ACCOUNTANT", "Tài chính, hóa đơn và công nợ", "Tài chính & hóa đơn", "green"),
+        new("ST", "Nhân viên vận hành", "STAFF", "Thực hiện nghiệp vụ vận hành", "Nghiệp vụ vận hành", "cyan"),
+        new("RS", "Cư dân", "RESIDENT", "Dịch vụ và thông tin cư dân", "Cổng thông tin cư dân", "violet")
+    ];
+    private IReadOnlyList<RoleRow> FilteredRoles => string.IsNullOrWhiteSpace(search) ? RoleRows : RoleRows.Where(role => role.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || role.Code.Contains(search, StringComparison.OrdinalIgnoreCase)).ToArray();
+    private sealed record RoleRow(string Initials, string Name, string Code, string Description, string Scope, string Tone);
+}

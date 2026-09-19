@@ -35,12 +35,14 @@
 }
 
 .app-shell-dark {
-    --app-surface: rgba(19, 28, 43, 0.88);
-    --app-text: #edf6ff;
-    --app-muted: #a9bbcc;
-    --app-line: rgba(180, 215, 245, 0.13);
-    --app-accent: #38bdf8;
-    background: #0b111b;
+  --app-surface: rgba(19, 28, 43, 0.88);
+  --app-pill-surface: rgba(30, 41, 59, 0.96);
+  --app-pill-shadow: 0 0.25rem 0.9rem rgba(0, 0, 0, 0.35);
+  --app-text: #edf6ff;
+  --app-muted: #a9bbcc;
+  --app-line: rgba(180, 215, 245, 0.13);
+  --app-accent: #38bdf8;
+  background: #0b111b;
 }
 
 .app-aurora {
@@ -92,38 +94,58 @@
 
 .app-header,
 .app-page-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin: 1rem 1.25rem 0;
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--app-line);
-    border-radius: 1.25rem;
-    background: var(--app-surface);
-    box-shadow: 0 0.5rem 1.75rem rgba(12, 74, 110, 0.07);
-    backdrop-filter: blur(1rem);
-    transition: background-color var(--theme-duration) var(--theme-ease),
-                border-color var(--theme-duration) var(--theme-ease),
-                color var(--theme-duration) var(--theme-ease);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .app-header {
-    position: relative;
-    z-index: 60;
+  position: relative;
+  z-index: 60;
+  margin: 1rem 1.25rem 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
-.app-brand,
-.app-brand-copy,
-.app-header-actions,
-.app-profile summary,
-.app-page-heading > div {
+
+.app-page-heading {
+  margin: 0.75rem 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--app-line);
+  border-radius: 1.25rem;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  flex-wrap: nowrap;
+  transition: background-color var(--theme-duration) var(--theme-ease), border-color var(--theme-duration) var(--theme-ease), color var(--theme-duration) var(--theme-ease);
+}
+  .app-brand,
+  .app-brand-copy,
+  .app-header-actions,
+  .app-profile summary,
+  .app-page-heading > div {
     display: flex;
     align-items: center;
     gap: 0.7rem;
     min-width: 0;
+  }
+
+.app-brand {
+  padding: 0.4rem 0.9rem 0.4rem 0.4rem;
+  border: 2px solid var(--app-line);
+  border-radius: 1.1rem;
+  background: var(--app-pill-surface);
+  box-shadow: var(--app-pill-shadow);
+  transition: background-color var(--theme-duration) var(--theme-ease), border-color var(--theme-duration) var(--theme-ease);
 }
 
+.app-header-actions {
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
 .app-brand-copy,
 .app-page-heading > div {
     align-items: flex-start;
@@ -132,16 +154,22 @@
 }
 
 .app-weather {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    min-width: 8.5rem;
-    padding: 0.3rem 0.7rem;
-    border: 1px solid var(--app-line);
-    border-radius: 0.8rem;
-    background: var(--app-surface);
-    transition: background-color var(--theme-duration) var(--theme-ease),
-                border-color var(--theme-duration) var(--theme-ease);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 8.5rem;
+  padding: 0.3rem 0.7rem;
+  border: 2px solid var(--app-line);
+  border-radius: 0.8rem;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.app-weather:hover {
+  border-color: var(--app-line);
+  background: rgba(2, 132, 199, 0.08);
+  transform: translateY(-1px);
 }
 
 .app-weather-icon {
@@ -172,16 +200,72 @@
 }
 
 .app-page-heading > .app-local-time {
-    align-items: flex-end;
-    margin-left: auto;
-    text-align: right;
-    white-space: nowrap;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1.1rem;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.app-local-time strong {
-    font-size: 1rem;
-    font-variant-numeric: tabular-nums;
+.app-local-time-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  padding-right: 1rem;
+  border-right: 1px solid var(--app-line);
+  text-align: right;
 }
+
+  .app-local-time-date span {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--app-text);
+    white-space: nowrap;
+  }
+
+  .app-local-time-date small {
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: var(--app-muted);
+    white-space: nowrap;
+  }
+
+.app-local-time-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 0.85rem;
+  border: 2px solid var(--app-line);
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.app-local-time-clock:hover {
+  border-color: var(--app-line);
+  background: rgba(2, 132, 199, 0.08);
+  transform: translateY(-1px);
+}
+
+  .app-local-time-clock strong {
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--app-text);
+    line-height: 1;
+  }
+
+  .app-local-time-clock span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--app-accent);
+    align-self: flex-end;
+    padding-bottom: 0.1rem;
+  }
 
 .app-brand-copy strong,
 .app-page-heading strong {
@@ -225,26 +309,55 @@
 .app-motion-button,
 .app-theme-button,
 .app-profile summary {
-    border: 1px solid var(--app-line);
-    border-radius: 0.75rem;
-    background: var(--app-surface);
-    color: var(--app-text);
-    cursor: pointer;
-    transition: background-color var(--theme-duration) var(--theme-ease),
-                border-color var(--theme-duration) var(--theme-ease),
-                color var(--theme-duration) var(--theme-ease);
+  border: 2px solid var(--app-line);
+  border-radius: 0.75rem;
+  background: transparent;
+  box-shadow: none;
+  color: var(--app-text);
+  cursor: pointer;
+  transition: background-color var(--theme-duration) var(--theme-ease), border-color var(--theme-duration) var(--theme-ease), color var(--theme-duration) var(--theme-ease);
+}
+
+.app-motion-button:hover,
+.app-theme-button:hover,
+.app-profile summary:hover,
+.app-profile[open] summary {
+  border-color: var(--app-line);
+  background: rgba(2, 132, 199, 0.08);
 }
 
 .app-motion-button,
 .app-theme-button {
-    width: 2.5rem;
-    height: 2.5rem;
-    font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
 }
+
+  .app-motion-button svg,
+  .app-theme-button svg {
+    display: block;
+    flex-shrink: 0;
+  }
 
 .app-motion-button[aria-pressed="true"] {
     color: var(--app-accent);
+    background: transparent;
+}
+
+.app-motion-button[aria-pressed="true"]:hover {
     background: rgba(2, 132, 199, 0.12);
+}
+
+.app-motion-button:focus-visible,
+.app-theme-button:focus-visible,
+.app-profile summary:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
 }
 
 .app-profile {
@@ -336,11 +449,6 @@
     justify-content: flex-start;
     margin-top: 0.75rem;
 }
-
-.app-page-icon {
-    background: linear-gradient(140deg, #1958b8, #6677e8);
-}
-
 .app-page-body {
     flex: 1;
     min-width: 0;
@@ -384,10 +492,15 @@
         padding: 0.3rem;
     }
 
-    .app-weather-copy small,
-    .app-page-heading > .app-local-time span {
-        display: none;
-    }
+  .app-weather-copy small,
+  .app-local-time-date small {
+    display: none;
+  }
+
+  .app-local-time-date {
+    border-right: none;
+    padding-right: 0;
+  }
 
     .app-page-heading {
         margin: 0.5rem;
@@ -399,7 +512,60 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .app-aurora {
-        animation: none;
-    }
+  .app-aurora {
+    animation: none;
+  }
+}
+
+.app-page-heading-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.app-page-heading .app-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(5, 150, 105, 0.2);
+  color: #047857;
+  font-size: 0.62rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-shell-dark .app-page-heading .app-status-badge {
+  background: rgba(52, 211, 153, 0.16);
+  color: #34d399;
+}
+
+.app-status-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: #059669;
+  animation: app-status-pulse 1.8s ease-in-out infinite;
+}
+
+.app-shell-dark .app-status-dot {
+  background: #34d399;
+}
+
+@keyframes app-status-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-status-dot {
+    animation: none;
+  }
 }
