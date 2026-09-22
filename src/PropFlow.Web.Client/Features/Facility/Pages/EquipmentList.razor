@@ -24,7 +24,7 @@
             <div>
                 <div class="flex flex-wrap items-center gap-2.5">
                     <h1 class="text-2xl font-black text-slate-900 tracking-tight">Quản Lý Hồ Sơ và Trạng Thái Thiết Bị</h1>
-                    
+
                 </div>
                 <p class="text-xs text-slate-500 mt-1 max-w-2xl">
                     Theo dõi danh mục máy móc kỹ thuật, phân cấp vị trí theo Cơ sở vật chất cụ thể và cập nhật trạng thái vận hành tức thì.
@@ -71,9 +71,9 @@
                 <span class="text-3xl font-bold font-display text-emerald-600">
                     @(PagedResult.Items?.Count(x => x.Status == EquipmentStatus.ACTIVE) ?? 0)
                 </span>
-                
+
             </div>
-            
+
         </div>
 
         <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-sm transition-all group">
@@ -87,9 +87,9 @@
                 <span class="text-3xl font-bold font-display text-amber-600">
                     @(PagedResult.Items?.Count(x => x.Status == EquipmentStatus.UNDER_MAINTENANCE) ?? 0)
                 </span>
-                
+
             </div>
-            
+
         </div>
 
         <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-sm transition-all group">
@@ -103,9 +103,9 @@
                 <span class="text-3xl font-bold font-display text-rose-600">
                     @((PagedResult.Items?.Count(x => x.Status == EquipmentStatus.INACTIVE) ?? 0) + (PagedResult.Items?.Count(x => x.Status == EquipmentStatus.OUT_OF_SERVICE) ?? 0))
                 </span>
-               
+
             </div>
-            
+
         </div>
     </div>
 
@@ -184,7 +184,7 @@
                 </select>
             </div>
 
-            
+
         </div>
 
         <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500">
@@ -348,7 +348,7 @@
                                                             <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                                                             <div class="text-left">
                                                                 <div class="font-bold">Đang bảo trì</div>
-                                                                
+
                                                             </div>
                                                         </button>
                                                         <button type="button"
@@ -407,7 +407,9 @@
                         else
                         {
                             <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-xs transition-stitch flex items-center justify-center"
-                                    @onclick="() => ChangePage(pageNum)">@pageNum</button>
+                                    @onclick="() => ChangePage(pageNum)">
+                                @pageNum
+                            </button>
                         }
                     }
                     <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
@@ -485,7 +487,10 @@
             </div>
 
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                @if (ErrorMessage != null) { <p class="text-rose-700 bg-rose-50 p-3 rounded-lg" role="alert">@ErrorMessage</p> }
+                @if (ErrorMessage != null)
+                {
+                    <p class="text-rose-700 bg-rose-50 p-3 rounded-lg" role="alert">@ErrorMessage</p>
+                }
                 <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                         <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng Thái Vận Hành</dt>
@@ -600,7 +605,7 @@
 
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                 <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
-                
+
             </div>
         </div>
     </div>
