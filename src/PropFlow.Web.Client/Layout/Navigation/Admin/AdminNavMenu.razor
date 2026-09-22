@@ -1,12 +1,29 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@implements IDisposable
+@inject NavigationManager Navigation
 
 <AuthorizeView Roles="ADMIN">
     <nav class="admin-nav" aria-label="Điều hướng quản trị hệ thống">
-        <div class="admin-nav-mark" aria-hidden="true">P</div>
-        <div class="admin-nav-divider"></div>
-        <NavLink href="/admin/dashboard" Match="NavLinkMatch.All" class="admin-nav-link"
-                 title="Tổng quan quản trị" aria-label="Tổng quan quản trị">
-            <span aria-hidden="true">▦</span>
-        </NavLink>
+        <a href="/admin/dashboard?tab=overview" class="admin-nav-link @(IsTab("overview") ? "is-selected" : "")" aria-label="Tổng quan" title="Tổng quan" aria-current="@(IsTab("overview") ? "page" : null)"><span class="material-symbols-outlined" aria-hidden="true">dashboard</span></a>
+        <a href="/admin/dashboard?tab=accounts" class="admin-nav-link @(IsTab("accounts") ? "is-selected" : "")" aria-label="Tài khoản Ban quản lý" title="Tài khoản Ban quản lý" aria-current="@(IsTab("accounts") ? "page" : null)"><span class="material-symbols-outlined" aria-hidden="true">group</span></a>
+        <a href="/admin/dashboard?tab=activity" class="admin-nav-link @(IsTab("activity") ? "is-selected" : "")" aria-label="Nhật ký quản trị" title="Nhật ký quản trị" aria-current="@(IsTab("activity") ? "page" : null)"><span class="material-symbols-outlined" aria-hidden="true">history</span></a>
     </nav>
 </AuthorizeView>
+
+@code {
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    private bool IsTab(string tab)
+    {
+        var query = new Uri(Navigation.Uri).Query.TrimStart('?');
+        var tabParameter = query.Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(part => part.StartsWith("tab=", StringComparison.OrdinalIgnoreCase));
+        var current = tabParameter is null ? "accounts" : Uri.UnescapeDataString(tabParameter[4..]);
+        return current == tab;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

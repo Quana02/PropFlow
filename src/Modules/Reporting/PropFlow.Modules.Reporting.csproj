@@ -6,4 +6,11 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../Apartments.Contracts/PropFlow.Modules.Apartments.Contracts.csproj" />
+    <ProjectReference Include="../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj" />
+    <ProjectReference Include="../ServiceRequests.Contracts/PropFlow.Modules.ServiceRequests.Contracts.csproj" />
+    <ProjectReference Include="../PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj" />
+  </ItemGroup>
 </Project>
