@@ -2,11 +2,11 @@ using System.ComponentModel.DataAnnotations;
 
 namespace PropFlow.Web.Client.Features.Facility.Models;
 
+public enum EquipmentStatus { ACTIVE, INACTIVE, OUT_OF_SERVICE, UNDER_MAINTENANCE }
+
 public class EquipmentModel
 {
     public Guid Id { get; set; }
-    public Guid BuildingId { get; set; }
-    public string BuildingName { get; set; } = string.Empty;
     public Guid? FacilityId { get; set; }
     public string? FacilityName { get; set; }
     public string Code { get; set; } = string.Empty;
@@ -32,9 +32,6 @@ public class EquipmentDetailModel : EquipmentModel
 
 public class CreateEquipmentModel
 {
-    [Required(ErrorMessage = "Tòa nhà là bắt buộc.")]
-    public Guid BuildingId { get; set; }
-
     [Required(ErrorMessage = "Mã thiết bị là bắt buộc.")]
     [StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")]
     public string Code { get; set; } = string.Empty;
@@ -81,8 +78,6 @@ public class UpdateEquipmentModel
     [StringLength(100, ErrorMessage = "Loại thiết bị không được vượt quá 100 ký tự.")]
     public string? EquipmentType { get; set; }
 
-    public EquipmentStatus Status { get; set; }
-
     [StringLength(100, ErrorMessage = "Hãng sản xuất không được vượt quá 100 ký tự.")]
     public string? Manufacturer { get; set; }
 
@@ -110,10 +105,10 @@ public class SetEquipmentStatusModel
 
 public class EquipmentFilterModel
 {
-    public Guid? BuildingId { get; set; }
     public Guid? FacilityId { get; set; }
     public string? SearchKeyword { get; set; }
     public EquipmentStatus? Status { get; set; }
+    public string? EquipmentType { get; set; }
     public int PageIndex { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }

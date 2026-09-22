@@ -36,10 +36,6 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("billing_frequency_code");
 
-                    b.Property<Guid?>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
                     b.Property<string>("CalculationMethodCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -113,13 +109,11 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BuildingId");
-
                     b.HasIndex("FeeTypeId");
 
                     b.HasIndex("IsActive");
 
-                    b.HasIndex("FeeTypeId", "BuildingId", "EffectiveFrom");
+                    b.HasIndex("FeeTypeId", "EffectiveFrom");
 
                     b.ToTable("fee_rate_rules", "billing", t =>
                         {

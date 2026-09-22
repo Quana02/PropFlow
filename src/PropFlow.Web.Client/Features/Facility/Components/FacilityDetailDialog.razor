@@ -4,140 +4,183 @@
 
 @if (IsOpen && Facility != null)
 {
-    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" role="dialog">
-        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-            <div class="modal-content shadow-lg border-0" style="border-radius: 1.5rem;">
-                <div class="modal-header bg-dark text-white px-4 py-3" style="border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem;">
-                    <h5 class="modal-title fw-bold">
-                        <i class="bi bi-grid-fill me-2 text-info"></i> Chi Tiết Hồ Sơ Cơ Sở Vật Chất
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" @onclick="Close" aria-label="Close"></button>
+    <div class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div class="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+                        <span class="material-symbols-outlined text-2xl">apartment</span>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold font-display text-slate-900">Chi Tiết Cơ Sở Vật Chất</h3>
+                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">Mã: @Facility.Code</p>
+                    </div>
                 </div>
-                <div class="modal-body p-4">
-                    @if (AssetError != null) { <p class="alert alert-danger" role="alert">@AssetError</p> }
-                    <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                        <div class="rounded-circle bg-primary bg-opacity-10 p-3 text-primary me-3 fs-3" style="border-radius: 1.25rem;">
-                            <i class="bi bi-grid-1x2-fill"></i>
-                        </div>
-                        <div>
-                            <h4 class="fw-bold mb-1">@Facility.Name</h4>
-                            <span class="badge bg-secondary me-2">Mã: @Facility.Code</span>
-                            @if (Facility.Status == MasterDataStatus.ACTIVE)
-                            {
-                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-3 py-1">
-                                    <i class="bi bi-check-circle-fill me-1"></i> Đang hoạt động
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 py-1">
-                                    <i class="bi bi-pause-circle-fill me-1"></i> Ngưng hoạt động
-                                </span>
-                            }
-                        </div>
-                    </div>
+                <button @onclick="Close" class="text-slate-400 hover:text-slate-700 p-2 rounded-xl transition-all">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="p-3 bg-light" style="border-radius: 1rem;">
-                                <span class="text-muted d-block small">Tòa nhà trực thuộc</span>
-                                <strong class="fs-6 text-dark"><i class="bi bi-building text-primary me-1"></i> @Facility.BuildingName</strong>
-                            </div>
+            <div class="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                <!-- Facility Information -->
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Thông Tin Cơ Sở Vật Chất</h4>
+                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                            <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Trạng Thái</dt>
+                            <dd class="mt-1.5">
+                                @switch (Facility.Status)
+                                {
+                                    case MasterDataStatus.ACTIVE:
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            <span>Đang hoạt động</span>
+                                        </span>
+                                        break;
+                                    case MasterDataStatus.INACTIVE:
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200/80 shadow-2xs">
+                                            <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                                            <span>Ngừng kích hoạt</span>
+                                        </span>
+                                        break;
+                                    case MasterDataStatus.UNDER_MAINTENANCE:
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs">
+                                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                            <span>Đang bảo trì</span>
+                                        </span>
+                                        break;
+                                    case MasterDataStatus.UNAVAILABLE:
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-2xs">
+                                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                            <span>Tạm ngưng / Kín lịch</span>
+                                        </span>
+                                        break;
+                                }
+                            </dd>
                         </div>
-                        <div class="col-md-6">
-                            <div class="p-3 bg-light" style="border-radius: 1rem;">
-                                <span class="text-muted d-block small">Loại cơ sở vật chất</span>
-                                <strong class="fs-6 text-dark"><i class="bi bi-tag-fill text-info me-1"></i> @(string.IsNullOrEmpty(Facility.FacilityType) ? "Chưa cập nhật" : Facility.FacilityType)</strong>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="p-3 bg-light" style="border-radius: 1rem;">
-                                <span class="text-muted d-block small">Vị trí chi tiết</span>
-                                <strong class="fs-6 text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i> @(string.IsNullOrEmpty(Facility.LocationDescription) ? "Chưa cập nhật" : Facility.LocationDescription)</strong>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="p-3 bg-light" style="border-radius: 1rem;">
-                                <span class="text-muted d-block small mb-1">Mô tả / Ghi chú</span>
-                                <p class="mb-0 text-dark">@(string.IsNullOrWhiteSpace(Facility.Description) ? "Không có mô tả bổ sung." : Facility.Description)</p>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Danh sách thiết bị -->
-                    <div class="row g-3 mt-3">
-                        <div class="col-12">
-                            <h6 class="fw-bold mb-3 border-bottom pb-2"><i class="bi bi-tools text-warning me-2"></i>Danh sách thiết bị trực thuộc (@TotalEquipments)</h6>
-                            <div class="border rounded p-3 bg-white" style="max-height: 250px; overflow-y: auto;">
-                                @if (IsLoadingAssets)
+                        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                            <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Loại CSVT</dt>
+                            <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                                @(string.IsNullOrEmpty(Facility.FacilityType) ? "-" : Facility.FacilityType)
+                            </dd>
+                        </div>
+
+                        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 sm:col-span-2">
+                            <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vị Trí Chi Tiết</dt>
+                            <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                                @(string.IsNullOrEmpty(Facility.LocationDescription) ? "-" : Facility.LocationDescription)
+                            </dd>
+                        </div>
+
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 sm:col-span-2">
+                            <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Mô Tả / Ghi Chú</dt>
+                            <dd class="mt-2 text-xs sm:text-sm text-slate-700 leading-relaxed">
+                                @(string.IsNullOrEmpty(Facility.Description) ? "Không có mô tả bổ sung." : Facility.Description)
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Equipment at Facility -->
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Thiết Bị Tại Cơ Sở Vật Chất</h4>
+                    @if (IsLoadingEquipment)
+                    {
+                        <div class="flex items-center justify-center py-8">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-600"></div>
+                        </div>
+                    }
+                    else if (EquipmentLoadError != null)
+                    {
+                        <div class="bg-rose-50 border border-rose-200 rounded-xl p-4">
+                            <p class="text-sm text-rose-700">@EquipmentLoadError</p>
+                        </div>
+                    }
+                    else if (EquipmentPagedResult?.Items?.Count == 0)
+                    {
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
+                            <span class="material-symbols-outlined text-4xl text-slate-300">devices_other</span>
+                            <p class="text-sm text-slate-600 mt-2">Chưa có thiết bị nào thuộc cơ sở vật chất này.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                            <div class="px-4 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                                <span class="text-xs font-semibold text-slate-700">@(EquipmentPagedResult?.TotalCount ?? 0) thiết bị</span>
+                            </div>
+                            <div class="divide-y divide-slate-200">
+                                @foreach (var equipment in EquipmentPagedResult?.Items ?? new List<EquipmentModel>())
                                 {
-                                    <div class="text-center py-3 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải dữ liệu...</div>
-                                }
-                                else if (!Equipments.Any())
-                                {
-                                    <div class="text-center py-3 text-muted">Không có thiết bị nào thuộc cơ sở vật chất này.</div>
-                                }
-                                else
-                                {
-                                    <div class="table-responsive">
-                                        <table class="table table-sm table-hover align-middle mb-0">
-                                            <thead class="table-light text-muted small sticky-top">
-                                                <tr>
-                                                    <th>Mã</th>
-                                                    <th>Tên thiết bị</th>
-                                                    <th>Loại</th>
-                                                    <th>Trạng thái</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="small">
-                                                @foreach (var e in Equipments)
+                                    <div class="px-4 py-3 hover:bg-slate-100 transition-colors">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs font-mono font-bold text-sky-600">@equipment.Code</span>
+                                                    <span class="text-sm font-semibold text-slate-800 truncate">@equipment.Name</span>
+                                                </div>
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <span class="text-xs text-slate-500">@equipment.EquipmentType</span>
+                                                    @if (!string.IsNullOrEmpty(equipment.LocationDescription))
+                                                    {
+                                                        <span class="text-xs text-slate-400">• @equipment.LocationDescription</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div>
+                                                @switch (equipment.Status)
                                                 {
-                                                    <tr>
-                                                        <td><span class="badge bg-light text-dark border">@e.Code</span></td>
-                                                        <td class="fw-semibold">@e.Name</td>
-                                                        <td>@(string.IsNullOrEmpty(e.EquipmentType) ? "-" : e.EquipmentType)</td>
-                                                        <td>
-                                                            <span class="badge @GetEqStatusBadgeClass(e.Status)">@GetEqStatusText(e.Status)</span>
-                                                        </td>
-                                                    </tr>
+                                                    case EquipmentStatus.ACTIVE:
+                                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                            <span>Đang hoạt động</span>
+                                                        </span>
+                                                        break;
+                                                    case EquipmentStatus.UNDER_MAINTENANCE:
+                                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                            <span>Đang bảo trì</span>
+                                                        </span>
+                                                        break;
+                                                    case EquipmentStatus.INACTIVE:
+                                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                            <span>Ngừng hoạt động</span>
+                                                        </span>
+                                                        break;
+                                                    case EquipmentStatus.OUT_OF_SERVICE:
+                                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                                                            <span>Ngừng phục vụ</span>
+                                                        </span>
+                                                        break;
                                                 }
-                                                @if (TotalEquipments > Equipments.Count)
-                                                {
-                                                    <tr>
-                                                        <td colspan="4" class="text-center text-muted small py-2">
-                                                            <i class="bi bi-info-circle me-1"></i>
-                                                            Hiển thị @Equipments.Count trên @TotalEquipments thiết bị
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            </tbody>
-                                        </table>
+                                            </div>
+                                        </div>
                                     </div>
                                 }
                             </div>
-                            @if (TotalEquipments > PageSize)
+                            @if (EquipmentPagedResult != null && EquipmentPagedResult.TotalPages > 1)
                             {
-                                <div class="d-flex align-items-center justify-content-between mt-2 small">
-                                    <button class="btn btn-sm btn-outline-secondary" disabled="@(EquipmentPage == 1 || IsLoadingAssets)" @onclick="() => ChangeEquipmentPage(-1)">Trước</button>
-                                    <span>Trang @EquipmentPage / @((TotalEquipments + PageSize - 1) / PageSize)</span>
-                                    <button class="btn btn-sm btn-outline-secondary" disabled="@(EquipmentPage * PageSize >= TotalEquipments || IsLoadingAssets)" @onclick="() => ChangeEquipmentPage(1)">Sau</button>
+                                <div class="px-4 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
+                                    <span class="text-xs text-slate-500">Trang @(EquipmentPagedResult?.PageIndex ?? 1) / @(EquipmentPagedResult?.TotalPages ?? 1)</span>
+                                    <div class="flex items-center gap-2">
+                                        @if (EquipmentPagedResult != null)
+                                        {
+                                            <button @onclick="() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex - 1)" disabled="!EquipmentPagedResult.HasPreviousPage" class="px-3 py-1 rounded-lg text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Trước</button>
+                                            <button @onclick="() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex + 1)" disabled="!EquipmentPagedResult.HasNextPage" class="px-3 py-1 rounded-lg text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Sau</button>
+                                        }
+                                    </div>
                                 </div>
                             }
                         </div>
-                    </div>
+                    }
+                </div>
+            </div>
 
-                    <div class="row g-3 mt-2 pt-3 border-top text-muted small">
-                        <div class="col-md-6">
-                            <i class="bi bi-calendar-plus me-1"></i> Ngày khởi tạo: @Facility.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")
-                        </div>
-                        <div class="col-md-6 text-md-end">
-                            <i class="bi bi-calendar-check me-1"></i> Cập nhật gần nhất: @Facility.UpdatedAt.ToString("dd/MM/yyyy HH:mm:ss")
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-0 px-4 pb-4 pt-0">
-                    <button type="button" class="btn btn-secondary px-4" style="border-radius: 1rem;" @onclick="Close">Đóng</button>
-                </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
             </div>
         </div>
     </div>
@@ -148,75 +191,67 @@
     [Parameter] public FacilityModel? Facility { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
 
-    private List<EquipmentModel> Equipments { get; set; } = new();
-    private int TotalEquipments { get; set; }
-    private const int PageSize = 20;
-    private int EquipmentPage = 1;
-    private bool IsLoadingAssets { get; set; }
-    private string? AssetError { get; set; }
-    private Guid? LoadedFacilityId { get; set; }
+    private bool IsLoadingEquipment { get; set; }
+    private string? EquipmentLoadError { get; set; }
+    private PagedResult<EquipmentModel>? EquipmentPagedResult { get; set; }
+    private int EquipmentPageIndex { get; set; } = 1;
+    private const int EquipmentPageSize = 10;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!IsOpen) { LoadedFacilityId = null; return; }
-        if (Facility != null && LoadedFacilityId != Facility.Id)
+        if (IsOpen && Facility != null)
         {
-            LoadedFacilityId = Facility.Id;
-            EquipmentPage = 1;
-            IsLoadingAssets = true;
-            AssetError = null;
-
-            try
-            {
-                var eResult = await EquipmentApiClient.GetEquipmentsAsync(new EquipmentFilterModel { FacilityId = Facility.Id, PageIndex = EquipmentPage, PageSize = PageSize });
-                if (eResult.IsSuccess && eResult.Data != null) { Equipments = eResult.Data.Items?.ToList() ?? new(); TotalEquipments = eResult.Data.TotalCount; }
-                else AssetError = eResult.Message ?? "Không thể tải thiết bị.";
-            }
-            finally
-            {
-                IsLoadingAssets = false;
-            }
+            EquipmentPageIndex = 1; // Reset to first page when opening
+            await LoadEquipmentForFacility();
         }
     }
 
-    private async Task ChangeEquipmentPage(int delta)
+    private async Task LoadEquipmentForFacility()
     {
         if (Facility == null) return;
-        var next = EquipmentPage + delta;
-        if (next < 1 || (next - 1) * PageSize >= TotalEquipments) return;
-        IsLoadingAssets = true;
+
+        IsLoadingEquipment = true;
+        EquipmentLoadError = null;
         try
         {
-            var result = await EquipmentApiClient.GetEquipmentsAsync(new EquipmentFilterModel { FacilityId = Facility.Id, PageIndex = next, PageSize = PageSize });
-            if (!result.IsSuccess || result.Data == null) { AssetError = result.Message ?? "Không thể tải thiết bị."; return; }
-            Equipments = result.Data.Items?.ToList() ?? new();
-            TotalEquipments = result.Data.TotalCount;
-            EquipmentPage = next;
+            var filter = new EquipmentFilterModel
+            {
+                FacilityId = Facility.Id,
+                PageIndex = EquipmentPageIndex,
+                PageSize = EquipmentPageSize
+            };
+            var result = await EquipmentApiClient.GetEquipmentsAsync(filter);
+            if (result.IsSuccess && result.Data != null)
+            {
+                EquipmentPagedResult = result.Data;
+            }
+            else
+            {
+                EquipmentLoadError = result.Message ?? "Không thể tải danh sách thiết bị.";
+            }
         }
-        finally { IsLoadingAssets = false; }
+        catch (Exception ex)
+        {
+            EquipmentLoadError = $"Lỗi khi tải thiết bị: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingEquipment = false;
+        }
+    }
+
+    private async Task ChangeEquipmentPage(int newPageIndex)
+    {
+        EquipmentPageIndex = newPageIndex;
+        await LoadEquipmentForFacility();
     }
 
     private async Task Close()
     {
         IsOpen = false;
+        EquipmentPagedResult = null;
+        EquipmentLoadError = null;
+        EquipmentPageIndex = 1;
         await OnClose.InvokeAsync();
     }
-
-    private string GetEqStatusText(EquipmentStatus status) => status switch
-    {
-        EquipmentStatus.ACTIVE => "Đang hoạt động",
-        EquipmentStatus.INACTIVE => "Ngưng hoạt động",
-        EquipmentStatus.UNDER_MAINTENANCE => "Đang bảo trì",
-        EquipmentStatus.OUT_OF_SERVICE => "Hỏng hóc",
-        _ => status.ToString()
-    };
-
-    private string GetEqStatusBadgeClass(EquipmentStatus status) => status switch
-    {
-        EquipmentStatus.ACTIVE => "bg-success",
-        EquipmentStatus.INACTIVE => "bg-danger",
-        EquipmentStatus.UNDER_MAINTENANCE => "bg-warning text-dark",
-        EquipmentStatus.OUT_OF_SERVICE => "bg-danger",
-        _ => "bg-secondary"
-    };
 }

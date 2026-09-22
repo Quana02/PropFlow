@@ -8,7 +8,6 @@ using PropFlow.Modules.PropertyAssets.Application.Facilities.Services;
 namespace PropFlow.Modules.PropertyAssets.Presentation.Controllers;
 
 [ApiController]
-[Authorize(Roles = "MANAGER")]
 [Route("api/v1/[controller]")]
 public class FacilitiesController : ControllerBase
 {
@@ -19,14 +18,22 @@ public class FacilitiesController : ControllerBase
         _facilityService = facilityService;
     }
 
+    /// <summary>
+    /// Lấy danh sách tiện ích - FE-04.3
+    /// </summary>
     [HttpGet]
+    [Authorize(Roles = "MANAGER,STAFF")]
     public async Task<ActionResult<PagedResult<FacilityDto>>> GetFacilities([FromQuery] FacilityFilterQuery query, CancellationToken cancellationToken)
     {
         var result = await _facilityService.GetFacilitiesAsync(query, cancellationToken);
         return Ok(result);
     }
 
+    /// <summary>
+    /// Lấy chi tiết tiện ích - FE-04.3
+    /// </summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "MANAGER,STAFF")]
     public async Task<ActionResult<FacilityDetailDto>> GetFacilityById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _facilityService.GetFacilityByIdAsync(id, cancellationToken);
@@ -37,7 +44,11 @@ public class FacilitiesController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Tạo tiện ích mới - FE-04.3
+    /// </summary>
     [HttpPost]
+    [Authorize(Roles = "MANAGER")]
     public async Task<ActionResult<FacilityDto>> CreateFacility([FromBody] CreateFacilityCommand command, CancellationToken cancellationToken)
     {
         try
@@ -65,7 +76,11 @@ public class FacilitiesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Cập nhật thông tin tiện ích - FE-04.3
+    /// </summary>
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "MANAGER")]
     public async Task<ActionResult<FacilityDto>> UpdateFacility(Guid id, [FromBody] UpdateFacilityCommand command, CancellationToken cancellationToken)
     {
         try
@@ -102,7 +117,11 @@ public class FacilitiesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Đặt trạng thái tiện ích - FE-04.4 (Status Management)
+    /// </summary>
     [HttpPatch("{id:guid}/status")]
+    [Authorize(Roles = "MANAGER")]
     public async Task<ActionResult<FacilityDto>> SetFacilityStatus(Guid id, [FromBody] SetFacilityStatusCommand command, CancellationToken cancellationToken)
     {
         try

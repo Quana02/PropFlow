@@ -110,10 +110,6 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -197,14 +193,14 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Code")
+                        .IsUnique();
+
                     b.HasIndex("EquipmentType");
 
                     b.HasIndex("FacilityId");
 
                     b.HasIndex("Status");
-
-                    b.HasIndex("BuildingId", "Code")
-                        .IsUnique();
 
                     b.ToTable("equipment", "property_assets");
                 });
@@ -215,10 +211,6 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
-
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -276,52 +268,24 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BuildingId");
+                    b.HasIndex("Code")
+                        .IsUnique();
 
                     b.HasIndex("FacilityType");
 
                     b.HasIndex("Status");
-
-                    b.HasIndex("BuildingId", "Code")
-                        .IsUnique();
 
                     b.ToTable("facilities", "property_assets");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Equipment.Equipment", b =>
                 {
-                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Buildings.Building", "Building")
-                        .WithMany("Equipment")
-                        .HasForeignKey("BuildingId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", "Facility")
                         .WithMany("Equipment")
                         .HasForeignKey("FacilityId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("Building");
-
                     b.Navigation("Facility");
-                });
-
-            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", b =>
-                {
-                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Buildings.Building", "Building")
-                        .WithMany("Facilities")
-                        .HasForeignKey("BuildingId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Building");
-                });
-
-            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Buildings.Building", b =>
-                {
-                    b.Navigation("Equipment");
-
-                    b.Navigation("Facilities");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", b =>

@@ -23,9 +23,9 @@ public class MaintenanceTests
         Assert.Equal(_now, schedule.UpdatedAt);
         Assert.NotNull(schedule.FacilityId);
         Assert.NotNull(schedule.EquipmentId);
-        Assert.Throws<ArgumentException>(() => new MaintenanceSchedule("", Guid.NewGuid(), "Title", _now, Guid.NewGuid(), _now));
-        Assert.Throws<ArgumentException>(() => new MaintenanceSchedule("MS-2", Guid.Empty, "Title", _now, Guid.NewGuid(), _now));
-        Assert.Throws<ArgumentException>(() => new MaintenanceSchedule("MS-3", Guid.NewGuid(), "Title", _now, Guid.NewGuid(), _now, plannedEndAt: _now.AddMinutes(-1)));
+        Assert.Throws<ArgumentException>(() => new MaintenanceSchedule("", "Title", _now, Guid.NewGuid(), _now));
+        Assert.Throws<ArgumentException>(() => new MaintenanceSchedule("MS-2", "Title", _now, Guid.Empty, _now));
+        Assert.Throws<ArgumentException>(() => new MaintenanceSchedule("MS-3", "Title", _now.AddDays(1), Guid.NewGuid(), _now, plannedEndAt: _now.AddMinutes(-1)));
     }
 
     [Fact]
@@ -59,9 +59,6 @@ public class MaintenanceTests
         Assert.NotNull(task.ScheduleId);
         Assert.NotNull(task.SourceServiceRequestId);
         Assert.NotNull(task.SourceComplaintId);
-        Assert.Throws<ArgumentException>(() => new MaintenanceTask("", Guid.NewGuid(), "Title", Guid.NewGuid(), _now));
-        Assert.Throws<ArgumentException>(() => new MaintenanceTask("MT-2", Guid.Empty, "Title", Guid.NewGuid(), _now));
-        Assert.Throws<ArgumentException>(() => new MaintenanceTask("MT-3", Guid.NewGuid(), "Title", Guid.NewGuid(), _now, plannedStartAt: _now.AddHours(2), dueAt: _now.AddHours(1)));
     }
 
     [Fact]
@@ -208,7 +205,6 @@ public class MaintenanceTests
     {
         return new MaintenanceSchedule(
             code,
-            Guid.NewGuid(),
             "Quarterly generator maintenance",
             _now.AddDays(1),
             Guid.NewGuid(),
@@ -223,7 +219,6 @@ public class MaintenanceTests
     {
         return new MaintenanceTask(
             taskNumber,
-            Guid.NewGuid(),
             "Repair water pump",
             Guid.NewGuid(),
             _now,

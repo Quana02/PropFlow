@@ -62,8 +62,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT schema_name 
-            FROM information_schema.schemata 
+            SELECT schema_name
+            FROM information_schema.schemata
             WHERE schema_name IN ('property_assets', 'apartments', 'auth', 'residents', 'administration', 'service_requests', 'complaints', 'maintenance', 'billing', 'payments', 'ai_classification', 'ai_recommendation', 'communication');";
 
         var schemas = new List<string>();
@@ -90,7 +90,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     }
 
     [Fact]
-    public async Task Database_ShouldContainExactly45BusinessTables_CurrentBaseline()
+    public async Task Database_ShouldContainExactly44BusinessTables_CurrentBaseline()
     {
         var options = new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseNpgsql(_connectionString)
@@ -102,8 +102,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT table_schema, table_name 
-            FROM information_schema.tables 
+            SELECT table_schema, table_name
+            FROM information_schema.tables
             WHERE table_schema IN ('property_assets', 'apartments', 'auth', 'residents', 'administration', 'service_requests', 'complaints', 'maintenance', 'billing', 'payments', 'ai_classification', 'ai_recommendation', 'communication')
               AND table_type = 'BASE TABLE'
               AND table_name <> '__EFMigrationsHistory'
@@ -116,7 +116,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add((reader.GetString(0), reader.GetString(1)));
         }
 
-        Assert.Equal(45, tables.Count);
+        Assert.Equal(44, tables.Count);
 
         // PropertyAssets: 3
         Assert.Contains(("property_assets", "buildings"), tables);
@@ -136,12 +136,11 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Contains(("residents", "residents"), tables);
         Assert.Contains(("residents", "resident_apartments"), tables);
 
-        // Administration: 8
+        // Administration: 7
         Assert.Contains(("administration", "roles"), tables);
         Assert.Contains(("administration", "permissions"), tables);
         Assert.Contains(("administration", "role_permissions"), tables);
         Assert.Contains(("administration", "user_role_assignments"), tables);
-        Assert.Contains(("administration", "user_building_accesses"), tables);
         Assert.Contains(("administration", "user_access_history"), tables);
         Assert.Contains(("administration", "system_configurations"), tables);
         Assert.Contains(("administration", "audit_logs"), tables);
@@ -203,8 +202,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT table_schema, table_name 
-            FROM information_schema.tables 
+            SELECT table_schema, table_name
+            FROM information_schema.tables
             WHERE table_schema IN ('property_assets', 'apartments', 'auth', 'residents', 'administration', 'service_requests', 'complaints', 'maintenance', 'billing', 'payments', 'ai_classification', 'ai_recommendation', 'communication')
               AND table_name = '__EFMigrationsHistory';";
 
@@ -244,14 +243,14 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT 
-                tc.table_schema, 
-                tc.table_name, 
+            SELECT
+                tc.table_schema,
+                tc.table_name,
                 ccu.table_schema AS foreign_table_schema,
                 ccu.table_name AS foreign_table_name
-            FROM information_schema.table_constraints AS tc 
-            JOIN information_schema.constraint_column_usage AS ccu 
-              ON ccu.constraint_name = tc.constraint_name 
+            FROM information_schema.table_constraints AS tc
+            JOIN information_schema.constraint_column_usage AS ccu
+              ON ccu.constraint_name = tc.constraint_name
              AND ccu.table_schema = tc.table_schema
             WHERE tc.constraint_type = 'FOREIGN KEY'
               AND tc.table_schema IN ('property_assets', 'apartments', 'auth', 'residents', 'administration', 'service_requests', 'complaints', 'maintenance', 'billing', 'payments', 'ai_classification', 'ai_recommendation', 'communication');";
@@ -302,7 +301,6 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             "administration.permissions",
             "administration.role_permissions",
             "administration.user_role_assignments",
-            "administration.user_building_accesses",
             "administration.user_access_history",
             "administration.system_configurations",
             "administration.audit_logs",
@@ -1433,12 +1431,13 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             VALUES
                 ({announcementId}, 'Title', 'Content', 'DRAFT', {Guid.NewGuid()}, {now}, {now});");
 
+        // Test: ROLE audience without role_id should violate check constraint
         var invalidAudience = await Assert.ThrowsAsync<PostgresException>(() =>
             audienceContext.Database.ExecuteSqlInterpolatedAsync($@"
                 INSERT INTO communication.announcement_audiences
-                    (id, announcement_id, audience_type, role_id, building_id, created_at)
+                    (id, announcement_id, audience_type, role_id, created_at)
                 VALUES
-                    ({Guid.NewGuid()}, {announcementId}, 'ROLE', {Guid.NewGuid()}, {Guid.NewGuid()}, {now});"));
+                    ({Guid.NewGuid()}, {announcementId}, 'ROLE', NULL, {now});"));
         Assert.Equal(PostgresErrorCodes.CheckViolation, invalidAudience.SqlState);
         await transaction.RollbackAsync();
     }
@@ -1519,9 +1518,10 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Contains("UX_announcement_audiences_announcement_role", indexes.Keys);
         Assert.Contains("'ROLE'::text", indexes["UX_announcement_audiences_announcement_role"]);
         Assert.Contains("role_id IS NOT NULL", indexes["UX_announcement_audiences_announcement_role"]);
-        Assert.Contains("UX_announcement_audiences_announcement_building", indexes.Keys);
-        Assert.Contains("'BUILDING'::text", indexes["UX_announcement_audiences_announcement_building"]);
-        Assert.Contains("building_id IS NOT NULL", indexes["UX_announcement_audiences_announcement_building"]);
+        // REMOVED: BUILDING audience type deleted in single-building refactor
+        // Assert.Contains("UX_announcement_audiences_announcement_building", indexes.Keys);
+        // Assert.Contains("'BUILDING'::text", indexes["UX_announcement_audiences_announcement_building"]);
+        // Assert.Contains("building_id IS NOT NULL", indexes["UX_announcement_audiences_announcement_building"]);
         Assert.Contains("UX_announcement_audiences_announcement_apartment", indexes.Keys);
         Assert.Contains("'APARTMENT'::text", indexes["UX_announcement_audiences_announcement_apartment"]);
         Assert.Contains("apartment_unit_id IS NOT NULL", indexes["UX_announcement_audiences_announcement_apartment"]);
@@ -1536,7 +1536,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         await AssertDuplicateAudienceRejected("ALL_USERS");
         await AssertDuplicateAudienceRejected("ALL_RESIDENTS");
         await AssertDuplicateAudienceRejected("ROLE", roleId: Guid.NewGuid());
-        await AssertDuplicateAudienceRejected("BUILDING", buildingId: Guid.NewGuid());
+        // REMOVED: BUILDING audience type deleted in single-building refactor
+        // await AssertDuplicateAudienceRejected("BUILDING", buildingId: Guid.NewGuid());
         await AssertDuplicateAudienceRejected("APARTMENT", apartmentUnitId: Guid.NewGuid());
         await AssertDuplicateAudienceRejected("RESIDENT", residentId: Guid.NewGuid());
     }
@@ -1556,8 +1557,9 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "ROLE", now, roleId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "ROLE", now, roleId: Guid.NewGuid());
-        await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: Guid.NewGuid());
-        await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: Guid.NewGuid());
+        // REMOVED: BUILDING audience type deleted in single-building refactor
+        // await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: Guid.NewGuid());
+        // await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "APARTMENT", now, apartmentUnitId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "APARTMENT", now, apartmentUnitId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "RESIDENT", now, residentId: Guid.NewGuid());
@@ -1565,7 +1567,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         var sameGuidAcrossTypes = Guid.NewGuid();
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "ROLE", now, roleId: sameGuidAcrossTypes);
-        await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: sameGuidAcrossTypes);
+        // REMOVED: BUILDING audience type deleted in single-building refactor
+        // await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: sameGuidAcrossTypes);
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "APARTMENT", now, apartmentUnitId: sameGuidAcrossTypes);
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "RESIDENT", now, residentId: sameGuidAcrossTypes);
 
@@ -1621,6 +1624,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.NotNull(indexDefinition);
     }
 
+
     [Fact]
     public async Task Maintenance_ShouldRejectTwoActiveAssignmentsForSameTask()
     {
@@ -1650,6 +1654,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await transaction.RollbackAsync();
     }
+
 
     [Fact]
     public async Task Maintenance_ShouldEnforceAttemptNoCheck()
@@ -1761,6 +1766,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.NotNull(indexDefinition);
     }
 
+
     [Fact]
     public async Task ServiceRequests_ShouldRejectTwoActiveAssignmentsForSameRequest()
     {
@@ -1790,6 +1796,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await transaction.RollbackAsync();
     }
+
 
     [Fact]
     public async Task ServiceRequests_ShouldAllowHistoricalReassignmentAfterPreviousAssignmentEnds()
@@ -1822,7 +1829,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     }
 
     [Fact]
-    public async Task Administration_ShouldContainExpectedEightTables()
+    public async Task Administration_ShouldContainExpectedSevenTables()
     {
         var options = new DbContextOptionsBuilder<AdministrationDbContext>()
             .UseNpgsql(_connectionString)
@@ -1848,12 +1855,11 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add(reader.GetString(0));
         }
 
-        Assert.Equal(8, tables.Count);
+        Assert.Equal(7, tables.Count);
         Assert.Contains("roles", tables);
         Assert.Contains("permissions", tables);
         Assert.Contains("role_permissions", tables);
         Assert.Contains("user_role_assignments", tables);
-        Assert.Contains("user_building_accesses", tables);
         Assert.Contains("user_access_history", tables);
         Assert.Contains("system_configurations", tables);
         Assert.Contains("audit_logs", tables);
@@ -1900,141 +1906,68 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.DoesNotContain(roleCodes, code => code is not "RESIDENT" and not "STAFF" and not "ACCOUNTANT" and not "MANAGER" and not "ADMIN");
     }
 
-    [Fact]
-    public async Task Administration_ShouldHavePartialUniqueIndexForActiveUserBuildingAccess()
-    {
-        var options = new DbContextOptionsBuilder<AdministrationDbContext>()
-            .UseNpgsql(_connectionString)
-            .Options;
+    // REMOVED: UserBuildingAccess entity deleted in single-building refactor
+    // [Fact]
+    // public async Task Administration_ShouldHavePartialUniqueIndexForActiveUserBuildingAccess()
 
-        await using var context = new AdministrationDbContext(options);
-        var connection = context.Database.GetDbConnection();
-        await connection.OpenAsync();
+    // REMOVED: UserBuildingAccess entity deleted in single-building refactor
+    // [Fact]
+    // public async Task Administration_ShouldAllowRevokedAccessHistoryThenGrantAgain()
+    // {
+    //     await using var context = new AdministrationDbContext(
+    //         new DbContextOptionsBuilder<AdministrationDbContext>()
+    //             .UseNpgsql(_connectionString)
+    //             .Options);
+    //     await using var transaction = await context.Database.BeginTransactionAsync();
+    //
+    //     var userId = Guid.NewGuid();
+    //     var buildingId = Guid.NewGuid();
+    //     var grantedAt = DateTimeOffset.UtcNow;
+    //     var revokedAt = grantedAt.AddMinutes(5);
+    //
+    //     await context.Database.ExecuteSqlInterpolatedAsync($@"
+    //         INSERT INTO administration.user_building_accesses
+    //             (id, user_id, building_id, granted_at, revoked_at, created_at)
+    //         VALUES
+    //             ({Guid.NewGuid()}, {userId}, {buildingId}, {grantedAt}, {revokedAt}, {grantedAt});");
+    //
+    //     await context.Database.ExecuteSqlInterpolatedAsync($@"
+    //         INSERT INTO administration.user_building_accesses
+    //             (id, user_id, building_id, granted_at, created_at)
+    //         VALUES
+    //             ({Guid.NewGuid()}, {userId}, {buildingId}, {revokedAt.AddMinutes(1)}, {revokedAt.AddMinutes(1)});");
+    //
+    //     var activeCount = await context.UserBuildingAccesses
+    //         .CountAsync(access => access.UserId == userId && access.BuildingId == buildingId && access.RevokedAt == null);
+    //
+    //     Assert.Equal(1, activeCount);
+    //
+    //     await transaction.RollbackAsync();
+    // }
 
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            SELECT indexdef
-            FROM pg_indexes
-            WHERE schemaname = 'administration'
-              AND tablename = 'user_building_accesses'
-              AND indexdef ILIKE '%UNIQUE%'
-              AND indexdef ILIKE '%user_id%'
-              AND indexdef ILIKE '%building_id%'
-              AND indexdef ILIKE '%revoked_at IS NULL%';";
+    // REMOVED: UserBuildingAccess entity deleted in single-building refactor
+    // [Fact]
+    // public async Task Administration_ShouldRejectTwoActiveAccessesForSameUserAndBuilding()
+    // {
+    //     await using var context = new AdministrationDbContext(
+    //         new DbContextOptionsBuilder<AdministrationDbContext>()
+    //             .UseNpgsql(_connectionString)
+    //             .Options);
+    //     await using var transaction = await context.Database.BeginTransactionAsync();
 
-        var indexDefinition = (string?)await cmd.ExecuteScalarAsync();
+    // REMOVED: UserBuildingAccess entity deleted in single-building refactor
+    // The following tests were for UserBuildingAccess functionality
+    // [Fact]
+    // public async Task Administration_ShouldRejectTwoActiveAccessesForSameUserAndBuilding()
+    // {
+    //     ... (implementation removed)
+    // }
 
-        Assert.NotNull(indexDefinition);
-        Assert.Contains("WHERE (revoked_at IS NULL)", indexDefinition, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task Administration_ShouldAllowRevokedAccessHistoryThenGrantAgain()
-    {
-        await using var context = new AdministrationDbContext(
-            new DbContextOptionsBuilder<AdministrationDbContext>()
-                .UseNpgsql(_connectionString)
-                .Options);
-        await using var transaction = await context.Database.BeginTransactionAsync();
-
-        var userId = Guid.NewGuid();
-        var buildingId = Guid.NewGuid();
-        var grantedAt = DateTimeOffset.UtcNow;
-        var revokedAt = grantedAt.AddMinutes(5);
-
-        await context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO administration.user_building_accesses
-                (id, user_id, building_id, granted_at, revoked_at, created_at)
-            VALUES
-                ({Guid.NewGuid()}, {userId}, {buildingId}, {grantedAt}, {revokedAt}, {grantedAt});");
-
-        await context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO administration.user_building_accesses
-                (id, user_id, building_id, granted_at, created_at)
-            VALUES
-                ({Guid.NewGuid()}, {userId}, {buildingId}, {revokedAt.AddMinutes(1)}, {revokedAt.AddMinutes(1)});");
-
-        var activeCount = await context.UserBuildingAccesses
-            .CountAsync(access => access.UserId == userId && access.BuildingId == buildingId && access.RevokedAt == null);
-
-        Assert.Equal(1, activeCount);
-
-        await transaction.RollbackAsync();
-    }
-
-    [Fact]
-    public async Task Administration_ShouldRejectTwoActiveAccessesForSameUserAndBuilding()
-    {
-        await using var context = new AdministrationDbContext(
-            new DbContextOptionsBuilder<AdministrationDbContext>()
-                .UseNpgsql(_connectionString)
-                .Options);
-        await using var transaction = await context.Database.BeginTransactionAsync();
-
-        var userId = Guid.NewGuid();
-        var buildingId = Guid.NewGuid();
-        var grantedAt = DateTimeOffset.UtcNow;
-
-        await context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO administration.user_building_accesses
-                (id, user_id, building_id, granted_at, created_at)
-            VALUES
-                ({Guid.NewGuid()}, {userId}, {buildingId}, {grantedAt}, {grantedAt});");
-
-        var exception = await Assert.ThrowsAsync<PostgresException>(() =>
-            context.Database.ExecuteSqlInterpolatedAsync($@"
-                INSERT INTO administration.user_building_accesses
-                    (id, user_id, building_id, granted_at, created_at)
-                VALUES
-                    ({Guid.NewGuid()}, {userId}, {buildingId}, {grantedAt.AddMinutes(1)}, {grantedAt.AddMinutes(1)});"));
-
-        Assert.Equal(PostgresErrorCodes.UniqueViolation, exception.SqlState);
-
-        await transaction.RollbackAsync();
-    }
-
-    [Fact]
-    public async Task Administration_ShouldAllowActiveAccessForDifferentUserOrBuilding()
-    {
-        await using var context = new AdministrationDbContext(
-            new DbContextOptionsBuilder<AdministrationDbContext>()
-                .UseNpgsql(_connectionString)
-                .Options);
-        await using var transaction = await context.Database.BeginTransactionAsync();
-
-        var userId = Guid.NewGuid();
-        var otherUserId = Guid.NewGuid();
-        var buildingId = Guid.NewGuid();
-        var otherBuildingId = Guid.NewGuid();
-        var grantedAt = DateTimeOffset.UtcNow;
-
-        await context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO administration.user_building_accesses
-                (id, user_id, building_id, granted_at, created_at)
-            VALUES
-                ({Guid.NewGuid()}, {userId}, {buildingId}, {grantedAt}, {grantedAt});");
-
-        await context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO administration.user_building_accesses
-                (id, user_id, building_id, granted_at, created_at)
-            VALUES
-                ({Guid.NewGuid()}, {userId}, {otherBuildingId}, {grantedAt.AddMinutes(1)}, {grantedAt.AddMinutes(1)});");
-
-        await context.Database.ExecuteSqlInterpolatedAsync($@"
-            INSERT INTO administration.user_building_accesses
-                (id, user_id, building_id, granted_at, created_at)
-            VALUES
-                ({Guid.NewGuid()}, {otherUserId}, {buildingId}, {grantedAt.AddMinutes(2)}, {grantedAt.AddMinutes(2)});");
-
-        var activeCount = await context.UserBuildingAccesses
-            .CountAsync(access => access.RevokedAt == null &&
-                (access.UserId == userId || access.UserId == otherUserId) &&
-                (access.BuildingId == buildingId || access.BuildingId == otherBuildingId));
-
-        Assert.Equal(3, activeCount);
-
-        await transaction.RollbackAsync();
-    }
+    // [Fact]
+    // public async Task Administration_ShouldAllowActiveAccessForDifferentUserOrBuilding()
+    // {
+    //     ... (implementation removed)
+    // }
 
     [Fact]
     public async Task Administration_ShouldNotContainSeededUsersPermissionsOrDemoAssignments()
@@ -2047,7 +1980,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Empty(await context.Permissions.AsNoTracking().ToListAsync());
         Assert.Empty(await context.RolePermissions.AsNoTracking().ToListAsync());
         Assert.Empty(await context.UserRoleAssignments.AsNoTracking().ToListAsync());
-        Assert.Empty(await context.UserBuildingAccesses.AsNoTracking().ToListAsync());
+        // REMOVED: UserBuildingAccesses DbSet deleted
+        // Assert.Empty(await context.UserBuildingAccesses.AsNoTracking().ToListAsync());
         Assert.Empty(await context.UserAccessHistories.AsNoTracking().ToListAsync());
         Assert.Empty(await context.SystemConfigurations.AsNoTracking().ToListAsync());
         Assert.Empty(await context.AuditLogs.AsNoTracking().ToListAsync());
@@ -2087,9 +2021,9 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT 
-                tc.table_schema, 
-                tc.table_name, 
+            SELECT
+                tc.table_schema,
+                tc.table_name,
                 ccu.table_schema AS foreign_table_schema,
                 ccu.table_name AS foreign_table_name
             FROM information_schema.table_constraints AS tc
@@ -2220,42 +2154,45 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.NotNull(scope.ServiceProvider.GetService<CommunicationDbContext>());
     }
 
-    [Fact]
-    public async Task AuditData_ShouldNotHaveDuplicateActiveUserBuildingAccessRecords_InEitherDatabase()
-    {
-        var connStrTest = _connectionString;
-        var connStrDev = _connectionString.Replace("Database=propflow_test", "Database=propflow", StringComparison.OrdinalIgnoreCase);
-
-        foreach (var (dbName, connStr) in new[] { ("propflow_test", connStrTest), ("propflow", connStrDev) })
-        {
-            await using var conn = new Npgsql.NpgsqlConnection(connStr);
-            await conn.OpenAsync();
-
-            await using var cmdCheckTable = conn.CreateCommand();
-            cmdCheckTable.CommandText = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'administration' AND table_name = 'user_building_accesses');";
-            var tableExists = (bool)(await cmdCheckTable.ExecuteScalarAsync() ?? false);
-
-            if (tableExists)
-            {
-                await using var cmd = conn.CreateCommand();
-                cmd.CommandText = @"
-                    SELECT user_id, building_id, COUNT(*) 
-                    FROM administration.user_building_accesses 
-                    WHERE revoked_at IS NULL 
-                    GROUP BY user_id, building_id 
-                    HAVING COUNT(*) > 1;";
-
-                await using var reader = await cmd.ExecuteReaderAsync();
-                var duplicates = new List<string>();
-                while (await reader.ReadAsync())
-                {
-                    duplicates.Add($"[{dbName}] user_id: {reader[0]}, building_id: {reader[1]}, count: {reader[2]}");
-                }
-
-                Assert.Empty(duplicates);
-            }
-        }
-    }
+    // REMOVED: UserBuildingAccess table deleted in single-building refactor
+    // This test checked for duplicate active user_building_accesses records
+    // The table no longer exists, so this test is obsolete
+    // [Fact]
+    // public async Task AuditData_ShouldNotHaveDuplicateActiveUserBuildingAccessRecords_InEitherDatabase()
+    // {
+    //     var connStrTest = _connectionString;
+    //     var connStrDev = _connectionString.Replace("Database=propflow_test", "Database=propflow", StringComparison.OrdinalIgnoreCase);
+    //
+    //     foreach (var (dbName, connStr) in new[] { ("propflow_test", connStrTest), ("propflow", connStrDev) })
+    //     {
+    //         await using var conn = new Npgsql.NpgsqlConnection(connStr);
+    //         await conn.OpenAsync();
+    //
+    //         await using var cmdCheckTable = conn.CreateCommand();
+    //         cmdCheckTable.CommandText = "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'administration' AND table_name = 'user_building_accesses');";
+    //         var tableExists = (bool)(await cmdCheckTable.ExecuteScalarAsync() ?? false);
+    //
+    //         if (tableExists)
+    //         {
+    //             await using var cmd = conn.CreateCommand();
+    //             cmd.CommandText = @"
+    //                 SELECT user_id, building_id, COUNT(*)
+    //                 FROM administration.user_building_accesses
+    //                 WHERE revoked_at IS NULL
+    //                 GROUP BY user_id, building_id
+    //                 HAVING COUNT(*) > 1;";
+    //
+    //             await using var reader = await cmd.ExecuteReaderAsync();
+    //             var duplicates = new List<string>();
+    //             while (await reader.ReadAsync())
+    //             {
+    //                 duplicates.Add($"[{dbName}] user_id: {reader[0]}, building_id: {reader[1]}, count: {reader[2]}");
+    //             }
+    //
+    //             Assert.Empty(duplicates);
+    //         }
+    //     }
+    // }
 
     private static async Task<Guid> InsertServiceRequestForConstraintTest(ServiceRequestsDbContext context, DateTimeOffset now)
     {
@@ -2263,9 +2200,9 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         var requestNumber = $"SR-{Guid.NewGuid():N}"[..15];
         await context.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO service_requests.service_requests
-                (id, request_number, resident_id, resident_apartment_id, building_id, title, description, status, submitted_at, created_at, updated_at)
+                (id, request_number, resident_id, resident_apartment_id, title, description, status, submitted_at, created_at, updated_at)
             VALUES
-                ({requestId}, {requestNumber}, {Guid.NewGuid()}, {Guid.NewGuid()}, {Guid.NewGuid()}, 'Constraint test', 'Constraint test request', 'ASSIGNED', {now}, {now}, {now});");
+                ({requestId}, {requestNumber}, {Guid.NewGuid()}, {Guid.NewGuid()}, 'Constraint test', 'Constraint test request', 'ASSIGNED', {now}, {now}, {now});");
 
         return requestId;
     }
@@ -2273,7 +2210,6 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     private async Task AssertDuplicateAudienceRejected(
         string audienceType,
         Guid? roleId = null,
-        Guid? buildingId = null,
         Guid? apartmentUnitId = null,
         Guid? residentId = null)
     {
@@ -2286,10 +2222,10 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         var now = DateTimeOffset.UtcNow;
         var announcementId = Guid.NewGuid();
         await InsertAnnouncementForCommunicationAudienceTest(context, announcementId, now);
-        await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, audienceType, now, roleId, buildingId, apartmentUnitId, residentId);
+        await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, audienceType, now, roleId, apartmentUnitId, residentId);
 
         var duplicate = await Assert.ThrowsAsync<PostgresException>(() =>
-            InsertAnnouncementAudienceForUniquenessTest(context, announcementId, audienceType, now, roleId, buildingId, apartmentUnitId, residentId));
+            InsertAnnouncementAudienceForUniquenessTest(context, announcementId, audienceType, now, roleId, apartmentUnitId, residentId));
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicate.SqlState);
         await transaction.RollbackAsync();
@@ -2313,26 +2249,27 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         string audienceType,
         DateTimeOffset now,
         Guid? roleId = null,
-        Guid? buildingId = null,
         Guid? apartmentUnitId = null,
         Guid? residentId = null)
     {
         return context.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO communication.announcement_audiences
-                (id, announcement_id, audience_type, role_id, building_id, apartment_unit_id, resident_id, created_at)
+                (id, announcement_id, audience_type, role_id, apartment_unit_id, resident_id, created_at)
             VALUES
-                ({Guid.NewGuid()}, {announcementId}, {audienceType}, {roleId}, {buildingId}, {apartmentUnitId}, {residentId}, {now});");
+                ({Guid.NewGuid()}, {announcementId}, {audienceType}, {roleId}, {apartmentUnitId}, {residentId}, {now});");
     }
 
+    // NOTE: This targets NEW schema (without building_id).
+    // Will fail against old database until migrations are applied.
     private static async Task<Guid> InsertMaintenanceTaskForConstraintTest(MaintenanceDbContext context, DateTimeOffset now)
     {
         var taskId = Guid.NewGuid();
         var taskNumber = $"MT-{Guid.NewGuid():N}"[..15];
         await context.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO maintenance.maintenance_tasks
-                (id, task_number, building_id, title, status, created_by, created_at, updated_at)
+                (id, task_number, title, status, created_by, created_at, updated_at)
             VALUES
-                ({taskId}, {taskNumber}, {Guid.NewGuid()}, 'Constraint test', 'ASSIGNED', {Guid.NewGuid()}, {now}, {now});");
+                ({taskId}, {taskNumber}, 'Constraint test', 'ASSIGNED', {Guid.NewGuid()}, {now}, {now});");
 
         return taskId;
     }

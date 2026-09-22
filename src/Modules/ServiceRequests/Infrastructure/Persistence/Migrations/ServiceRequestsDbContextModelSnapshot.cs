@@ -229,10 +229,6 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("apartment_unit_id");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid")
                         .HasColumnName("category_id");
@@ -316,8 +312,6 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ApartmentUnitId");
-
-                    b.HasIndex("BuildingId");
 
                     b.HasIndex("CategoryId");
 
