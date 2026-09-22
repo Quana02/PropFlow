@@ -18,7 +18,7 @@ public class ComplaintsTests
         Assert.Equal(ComplaintStatus.SUBMITTED, complaint.Status);
         Assert.Equal(relatedServiceRequestId, complaint.RelatedServiceRequestId);
         Assert.Null(complaint.OfficialResponse);
-        Assert.Throws<ArgumentException>(() => new Complaint("CP-2", Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), "Subject", "Description", _now));
+        Assert.Throws<ArgumentException>(() => new Complaint("CP-2", Guid.Empty, Guid.NewGuid(), "Subject", "Description", _now));
     }
 
     [Fact]
@@ -104,7 +104,6 @@ public class ComplaintsTests
     {
         return new Complaint(
             "CP-2026-0001",
-            Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
             "Noise complaint",

@@ -113,7 +113,9 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         var now = DateTimeOffset.UtcNow;
         var building = new Building(Guid.NewGuid().ToString("N")[..12], "Tòa nhà kiểm thử", "Địa chỉ kiểm thử", now);
         var assets = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>(); assets.Buildings.Add(building); await assets.SaveChangesAsync();
-        var apartment = new ApartmentUnit(building.Id, "A101", 1, now);
+        // Generate unique unit_number to avoid duplicate key constraint in test reuse
+        var uniqueUnitNumber = $"A{Guid.NewGuid():N}".Substring(0, 10);
+        var apartment = new ApartmentUnit(uniqueUnitNumber, 1, now);
         var apartments = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>(); apartments.ApartmentUnits.Add(apartment); await apartments.SaveChangesAsync();
         var resident = new Resident(Guid.NewGuid().ToString("N")[..20], "Cư dân kiểm thử", now, email: email);
         var residents = scope.ServiceProvider.GetRequiredService<ResidentsDbContext>(); residents.Residents.Add(resident);

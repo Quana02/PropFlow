@@ -1,4 +1,3 @@
-using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
 
 namespace PropFlow.Modules.PropertyAssets.Domain.Equipment;
@@ -11,7 +10,6 @@ public class Equipment
     }
 
     public Equipment(
-        Guid buildingId,
         string code,
         string name,
         DateTimeOffset now,
@@ -26,16 +24,10 @@ public class Equipment
         string? description = null,
         Guid? createdBy = null)
     {
-        if (buildingId == Guid.Empty)
-        {
-            throw new ArgumentException("BuildingId cannot be empty.", nameof(buildingId));
-        }
-
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Id = Guid.NewGuid();
-        BuildingId = buildingId;
         FacilityId = facilityId;
         Code = code.Trim();
         Name = name.Trim();
@@ -55,7 +47,6 @@ public class Equipment
     }
 
     public Guid Id { get; private set; }
-    public Guid BuildingId { get; private set; }
     public Guid? FacilityId { get; private set; }
     public string Code { get; private set; } = null!;
     public string Name { get; private set; } = null!;
@@ -74,7 +65,6 @@ public class Equipment
     public DateTimeOffset UpdatedAt { get; private set; }
 
     // Within-module navigation
-    public Building? Building { get; private set; }
     public Facility? Facility { get; private set; }
 
     public void Update(
@@ -97,6 +87,7 @@ public class Equipment
         Name = name.Trim();
         FacilityId = facilityId;
         EquipmentType = equipmentType?.Trim();
+        // Only update status if explicitly provided (FE-04.6 owns status management)
         if (status.HasValue)
         {
             Status = status.Value;

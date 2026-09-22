@@ -11,7 +11,6 @@ public class AnnouncementAudience
         AnnouncementAudienceType audienceType,
         DateTimeOffset now,
         Guid? roleId = null,
-        Guid? buildingId = null,
         Guid? apartmentUnitId = null,
         Guid? residentId = null)
     {
@@ -20,13 +19,12 @@ public class AnnouncementAudience
             throw new ArgumentException("Announcement id is required.", nameof(announcementId));
         }
 
-        ValidateTarget(audienceType, roleId, buildingId, apartmentUnitId, residentId);
+        ValidateTarget(audienceType, roleId, apartmentUnitId, residentId);
 
         Id = Guid.NewGuid();
         AnnouncementId = announcementId;
         AudienceType = audienceType;
         RoleId = roleId;
-        BuildingId = buildingId;
         ApartmentUnitId = apartmentUnitId;
         ResidentId = residentId;
         CreatedAt = now;
@@ -36,7 +34,6 @@ public class AnnouncementAudience
     public Guid AnnouncementId { get; private set; }
     public AnnouncementAudienceType AudienceType { get; private set; }
     public Guid? RoleId { get; private set; }
-    public Guid? BuildingId { get; private set; }
     public Guid? ApartmentUnitId { get; private set; }
     public Guid? ResidentId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -46,13 +43,12 @@ public class AnnouncementAudience
     private static void ValidateTarget(
         AnnouncementAudienceType audienceType,
         Guid? roleId,
-        Guid? buildingId,
         Guid? apartmentUnitId,
         Guid? residentId)
     {
         static bool Present(Guid? id) => id.HasValue && id.Value != Guid.Empty;
 
-        var targetCount = new[] { roleId, buildingId, apartmentUnitId, residentId }.Count(Present);
+        var targetCount = new[] { roleId, apartmentUnitId, residentId }.Count(Present);
 
         switch (audienceType)
         {
@@ -65,9 +61,6 @@ public class AnnouncementAudience
                 break;
             case AnnouncementAudienceType.ROLE:
                 RequireOnly(roleId, targetCount, "Role audience requires role id only.");
-                break;
-            case AnnouncementAudienceType.BUILDING:
-                RequireOnly(buildingId, targetCount, "Building audience requires building id only.");
                 break;
             case AnnouncementAudienceType.APARTMENT:
                 RequireOnly(apartmentUnitId, targetCount, "Apartment audience requires apartment unit id only.");

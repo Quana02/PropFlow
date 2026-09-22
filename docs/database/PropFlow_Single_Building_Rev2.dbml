@@ -1,0 +1,1392 @@
+Project PropFlow {
+  database_type: 'PostgreSQL'
+  Note: 'PropFlow database baseline mapped to 15 Major Features / 56 Use Cases. PostgreSQL + EF Core. Modular Monolith, one PostgreSQL database, schema-per-module persistence boundaries. Financial baseline: VND only. Business timezone is owned by Building using IANA timezone IDs, default Asia/Ho_Chi_Minh.'
+}
+
+// PostgreSQL schemas used by the Modular Monolith:
+// auth, administration, residents, apartments, property_assets,
+// service_requests, complaints, maintenance, billing, payments,
+// ai_classification, ai_recommendation, communication, shared.
+// FE-12 Chatbot and FE-14 Reporting do not require source-of-truth tables in the baseline.
+// Approved financial baseline: VND only; multi-currency and exchange-rate conversion are OUT OF SCOPE.
+// Approved time baseline: PostgreSQL timestamptz for instants, date for calendar-only business dates,
+// and Building.time_zone_id (IANA) for business-local calculations.
+
+// =========================================================
+// ENUMS
+// =========================================================
+
+Enum account_status {
+  PENDING
+  ACTIVE
+  LOCKED
+  SUSPENDED
+  DISABLED
+}
+
+Enum resident_status {
+  ACTIVE
+  INACTIVE
+  MOVED_OUT
+}
+
+
+Enum residency_status {
+  ACTIVE
+  ENDED
+}
+
+
+Enum verification_status {
+  PENDING
+  VERIFIED
+  EXPIRED
+  CANCELLED
+}
+
+Enum access_action_type {
+  CREATED
+  ACTIVATED
+  LOCKED
+  UNLOCKED
+  SUSPENDED
+  DISABLED
+  RE_ENABLED
+  ROLE_CHANGED
+}
+
+Enum config_value_type {
+  STRING
+  INTEGER
+  DECIMAL
+  BOOLEAN
+  JSON
+}
+
+Enum master_data_status {
+  ACTIVE
+  INACTIVE
+}
+
+Enum equipment_status {
+  ACTIVE
+  INACTIVE
+  OUT_OF_SERVICE
+  UNDER_MAINTENANCE
+}
+
+Enum service_request_status {
+  SUBMITTED
+  UNDER_REVIEW
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+Enum assignment_status {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  REASSIGNED
+  CANCELLED
+}
+
+Enum service_activity_type {
+  CREATED
+  STATUS_CHANGED
+  ASSIGNED
+  REASSIGNED
+  PROGRESS_UPDATED
+  WORK_RESULT_ADDED
+  MANAGER_REVIEWED
+  RESOLVED
+  CLOSED
+}
+
+Enum complaint_status {
+  SUBMITTED
+  UNDER_REVIEW
+  FOLLOW_UP
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+Enum complaint_followup_status {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+Enum complaint_activity_type {
+  CREATED
+  STATUS_CHANGED
+  FOLLOWUP_ASSIGNED
+  FOLLOWUP_UPDATED
+  MANAGER_REVIEWED
+  OFFICIAL_RESPONSE_ADDED
+  RESOLVED
+  CLOSED
+}
+
+Enum maintenance_schedule_status {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+Enum maintenance_task_status {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+Enum maintenance_activity_type {
+  CREATED
+  ASSIGNED
+  REASSIGNED
+  STATUS_CHANGED
+  PROGRESS_UPDATED
+  WORK_LOG_ADDED
+  RESULT_SUBMITTED
+  MANAGER_REVIEWED
+  COMPLETED
+  CLOSED
+}
+
+Enum maintenance_result_status {
+  SUBMITTED
+  APPROVED
+  REVISION_REQUIRED
+}
+
+
+Enum invoice_status {
+  DRAFT
+  ISSUED
+  CANCELLED
+}
+
+Enum payment_status {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+
+Enum ai_run_status {
+  SUCCESS
+  FAILED
+}
+
+Enum ai_review_decision {
+  CONFIRMED
+  CORRECTED
+  OVERRIDDEN
+  REJECTED
+}
+
+
+Enum notification_type {
+  SYSTEM
+  SERVICE_REQUEST
+  COMPLAINT
+  MAINTENANCE
+  INVOICE
+  PAYMENT
+  ANNOUNCEMENT
+  ACCOUNT
+}
+
+Enum announcement_status {
+  DRAFT
+  PUBLISHED
+  WITHDRAWN
+}
+
+Enum announcement_audience_type {
+  ALL_USERS
+  ALL_RESIDENTS
+  ROLE
+  APARTMENT
+  RESIDENT
+}
+
+// =========================================================
+// 1. IDENTITY, AUTHENTICATION & ADMINISTRATION
+// FE-01 + FE-15
+// =========================================================
+
+Table administration.roles {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(30) [not null, unique, note: 'Seeded baseline values: RESIDENT, STAFF, ACCOUNTANT, MANAGER, ADMIN.']
+  name varchar(100) [not null]
+  description text
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'Fixed business-role catalog. Baseline does not allow arbitrary business-role CRUD.'
+}
+
+Table administration.permissions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(100) [not null, unique]
+  name varchar(150) [not null]
+  module varchar(50) [not null]
+  description text
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    module
+  }
+}
+
+Table auth.users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  username varchar(50) [not null, unique]
+  email varchar(255) [unique]
+  phone_number varchar(20) [unique]
+  password_hash text [not null]
+  display_name varchar(150) [not null]
+  status account_status [not null, default: 'PENDING']
+  email_verified boolean [not null, default: false]
+  failed_login_count int [not null, default: 0]
+  lockout_until timestamptz
+  last_login_at timestamptz
+  last_login_ip varchar(45)
+  password_changed_at timestamptz
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    status
+  }
+
+  Note: 'Authentication identity only. Primary business-role assignment is owned by FE-15 through user_role_assignments.'
+}
+
+Table administration.role_permissions {
+  role_id uuid [not null, ref: > administration.roles.id]
+  permission_id uuid [not null, ref: > administration.permissions.id]
+  created_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (role_id, permission_id) [pk]
+    permission_id
+  }
+}
+
+
+Table administration.user_role_assignments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, unique, ref: > auth.users.id]
+  role_id uuid [not null, ref: > administration.roles.id]
+  assigned_by uuid [ref: > auth.users.id]
+  assigned_at timestamptz [not null, default: `now()`]
+  updated_by uuid [ref: > auth.users.id]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    role_id
+  }
+
+  Note: 'Administration owns the approved one-primary-business-role assignment. UNIQUE(user_id) prevents accidental multi-role expansion.'
+}
+
+// Single-building baseline: user_building_accesses removed.
+// Authorization is role/permission based; there is no per-building access scope.
+
+Table auth.refresh_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > auth.users.id]
+  token_hash text [not null, unique]
+  device_name varchar(150)
+  ip_address varchar(45)
+  user_agent text
+  expires_at timestamptz [not null]
+  revoked_at timestamptz
+  revoked_reason varchar(255)
+  replaced_by_token_id uuid [ref: > auth.refresh_tokens.id]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    user_id
+    expires_at
+  }
+
+  Note: 'Store token hashes only; supports multiple authenticated sessions/devices.'
+}
+
+Table auth.password_reset_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > auth.users.id]
+  token_hash text [not null, unique]
+  expires_at timestamptz [not null]
+  used_at timestamptz
+  requested_ip varchar(45)
+  attempt_count int [not null, default: 0]
+  verified_at timestamptz
+  proof_hash text [note: 'Hash of the one-use reset authorization proof; separate from the email OTP hash in token_hash.']
+  proof_expires_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    user_id
+    expires_at
+  }
+}
+
+Table auth.resident_verifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > auth.users.id]
+  resident_id uuid [not null, ref: > residents.residents.id]
+  apartment_unit_id uuid [ref: > apartments.apartment_units.id]
+  status verification_status [not null, default: 'PENDING']
+  verification_code_hash text [not null, note: 'Hash of the email OTP only; plaintext OTP is never stored.']
+  attempt_count int [not null, default: 0]
+  expires_at timestamptz [not null]
+  verified_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    user_id
+    resident_id
+    apartment_unit_id
+    status
+  }
+
+  Note: 'Email OTP verification challenge for resident self-registration. Resident eligibility lookup and linking are orchestrated in Application across module boundaries; phone number is contact information only.'
+}
+
+Table administration.user_access_history {
+  id uuid [pk, default: `gen_random_uuid()`]
+  target_user_id uuid [not null, ref: > auth.users.id]
+  action access_action_type [not null]
+  old_role_id uuid [ref: > administration.roles.id]
+  new_role_id uuid [ref: > administration.roles.id]
+  old_status account_status
+  new_status account_status
+  reason text
+  performed_by uuid [ref: > auth.users.id]
+  metadata jsonb
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    target_user_id
+    performed_by
+    created_at
+  }
+}
+
+Table administration.system_configurations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  config_key varchar(150) [not null, unique]
+  config_value text [not null]
+  value_type config_value_type [not null, default: 'STRING']
+  description text
+  is_active boolean [not null, default: true]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'Non-secret supported configuration only. JWT/AI/payment/database secrets must be provided through environment/secret storage, not this table.'
+}
+
+Table administration.audit_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  actor_user_id uuid [ref: > auth.users.id]
+  action varchar(100) [not null]
+  entity_type varchar(100) [not null]
+  entity_id uuid
+  old_values jsonb
+  new_values jsonb
+  ip_address varchar(45)
+  correlation_id varchar(100)
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    actor_user_id
+    (entity_type, entity_id)
+    created_at
+  }
+
+  Note: 'Cross-cutting administrative/system audit. Domain-specific workflow histories remain in their own activity/history tables.'
+}
+
+// =========================================================
+// 2. RESIDENT & PROPERTY CORE
+// FE-02 + FE-03 + FE-04
+// =========================================================
+
+Table residents.residents {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [unique, ref: > auth.users.id]
+  resident_code varchar(30) [not null, unique]
+  full_name varchar(150) [not null]
+  phone_number varchar(20)
+  email varchar(255)
+  status resident_status [not null, default: 'ACTIVE']
+  note text
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    full_name
+    phone_number
+    status
+  }
+
+  Note: 'Business resident profile. May exist before a login account is linked.'
+}
+
+// SINGLE-BUILDING BASELINE:
+// This table stores the one current property's information (name, address, timezone, status).
+// It is not an authorization scope and child business tables do not carry building_id.
+Table property_assets.buildings {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(30) [not null, unique]
+  name varchar(150) [not null]
+  address text [not null]
+  time_zone_id varchar(64) [not null, default: 'Asia/Ho_Chi_Minh', note: 'IANA timezone ID for building-local business calculations; do not store raw UTC offsets such as +07:00 as the timezone identifier.']
+  number_of_floors int
+  description text
+  status master_data_status [not null, default: 'ACTIVE']
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    name
+    status
+  }
+}
+
+Table apartments.apartment_units {
+  id uuid [pk, default: `gen_random_uuid()`]
+  unit_number varchar(30) [not null]
+  floor_number int [not null]
+  area_m2 numeric(10,2)
+  bedroom_count int
+  description text
+  status master_data_status [not null, default: 'ACTIVE']
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    unit_number [unique]
+    floor_number
+    status
+  }
+
+  Note: 'Occupancy is derived from active resident_apartments; do not duplicate occupancy state here.'
+}
+
+Table residents.resident_apartments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  resident_id uuid [not null, ref: > residents.residents.id]
+  apartment_unit_id uuid [not null, ref: > apartments.apartment_units.id]
+  relationship_type_code varchar(50) [not null, note: 'Approved residency relationship code; not hard-coded as a PostgreSQL enum by the 56-UC baseline.']
+  is_primary boolean [not null, default: false]
+  start_date date [not null]
+  end_date date
+  status residency_status [not null, default: 'ACTIVE']
+  note text
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    resident_id
+    apartment_unit_id
+    (resident_id, apartment_unit_id, start_date) [unique]
+    status
+  }
+
+  Note: 'Historical Resident <-> Apartment relationship. Migration must reject invalid date ranges and overlapping active duplicate residency intervals; historical rows are preserved.'
+}
+
+Table property_assets.facilities {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(30) [not null]
+  name varchar(150) [not null]
+  facility_type varchar(80)
+  location_description varchar(255)
+  description text
+  status master_data_status [not null, default: 'ACTIVE']
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    code [unique]
+    facility_type
+    status
+  }
+}
+
+Table property_assets.equipment {
+  id uuid [pk, default: `gen_random_uuid()`]
+  facility_id uuid [ref: > property_assets.facilities.id]
+  code varchar(50) [not null]
+  name varchar(150) [not null]
+  equipment_type varchar(100)
+  manufacturer varchar(100)
+  model varchar(100)
+  serial_number varchar(100)
+  installation_date date
+  warranty_expiry_date date
+  location_description varchar(255)
+  status equipment_status [not null, default: 'ACTIVE']
+  description text
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    code [unique]
+    facility_id
+    equipment_type
+    status
+  }
+
+  Note: 'Single-building baseline: facility_id is optional. NULL means building-level equipment; otherwise the equipment belongs to the referenced Facility.'
+}
+
+// =========================================================
+// 3. SERVICE REQUEST MANAGEMENT
+// FE-05 + FE-10/11 references
+// =========================================================
+
+Table service_requests.service_request_categories {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(50) [not null, unique]
+  name varchar(150) [not null]
+  description text
+  is_active boolean [not null, default: true]
+  display_order int [not null, default: 0]
+  created_by uuid [ref: > auth.users.id]
+  updated_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table service_requests.service_requests {
+  id uuid [pk, default: `gen_random_uuid()`]
+  request_number varchar(30) [not null, unique]
+  resident_id uuid [not null, ref: > residents.residents.id]
+  resident_apartment_id uuid [not null, ref: > residents.resident_apartments.id]
+  apartment_unit_id uuid [ref: > apartments.apartment_units.id]
+  category_id uuid [ref: > service_requests.service_request_categories.id, note: 'Final/current category. May be set by Manager after AI suggestion.']
+  facility_id uuid [ref: > property_assets.facilities.id]
+  equipment_id uuid [ref: > property_assets.equipment.id]
+  title varchar(200) [not null]
+  description text [not null]
+  final_priority_code varchar(30) [note: 'Manager-confirmed operational priority code; exact taxonomy is approval-driven.']
+  status service_request_status [not null, default: 'SUBMITTED']
+  submitted_at timestamptz [not null, default: `now()`]
+  resolved_at timestamptz
+  closed_at timestamptz
+  closed_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    resident_id
+    apartment_unit_id
+    category_id
+    status
+    submitted_at
+    (status, final_priority_code)
+  }
+
+  Note: 'resident_apartment_id is the submission/authorization context. apartment/facility/equipment are optional issue-location context inside the single property and may differ from the resident home unit. Full assignment/progress history is stored separately.'
+}
+
+Table service_requests.service_request_assignments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  service_request_id uuid [not null, ref: > service_requests.service_requests.id]
+  staff_user_id uuid [not null, ref: > auth.users.id]
+  assigned_by uuid [not null, ref: > auth.users.id]
+  status assignment_status [not null, default: 'ASSIGNED']
+  assignment_note text
+  assigned_at timestamptz [not null, default: `now()`]
+  started_at timestamptz
+  completed_at timestamptz
+  ended_at timestamptz
+
+  Indexes {
+    service_request_id
+    service_request_id [unique, note: 'PostgreSQL partial unique index WHERE status IN (ASSIGNED, IN_PROGRESS)']
+    staff_user_id
+    status
+    assigned_at
+  }
+
+  Note: 'Append assignment/reassignment records; do not overwrite historical assignments. PostgreSQL migration must enforce at most one active assignment per request where status is ASSIGNED or IN_PROGRESS.'
+}
+
+Table service_requests.service_request_activities {
+  id uuid [pk, default: `gen_random_uuid()`]
+  service_request_id uuid [not null, ref: > service_requests.service_requests.id]
+  assignment_id uuid [ref: > service_requests.service_request_assignments.id]
+  activity_type service_activity_type [not null]
+  from_status service_request_status
+  to_status service_request_status
+  title varchar(200)
+  detail text
+  work_result text
+  performed_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    service_request_id
+    assignment_id
+    created_at
+    activity_type
+  }
+}
+
+// =========================================================
+// 4. COMPLAINT MANAGEMENT
+// FE-06
+// =========================================================
+
+Table complaints.complaints {
+  id uuid [pk, default: `gen_random_uuid()`]
+  complaint_number varchar(30) [not null, unique]
+  resident_id uuid [not null, ref: > residents.residents.id]
+  resident_apartment_id uuid [not null, ref: > residents.resident_apartments.id]
+  apartment_unit_id uuid [ref: > apartments.apartment_units.id]
+  related_service_request_id uuid [note: 'Stable scalar reference to FE-05; no cross-module EF navigation.']
+  facility_id uuid [ref: > property_assets.facilities.id]
+  equipment_id uuid [ref: > property_assets.equipment.id]
+  subject varchar(200) [not null]
+  description text [not null]
+  status complaint_status [not null, default: 'SUBMITTED']
+  official_response text
+  submitted_at timestamptz [not null, default: `now()`]
+  resolved_at timestamptz
+  closed_at timestamptz
+  closed_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    resident_id
+    apartment_unit_id
+    related_service_request_id
+    status
+    submitted_at
+  }
+
+  Note: 'Complaint remains separate from Service Request. resident_apartment_id is the resident context; apartment/facility/equipment provide optional operational context inside the single property.'
+}
+
+Table complaints.complaint_followups {
+  id uuid [pk, default: `gen_random_uuid()`]
+  complaint_id uuid [not null, ref: > complaints.complaints.id]
+  staff_user_id uuid [not null, ref: > auth.users.id]
+  assigned_by uuid [not null, ref: > auth.users.id]
+  title varchar(200) [not null]
+  instruction text
+  status complaint_followup_status [not null, default: 'ASSIGNED']
+  due_at timestamptz
+  started_at timestamptz
+  completed_at timestamptz
+  result text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    complaint_id
+    staff_user_id
+    status
+    due_at
+  }
+}
+
+Table complaints.complaint_activities {
+  id uuid [pk, default: `gen_random_uuid()`]
+  complaint_id uuid [not null, ref: > complaints.complaints.id]
+  followup_id uuid [ref: > complaints.complaint_followups.id]
+  activity_type complaint_activity_type [not null]
+  from_status complaint_status
+  to_status complaint_status
+  detail text
+  performed_by uuid [ref: > auth.users.id]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    complaint_id
+    followup_id
+    created_at
+    activity_type
+  }
+}
+
+// =========================================================
+// 5. MAINTENANCE MANAGEMENT
+// FE-07
+// =========================================================
+
+Table maintenance.maintenance_schedules {
+  id uuid [pk, default: `gen_random_uuid()`]
+  schedule_code varchar(30) [not null, unique]
+  facility_id uuid [note: 'Cross-module scalar reference to property_assets.facilities.id; no cross-module EF navigation or physical FK.']
+  equipment_id uuid [note: 'Cross-module scalar reference to property_assets.equipment.id; no cross-module EF navigation or physical FK.']
+  title varchar(200) [not null]
+  description text
+  planned_start_at timestamptz [not null]
+  planned_end_at timestamptz
+  status maintenance_schedule_status [not null, default: 'ACTIVE']
+  created_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  updated_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    facility_id
+    equipment_id
+    planned_start_at
+    status
+  }
+}
+
+Table maintenance.maintenance_tasks {
+  id uuid [pk, default: `gen_random_uuid()`]
+  task_number varchar(30) [not null, unique]
+  schedule_id uuid [ref: > maintenance.maintenance_schedules.id]
+  source_service_request_id uuid [note: 'Optional stable scalar reference to FE-05; no cross-module EF navigation.']
+  source_complaint_id uuid [note: 'Optional stable scalar reference to FE-06 when maintenance originates from complaint follow-up.']
+  facility_id uuid [note: 'Cross-module scalar reference to property_assets.facilities.id; no cross-module EF navigation or physical FK.']
+  equipment_id uuid [note: 'Cross-module scalar reference to property_assets.equipment.id; no cross-module EF navigation or physical FK.']
+  title varchar(200) [not null]
+  description text
+  priority_code varchar(30) [note: 'Final operational priority code; exact taxonomy is approval-driven.']
+  status maintenance_task_status [not null, default: 'OPEN']
+  planned_start_at timestamptz
+  due_at timestamptz
+  started_at timestamptz
+  completed_at timestamptz
+  closed_at timestamptz
+  closed_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  created_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    schedule_id
+    source_service_request_id
+    source_complaint_id
+    equipment_id
+    status
+    priority_code
+    due_at
+  }
+
+  Note: 'May be planned from a schedule or corrective from a Service Request/Complaint. Source IDs are scalar cross-module references; each lifecycle remains independently owned.'
+}
+
+Table maintenance.maintenance_assignments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  maintenance_task_id uuid [not null, ref: > maintenance.maintenance_tasks.id]
+  staff_user_id uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  assigned_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  status assignment_status [not null, default: 'ASSIGNED']
+  assignment_note text
+  assigned_at timestamptz [not null, default: `now()`]
+  started_at timestamptz
+  completed_at timestamptz
+  ended_at timestamptz
+
+  Indexes {
+    maintenance_task_id
+    (maintenance_task_id) [unique, note: 'Partial unique in PostgreSQL: WHERE status IN (''ASSIGNED'', ''IN_PROGRESS'').']
+    staff_user_id
+    status
+    assigned_at
+  }
+}
+
+Table maintenance.maintenance_task_activities {
+  id uuid [pk, default: `gen_random_uuid()`]
+  maintenance_task_id uuid [not null, ref: > maintenance.maintenance_tasks.id]
+  assignment_id uuid [ref: > maintenance.maintenance_assignments.id]
+  activity_type maintenance_activity_type [not null]
+  from_status maintenance_task_status
+  to_status maintenance_task_status
+  detail text
+  performed_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    maintenance_task_id
+    assignment_id
+    activity_type
+    created_at
+  }
+}
+
+Table maintenance.maintenance_results {
+  id uuid [pk, default: `gen_random_uuid()`]
+  maintenance_task_id uuid [not null, ref: > maintenance.maintenance_tasks.id]
+  attempt_no int [not null, default: 1]
+  submitted_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  summary text [not null]
+  work_performed text
+  issue_found text
+  parts_or_resources_used text
+  recommendation text
+  result_status maintenance_result_status [not null, default: 'SUBMITTED']
+  reviewed_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  review_note text
+  submitted_at timestamptz [not null, default: `now()`]
+  reviewed_at timestamptz
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (maintenance_task_id, attempt_no) [unique]
+    result_status
+    reviewed_by
+  }
+
+  Note: 'Append each Staff result submission/revision instead of overwriting earlier submissions; this preserves review and revision history.'
+}
+
+// =========================================================
+// 6. FINANCE - FEE & INVOICE
+// FE-08
+// =========================================================
+
+Table billing.fee_types {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(50) [not null, unique]
+  name varchar(150) [not null]
+  description text
+  default_calculation_method_code varchar(50) [not null]
+  default_billing_frequency_code varchar(50) [not null]
+  status master_data_status [not null, default: 'ACTIVE']
+  created_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  updated_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+Table billing.fee_rate_rules {
+  id uuid [pk, default: `gen_random_uuid()`]
+  fee_type_id uuid [not null, ref: > billing.fee_types.id]
+  rule_name varchar(150) [not null]
+  calculation_method_code varchar(50) [not null]
+  billing_frequency_code varchar(50) [not null]
+  unit_rate numeric(18,0) [not null]
+  unit_name varchar(50)
+  minimum_amount numeric(18,0)
+  maximum_amount numeric(18,0)
+  rule_config jsonb
+  effective_from date [not null]
+  effective_to date
+  is_active boolean [not null, default: true]
+  created_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  updated_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    fee_type_id
+    (fee_type_id, effective_from)
+    is_active
+  }
+
+  Note: 'Versioned charging rule. Calculation/frequency codes are approval-driven rather than fixed PostgreSQL enums. VND monetary rates use numeric(18,0). Historical invoices must not be recalculated when rates change.'
+}
+
+Table billing.invoices {
+  id uuid [pk, default: `gen_random_uuid()`]
+  invoice_number varchar(40) [not null, unique]
+  apartment_unit_id uuid [not null, note: 'Cross-module scalar reference to apartments.apartment_units.id; no cross-module EF navigation or physical FK.']
+  billing_period_start date [not null]
+  billing_period_end date [not null]
+  issue_date date
+  due_date date
+  subtotal numeric(18,0) [not null, default: 0]
+  total_amount numeric(18,0) [not null, default: 0]
+  status invoice_status [not null, default: 'DRAFT']
+  note text
+  issued_at timestamptz
+  issued_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  cancelled_at timestamptz
+  cancelled_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  cancellation_reason text
+  created_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  updated_by uuid [note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    apartment_unit_id
+    status
+    due_date
+    (apartment_unit_id, billing_period_start, billing_period_end) [unique]
+  }
+
+  Note: 'Invoice lifecycle is separate from derived settlement state. Currency baseline is VND only. Monetary amounts use numeric(18,0). Outstanding = total_amount - confirmed payments.'
+}
+
+Table billing.invoice_items {
+  id uuid [pk, default: `gen_random_uuid()`]
+  invoice_id uuid [not null, ref: > billing.invoices.id]
+  fee_type_id uuid [ref: > billing.fee_types.id]
+  fee_rate_rule_id uuid [ref: > billing.fee_rate_rules.id]
+  fee_code_snapshot varchar(50) [not null]
+  fee_name_snapshot varchar(150) [not null]
+  calculation_method_code_snapshot varchar(50) [not null]
+  description text
+  quantity numeric(18,4) [not null, default: 1]
+  unit_name varchar(50)
+  unit_rate numeric(18,0) [not null]
+  line_amount numeric(18,0) [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    invoice_id
+    fee_type_id
+    fee_rate_rule_id
+  }
+
+  Note: 'Financial snapshot. quantity keeps fractional calculation precision; unit_rate and line_amount are VND whole-dong values. Round each line_amount before summing invoice totals. Values on issued invoices should be treated as immutable except through an explicit controlled correction process.'
+}
+
+Table billing.invoice_status_history {
+  id uuid [pk, default: `gen_random_uuid()`]
+  invoice_id uuid [not null, ref: > billing.invoices.id]
+  from_status invoice_status
+  to_status invoice_status [not null]
+  reason text
+  changed_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no cross-module EF navigation or physical FK.']
+  changed_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    invoice_id
+    changed_at
+  }
+}
+
+// =========================================================
+// 7. FINANCE - PAYMENT & DERIVED DEBT
+// FE-09
+// =========================================================
+
+Table payments.payments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  payment_number varchar(40) [not null, unique]
+  invoice_id uuid [not null, note: 'Stable scalar reference to FE-08 Invoice; no cross-module EF navigation.']
+  amount numeric(18,0) [not null]
+  payment_method_code varchar(50) [not null, note: 'Supported payment-method code; exact methods are approval/configuration driven.']
+  payment_date timestamptz [not null]
+  reference_number varchar(100)
+  note text
+  status payment_status [not null, default: 'PENDING']
+  submitted_by uuid [note: 'Scalar actor reference to auth.users; no cross-module EF navigation or physical FK.']
+  confirmed_by uuid [note: 'Scalar actor reference to auth.users; no cross-module EF navigation or physical FK.']
+  confirmed_at timestamptz
+  rejected_by uuid [note: 'Scalar actor reference to auth.users; no cross-module EF navigation or physical FK.']
+  rejected_at timestamptz
+  rejection_reason text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    invoice_id
+    status
+    payment_date
+    reference_number [unique, note: 'Filtered unique in PostgreSQL when reference_number IS NOT NULL to prevent duplicate transaction references.']
+  }
+
+  Note: 'One invoice may have many payments for partial payment. Currency baseline is VND only and amount uses numeric(18,0). Only CONFIRMED payments reduce outstanding balance.'
+}
+
+Table payments.payment_status_history {
+  id uuid [pk, default: `gen_random_uuid()`]
+  payment_id uuid [not null, ref: > payments.payments.id]
+  from_status payment_status
+  to_status payment_status [not null]
+  reason text
+  changed_by uuid [not null, note: 'Scalar actor reference to auth.users; no cross-module EF navigation or physical FK.']
+  changed_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    payment_id
+    changed_at
+  }
+}
+
+
+// =========================================================
+// 7B. RELIABILITY / INTEGRATION INFRASTRUCTURE
+// Cross-cutting technical infrastructure in shared schema; business data remains module-owned.
+// =========================================================
+
+Table shared.idempotency_records {
+  id uuid [pk, default: `gen_random_uuid()`]
+  owner_module varchar(50) [not null]
+  idempotency_key varchar(150) [not null]
+  operation varchar(100) [not null]
+  request_hash varchar(128) [not null]
+  actor_user_id uuid [ref: > auth.users.id]
+  resource_type varchar(80)
+  resource_id uuid
+  response_status int
+  created_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz
+
+  Indexes {
+    (owner_module, idempotency_key) [unique]
+    actor_user_id
+    created_at
+  }
+
+  Note: 'Retry safety for state-changing operations such as invoice issuance/payment confirmation. Same key + same hash returns the same logical result; same key + different hash is rejected.'
+}
+
+Table shared.outbox_messages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  owner_module varchar(50) [not null]
+  event_name varchar(150) [not null]
+  event_version int [not null, default: 1]
+  aggregate_type varchar(100)
+  aggregate_id uuid
+  correlation_id varchar(100)
+  payload jsonb [not null]
+  occurred_at timestamptz [not null, default: `now()`]
+  processed_at timestamptz
+  attempt_count int [not null, default: 0]
+  next_attempt_at timestamptz
+  last_error text
+
+  Indexes {
+    owner_module
+    event_name
+    occurred_at
+    processed_at
+  }
+
+  Note: 'Transactional outbox for durable cross-module side effects such as InvoiceIssued, PaymentConfirmed/Rejected and workflow-completion notifications. Each module may write only its own rows.'
+}
+
+// =========================================================
+// 8. AI-ASSISTED SERVICE REQUEST CLASSIFICATION
+// FE-10
+// =========================================================
+
+Table ai_classification.ai_request_classifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  service_request_id uuid [not null, note: 'Stable scalar reference to FE-05; no cross-module EF navigation.']
+  attempt_no int [not null, default: 1]
+  provider varchar(80) [not null]
+  model_name varchar(120) [not null]
+  prompt_version varchar(50)
+  predicted_category_id uuid [note: 'Scalar reference to FE-05 ServiceRequestCategory; no cross-module EF navigation or physical FK.']
+  confidence_score numeric(5,4)
+  reasoning_summary text
+  input_hash varchar(128)
+  input_tokens int
+  output_tokens int
+  total_tokens int
+  run_status ai_run_status [not null]
+  error_message text
+  latency_ms int
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    service_request_id
+    predicted_category_id
+    run_status
+    (service_request_id, attempt_no) [unique]
+  }
+
+  Note: 'AI classification is advisory. Persist normalized outputs and minimal telemetry; avoid raw prompt/provider-response storage by default. SUCCESS requires predicted_category_id and no error_message. FAILED requires error_message and no predicted_category_id, confidence_score, or reasoning_summary. Failure must not block the Service Request workflow.'
+}
+
+Table ai_classification.ai_classification_reviews {
+  id uuid [pk, default: `gen_random_uuid()`]
+  classification_id uuid [not null, unique, ref: > ai_classification.ai_request_classifications.id]
+  reviewed_by uuid [not null, note: 'Scalar manager reference to auth.users; no cross-module EF navigation or physical FK.']
+  decision ai_review_decision [not null]
+  final_category_id uuid [note: 'Scalar final category reference to FE-05 ServiceRequestCategory; no cross-module EF navigation or physical FK.']
+  review_note text
+  reviewed_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    reviewed_by
+    decision
+  }
+
+  Note: 'Manager confirmation/correction remains distinct from the AI output to preserve human-in-the-loop traceability.'
+}
+
+// =========================================================
+// 9. AI PRIORITY / MAINTENANCE / RESOURCE RECOMMENDATION
+// FE-11
+// =========================================================
+
+Table ai_recommendation.ai_request_recommendations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  service_request_id uuid [not null, note: 'Stable scalar reference to FE-05; no cross-module EF navigation.']
+  attempt_no int [not null, default: 1]
+  provider varchar(80) [not null]
+  model_name varchar(120) [not null]
+  prompt_version varchar(50)
+  suggested_priority_code varchar(30)
+  maintenance_recommended boolean
+  recommended_action text
+  recommended_resource_summary text
+  recommended_resources jsonb
+  reasoning_summary text
+  input_hash varchar(128)
+  input_tokens int
+  output_tokens int
+  total_tokens int
+  run_status ai_run_status [not null]
+  error_message text
+  latency_ms int
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    service_request_id
+    run_status
+    suggested_priority_code
+    (service_request_id, attempt_no) [unique]
+  }
+
+  Note: 'Recommendation is advisory. Priority is a normalized code because FE-11 priority taxonomy is not final. Persist normalized outputs and minimal telemetry; avoid raw prompt/provider-response storage by default. SUCCESS requires suggested_priority_code and no error_message. FAILED requires error_message and no suggested priority, maintenance recommendation, action/resource output, or reasoning summary. It must not automatically create assignments or Maintenance Tasks.'
+}
+
+Table ai_recommendation.ai_recommendation_reviews {
+  id uuid [pk, default: `gen_random_uuid()`]
+  recommendation_id uuid [not null, unique, ref: > ai_recommendation.ai_request_recommendations.id]
+  reviewed_by uuid [not null, note: 'Scalar manager reference to auth.users; no cross-module EF navigation or physical FK.']
+  decision ai_review_decision [not null]
+  final_priority_code varchar(30)
+  final_maintenance_required boolean
+  final_action text
+  final_resource_plan text
+  review_note text
+  reviewed_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    reviewed_by
+    decision
+  }
+  Note: 'Manager final decision is stored separately from AI suggestion. Confirm/correct are supported; other enum values are reserved unless a future spec defines them.'
+}
+
+// =========================================================
+// 10. COMMUNICATION
+// FE-13
+// =========================================================
+
+Table communication.notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  recipient_user_id uuid [not null, note: 'Logical scalar reference to auth.users.id; no physical FK across module boundary.']
+  type notification_type [not null, default: 'SYSTEM']
+  title varchar(200) [not null]
+  message text [not null]
+  source_event_id uuid
+  source_type varchar(80)
+  source_id uuid
+  action_path varchar(500)
+  is_read boolean [not null, default: false]
+  read_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    recipient_user_id
+    (recipient_user_id, is_read)
+    created_at
+    (source_type, source_id)
+    (recipient_user_id, source_event_id) [unique]
+  }
+
+  Note: 'In-app user-specific notification. source_event_id supports idempotent handling of retried outbox events. Recipient may modify only own read/unread state.'
+}
+
+Table communication.announcements {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title varchar(200) [not null]
+  content text [not null]
+  status announcement_status [not null, default: 'DRAFT']
+  published_at timestamptz
+  withdrawn_at timestamptz
+  withdrawal_reason text
+  created_by uuid [not null, note: 'Logical scalar reference to auth.users.id; no physical FK across module boundary.']
+  updated_by uuid [note: 'Logical scalar reference to auth.users.id; no physical FK across module boundary.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    status
+    created_by
+  }
+}
+
+
+Table communication.announcement_versions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  announcement_id uuid [not null, ref: > communication.announcements.id]
+  version_no int [not null]
+  title_snapshot varchar(200) [not null]
+  content_snapshot text [not null]
+  status_snapshot announcement_status [not null]
+  audience_snapshot jsonb [note: 'Snapshot of the effective audience for communication-history traceability.']
+  changed_by uuid [not null, note: 'Logical scalar reference to auth.users.id; no physical FK across module boundary.']
+  change_reason text
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (announcement_id, version_no) [unique]
+    changed_by
+    created_at
+  }
+
+  Note: 'Preserves publish/update/withdraw revisions so communication history is not lost by overwriting the current announcement row.'
+}
+
+Table communication.announcement_audiences {
+  id uuid [pk, default: `gen_random_uuid()`]
+  announcement_id uuid [not null, ref: > communication.announcements.id]
+  audience_type announcement_audience_type [not null]
+  role_id uuid [note: 'Logical scalar reference to administration.roles.id; no physical FK across module boundary.']
+  apartment_unit_id uuid [note: 'Logical scalar reference to apartments.apartment_units.id; no physical FK across module boundary.']
+  resident_id uuid [note: 'Logical scalar reference to residents.residents.id; no physical FK across module boundary.']
+  created_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    announcement_id
+    audience_type
+    role_id
+    apartment_unit_id
+    resident_id
+    (announcement_id, audience_type) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type IN ('ALL_USERS', 'ALL_RESIDENTS'). Prevents duplicate global audience scopes per announcement."]
+    (announcement_id, role_id) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type = 'ROLE' AND role_id IS NOT NULL."]
+    (announcement_id, apartment_unit_id) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type = 'APARTMENT' AND apartment_unit_id IS NOT NULL."]
+    (announcement_id, resident_id) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type = 'RESIDENT' AND resident_id IS NOT NULL."]
+  }
+
+  Note: 'Depending on audience_type, the matching scalar target id is populated. Single-building baseline removes BUILDING audience targeting; use ALL_USERS/ALL_RESIDENTS, ROLE, APARTMENT or RESIDENT. Backend must validate legal combinations and authorization; no physical FK is created to other business modules. An Announcement cannot contain two identical audience scopes.'
+}
+
+// =========================================================
+// BASELINE EXCLUSIONS / DERIVED CONCEPTS
+// =========================================================
+// No debts table: debt/outstanding is derived from invoice total - SUM(CONFIRMED payments).
+// No invoice_settlements table: settlement state is derived (UNPAID/PARTIALLY_PAID/PAID/OVERDUE).
+// No apartment_occupancy table: occupancy is derived from active resident_apartments.
+// No many-to-many user_roles table: baseline uses one Administration-owned primary assignment per user via user_role_assignments.
+// No chat_conversations/chat_messages tables: FE-12 baseline excludes persistent chatbot history.
+// No dashboards/analytics_records tables: FE-14 aggregates source data; views/materialized views can be added later.
+// No notification_channels table: baseline channel is in-app; external channels are optional extensions.
+// No attachments/file-upload table: attachment/file upload is OUT OF SCOPE for the approved 56-UC baseline.
+// Backend attachment rules apply only if a future approved UC/scope extension explicitly introduces file upload/download.
+
+
+// =========================================================
+// REQUIRED DATA INTEGRITY & IMPLEMENTATION INVARIANTS
+//
+// ALL invariants below are mandatory.
+//
+// Each invariant MUST be enforced at the strongest appropriate layer:
+//
+// - PostgreSQL CHECK / UNIQUE / EXCLUDE / FK where expressible.
+// - EF Core mapping / migration where applicable.
+// - Domain/Application validation for business invariants.
+// - Transaction/concurrency control where required.
+// - Module Contracts for cross-module references.
+// - Automated integration tests for all critical invariants.
+//
+// These are implementation requirements, not optional documentation notes.
+// DBML/dbdiagram cannot fully express every invariant below.
+// =========================================================
+// 1) [DATABASE + APPLICATION]
+// resident_apartments: CHECK end_date IS NULL OR end_date >= start_date; prevent invalid overlapping active residency intervals according to the approved relationship rule.
+//
+// 2) [DATABASE + APPLICATION]
+// Single-building baseline: no user_building_accesses table and no per-building authorization scope.
+// User access is controlled by the approved primary role, permissions, and resource/work assignment rules.
+//
+// 3) [DATABASE + APPLICATION + TEST]
+// service_request_assignments: at most one active assignment per request unless a later approved workflow explicitly supports multiple assignees.
+//
+// 4) [DATABASE + APPLICATION + TEST]
+// maintenance_assignments: at most one active assignment per task unless a later approved workflow explicitly supports multiple assignees.
+//
+// 5) [DATABASE + APPLICATION]
+// payment: CHECK amount > 0; optional reference_number is unique when present; CONFIRMED requires confirmed_by/confirmed_at and no rejection fields; REJECTED requires rejected_by/rejected_at.
+//
+// 6) [APPLICATION + TRANSACTION + TEST]
+// financial transitions must be concurrency-safe and idempotent; confirmed payment total must not exceed the payable balance in the approved baseline.
+//
+// 7) [DATABASE]
+// fee_rate_rules: effective_to IS NULL OR effective_to >= effective_from; minimum_amount <= maximum_amount when both exist.
+//
+// 8) [DATABASE + APPLICATION]
+// invoices: billing_period_end >= billing_period_start; issued/cancelled timestamps must match lifecycle state.
+//
+// 9) [DATABASE]
+// maintenance_results and AI attempts: attempt_no >= 1; AI token/latency counters >= 0; confidence_score, when present, must be between 0 and 1.
+//
+// 10) [DATABASE + APPLICATION]
+// announcement_audiences: only the scalar target id matching audience_type may be populated; ALL_* audience types must have all target ids NULL. BUILDING audience targeting is removed in the single-building baseline. No cross-module physical FK.
+// announcement_audiences: an Announcement must not contain duplicate audience scopes. Enforce with PostgreSQL partial UNIQUE indexes:
+//   - UNIQUE(announcement_id, audience_type) WHERE audience_type IN ('ALL_USERS', 'ALL_RESIDENTS')
+//   - UNIQUE(announcement_id, role_id) WHERE audience_type = 'ROLE' AND role_id IS NOT NULL
+//   - UNIQUE(announcement_id, apartment_unit_id) WHERE audience_type = 'APARTMENT' AND apartment_unit_id IS NOT NULL
+//   - UNIQUE(announcement_id, resident_id) WHERE audience_type = 'RESIDENT' AND resident_id IS NOT NULL
+//
+// 11) [APPLICATION + TEST]
+// Single-building property-reference consistency: Facility/Equipment/Apartment references must resolve to valid records in this deployment. When equipment_id is associated with facility_id, the relationship must be valid; no cross-building validation exists.
+//
+// 12) [DATABASE + APPLICATION]
+// historical business records should use RESTRICT/NO ACTION for destructive relationships; prefer status/inactivation over cascade deletion.
+//
+// 13) [DATABASE + DOMAIN/APPLICATION + TEST]
+// APPROVED MONEY BASELINE — MUST be implemented consistently:
+//     - system currency is VND only; multi-currency and exchange-rate conversion are OUT OF SCOPE for the approved 56-UC baseline;
+//     - .NET monetary calculations use decimal; PostgreSQL monetary amounts use numeric(18,0); never use float/double for money;
+//     - billing calculation quantities use numeric(18,4) where fractional quantity/area precision is required;
+//     - round each InvoiceItem line amount to 0 decimal places using MidpointRounding.AwayFromZero BEFORE summing invoice totals;
+//     - invoice subtotal/total are the sum of persisted rounded line_amount values;
+//     - issued invoices preserve financial snapshots and MUST NOT be recalculated from later FeeRateRule changes;
+//     - confirmed payment total MUST NOT exceed the current payable/outstanding balance in the approved baseline.
+//
+// 13A) [DATABASE + DOMAIN/APPLICATION + TEST]
+// APPROVED TIMEZONE BASELINE — MUST be implemented consistently:
+//     - instant/event/audit timestamps use PostgreSQL timestamptz and are processed/stored as UTC instants;
+//     - calendar-only business values such as billing period, issue date, due date, residency dates and warranty dates use PostgreSQL date;
+//     - the singleton Building record owns time_zone_id as the system property timezone; baseline default is Asia/Ho_Chi_Minh;
+//     - due/overdue boundaries, daily business reporting and property-local scheduling use the singleton Building timezone, not server-local time and not the UTC calendar date;
+//     - APIs return ISO-8601 timestamps; frontend presentation converts instants to the singleton Building timezone;
+//     - do not persist localized display strings or raw UTC offsets as timezone identifiers.
+//
+// 14) [MODULE CONTRACT + APPLICATION + INTEGRATION TEST]
+// cross-module operational IDs (Payment->Invoice, Complaint/Maintenance/AI->ServiceRequest) are scalar references without cross-module EF navigation; validate existence/access through module contracts/application rules.
