@@ -17,7 +17,6 @@ public class MaintenanceTask
 
     public MaintenanceTask(
         string taskNumber,
-        Guid buildingId,
         string title,
         Guid createdBy,
         DateTimeOffset now,
@@ -33,7 +32,6 @@ public class MaintenanceTask
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(taskNumber);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
-        ThrowIfEmpty(buildingId, nameof(buildingId));
         ThrowIfEmpty(createdBy, nameof(createdBy));
         EnsureDueAfterPlannedStart(plannedStartAt, dueAt);
 
@@ -42,7 +40,6 @@ public class MaintenanceTask
         ScheduleId = scheduleId;
         SourceServiceRequestId = sourceServiceRequestId;
         SourceComplaintId = sourceComplaintId;
-        BuildingId = buildingId;
         FacilityId = facilityId;
         EquipmentId = equipmentId;
         Title = title.Trim();
@@ -61,7 +58,6 @@ public class MaintenanceTask
     public Guid? ScheduleId { get; private set; }
     public Guid? SourceServiceRequestId { get; private set; }
     public Guid? SourceComplaintId { get; private set; }
-    public Guid BuildingId { get; private set; }
     public Guid? FacilityId { get; private set; }
     public Guid? EquipmentId { get; private set; }
     public string Title { get; private set; } = null!;

@@ -17,7 +17,6 @@ public class FeeRateRule
         DateOnly effectiveFrom,
         Guid createdBy,
         DateTimeOffset now,
-        Guid? buildingId = null,
         string? unitName = null,
         decimal? minimumAmount = null,
         decimal? maximumAmount = null,
@@ -37,7 +36,6 @@ public class FeeRateRule
 
         Id = Guid.NewGuid();
         FeeTypeId = feeTypeId;
-        BuildingId = buildingId;
         RuleName = ruleName.Trim();
         CalculationMethodCode = calculationMethodCode.Trim().ToUpperInvariant();
         BillingFrequencyCode = billingFrequencyCode.Trim().ToUpperInvariant();
@@ -56,7 +54,6 @@ public class FeeRateRule
 
     public Guid Id { get; private set; }
     public Guid FeeTypeId { get; private set; }
-    public Guid? BuildingId { get; private set; }
     public string RuleName { get; private set; } = null!;
     public string CalculationMethodCode { get; private set; } = null!;
     public string BillingFrequencyCode { get; private set; } = null!;
@@ -83,7 +80,6 @@ public class FeeRateRule
         DateOnly effectiveFrom,
         Guid updatedBy,
         DateTimeOffset now,
-        Guid? buildingId = null,
         string? unitName = null,
         decimal? minimumAmount = null,
         decimal? maximumAmount = null,
@@ -100,7 +96,6 @@ public class FeeRateRule
         EnsureDateRange(effectiveFrom, effectiveTo);
         EnsureAmountRange(minimumAmount, maximumAmount);
 
-        BuildingId = buildingId;
         RuleName = ruleName.Trim();
         CalculationMethodCode = calculationMethodCode.Trim().ToUpperInvariant();
         BillingFrequencyCode = billingFrequencyCode.Trim().ToUpperInvariant();

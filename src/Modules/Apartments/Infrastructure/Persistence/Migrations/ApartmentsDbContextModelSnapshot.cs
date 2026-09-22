@@ -39,10 +39,6 @@ namespace PropFlow.Modules.Apartments.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("bedroom_count");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -91,7 +87,7 @@ namespace PropFlow.Modules.Apartments.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("BuildingId", "UnitNumber")
+                    b.HasIndex("UnitNumber")
                         .IsUnique();
 
                     b.ToTable("apartment_units", "apartments");

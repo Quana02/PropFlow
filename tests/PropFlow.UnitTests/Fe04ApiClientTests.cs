@@ -16,15 +16,15 @@ public sealed class Fe04ApiClientTests
     }
 
     [Fact]
-    public async Task Building_list_maps_forbidden_to_api_result()
+    public async Task Current_building_maps_forbidden_to_api_result()
     {
         var api = CreateApi(request =>
         {
-            Assert.Equal("/api/v1/buildings", request.RequestUri!.AbsolutePath);
+            Assert.Equal("/api/v1/buildings/current", request.RequestUri!.AbsolutePath);
             return new HttpResponseMessage(HttpStatusCode.Forbidden);
         });
 
-        var result = await new BuildingApiClient(api).GetBuildingsAsync(new BuildingFilterModel());
+        var result = await new BuildingApiClient(api).GetCurrentBuildingOverviewAsync();
 
         Assert.False(result.IsSuccess);
         Assert.Equal(403, result.StatusCode);

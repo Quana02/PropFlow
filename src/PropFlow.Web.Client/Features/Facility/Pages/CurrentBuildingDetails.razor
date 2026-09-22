@@ -1,0 +1,183 @@
+@page "/buildings"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER,STAFF")]
+@using PropFlow.Web.Client.Features.Facility.Models
+@using PropFlow.Web.Client.Features.Facility.Services
+@using PropFlow.Web.Client.Features.Facility.Components
+@using PropFlow.Web.Client.Services.Authentication
+@inject IBuildingApiClient BuildingApiClient
+@inject AuthSession Session
+
+<PageTitle>Chi tiết chung cư - PropFlow</PageTitle>
+
+<main class="building-details" aria-labelledby="building-page-title">
+    <header class="page-header">
+        <div>
+            <span class="eyebrow">FE-04 · Hồ sơ hiện tại</span>
+            <h1 id="building-page-title">Chi tiết chung cư</h1>
+            <p>Thông tin hồ sơ và tổng quan vận hành của chung cư đang được PropFlow quản lý.</p>
+        </div>
+        @if (CanEdit && Building is not null)
+        {
+            <button class="primary-action" type="button" @onclick="OpenEditDialog">
+                <span aria-hidden="true">✎</span> Chỉnh sửa
+            </button>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(SuccessMessage))
+    {
+        <div class="feedback success" role="status"><span aria-hidden="true">✓</span><span>@SuccessMessage</span></div>
+    }
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="feedback error" role="alert">
+            <span aria-hidden="true">!</span><span>@ErrorMessage</span>
+            <button type="button" @onclick="LoadAsync">Thử lại</button>
+        </div>
+    }
+
+    @if (IsLoading)
+    {
+        <section class="state-panel" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <strong>Đang tải thông tin chung cư</strong>
+            <span>Vui lòng chờ trong giây lát.</span>
+        </section>
+    }
+    else if (Building is null && string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <section class="state-panel empty">
+            <span class="state-icon" aria-hidden="true">⌂</span>
+            <strong>Chưa có hồ sơ chung cư</strong>
+            <span>Hệ thống chưa được thiết lập thông tin chung cư ban đầu.</span>
+        </section>
+    }
+    else if (Building is not null)
+    {
+        <section class="metrics-grid" aria-label="Tổng quan vận hành">
+            <article class="metric-card"><span>Căn hộ</span><strong>@Building.TotalApartments</strong><small>Tổng số căn hộ</small></article>
+            <article class="metric-card"><span>Cơ sở vật chất</span><strong>@Building.Facilities.Total</strong><small>@Building.Facilities.Active đang hoạt động</small></article>
+            <article class="metric-card"><span>Thiết bị</span><strong>@Building.Equipment.Total</strong><small>@Building.Equipment.Active đang hoạt động</small></article>
+        </section>
+
+        <div class="details-grid">
+            <section class="detail-panel" aria-labelledby="basic-heading">
+                <header class="section-header">
+                    <span class="section-icon" aria-hidden="true">⌂</span>
+                    <div><h2 id="basic-heading">Thông tin cơ bản</h2><p>Hồ sơ nhận diện của chung cư hiện tại</p></div>
+                    <span class="status-badge @StatusClass(Building.Status)">@StatusText(Building.Status)</span>
+                </header>
+                <dl class="field-grid">
+                    <div><dt>Mã chung cư</dt><dd>@Building.Code</dd></div>
+                    <div><dt>Tên chung cư</dt><dd>@Building.Name</dd></div>
+                    <div class="wide"><dt>Địa chỉ</dt><dd>@Building.Address</dd></div>
+                    <div><dt>Số tầng</dt><dd>@Building.NumberOfFloors tầng</dd></div>
+                    <div><dt>Múi giờ</dt><dd>@Building.TimeZoneId</dd></div>
+                </dl>
+            </section>
+
+            <section class="detail-panel" aria-labelledby="description-heading">
+                <header class="section-header">
+                    <span class="section-icon secondary" aria-hidden="true">≡</span>
+                    <div><h2 id="description-heading">Mô tả</h2><p>Thông tin bổ sung về chung cư</p></div>
+                </header>
+                <p class="description">@(string.IsNullOrWhiteSpace(Building.Description) ? "Chưa có mô tả." : Building.Description)</p>
+            </section>
+
+            <section class="detail-panel wide-panel" aria-labelledby="operation-heading">
+                <header class="section-header">
+                    <span class="section-icon operation" aria-hidden="true">◇</span>
+                    <div><h2 id="operation-heading">Tổng quan vận hành</h2><p>Trạng thái cơ sở vật chất và thiết bị</p></div>
+                </header>
+                <div class="operation-grid">
+                    <OperationalSummary Title="Cơ sở vật chất" Total="Building.Facilities.Total" Active="Building.Facilities.Active"
+                                        UnderMaintenance="Building.Facilities.UnderMaintenance" Inactive="Building.Facilities.Inactive"
+                                        Unavailable="Building.Facilities.Unavailable" OutOfService="Building.Facilities.OutOfService" />
+                    <OperationalSummary Title="Thiết bị" Total="Building.Equipment.Total" Active="Building.Equipment.Active"
+                                        UnderMaintenance="Building.Equipment.UnderMaintenance" Inactive="Building.Equipment.Inactive"
+                                        OutOfService="Building.Equipment.OutOfService" />
+                </div>
+            </section>
+
+            <section class="detail-panel wide-panel" aria-labelledby="system-heading">
+                <header class="section-header">
+                    <span class="section-icon system" aria-hidden="true">◷</span>
+                    <div><h2 id="system-heading">Thông tin cập nhật</h2><p>Mốc thời gian của hồ sơ chung cư</p></div>
+                </header>
+                <dl class="field-grid system-fields">
+                    <div><dt>Ngày tạo</dt><dd>@FormatDateTime(Building.CreatedAt)</dd></div>
+                    <div><dt>Cập nhật gần nhất</dt><dd>@FormatDateTime(Building.UpdatedAt)</dd></div>
+                </dl>
+            </section>
+        </div>
+    }
+
+    @if (CanEdit && IsEditDialogOpen && Building is not null)
+    {
+        <BuildingFormDialog IsOpen="true" Building="Building" OnClose="CloseEditDialog" OnSave="SaveAsync" IsSaving="IsSaving" />
+    }
+</main>
+
+@code {
+    private CurrentBuildingOverviewResponse? Building;
+    private bool IsLoading = true;
+    private bool IsEditDialogOpen;
+    private bool IsSaving;
+    private string? SuccessMessage;
+    private string? ErrorMessage;
+    private bool CanEdit => string.Equals(Session.User?.Role, "MANAGER", StringComparison.OrdinalIgnoreCase);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        try
+        {
+            var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
+            if (result.IsSuccess && result.Data is not null) Building = result.Data;
+            else if (result.StatusCode == 404) Building = null;
+            else ErrorMessage = result.Message ?? "Không thể tải thông tin chung cư. Vui lòng thử lại.";
+        }
+        catch
+        {
+            ErrorMessage = "Không thể kết nối để tải thông tin chung cư. Vui lòng thử lại.";
+        }
+        finally { IsLoading = false; }
+    }
+
+    private void OpenEditDialog() => IsEditDialogOpen = CanEdit;
+    private void CloseEditDialog() => IsEditDialogOpen = false;
+
+    private async Task SaveAsync(UpdateCurrentBuildingModel model)
+    {
+        if (!CanEdit) return;
+        IsSaving = true;
+        ErrorMessage = null;
+        SuccessMessage = null;
+        try
+        {
+            var result = await BuildingApiClient.UpdateCurrentBuildingAsync(model);
+            if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể cập nhật thông tin chung cư."; return; }
+            IsEditDialogOpen = false;
+            SuccessMessage = "Đã cập nhật thông tin chung cư.";
+            await LoadAsync();
+        }
+        catch { ErrorMessage = "Không thể kết nối để cập nhật thông tin chung cư. Vui lòng thử lại."; }
+        finally { IsSaving = false; }
+    }
+
+    private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    private static string StatusClass(MasterDataStatus status) => status == MasterDataStatus.ACTIVE ? "active" : "inactive";
+    private static string StatusText(MasterDataStatus status) => status switch
+    {
+        MasterDataStatus.ACTIVE => "Đang hoạt động",
+        MasterDataStatus.INACTIVE => "Ngưng hoạt động",
+        MasterDataStatus.UNDER_MAINTENANCE => "Đang bảo trì",
+        MasterDataStatus.UNAVAILABLE => "Không khả dụng",
+        MasterDataStatus.OUT_OF_SERVICE => "Hết phục vụ",
+        _ => status.ToString()
+    };
+}

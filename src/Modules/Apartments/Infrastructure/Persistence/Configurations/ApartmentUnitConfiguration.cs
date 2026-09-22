@@ -14,11 +14,6 @@ public class ApartmentUnitConfiguration : IEntityTypeConfiguration<ApartmentUnit
         builder.Property(a => a.Id)
             .HasColumnName("id");
 
-        // Cross-module scalar ID: no cross-module navigation property
-        builder.Property(a => a.BuildingId)
-            .HasColumnName("building_id")
-            .IsRequired();
-
         builder.Property(a => a.UnitNumber)
             .HasColumnName("unit_number")
             .HasMaxLength(30)
@@ -62,7 +57,7 @@ public class ApartmentUnitConfiguration : IEntityTypeConfiguration<ApartmentUnit
             .IsRequired();
 
         // Indexes
-        builder.HasIndex(a => new { a.BuildingId, a.UnitNumber })
+        builder.HasIndex(a => a.UnitNumber)
             .IsUnique();
 
         builder.HasIndex(a => a.FloorNumber);
