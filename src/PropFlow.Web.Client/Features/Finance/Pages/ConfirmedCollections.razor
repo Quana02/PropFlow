@@ -58,7 +58,7 @@
                 </label>
                 <label class="filter-field building-field">
                     <span>Tòa nhà</span>
-                    <select disabled title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền"><option>Chọn tòa nhà</option></select>
+                    <PropFlowSelect Value="@string.Empty" Options="PropFlowSelectOptions.UnavailableBuilding" Variant="Filter" AriaLabel="Chọn tòa nhà" Disabled="true" title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền" />
                 </label>
             </div>
             <div class="method-filters" aria-label="Lọc theo phương thức thanh toán" title="Chưa khả dụng: chưa có API lọc thanh toán">

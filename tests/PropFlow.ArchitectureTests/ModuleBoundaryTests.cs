@@ -55,8 +55,8 @@ public class ModuleBoundaryTests
             .Where(l => l.StartsWith("Project(") && !l.Contains(SolutionFolderGuid))
             .ToList();
 
-        Assert.Equal(25, projectLines.Count);
-        Assert.Equal(3, projectLines.Count(x => x.Contains(".Contracts.csproj")));
+        Assert.Equal(28, projectLines.Count);
+        Assert.Equal(6, projectLines.Count(x => x.Contains(".Contracts.csproj")));
     }
 
     [Fact]
@@ -262,8 +262,8 @@ public class ModuleBoundaryTests
         foreach (var pr in projectReferences)
         {
             Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase)
-                || pr.EndsWith("PropFlow.Modules.Administration.Contracts.csproj", StringComparison.Ordinal),
-                $"Administration may reference its own public contract, not another implementation: {pr}");
+                || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
+                $"Administration may reference public contracts, not another implementation: {pr}");
         }
     }
 
@@ -394,7 +394,8 @@ public class ModuleBoundaryTests
             "../Modules/Payments/PropFlow.Modules.Payments.csproj",
             "../Modules/AiClassification/PropFlow.Modules.AiClassification.csproj",
             "../Modules/AiRecommendation/PropFlow.Modules.AiRecommendation.csproj",
-            "../Modules/Communication/PropFlow.Modules.Communication.csproj"
+            "../Modules/Communication/PropFlow.Modules.Communication.csproj",
+            "../Modules/Reporting/PropFlow.Modules.Reporting.csproj"
         };
 
         Assert.Equal(expectedReferences.Length, projectReferences.Count);
@@ -426,7 +427,9 @@ public class ModuleBoundaryTests
 
             foreach (var pr in projectReferences)
             {
-                Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+                Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase)
+                    || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
+                    $"Business modules may reference public contracts, not another implementation: {pr}");
             }
         }
     }
