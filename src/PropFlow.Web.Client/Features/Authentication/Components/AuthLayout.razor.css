@@ -93,17 +93,6 @@ html.dark .home-icon:hover{background:#083344}
 ::deep .auth-field input{padding-left:41px}
 ::deep .auth-register-grid .auth-field-icon{left:9px;font-size:15px}
 ::deep .auth-register-grid .auth-field input{padding-left:31px}
-::deep .auth-toggle-pass{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;margin:0!important;padding:0!important;border:none;border-radius:6px;background:transparent!important;color:#64748b!important;box-shadow:none!important;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;transition:color .15s ease,background .15s ease}
-::deep .auth-toggle-pass:hover{color:#0284c7!important;background:#0284c714!important}
-::deep .auth-toggle-pass:focus-visible{outline:2px solid #0284c7;outline-offset:1px}
-::deep .auth-toggle-pass .material-symbols-outlined{font-size:20px;line-height:1;pointer-events:none}
-::deep .auth-field-has-toggle input{padding-right:42px!important}
-::deep .auth-register-grid .auth-toggle-pass{right:3px;width:26px;height:26px}
-::deep .auth-register-grid .auth-toggle-pass .material-symbols-outlined{font-size:16px}
-::deep .auth-register-grid .auth-field-has-toggle input{padding-right:30px!important}
-html.dark .auth-content ::deep .auth-toggle-pass{color:#94a3b8!important}
-html.dark .auth-content ::deep .auth-toggle-pass:hover{color:#00f2ff!important;background:#00f2ff1a!important}
-html.dark .auth-content ::deep .auth-toggle-pass:focus-visible{outline:2px solid #00f2ff}
 ::deep .auth-links-login,::deep .auth-links-register{display:flex;align-items:center;justify-content:center;gap:6px 10px;flex-wrap:wrap;text-align:center}
 ::deep .auth-links-login a,::deep .auth-links-register a{text-transform:none;font-weight:600;text-decoration:none}
 ::deep .auth-links-login a:hover,::deep .auth-links-register a:hover{text-decoration:underline}

@@ -8,11 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../Administration.Contracts/PropFlow.Modules.Administration.Contracts.csproj" />
-    <ProjectReference Include="../Authentication.Contracts/PropFlow.Modules.Authentication.Contracts.csproj" />
-  </ItemGroup>
+  <ItemGroup><ProjectReference Include="../Administration.Contracts/PropFlow.Modules.Administration.Contracts.csproj" /></ItemGroup>
 </Project>

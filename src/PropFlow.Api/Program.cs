@@ -20,13 +20,6 @@ using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Residents.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
-using PropFlow.Modules.Apartments.Contracts;
-using PropFlow.Modules.Apartments.Infrastructure;
-using PropFlow.Modules.PropertyAssets.Contracts;
-using PropFlow.Modules.PropertyAssets.Infrastructure;
-using PropFlow.Modules.ServiceRequests.Contracts;
-using PropFlow.Modules.ServiceRequests.Infrastructure;
-using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -136,16 +129,9 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 
 // Add services to the container.
 builder.Services.AddControllers();
-builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly);
-builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly);
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
 builder.Services.AddScoped<IAccountAccess, AccountAccessService>();
-builder.Services.AddScoped<IApartmentOverviewSource, ApartmentOverviewSource>();
-builder.Services.AddScoped<IBuildingTimeZones, BuildingTimeZones>();
-builder.Services.AddScoped<IResidentOverviewSource, ResidentOverviewSource>();
-builder.Services.AddScoped<IServiceRequestOverviewSource, ServiceRequestOverviewSource>();
-builder.Services.AddScoped<AdministrationOverviewQuery>();
 builder.Services.AddExceptionHandler<AuthExceptionHandler>();
 // AuthExceptionHandler logs safe metadata; avoid framework logging raw exception details twice.
 builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);

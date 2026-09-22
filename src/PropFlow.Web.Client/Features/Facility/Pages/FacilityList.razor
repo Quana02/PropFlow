@@ -145,7 +145,16 @@
 
                 <!-- Status Dropdown Filter -->
                 <div class="w-full sm:w-56 relative">
-                    <PropFlowSelect @bind-Value="StatusFilterString" Options="FacilityStatusOptions" Variant="Filter" AriaLabel="Lọc trạng thái cơ sở vật chất" />
+                    <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all appearance-none font-medium cursor-pointer"
+                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
+                            @bind="StatusFilterString">
+                        <option value="" style="padding: 8px 12px; font-weight: 500;">Tất cả trạng thái</option>
+                        <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500;">● Đang hoạt động</option>
+                        <option value="UNDER_MAINTENANCE" style="padding: 8px 12px; font-weight: 500;">● Đang bảo trì</option>
+                        <option value="UNAVAILABLE" style="padding: 8px 12px; font-weight: 500;">● Tạm ngưng / Kín lịch</option>
+                        <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500;">● Ngừng kích hoạt</option>
+                        <option value="OUT_OF_SERVICE" style="padding: 8px 12px; font-weight: 500;">● Ngừng phục vụ</option>
+                    </select>
                 </div>
             </div>
 
@@ -429,7 +438,14 @@
                                 Tòa Nhà Trực Thuộc <span class="text-rose-500">*</span>
                             </label>
                             <div class="relative">
-                                <PropFlowSelect @bind-Value="BuildingIdString" Options="BuildingOptions" Placeholder="Chọn tòa nhà" AriaLabel="Tòa nhà trực thuộc" />
+                                <select @bind="BuildingIdString" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;"> Chọn tòa nhà </option>
+                                    @foreach (var b in Buildings)
+                                    {
+                                        <option value="@b.Id" style="padding: 8px 12px; font-weight: 500;">@b.Name</option>
+                                    }
+                                </select>
                             </div>
                         </div>
 
@@ -439,7 +455,16 @@
                                 Phân Loại Tiện Ích <span class="text-rose-500">*</span>
                             </label>
                             <div class="relative">
-                                <PropFlowSelect @bind-Value="CreateFormModel.FacilityType" Options="FacilityTypeOptions" Placeholder="Chọn phân loại" AriaLabel="Phân loại tiện ích" />
+                                <select @bind="CreateFormModel.FacilityType" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;"> Chọn phân loại </option>
+                                    <option value="Thể Thao & Giải Trí" style="padding: 8px 12px; font-weight: 500;">Thể Thao & Giải Trí</option>
+                                    <option value="Sức Khỏe & Fitness" style="padding: 8px 12px; font-weight: 500;">Sức Khỏe & Fitness</option>
+                                    <option value="Tiện Ích Chung" style="padding: 8px 12px; font-weight: 500;">Tiện Ích Chung</option>
+                                    <option value="Hạ Tầng Kỹ Thuật" style="padding: 8px 12px; font-weight: 500;">Hạ Tầng Kỹ Thuật</option>
+                                    <option value="An Ninh & PCCC" style="padding: 8px 12px; font-weight: 500;">An Ninh & PCCC</option>
+                                    <option value="Cảnh Quan & Môi Trường" style="padding: 8px 12px; font-weight: 500;">Cảnh Quan & Môi Trường</option>
+                                </select>
                             </div>
                         </div>
 
@@ -513,7 +538,14 @@
                                 Tòa Nhà Trực Thuộc <span class="text-rose-500">*</span>
                             </label>
                             <div class="relative">
-                                <PropFlowSelect @bind-Value="UpdateBuildingIdString" Options="BuildingOptions" Placeholder="Chọn tòa nhà" AriaLabel="Tòa nhà trực thuộc" />
+                                <select @bind="UpdateBuildingIdString" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;">-- Chọn tòa nhà --</option>
+                                    @foreach (var b in Buildings)
+                                    {
+                                        <option value="@b.Id" style="padding: 8px 12px; font-weight: 500;">@b.Name</option>
+                                    }
+                                </select>
                             </div>
                         </div>
 
@@ -523,7 +555,16 @@
                                 Phân Loại Tiện Ích <span class="text-rose-500">*</span>
                             </label>
                             <div class="relative">
-                                <PropFlowSelect @bind-Value="UpdateFormModel.FacilityType" Options="FacilityTypeOptions" Placeholder="Chọn phân loại" AriaLabel="Phân loại tiện ích" />
+                                <select @bind="UpdateFormModel.FacilityType" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] appearance-none transition-all pr-12"
+                                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
+                                    <option value="" style="padding: 8px 12px; font-weight: 500;">-- Chọn phân loại --</option>
+                                    <option value="Thể Thao & Giải Trí" style="padding: 8px 12px; font-weight: 500;">Thể Thao & Giải Trí</option>
+                                    <option value="Sức Khỏe & Fitness" style="padding: 8px 12px; font-weight: 500;">Sức Khỏe & Fitness</option>
+                                    <option value="Tiện Ích Chung" style="padding: 8px 12px; font-weight: 500;">Tiện Ích Chung</option>
+                                    <option value="Hạ Tầng Kỹ Thuật" style="padding: 8px 12px; font-weight: 500;">Hạ Tầng Kỹ Thuật</option>
+                                    <option value="An Ninh & PCCC" style="padding: 8px 12px; font-weight: 500;">An Ninh & PCCC</option>
+                                    <option value="Cảnh Quan & Môi Trường" style="padding: 8px 12px; font-weight: 500;">Cảnh Quan & Môi Trường</option>
+                                </select>
                             </div>
                         </div>
 
@@ -593,9 +634,6 @@
 <PropFlow.Web.Client.Features.Facility.Components.FacilityDetailDialog IsOpen="IsDetailOpen" Facility="SelectedFacilityToView" OnClose="() => IsDetailOpen = false" />
 
 @code {
-    private static readonly PropFlowSelectOption[] FacilityStatusOptions = [new("", "Tất cả trạng thái"), new("ACTIVE", "Đang hoạt động"), new("UNDER_MAINTENANCE", "Đang bảo trì"), new("UNAVAILABLE", "Tạm ngưng / Kín lịch"), new("INACTIVE", "Ngừng kích hoạt"), new("OUT_OF_SERVICE", "Ngừng phục vụ")];
-    private static readonly PropFlowSelectOption[] FacilityTypeOptions = [new("", "Chọn phân loại"), new("Thể Thao & Giải Trí", "Thể Thao & Giải Trí"), new("Sức Khỏe & Fitness", "Sức Khỏe & Fitness"), new("Tiện Ích Chung", "Tiện Ích Chung"), new("Hạ Tầng Kỹ Thuật", "Hạ Tầng Kỹ Thuật"), new("An Ninh & PCCC", "An Ninh & PCCC"), new("Cảnh Quan & Môi Trường", "Cảnh Quan & Môi Trường")];
-    private IReadOnlyList<PropFlowSelectOption> BuildingOptions => [new("", "Chọn tòa nhà"), .. Buildings.Select(building => new PropFlowSelectOption(building.Id.ToString(), building.Name))];
     private PagedResult<FacilityModel> PagedResult { get; set; } = new();
     private FacilityFilterModel Filter { get; set; } = new();
     private List<BuildingModel> Buildings { get; set; } = new();

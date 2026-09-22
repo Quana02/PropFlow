@@ -9,7 +9,6 @@ using Microsoft.IdentityModel.Tokens;
 using PropFlow.Modules.Authentication.Application;
 using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 using PropFlow.Modules.Authentication.Presentation;
-using PropFlow.Modules.Authentication.Contracts;
 
 namespace PropFlow.Modules.Authentication.Infrastructure;
 
@@ -35,7 +34,6 @@ public static class AuthRegistration
         services.AddSingleton<IAuthEmail>(sp => sp.GetRequiredService<AuthEmailQueue>());
         services.AddHostedService(sp => sp.GetRequiredService<AuthEmailQueue>());
         services.AddScoped<IAuthStore, AuthStore>();
-        services.AddScoped<IInternalAccountDirectory, InternalAccountDirectory>();
         services.AddScoped<AuthUseCases>();
         services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly);
         services.Configure<ApiBehaviorOptions>(options => options.InvalidModelStateResponseFactory = context =>

@@ -30,7 +30,6 @@
     <ProjectReference Include="..\Modules\AiClassification\PropFlow.Modules.AiClassification.csproj" />
     <ProjectReference Include="..\Modules\AiRecommendation\PropFlow.Modules.AiRecommendation.csproj" />
     <ProjectReference Include="..\Modules\Communication\PropFlow.Modules.Communication.csproj" />
-    <ProjectReference Include="..\Modules\Reporting\PropFlow.Modules.Reporting.csproj" />
   </ItemGroup>
 
 </Project>

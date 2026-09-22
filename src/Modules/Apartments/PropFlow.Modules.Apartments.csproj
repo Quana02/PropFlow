@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
-    <ProjectReference Include="../Apartments.Contracts/PropFlow.Modules.Apartments.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
