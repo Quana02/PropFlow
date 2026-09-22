@@ -170,10 +170,6 @@ namespace PropFlow.Modules.Complaints.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("apartment_unit_id");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
                     b.Property<DateTimeOffset?>("ClosedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("closed_at");
@@ -256,8 +252,6 @@ namespace PropFlow.Modules.Complaints.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ApartmentUnitId");
-
-                    b.HasIndex("BuildingId");
 
                     b.HasIndex("ComplaintNumber")
                         .IsUnique();

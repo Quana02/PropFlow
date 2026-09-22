@@ -194,7 +194,6 @@ public class BillingTests
             _periodStart,
             Guid.NewGuid(),
             _now,
-            buildingId: Guid.NewGuid(),
             unitName: "m2",
             minimumAmount: 0m,
             maximumAmount: 1000000m,

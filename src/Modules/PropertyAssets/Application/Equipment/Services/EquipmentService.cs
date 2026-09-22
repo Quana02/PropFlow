@@ -35,8 +35,6 @@ public class EquipmentService : IEquipmentService
 
         return new EquipmentDetailDto(
             equipment.Id,
-            equipment.BuildingId,
-            equipment.Building?.Name ?? "",
             equipment.FacilityId,
             equipment.Facility?.Name,
             equipment.Code,
@@ -60,14 +58,7 @@ public class EquipmentService : IEquipmentService
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        // Validate Building exists
-        var building = await _store.BuildingAsync(command.BuildingId, false, cancellationToken);
-        if (building is null)
-        {
-            throw new ArgumentException($"Tòa nhà với ID = {command.BuildingId} không tồn tại.");
-        }
-
-        // Validate Facility exists and belongs to the same Building if FacilityId is provided
+        // Validate Facility exists if FacilityId is provided
         if (command.FacilityId.HasValue)
         {
             var facility = await _store.FacilityAsync(command.FacilityId.Value, false, false, cancellationToken);
@@ -75,23 +66,18 @@ public class EquipmentService : IEquipmentService
             {
                 throw new ArgumentException($"Cơ sở vật chất với ID = {command.FacilityId.Value} không tồn tại.");
             }
-            if (facility.BuildingId != command.BuildingId)
-            {
-                throw new ArgumentException($"Cơ sở vật chất '{facility.Name}' không thuộc tòa nhà '{building.Name}'. Không thể gắn thiết bị vào cơ sở vật chất của tòa nhà khác.");
-            }
         }
 
         var codeUpper = command.Code.Trim();
-        var existingEquipment = await _store.EquipmentCodeExistsAsync(command.BuildingId, codeUpper, cancellationToken);
+        var existingEquipment = await _store.EquipmentCodeExistsAsync(codeUpper, cancellationToken);
 
         if (existingEquipment)
         {
-            throw new InvalidOperationException($"Mã thiết bị '{command.Code}' đã tồn tại trong tòa nhà này.");
+            throw new InvalidOperationException($"Mã thiết bị '{command.Code}' đã tồn tại.");
         }
 
         var now = DateTimeOffset.UtcNow;
         var equipment = new EquipmentEntity(
-            command.BuildingId,
             command.Code,
             command.Name,
             now,
@@ -122,17 +108,13 @@ public class EquipmentService : IEquipmentService
             throw new KeyNotFoundException($"Không tìm thấy thiết bị với mã định danh ID = {id}.");
         }
 
-        // Validate Facility exists and belongs to the same Building if FacilityId is provided
+        // Validate Facility exists if FacilityId is provided
         if (command.FacilityId.HasValue)
         {
             var facility = await _store.FacilityAsync(command.FacilityId.Value, false, false, cancellationToken);
             if (facility is null)
             {
                 throw new ArgumentException($"Cơ sở vật chất với ID = {command.FacilityId.Value} không tồn tại.");
-            }
-            if (facility.BuildingId != equipment.BuildingId)
-            {
-                throw new ArgumentException($"Cơ sở vật chất '{facility.Name}' không thuộc tòa nhà '{equipment.Building?.Name}'. Không thể gắn thiết bị vào cơ sở vật chất của tòa nhà khác.");
             }
         }
 
@@ -141,7 +123,7 @@ public class EquipmentService : IEquipmentService
             command.Name,
             command.FacilityId,
             command.EquipmentType,
-            command.Status,
+            null, // Preserve existing status - FE-04.6 owns status management
             command.Manufacturer,
             command.Model,
             command.SerialNumber,
@@ -195,8 +177,6 @@ public class EquipmentService : IEquipmentService
     {
         return new EquipmentDto(
             equipment.Id,
-            equipment.BuildingId,
-            equipment.Building?.Name ?? "",
             equipment.FacilityId,
             equipment.Facility?.Name,
             equipment.Code,

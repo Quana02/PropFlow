@@ -3,7 +3,6 @@ using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Domain.SystemConfigurations;
 using PropFlow.Modules.Administration.Domain.UserAccessHistories;
-using PropFlow.Modules.Administration.Domain.UserBuildingAccesses;
 using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
 
 namespace PropFlow.UnitTests;
@@ -151,33 +150,6 @@ public class AdministrationTests
         Assert.Equal(changeTime, assignment.UpdatedAt);
 
         Assert.Throws<ArgumentException>(() => assignment.ChangeRole(Guid.Empty, actor, changeTime));
-    }
-
-    [Fact]
-    public void UserBuildingAccess_Constructor_AndRevoke_WorkCorrectly()
-    {
-        var userId = Guid.NewGuid();
-        var buildingId = Guid.NewGuid();
-        var actor = Guid.NewGuid();
-
-        Assert.Throws<ArgumentException>(() => new UserBuildingAccess(Guid.Empty, buildingId, _now));
-        Assert.Throws<ArgumentException>(() => new UserBuildingAccess(userId, Guid.Empty, _now));
-
-        var access = new UserBuildingAccess(userId, buildingId, _now, actor, "Assigned as manager");
-        Assert.NotEqual(Guid.Empty, access.Id);
-        Assert.Equal(userId, access.UserId);
-        Assert.Equal(buildingId, access.BuildingId);
-        Assert.Equal("Assigned as manager", access.Reason);
-        Assert.Null(access.RevokedAt);
-
-        var revoker = Guid.NewGuid();
-        var revokeTime = _now.AddMonths(1);
-        access.Revoke(revoker, revokeTime, "Transferred to other site");
-        Assert.Equal(revoker, access.RevokedBy);
-        Assert.Equal(revokeTime, access.RevokedAt);
-        Assert.Equal("Transferred to other site", access.Reason);
-
-        Assert.Throws<ArgumentException>(() => access.Revoke(Guid.Empty, revokeTime));
     }
 
     [Fact]

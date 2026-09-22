@@ -17,7 +17,6 @@ public class ServiceRequest
         string requestNumber,
         Guid residentId,
         Guid residentApartmentId,
-        Guid buildingId,
         string title,
         string description,
         DateTimeOffset now,
@@ -32,13 +31,11 @@ public class ServiceRequest
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
         ThrowIfEmpty(residentId, nameof(residentId));
         ThrowIfEmpty(residentApartmentId, nameof(residentApartmentId));
-        ThrowIfEmpty(buildingId, nameof(buildingId));
 
         Id = Guid.NewGuid();
         RequestNumber = requestNumber.Trim();
         ResidentId = residentId;
         ResidentApartmentId = residentApartmentId;
-        BuildingId = buildingId;
         ApartmentUnitId = apartmentUnitId;
         CategoryId = categoryId;
         FacilityId = facilityId;
@@ -56,7 +53,6 @@ public class ServiceRequest
     public string RequestNumber { get; private set; } = null!;
     public Guid ResidentId { get; private set; }
     public Guid ResidentApartmentId { get; private set; }
-    public Guid BuildingId { get; private set; }
     public Guid? ApartmentUnitId { get; private set; }
     public Guid? CategoryId { get; private set; }
     public Guid? FacilityId { get; private set; }
@@ -100,16 +96,13 @@ public class ServiceRequest
     }
 
     public void AssociatePropertyContext(
-        Guid buildingId,
         Guid? apartmentUnitId,
         Guid? facilityId,
         Guid? equipmentId,
         DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
-        ThrowIfEmpty(buildingId, nameof(buildingId));
 
-        BuildingId = buildingId;
         ApartmentUnitId = apartmentUnitId;
         FacilityId = facilityId;
         EquipmentId = equipmentId;

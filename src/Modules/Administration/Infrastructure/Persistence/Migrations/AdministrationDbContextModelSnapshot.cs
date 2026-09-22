@@ -398,64 +398,6 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                     b.ToTable("user_access_history", "administration");
                 });
 
-            modelBuilder.Entity("PropFlow.Modules.Administration.Domain.UserBuildingAccesses.UserBuildingAccess", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<DateTimeOffset>("GrantedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("granted_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid?>("GrantedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("granted_by");
-
-                    b.Property<string>("Reason")
-                        .HasColumnType("text")
-                        .HasColumnName("reason");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<Guid?>("RevokedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("revoked_by");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BuildingId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("UserId", "BuildingId")
-                        .IsUnique()
-                        .HasFilter("\"revoked_at\" IS NULL");
-
-                    b.HasIndex("UserId", "BuildingId", "GrantedAt");
-
-                    b.ToTable("user_building_accesses", "administration");
-                });
-
             modelBuilder.Entity("PropFlow.Modules.Administration.Domain.UserRoleAssignments.UserRoleAssignment", b =>
                 {
                     b.Property<Guid>("Id")

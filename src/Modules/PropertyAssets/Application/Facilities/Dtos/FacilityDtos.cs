@@ -4,8 +4,6 @@ namespace PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
 
 public record FacilityDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     string Code,
     string Name,
     string? FacilityType,
@@ -19,8 +17,6 @@ public record FacilityDto(
 
 public record FacilityDetailDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     string Code,
     string Name,
     string? FacilityType,
@@ -35,22 +31,18 @@ public record FacilityDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateFacilityCommand(
-    Guid BuildingId,
     string Code,
     string Name,
     string? FacilityType = null,
     string? LocationDescription = null,
     string? Description = null,
-    Guid? CreatedBy = null,
-    MasterDataStatus InitialStatus = MasterDataStatus.ACTIVE);
+    Guid? CreatedBy = null);
 
 public record UpdateFacilityCommand(
-    Guid BuildingId,
     string Name,
     string? FacilityType = null,
     string? LocationDescription = null,
     string? Description = null,
-    MasterDataStatus? Status = null,
     Guid? UpdatedBy = null);
 
 public record SetFacilityStatusCommand(
@@ -58,8 +50,19 @@ public record SetFacilityStatusCommand(
     Guid? UpdatedBy = null);
 
 public record FacilityFilterQuery(
-    Guid? BuildingId = null,
     string? SearchKeyword = null,
     MasterDataStatus? Status = null,
+    string? FacilityType = null,
     int PageIndex = 1,
     int PageSize = 10);
+
+public record PagedResult<T>(
+    IReadOnlyList<T> Items,
+    int TotalCount,
+    int PageIndex,
+    int PageSize)
+{
+    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
+    public bool HasPreviousPage => PageIndex > 1;
+    public bool HasNextPage => PageIndex < TotalPages;
+}
