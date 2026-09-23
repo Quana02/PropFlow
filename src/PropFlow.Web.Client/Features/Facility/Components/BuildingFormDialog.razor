@@ -49,10 +49,7 @@
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">Múi Giờ <span class="text-danger">*</span></label>
-                                    <InputSelect @bind-Value="UpdateModel.TimeZoneId" class="form-select" style="border-radius: 1rem;">
-                                        <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
-                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
-                                    </InputSelect>
+                                    <PropFlowSelect @bind-Value="UpdateModel.TimeZoneId" Options="TimeZoneOptions" AriaLabel="Múi giờ" />
                                     <ValidationMessage For="() => UpdateModel.TimeZoneId" class="text-danger small mt-1" />
                                 </div>
                                 <div class="col-md-6">
@@ -111,10 +108,7 @@
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-semibold">Múi Giờ <span class="text-danger">*</span></label>
-                                    <InputSelect @bind-Value="CreateModel.TimeZoneId" class="form-select" style="border-radius: 1rem;">
-                                        <option value="Asia/Ho_Chi_Minh">Asia/Ho_Chi_Minh (GMT+7)</option>
-                                        <option value="UTC">UTC (Coordinated Universal Time)</option>
-                                    </InputSelect>
+                                    <PropFlowSelect @bind-Value="CreateModel.TimeZoneId" Options="TimeZoneOptions" AriaLabel="Múi giờ" />
                                     <ValidationMessage For="() => CreateModel.TimeZoneId" class="text-danger small mt-1" />
                                 </div>
                                 <div class="col-md-6">
@@ -154,6 +148,7 @@
 }
 
 @code {
+    private static readonly PropFlowSelectOption[] TimeZoneOptions = [new("Asia/Ho_Chi_Minh", "Asia/Ho_Chi_Minh (GMT+7)"), new("UTC", "UTC (Coordinated Universal Time)")];
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public BuildingModel? BuildingToEdit { get; set; }
     [Parameter] public EventCallback OnSaved { get; set; }

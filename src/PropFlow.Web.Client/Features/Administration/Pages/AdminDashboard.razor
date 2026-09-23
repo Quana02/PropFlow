@@ -1,84 +1,96 @@
 @page "/admin/dashboard"
 @layout PropFlow.Web.Client.Layout.AdminLayout
 @using Microsoft.AspNetCore.Authorization
-@using PropFlow.Web.Client.Services.Authentication
+@using Microsoft.AspNetCore.Components
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Features.Administration.Services
 @attribute [Authorize(Roles = "ADMIN")]
-@inject AuthSession Session
+@inject IAdministrationApiClient AdministrationApi
 
-<PageTitle>Quản lý phân quyền — PropFlow</PageTitle>
+<PageTitle>Quản trị hệ thống — PropFlow</PageTitle>
 
 <div class="admin-dashboard">
-    <section class="metrics-grid" aria-label="Chỉ số hệ thống">
-        <article class="metric-card metric-accounts"><span class="metric-icon" aria-hidden="true">♙</span><div class="metric-copy"><span>Tổng tài khoản</span><strong>—</strong><small>Chưa kết nối API tài khoản</small></div></article>
-        <article class="metric-card metric-staff"><span class="metric-icon" aria-hidden="true">♧</span><div class="metric-copy"><span>Tài khoản nhân viên</span><strong>—</strong><small>Chưa kết nối API nhân sự</small></div></article>
-        <article class="metric-card metric-restricted"><span class="metric-icon" aria-hidden="true">◇</span><div class="metric-copy"><span>Tài khoản bị hạn chế</span><strong>—</strong><small>Chưa kết nối API trạng thái</small></div></article>
+@if (Tab == "overview")
+{
+    <section class="rbac-panel"><header class="rbac-header"><div class="rbac-title"><span class="section-icon">▦</span><div><h1>Tổng quan</h1><p>Chỉ số vận hành toàn hệ thống · chỉ đọc</p></div></div></header>
+    @if (overviewLoading) { <p class="empty-state">Đang tải chỉ số…</p> }
+    else if (overviewError is not null) { <p class="empty-state" role="alert">@overviewError</p> }
+    else if (overview is not null)
+    {
+        <div class="metrics-grid overview-metrics" aria-label="Chỉ số toàn hệ thống">
+            <article class="metric-card metric-accounts"><span class="metric-icon">⌂</span><div class="metric-copy"><span>Tổng số căn hộ</span><strong>@overview.TotalApartments</strong></div></article>
+            <article class="metric-card metric-staff"><span class="metric-icon">◇</span><div class="metric-copy"><span>Căn hộ trống</span><strong>@overview.VacantApartments</strong></div></article>
+            <article class="metric-card metric-accounts"><span class="metric-icon">♙</span><div class="metric-copy"><span>Tổng số cư dân</span><strong>@overview.TotalResidents</strong></div></article>
+            <article class="metric-card metric-restricted"><span class="metric-icon">☷</span><div class="metric-copy"><span>Yêu cầu dịch vụ đang mở</span><strong>@overview.OpenServiceRequests</strong></div></article>
+        </div>
+    }
     </section>
-
-    <section class="rbac-panel" aria-labelledby="rbac-heading">
-        <header class="rbac-header">
-            <div class="rbac-title">
-                <span class="section-icon" aria-hidden="true">♢</span>
-                <div>
-                    <div class="title-line"><h1 id="rbac-heading">Quản lý Phân quyền &amp; Vai trò Hệ thống</h1><span class="catalog-badge">5 vai trò hệ thống</span></div>
-                    <p>Danh mục vai trò theo RBAC của PropFlow và quyền của phiên quản trị hiện tại.</p>
-                </div>
-            </div>
-            <div class="rbac-actions">
-                <button type="button" disabled title="API xuất ma trận quyền chưa được triển khai">⇩ Xuất ma trận quyền</button>
-                <button type="button" class="primary" disabled title="API quản lý vai trò chưa được triển khai">♙ Tạo vai trò mới</button>
-            </div>
-        </header>
-
-        <div class="policy-strip" aria-label="Trạng thái chính sách">
-            <span><i class="status-dot green"></i>Danh mục mặc định: <strong>5 role hệ thống</strong></span>
-            <span><i class="status-dot blue"></i>Phiên hiện tại: <strong>@(Session.User?.Role ?? "Chưa xác định")</strong></span>
-            <span class="policy-note">Dữ liệu quyền đầy đủ chờ API Administration</span>
-        </div>
-
-        <div class="table-tools">
-            <label class="role-search"><span aria-hidden="true">⌕</span><input @bind="search" @bind:event="oninput" placeholder="Tìm kiếm theo tên vai trò hoặc mã role…" /></label>
-            <span class="result-count">Hiển thị @FilteredRoles.Count / @RoleRows.Length vai trò</span>
-        </div>
-
-        <div class="role-table-wrap">
-            <table class="role-table">
-                <thead><tr><th>Vai trò &amp; mã role</th><th>Phạm vi hoạt động</th><th>Quyền được cấp</th><th>Trạng thái dữ liệu</th><th><span class="visually-hidden">Hành động</span></th></tr></thead>
-                <tbody>
-                    @foreach (var role in FilteredRoles)
-                    {
-                        <tr>
-                            <td><div class="role-identity"><span class="role-avatar @role.Tone">@role.Initials</span><div><strong>@role.Name</strong><span>@role.Description</span></div><code>@role.Code</code></div></td>
-                            <td><span class="scope-pill @role.Tone">@role.Scope</span></td>
-                            <td>
-                                @if (role.Code == "ADMIN")
-                                { <div class="permission-value"><strong>@CurrentPermissionCount quyền trong phiên</strong><span>Thông tin từ token đăng nhập</span></div> }
-                                else
-                                { <div class="permission-value"><strong>Chưa có dữ liệu</strong><span>Chờ API ma trận quyền</span></div> }
-                            </td>
-                            <td><span class="data-state @(role.Code == "ADMIN" ? "connected" : "pending")">@(role.Code == "ADMIN" ? "Đã đọc phiên" : "Chưa kết nối")</span></td>
-                            <td><button type="button" class="row-action" disabled aria-label="Chi tiết @role.Name" title="Chức năng chi tiết chưa được kết nối">•••</button></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-            @if (FilteredRoles.Count == 0) { <p class="empty-state">Không tìm thấy vai trò phù hợp.</p> }
-        </div>
-
-        <footer class="table-footer"><span>Danh mục vai trò chuẩn được định nghĩa trong Administration domain.</span><span>Trang 1 / 1</span></footer>
+}
+else if (Tab == "activity")
+{
+    <section class="rbac-panel activity-panel"><header class="rbac-header"><div class="rbac-title"><span class="section-icon"><span class="material-symbols-outlined" aria-hidden="true">history</span></span><div><h1>Nhật ký quản trị</h1><p>Theo dõi các thay đổi tài khoản nội bộ · chỉ đọc</p></div></div></header>
+    <div class="activity-tools"><div class="activity-filter"><PropFlowSelect Value="activityAction" ValueChanged="FilterActivityAsync" Options="ActivityActionOptions" Variant="Filter" AriaLabel="Lọc theo hành động" /></div><span>@(activityPage?.Total ?? 0) hoạt động</span></div>
+    @if (activityLoading) { <p class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>Đang tải nhật ký…</p> }
+    else if (activityError is not null) { <p class="empty-state error-state" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span>@activityError</p> }
+    else if (activities.Length == 0) { <p class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">history_toggle_off</span>Chưa có hoạt động quản trị.</p> }
+    else { <div class="role-table-wrap"><table class="role-table activity-table"><thead><tr><th>Thời gian</th><th>Hành động</th><th>Tài khoản</th><th>Thay đổi</th><th><span class="visually-hidden">Hành động</span></th></tr></thead><tbody>@foreach (var item in activities) { <tr><td><time datetime="@item.Timestamp.ToString("O")"><strong>@item.Timestamp.LocalDateTime.ToString("dd/MM/yyyy")</strong><span>@item.Timestamp.LocalDateTime.ToString("HH:mm")</span></time></td><td><span class="activity-badge @ActionTone(item)"><span class="material-symbols-outlined" aria-hidden="true">@ActionIcon(item)</span>@ActionLabel(item)</span></td><td><div class="activity-account"><strong>@(item.TargetUsername ?? "Không xác định")</strong>@if (!string.IsNullOrWhiteSpace(item.TargetRole)) { <span class="activity-value-chip">@item.TargetRole</span> }</div></td><td>@ChangeContent(item)</td><td><button type="button" class="activity-view" title="Xem chi tiết" aria-label="Xem chi tiết hoạt động của @(item.TargetUsername ?? "tài khoản")" @onclick="() => selectedActivity = item"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button></td></tr> }</tbody></table></div><footer class="table-footer"><span>Hiển thị @activities.Length / @(activityPage?.Total ?? 0) hoạt động</span><span><button disabled="@(activityPageNumber <= 1)" @onclick="PreviousActivityPageAsync">Trước</button> Trang @activityPageNumber <button disabled="@(activityPage is null || activityPageNumber * activityPage.PageSize >= activityPage.Total)" @onclick="NextActivityPageAsync">Sau</button></span></footer> }
     </section>
+}
+else
+{
+    <section class="metrics-grid" aria-label="Tóm tắt tài khoản nội bộ">
+        <article class="metric-card metric-accounts"><span class="metric-icon">♙</span><div class="metric-copy"><span>Tổng tài khoản</span><strong>@(summary?.Total.ToString() ?? "—")</strong></div></article>
+        <article class="metric-card metric-staff"><span class="metric-icon">●</span><div class="metric-copy"><span>Đang hoạt động</span><strong>@(summary?.Active.ToString() ?? "—")</strong></div></article>
+        <article class="metric-card metric-restricted"><span class="metric-icon">◇</span><div class="metric-copy"><span>Bị vô hiệu hóa</span><strong>@(summary?.Disabled.ToString() ?? "—")</strong></div></article>
+        <article class="metric-card metric-restricted"><span class="metric-icon">⌧</span><div class="metric-copy"><span>Đang bị khóa</span><strong>@(summary?.Locked.ToString() ?? "—")</strong></div></article>
+    </section>
+    <section class="rbac-panel"><header class="rbac-header"><div class="rbac-title"><span class="section-icon">♙</span><div><div class="title-line"><h1>Tài khoản Ban quản lý</h1></div><p>Quản lý tài khoản nội bộ và vai trò của Ban quản lý.</p></div></div><div class="rbac-actions"><button type="button" class="primary" @onclick="OpenCreate">+ Tạo tài khoản</button></div></header>
+    @if (error is not null) { <p class="empty-state">@error</p> }
+    <div class="policy-strip" aria-label="Lọc theo vai trò"><button type="button" class="role-tab @(role == "MANAGER" ? "selected" : null)" aria-pressed="@(role == "MANAGER")" @onclick='() => SelectRoleAsync("MANAGER")'><span class="material-symbols-outlined" aria-hidden="true">manage_accounts</span><span><strong>MANAGER</strong><small>Trưởng Ban Quản lý · @Count("MANAGER")</small></span></button><button type="button" class="role-tab @(role == "STAFF" ? "selected" : null)" aria-pressed="@(role == "STAFF")" @onclick='() => SelectRoleAsync("STAFF")'><span class="material-symbols-outlined" aria-hidden="true">engineering</span><span><strong>STAFF</strong><small>Nhân viên vận hành · @Count("STAFF")</small></span></button><button type="button" class="role-tab @(role == "ACCOUNTANT" ? "selected" : null)" aria-pressed="@(role == "ACCOUNTANT")" @onclick='() => SelectRoleAsync("ACCOUNTANT")'><span class="material-symbols-outlined" aria-hidden="true">calculate</span><span><strong>ACCOUNTANT</strong><small>Kế toán · @Count("ACCOUNTANT")</small></span></button></div>
+    <div class="table-tools"><label class="role-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input @bind="search" placeholder="Tìm theo tên, username hoặc email" /></label><div class="admin-filter-select"><PropFlowSelect @bind-Value="status" Options="AccountStatusFilterOptions" Variant="Filter" AriaLabel="Lọc theo trạng thái" /></div><button type="button" class="filter-submit" @onclick="SearchAsync"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span><span>Tìm</span></button></div>
+    @if (accountsLoading) { <p class="empty-state">Đang tải tài khoản…</p> } else if (accounts.Length == 0) { <p class="empty-state">Chưa có tài khoản thuộc vai trò này.</p> } else { <div class="role-table-wrap"><table class="role-table"><thead><tr><th>Tên</th><th>Username</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>@foreach (var account in accounts) { <tr><td>@account.DisplayName</td><td>@account.Username</td><td>@account.Email</td><td>@account.Role</td><td><span class="data-state connected">@StatusLabel(account.Status)</span></td><td><button type="button" class="row-action enabled" @onclick="() => OpenRole(account)">Đổi vai trò</button><button type="button" class="row-action enabled" @onclick="() => OpenStatus(account)">Trạng thái</button></td></tr> }</tbody></table></div> }
+    <footer class="table-footer"><span>@(pageData?.Total ?? 0) tài khoản</span><span><button disabled="@(page <= 1)" @onclick="PreviousPageAsync">Trước</button> Trang @(page) <button disabled="@(pageData is null || page * 20 >= pageData.Total)" @onclick="NextPageAsync">Sau</button></span></footer>
+    </section>
+}
 </div>
 
+@if (showCreate) { <div class="admin-modal" role="dialog"><div class="modal-card"><h2>Tạo tài khoản nội bộ</h2><input @bind="createUsername" placeholder="Username" /><input @bind="createName" placeholder="Họ và tên" /><input @bind="createEmail" placeholder="Email" /><div class="admin-password-field"><input @bind="createPassword" type="@(showCreatePassword ? "text" : "password")" autocomplete="new-password" aria-label="Mật khẩu" placeholder="Mật khẩu (ít nhất 12 ký tự)" /><button type="button" class="admin-password-toggle" aria-label="@(showCreatePassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")" title="@(showCreatePassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")" aria-pressed="@showCreatePassword" @onclick="() => showCreatePassword = !showCreatePassword"><span class="material-symbols-outlined" aria-hidden="true">@(showCreatePassword ? "visibility_off" : "visibility")</span></button></div><PropFlowSelect @bind-Value="createRole" Options="RoleOptions" AriaLabel="Vai trò tài khoản" /><div class="rbac-actions"><button @onclick="CloseDialogs">Hủy</button><button class="primary" disabled="@submitting" @onclick="CreateAsync">Tạo tài khoản</button></div></div></div> }
+@if (selected is not null && action is not null) { <div class="admin-modal" role="dialog"><div class="modal-card"><h2>@(action == "role" ? "Đổi vai trò" : "Cập nhật trạng thái")</h2><p>@selected.Username · @selected.Role · @StatusLabel(selected.Status)</p>@if (action == "role") { <PropFlowSelect @bind-Value="nextRole" Options="RoleOptions" AriaLabel="Vai trò mới" /><p>Bạn có chắc muốn chuyển tài khoản @selected.Username từ @selected.Role sang @nextRole?</p> } else { <PropFlowSelect @bind-Value="nextStatus" Options="AccountStatusActionOptions" AriaLabel="Trạng thái mới" /><p>Bạn có chắc muốn cập nhật trạng thái tài khoản @selected.Username?</p> }<div class="rbac-actions"><button @onclick="CloseDialogs">Hủy</button><button class="primary" disabled="@submitting" @onclick="SubmitActionAsync">Xác nhận</button></div></div></div> }
+@if (selectedActivity is not null) { <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="activity-detail-title" @onclick="() => selectedActivity = null"><div class="modal-card activity-detail" @onclick:stopPropagation="true"><header><div><span class="activity-badge @ActionTone(selectedActivity)"><span class="material-symbols-outlined" aria-hidden="true">@ActionIcon(selectedActivity)</span>@ActionLabel(selectedActivity)</span><h2 id="activity-detail-title">Chi tiết hoạt động</h2></div><button type="button" class="modal-close" title="Đóng" aria-label="Đóng chi tiết hoạt động" @onclick="() => selectedActivity = null"><span class="material-symbols-outlined" aria-hidden="true">close</span></button></header><dl><div><dt>Thời gian</dt><dd>@selectedActivity.Timestamp.LocalDateTime.ToString("dd/MM/yyyy · HH:mm")</dd></div><div><dt>Người thực hiện</dt><dd>@ActorDisplay(selectedActivity)@if (selectedActivity.ActorUserId.HasValue) { <small>@selectedActivity.ActorUserId</small> }</dd></div><div><dt>Tài khoản</dt><dd>@(selectedActivity.TargetDisplayName ?? selectedActivity.TargetUsername ?? "Không có dữ liệu danh tính")@if (!string.IsNullOrWhiteSpace(selectedActivity.TargetUsername) && selectedActivity.TargetDisplayName != selectedActivity.TargetUsername) { <small>@selectedActivity.TargetUsername</small> }</dd></div>@if (!string.IsNullOrWhiteSpace(selectedActivity.TargetRole)) { <div><dt>Vai trò</dt><dd><span class="activity-value-chip">@selectedActivity.TargetRole</span></dd></div> }@if (!string.IsNullOrWhiteSpace(selectedActivity.OldRole) || !string.IsNullOrWhiteSpace(selectedActivity.NewRole)) { <div><dt>Thay đổi vai trò</dt><dd>@Transition(selectedActivity.OldRole, selectedActivity.NewRole)</dd></div> }@if (!string.IsNullOrWhiteSpace(selectedActivity.OldStatus) || !string.IsNullOrWhiteSpace(selectedActivity.NewStatus)) { <div><dt>Thay đổi trạng thái</dt><dd>@Transition(selectedActivity.OldStatus, selectedActivity.NewStatus)</dd></div> }<div><dt>Mã tham chiếu</dt><dd class="technical-reference">@(selectedActivity.TargetAccountId?.ToString() ?? selectedActivity.Id.ToString())</dd></div></dl></div></div> }
+
 @code {
-    private string search = string.Empty;
-    private int CurrentPermissionCount => Session.User?.Permissions.Length ?? 0;
-    private static readonly RoleRow[] RoleRows =
-    [
-        new("SA", "Super Admin", "ADMIN", "Quản trị hệ thống và chính sách", "Toàn hệ thống", "red"),
-        new("MG", "Trưởng Ban Quản lý", "MANAGER", "Điều hành hoạt động tòa nhà", "Vận hành tòa nhà", "blue"),
-        new("FN", "Kế toán", "ACCOUNTANT", "Tài chính, hóa đơn và công nợ", "Tài chính & hóa đơn", "green"),
-        new("ST", "Nhân viên vận hành", "STAFF", "Thực hiện nghiệp vụ vận hành", "Nghiệp vụ vận hành", "cyan"),
-        new("RS", "Cư dân", "RESIDENT", "Dịch vụ và thông tin cư dân", "Cổng thông tin cư dân", "violet")
-    ];
-    private IReadOnlyList<RoleRow> FilteredRoles => string.IsNullOrWhiteSpace(search) ? RoleRows : RoleRows.Where(role => role.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || role.Code.Contains(search, StringComparison.OrdinalIgnoreCase)).ToArray();
-    private sealed record RoleRow(string Initials, string Name, string Code, string Description, string Scope, string Tone);
+    [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
+    private string Tab => RequestedTab is "overview" or "activity" ? RequestedTab : "accounts";
+    private InternalAccountSummary? summary; private PagedInternalAccounts? pageData; private PagedAdministrationActivities? activityPage; private InternalAccount[] accounts = []; private AdministrationActivity[] activities = []; private AdministrationOverview? overview; private AdministrationActivity? selectedActivity;
+    private string role = "MANAGER", search = "", status = "", createUsername = "", createName = "", createEmail = "", createPassword = "", createRole = "STAFF", nextRole = "", nextStatus = "ACTIVE";
+    private static readonly PropFlowSelectOption[] RoleOptions = [new("MANAGER", "MANAGER"), new("STAFF", "STAFF"), new("ACCOUNTANT", "ACCOUNTANT")];
+    private static readonly PropFlowSelectOption[] AccountStatusFilterOptions = [new("", "Tất cả trạng thái"), new("ACTIVE", "Đang hoạt động"), new("DISABLED", "Bị vô hiệu hóa"), new("LOCKED", "Đang bị khóa")];
+    private static readonly PropFlowSelectOption[] AccountStatusActionOptions = [new("ACTIVE", "Kích hoạt / mở khóa"), new("DISABLED", "Vô hiệu hóa"), new("LOCKED", "Khóa")];
+    private int page = 1, activityPageNumber = 1; private bool accountsLoading, activityLoading, overviewLoading, showCreate, showCreatePassword, submitting; private string? error, action, overviewError, activityError, activityAction = ""; private InternalAccount? selected;
+    private static readonly PropFlowSelectOption[] ActivityActionOptions = [new("", "Tất cả hành động"), new("internal_account_created", "Tạo tài khoản"), new("internal_account_role_changed", "Đổi vai trò"), new("internal_account_status_changed", "Thay đổi trạng thái")];
+    protected override async Task OnParametersSetAsync() { if (Tab == "overview") await LoadOverviewAsync(); else if (Tab == "activity") await LoadActivityAsync(); else await LoadAccountsPageAsync(true); }
+    private async Task LoadOverviewAsync() { overviewLoading = true; overviewError = null; overview = null; var result = await AdministrationApi.GetOverviewAsync(); if (result.IsSuccess) overview = result.Data; else overviewError = result.Message ?? "Không thể tải chỉ số tổng quan."; overviewLoading = false; }
+    private async Task LoadAccountsPageAsync(bool includeSummary = false) { accountsLoading = true; error = null; if (includeSummary) { var s = await AdministrationApi.GetSummaryAsync(); if (s.IsSuccess) summary = s.Data; else error = s.Message; } var result = await AdministrationApi.GetAccountsAsync(role, search, status, page); if (result.IsSuccess) { pageData = result.Data; accounts = result.Data!.Items; } else error = result.Message; accountsLoading = false; }
+    private async Task LoadActivityAsync() { activityLoading = true; activityError = null; var result = await AdministrationApi.GetActivityAsync(activityAction, activityPageNumber); if (result.IsSuccess) { activityPage = result.Data; activities = result.Data!.Items; } else { activities = []; activityError = result.Message ?? "Không thể tải nhật ký quản trị."; } activityLoading = false; }
+    private async Task FilterActivityAsync(string value) { activityAction = value; activityPageNumber = 1; await LoadActivityAsync(); }
+    private async Task PreviousActivityPageAsync() { if (activityPageNumber > 1) { activityPageNumber--; await LoadActivityAsync(); } }
+    private async Task NextActivityPageAsync() { if (activityPage is not null && activityPageNumber * activityPage.PageSize < activityPage.Total) { activityPageNumber++; await LoadActivityAsync(); } }
+    private async Task SelectRoleAsync(string value) { role = value; page = 1; await LoadAccountsPageAsync(); }
+    private async Task SearchAsync() { page = 1; await LoadAccountsPageAsync(); }
+    private async Task PreviousPageAsync() { if (page > 1) { page--; await LoadAccountsPageAsync(); } }
+    private async Task NextPageAsync() { if (pageData is not null && page * 20 < pageData.Total) { page++; await LoadAccountsPageAsync(); } }
+    private int Count(string code) => summary?.RoleCounts.TryGetValue(code, out var value) == true ? value : 0;
+    private void OpenCreate() { showCreate = true; showCreatePassword = false; error = null; }
+    private void OpenRole(InternalAccount item) { selected = item; action = "role"; nextRole = item.Role; }
+    private void OpenStatus(InternalAccount item) { selected = item; action = "status"; nextStatus = item.Status == "ACTIVE" ? "DISABLED" : "ACTIVE"; }
+    private void CloseDialogs() { showCreate = false; showCreatePassword = false; selected = null; action = null; }
+    private async Task CreateAsync() { submitting = true; var result = await AdministrationApi.CreateAsync(new(createUsername, createName, createEmail, createPassword, createRole, null)); submitting = false; if (!result.IsSuccess) { error = result.Message; return; } CloseDialogs(); role = createRole; page = 1; await LoadAccountsPageAsync(true); }
+    private async Task SubmitActionAsync() { if (selected is null) return; submitting = true; var result = action == "role" ? await AdministrationApi.ChangeRoleAsync(selected.Id, nextRole) : await AdministrationApi.ChangeStatusAsync(selected.Id, nextStatus); submitting = false; if (!result.IsSuccess) { error = result.Message; return; } CloseDialogs(); await LoadAccountsPageAsync(true); }
+    private static string StatusLabel(string value) => value switch { "ACTIVE" => "Đang hoạt động", "DISABLED" => "Bị vô hiệu hóa", "LOCKED" => "Đang bị khóa", _ => value };
+    private static string ActionLabel(AdministrationActivity item) => item.Action switch { "internal_account_created" => "Tạo tài khoản", "internal_account_role_changed" => "Đổi vai trò", "internal_account_status_changed" when item.NewStatus == "LOCKED" => "Khóa tài khoản", "internal_account_status_changed" when item.NewStatus == "ACTIVE" => "Kích hoạt tài khoản", "internal_account_status_changed" => "Đổi trạng thái", _ => item.Action };
+    private static string ActionIcon(AdministrationActivity item) => item.Action switch { "internal_account_created" => "person_add", "internal_account_role_changed" => "manage_accounts", "internal_account_status_changed" when item.NewStatus == "LOCKED" => "lock", "internal_account_status_changed" when item.NewStatus == "ACTIVE" => "lock_open", "internal_account_status_changed" => "person_off", _ => "history" };
+    private static string ActionTone(AdministrationActivity item) => item.Action switch { "internal_account_created" => "activity-created", "internal_account_role_changed" => "activity-role", "internal_account_status_changed" when item.NewStatus == "ACTIVE" => "activity-enabled", _ => "activity-status" };
+    private static string ChangeContent(AdministrationActivity item) => item.Action switch { "internal_account_created" => "Tài khoản nội bộ được tạo", "internal_account_role_changed" => Transition(item.OldRole, item.NewRole), "internal_account_status_changed" => Transition(item.OldStatus, item.NewStatus), _ => "Hoạt động quản trị" };
+    private static string Transition(string? oldValue, string? newValue) => oldValue is not null && newValue is not null ? $"{oldValue} → {newValue}" : newValue ?? oldValue ?? "Không có dữ liệu thay đổi";
+    private static string ActorDisplay(AdministrationActivity item) => item.ActorDisplayName ?? item.ActorUsername ?? "Không có dữ liệu danh tính";
 }
