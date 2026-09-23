@@ -44,7 +44,7 @@ public sealed class AdministrationOverviewAccessTests
     }
     private sealed class Buildings : IBuildingTimeZones
     {
-        public Task<IReadOnlyList<BuildingTimeZone>> GetAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        public Task<IReadOnlyList<BuildingTimeZone>> GetAllAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<BuildingTimeZone>>([]);
     }
     private sealed class Residents : IResidentOverviewSource
@@ -54,7 +54,9 @@ public sealed class AdministrationOverviewAccessTests
     }
     private sealed class Requests : IServiceRequestOverviewSource
     {
-        public Task<int> CountOpenAsync(CancellationToken ct) => Task.FromResult(0);
+        public Task<ServiceRequestOverviewData> GetOverviewAsync(DateTimeOffset instant, int trendDays,
+            IReadOnlyList<ServiceRequestBuildingTimeZone> buildingTimeZones, CancellationToken ct) =>
+            Task.FromResult(new ServiceRequestOverviewData(0, [], []));
     }
 
     [Theory]

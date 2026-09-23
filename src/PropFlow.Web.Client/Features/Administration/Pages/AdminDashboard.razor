@@ -2,8 +2,10 @@
 @layout PropFlow.Web.Client.Layout.AdminLayout
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components
+@using PropFlow.Web.Client.Features.Administration
 @using PropFlow.Web.Client.Features.Administration.Models
 @using PropFlow.Web.Client.Features.Administration.Services
+@using PropFlow.Web.Client.Features.Administration.Components
 @attribute [Authorize(Roles = "ADMIN")]
 @inject IAdministrationApiClient AdministrationApi
 
@@ -22,6 +24,11 @@
             <article class="metric-card metric-staff"><span class="metric-icon">◇</span><div class="metric-copy"><span>Căn hộ trống</span><strong>@overview.VacantApartments</strong></div></article>
             <article class="metric-card metric-accounts"><span class="metric-icon">♙</span><div class="metric-copy"><span>Tổng số cư dân</span><strong>@overview.TotalResidents</strong></div></article>
             <article class="metric-card metric-restricted"><span class="metric-icon">☷</span><div class="metric-copy"><span>Yêu cầu dịch vụ đang mở</span><strong>@overview.OpenServiceRequests</strong></div></article>
+        </div>
+        <div class="overview-charts" aria-label="Biểu đồ vận hành toàn hệ thống">
+            <ApartmentOccupancyChart Total="overview.TotalApartments" Occupied="overview.OccupiedApartments" Vacant="overview.VacantApartments" />
+            <ServiceRequestStatusChart Items="overview.ServiceRequestsByStatus" />
+            <ServiceRequestTrendChart Items="overview.ServiceRequestTrend" />
         </div>
     }
     </section>
@@ -60,7 +67,7 @@ else
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
-    private string Tab => RequestedTab is "overview" or "activity" ? RequestedTab : "accounts";
+    private string Tab => AdminDashboardTabs.Normalize(RequestedTab);
     private InternalAccountSummary? summary; private PagedInternalAccounts? pageData; private PagedAdministrationActivities? activityPage; private InternalAccount[] accounts = []; private AdministrationActivity[] activities = []; private AdministrationOverview? overview; private AdministrationActivity? selectedActivity;
     private string role = "MANAGER", search = "", status = "", createUsername = "", createName = "", createEmail = "", createPassword = "", createRole = "STAFF", nextRole = "", nextStatus = "ACTIVE";
     private static readonly PropFlowSelectOption[] RoleOptions = [new("MANAGER", "MANAGER"), new("STAFF", "STAFF"), new("ACCOUNTANT", "ACCOUNTANT")];

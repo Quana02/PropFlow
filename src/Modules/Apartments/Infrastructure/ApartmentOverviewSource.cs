@@ -11,8 +11,10 @@ public sealed class ApartmentOverviewSource(ApartmentsDbContext db) : IApartment
     {
         var units = await db.ApartmentUnits.AsNoTracking()
             .Where(unit => unit.Status == MasterDataStatus.ACTIVE)
-            .Select(unit => new { unit.BuildingId, unit.Id }).ToArrayAsync(ct);
+            .Select(unit => new { unit.BuildingId, unit.Id })
+            .ToArrayAsync(ct);
         return units.GroupBy(unit => unit.BuildingId)
-            .Select(group => new ActiveApartmentIds(group.Key, group.Select(unit => unit.Id).ToArray())).ToArray();
+            .Select(group => new ActiveApartmentIds(group.Key, group.Select(unit => unit.Id).ToArray()))
+            .ToArray();
     }
 }

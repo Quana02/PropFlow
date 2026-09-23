@@ -1,19 +1,23 @@
 using Microsoft.EntityFrameworkCore;
-using PropFlow.Modules.Apartments.Domain.ApartmentUnits;
 using PropFlow.Modules.Apartments.Contracts;
+using PropFlow.Modules.Apartments.Domain.ApartmentUnits;
 using PropFlow.Modules.Apartments.Infrastructure;
 using PropFlow.Modules.Apartments.Infrastructure.Persistence;
-using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.PropertyAssets.Contracts;
+using PropFlow.Modules.PropertyAssets.Domain.Buildings;
+using PropFlow.Modules.PropertyAssets.Infrastructure;
+using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
-using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.Residents.Domain.ResidentApartments;
 using PropFlow.Modules.Residents.Domain.Residents;
 using PropFlow.Modules.Residents.Infrastructure;
 using PropFlow.Modules.Residents.Infrastructure.Persistence;
+using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
+using PropFlow.Web.Client.Features.Administration;
 
 namespace PropFlow.UnitTests;
 
@@ -25,16 +29,19 @@ public sealed class AdministrationOverviewTests
     {
         public override DateTimeOffset GetUtcNow() => new(2026, 9, 22, 23, 30, 0, TimeSpan.Zero);
     }
-    private sealed class FixedApartments(Guid building, Guid[] ids) : IApartmentOverviewSource
+
+    private sealed class FixedApartments(Guid buildingId, Guid[] ids) : IApartmentOverviewSource
     {
         public Task<IReadOnlyList<ActiveApartmentIds>> GetActiveApartmentsAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<ActiveApartmentIds>>([new ActiveApartmentIds(building, ids)]);
+            Task.FromResult<IReadOnlyList<ActiveApartmentIds>>([new(buildingId, ids)]);
     }
-    private sealed class FixedBuildings(Guid building) : IBuildingTimeZones
+
+    private sealed class FixedBuildings(Guid buildingId) : IBuildingTimeZones
     {
-        public Task<IReadOnlyList<BuildingTimeZone>> GetAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<BuildingTimeZone>>([new BuildingTimeZone(building, "Asia/Ho_Chi_Minh")]);
+        public Task<IReadOnlyList<BuildingTimeZone>> GetAllAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<BuildingTimeZone>>([new(buildingId, "Asia/Ho_Chi_Minh")]);
     }
+
     private sealed class CapturingResidents : IResidentOverviewSource
     {
         public DateOnly Date { get; private set; }
@@ -44,26 +51,56 @@ public sealed class AdministrationOverviewTests
             return Task.FromResult(new ResidentOverviewCounts(7, 1));
         }
     }
+
     private sealed class FixedRequests : IServiceRequestOverviewSource
     {
-        public Task<int> CountOpenAsync(CancellationToken ct) => Task.FromResult(5);
+        public DateOnly From { get; private set; }
+        public DateOnly Through { get; private set; }
+        public Task<ServiceRequestOverviewData> GetOverviewAsync(DateTimeOffset instant, int trendDays,
+            IReadOnlyList<ServiceRequestBuildingTimeZone> buildingTimeZones, CancellationToken ct)
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(Assert.Single(buildingTimeZones).TimeZoneId);
+            Through = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
+            From = Through.AddDays(-(trendDays - 1));
+            return Task.FromResult(new ServiceRequestOverviewData(5,
+                [new(nameof(ServiceRequestStatus.SUBMITTED), 5)], [new(Through, 2)]));
+        }
     }
 
     [Fact]
-    public async Task Reporting_composes_source_counts_using_building_local_date()
+    public async Task Reporting_composes_counts_and_charts_using_building_local_date()
     {
-        var building = Guid.NewGuid();
         var residents = new CapturingResidents();
-        var query = new AdministrationOverviewQuery(new FixedApartments(building, [Guid.NewGuid(), Guid.NewGuid()]),
-            new FixedBuildings(building), residents, new FixedRequests(), new FixedClock());
+        var requests = new FixedRequests();
+        var buildingId = Guid.NewGuid();
+        var query = new AdministrationOverviewQuery(new FixedApartments(buildingId, [Guid.NewGuid(), Guid.NewGuid()]),
+            new FixedBuildings(buildingId), residents, requests, new FixedClock());
 
         var result = await query.GetAsync(default);
 
         Assert.Equal(new DateOnly(2026, 9, 23), residents.Date);
+        Assert.Equal(new DateOnly(2026, 8, 25), requests.From);
+        Assert.Equal(new DateOnly(2026, 9, 23), requests.Through);
         Assert.Equal(2, result.TotalApartments);
+        Assert.Equal(1, result.OccupiedApartments);
         Assert.Equal(1, result.VacantApartments);
         Assert.Equal(7, result.TotalResidents);
         Assert.Equal(5, result.OpenServiceRequests);
+    }
+
+    [Fact]
+    public async Task Building_time_zone_source_supports_existing_multiple_buildings()
+    {
+        await using var db = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        db.Buildings.AddRange(
+            new Building("B1", "Building 1", "Address 1", Now, "Asia/Ho_Chi_Minh"),
+            new Building("B2", "Building 2", "Address 2", Now, "UTC"));
+        await db.SaveChangesAsync();
+
+        var zones = await new BuildingTimeZones(db).GetAllAsync(default);
+
+        Assert.Equal(2, zones.Count);
     }
 
     [Fact]
@@ -71,9 +108,9 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new ApartmentsDbContext(new DbContextOptionsBuilder<ApartmentsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var building = Guid.NewGuid();
-        var active = new ApartmentUnit(building, "101", 1, Now);
-        var inactive = new ApartmentUnit(building, "102", 1, Now);
+        var buildingId = Guid.NewGuid();
+        var active = new ApartmentUnit(buildingId, "101", 1, Now);
+        var inactive = new ApartmentUnit(buildingId, "102", 1, Now);
         inactive.Deactivate(null, Now);
         db.ApartmentUnits.AddRange(active, inactive);
         await db.SaveChangesAsync();
@@ -112,23 +149,42 @@ public sealed class AdministrationOverviewTests
         Assert.Equal(1, counts.OccupiedActiveApartments);
     }
 
-    [Theory]
-    [InlineData(ServiceRequestStatus.SUBMITTED, 1)]
-    [InlineData(ServiceRequestStatus.UNDER_REVIEW, 1)]
-    [InlineData(ServiceRequestStatus.ASSIGNED, 1)]
-    [InlineData(ServiceRequestStatus.IN_PROGRESS, 1)]
-    [InlineData(ServiceRequestStatus.RESOLVED, 1)]
-    [InlineData(ServiceRequestStatus.CLOSED, 0)]
-    [InlineData(ServiceRequestStatus.CANCELLED, 0)]
-    public async Task Requests_source_counts_only_non_terminal_statuses(ServiceRequestStatus status, int expected)
+    [Fact]
+    public async Task Requests_source_returns_all_statuses_and_zero_filled_local_daily_trend()
     {
         await using var db = new ServiceRequestsDbContext(new DbContextOptionsBuilder<ServiceRequestsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var request = new ServiceRequest(Guid.NewGuid().ToString("N"), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Title", "Description", Now);
-        typeof(ServiceRequest).GetProperty(nameof(ServiceRequest.Status))!.SetValue(request, status);
-        db.ServiceRequests.Add(request);
+        var statuses = Enum.GetValues<ServiceRequestStatus>();
+        var buildingId = Guid.NewGuid();
+        foreach (var status in statuses)
+        {
+            var request = CreateRequest(buildingId, new DateTimeOffset(2026, 9, 22, 10, 0, 0, TimeSpan.Zero));
+            typeof(ServiceRequest).GetProperty(nameof(ServiceRequest.Status))!.SetValue(request, status);
+            db.ServiceRequests.Add(request);
+        }
+        db.ServiceRequests.Add(CreateRequest(buildingId, new DateTimeOffset(2026, 9, 20, 18, 30, 0, TimeSpan.Zero)));
         await db.SaveChangesAsync();
 
-        Assert.Equal(expected, await new ServiceRequestOverviewSource(db).CountOpenAsync(default));
+        var result = await new ServiceRequestOverviewSource(db).GetOverviewAsync(
+            new DateTimeOffset(2026, 9, 23, 12, 0, 0, TimeSpan.Zero), 4,
+            [new ServiceRequestBuildingTimeZone(buildingId, "Asia/Ho_Chi_Minh")], default);
+
+        Assert.Equal(statuses.Length, result.StatusCounts.Count);
+        Assert.Equal(6, result.OpenCount);
+        Assert.Equal([0, 1, 7, 0], result.CreatedTrend.Select(item => item.Count));
+        Assert.Equal(new DateOnly(2026, 9, 20), result.CreatedTrend[0].Date);
+        Assert.Equal(new DateOnly(2026, 9, 23), result.CreatedTrend[^1].Date);
     }
+
+    [Theory]
+    [InlineData(null, "overview")]
+    [InlineData("overview", "overview")]
+    [InlineData("accounts", "accounts")]
+    [InlineData("activity", "activity")]
+    [InlineData("invalid", "overview")]
+    public void Admin_dashboard_tab_falls_back_to_overview(string? requested, string expected) =>
+        Assert.Equal(expected, AdminDashboardTabs.Normalize(requested));
+
+    private static ServiceRequest CreateRequest(Guid buildingId, DateTimeOffset createdAt) =>
+        new(Guid.NewGuid().ToString("N"), Guid.NewGuid(), Guid.NewGuid(), buildingId, "Title", "Description", createdAt);
 }

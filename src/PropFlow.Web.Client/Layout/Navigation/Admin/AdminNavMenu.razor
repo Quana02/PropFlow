@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Web.Client.Features.Administration
 @implements IDisposable
 @inject NavigationManager Navigation
 
@@ -18,7 +19,8 @@
         var query = new Uri(Navigation.Uri).Query.TrimStart('?');
         var tabParameter = query.Split('&', StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault(part => part.StartsWith("tab=", StringComparison.OrdinalIgnoreCase));
-        var current = tabParameter is null ? "accounts" : Uri.UnescapeDataString(tabParameter[4..]);
+        var requested = tabParameter is null ? null : Uri.UnescapeDataString(tabParameter[4..]);
+        var current = AdminDashboardTabs.Normalize(requested);
         return current == tab;
     }
 

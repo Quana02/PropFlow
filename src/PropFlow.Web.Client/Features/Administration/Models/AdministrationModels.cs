@@ -11,4 +11,13 @@ public sealed record AdministrationActivity(Guid Id, DateTimeOffset Timestamp, s
     Guid? ActorUserId, string? ActorUsername, string? ActorDisplayName,
     Guid? TargetAccountId, string? TargetUsername, string? TargetDisplayName, string? TargetRole, string? TargetStatus,
     string? OldRole, string? NewRole, string? OldStatus, string? NewStatus);
-public sealed record AdministrationOverview(int TotalApartments, int VacantApartments, int TotalResidents, int OpenServiceRequests);
+public sealed record AdministrationOverviewStatus(string Status, int Count);
+public sealed record AdministrationOverviewTrend(DateOnly Date, int Count);
+public sealed record AdministrationOverview(
+    int TotalApartments,
+    int VacantApartments,
+    int TotalResidents,
+    int OpenServiceRequests,
+    int OccupiedApartments,
+    AdministrationOverviewStatus[] ServiceRequestsByStatus,
+    AdministrationOverviewTrend[] ServiceRequestTrend);
