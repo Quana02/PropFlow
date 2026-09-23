@@ -1,0 +1,105 @@
+@page "/finance/invoices/unpaid"
+@layout PropFlow.Web.Client.Layout.AccountantLayout
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "ACCOUNTANT")]
+
+<PageTitle>Hóa đơn chưa thanh toán — PropFlow</PageTitle>
+
+<div class="unpaid-page">
+    <header class="unpaid-heading">
+        <div>
+            <nav class="unpaid-breadcrumb" aria-label="Đường dẫn trang">
+                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
+                <span aria-hidden="true">›</span>
+                <span aria-current="page">Hóa đơn &amp; Công nợ</span>
+            </nav>
+            <h1>Hóa đơn chưa thanh toán</h1>
+            <p>Theo dõi các kỳ phí sinh hoạt, dịch vụ và tiện ích còn nghĩa vụ thanh toán trong phạm vi được cấp quyền.</p>
+        </div>
+        <div class="unpaid-actions">
+            <span title="Chưa khả dụng: chưa có API xuất danh sách hóa đơn"><button type="button" disabled><span class="material-symbols-outlined" aria-hidden="true">download</span> Xuất danh sách (Excel)</button></span>
+            <span title="Chưa khả dụng: chờ xác nhận tích hợp Communication"><button type="button" disabled><span class="material-symbols-outlined" aria-hidden="true">mail</span> Gửi thông báo nhắc nợ</button></span>
+        </div>
+    </header>
+
+    <section class="unpaid-summary" aria-label="Tổng quan hóa đơn chưa thanh toán">
+        <article class="unpaid-card">
+            <span class="card-label">TỔNG CĂN CHƯA ĐÓNG</span>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Chờ dữ liệu tổng hợp từ Billing và Payments</small>
+        </article>
+        <article class="unpaid-card amount">
+            <span class="card-label">TỔNG TIỀN CHƯA THU</span>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Chờ số dư công nợ từ backend</small>
+        </article>
+        <article class="unpaid-card due-soon">
+            <span class="card-label">SẮP ĐẾN HẠN</span>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Chờ kỳ hạn và múi giờ tòa nhà</small>
+        </article>
+        <article class="unpaid-card partial">
+            <span class="card-label">THANH TOÁN MỘT PHẦN</span>
+            <strong aria-label="Chưa có số liệu">—</strong>
+            <small>Chờ trạng thái tổng hợp từ backend</small>
+        </article>
+    </section>
+
+    <section class="unpaid-content" aria-labelledby="unpaid-list-title">
+        <div class="unpaid-toolbar">
+            <div class="unpaid-filters">
+                <label class="unpaid-search" title="Chưa khả dụng: chưa có API tìm kiếm hóa đơn">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <span class="visually-hidden">Tìm hóa đơn</span>
+                    <input type="search" disabled placeholder="Tìm theo mã hóa đơn hoặc căn hộ..." />
+                </label>
+                <label class="unpaid-field" title="Chưa khả dụng: chưa có API lọc kỳ hóa đơn">
+                    <span>Kỳ hóa đơn</span>
+                    <input type="month" disabled />
+                </label>
+                <label class="unpaid-field" title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền">
+                    <span>Tòa nhà</span>
+                    <PropFlowSelect Value="@string.Empty" Options="PropFlowSelectOptions.UnavailableBuilding" Variant="Filter" AriaLabel="Chọn tòa nhà" Disabled="true" />
+                </label>
+            </div>
+            <p class="unpaid-filter-note">Bộ lọc sẽ hoạt động khi Billing cung cấp API tìm kiếm theo phạm vi được cấp quyền.</p>
+        </div>
+
+        <div class="unpaid-table-card">
+            <div class="unpaid-table-heading">
+                <div>
+                    <h2 id="unpaid-list-title">Danh sách hóa đơn chưa thanh toán</h2>
+                    <p>Trạng thái thanh toán và số dư cần được backend tổng hợp từ hóa đơn cùng khoản thu đã xác nhận.</p>
+                </div>
+                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
+            </div>
+            <div class="unpaid-table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Mã hóa đơn &amp; ngày phát hành</th>
+                            <th scope="col">Căn hộ</th>
+                            <th scope="col">Chi tiết khoản phí</th>
+                            <th scope="col">Tổng tiền</th>
+                            <th scope="col">Hạn thanh toán</th>
+                            <th scope="col">Trạng thái thanh toán</th>
+                            <th scope="col">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="7">
+                                <div class="unpaid-unavailable" role="status">
+                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                                    <strong>Danh sách hóa đơn chưa sẵn sàng</strong>
+                                    <span>Billing chưa cung cấp API danh sách và số dư hóa đơn. Khi có contract, dữ liệu sẽ hiển thị tại đây.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <footer class="unpaid-table-footer">Chưa có tổng số bản ghi và phân trang từ API.</footer>
+        </div>
+    </section>
+</div>

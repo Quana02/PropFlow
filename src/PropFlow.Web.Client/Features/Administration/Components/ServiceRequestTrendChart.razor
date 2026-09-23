@@ -1,0 +1,35 @@
+@using System.Globalization
+@using PropFlow.Web.Client.Features.Administration.Models
+
+<article class="chart-card trend-chart-card" aria-labelledby="trend-chart-title">
+    <header><div><h2 id="trend-chart-title">Xu hướng yêu cầu dịch vụ</h2><p>Số yêu cầu mới trong 30 ngày gần nhất</p></div></header>
+    @if (Items.Length == 0 || Items.All(item => item.Count == 0))
+    {
+        <p class="chart-empty">Không có yêu cầu mới trong 30 ngày gần nhất.</p>
+    }
+    else
+    {
+        <div class="trend-plot">
+            <svg viewBox="0 0 100 36" preserveAspectRatio="none" role="img" aria-label="@AccessibleLabel">
+                <line x1="0" y1="32" x2="100" y2="32" class="axis" />
+                <polyline points="@Points" class="trend-line" />
+                @for (var index = 0; index < Items.Length; index++)
+                {
+                    var item = Items[index];
+                    <circle cx="@X(index)" cy="@Y(item.Count)" r="0.75" class="trend-point"><title>@item.Date.ToString("dd/MM/yyyy"): @item.Count yêu cầu mới</title></circle>
+                }
+            </svg>
+            <div class="trend-axis"><span>@Items[0].Date.ToString("dd/MM")</span><span>@Items[^1].Date.ToString("dd/MM")</span></div>
+        </div>
+        <p class="trend-summary">Tổng cộng <strong>@Items.Sum(item => item.Count)</strong> yêu cầu mới · Cao nhất <strong>@Maximum</strong> yêu cầu/ngày</p>
+    }
+</article>
+
+@code {
+    [Parameter] public AdministrationOverviewTrend[] Items { get; set; } = [];
+    private int Maximum => Math.Max(1, Items.Select(item => item.Count).DefaultIfEmpty().Max());
+    private string AccessibleLabel => $"Xu hướng 30 ngày từ {Items[0].Date:dd/MM/yyyy} đến {Items[^1].Date:dd/MM/yyyy}, tổng cộng {Items.Sum(item => item.Count)} yêu cầu mới.";
+    private string Points => string.Join(' ', Items.Select((item, index) => $"{X(index)},{Y(item.Count)}"));
+    private string X(int index) => (Items.Length == 1 ? 50 : index * 100d / (Items.Length - 1)).ToString("0.###", CultureInfo.InvariantCulture);
+    private string Y(int count) => (32 - count * 27d / Maximum).ToString("0.###", CultureInfo.InvariantCulture);
+}

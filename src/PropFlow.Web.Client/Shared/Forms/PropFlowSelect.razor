@@ -1,0 +1,119 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@using System.Linq.Expressions
+
+<div @ref="root" class="pf-select pf-select--@Variant.ToLowerInvariant() @(Disabled ? "is-disabled" : null) @(open ? "is-open" : null) @ValidationClass" @attributes="AdditionalAttributes">
+    <button id="@Id" type="button" class="pf-select__trigger" disabled="@Disabled" aria-label="@AriaLabel" aria-haspopup="listbox" aria-expanded="@open" aria-controls="@listboxId" aria-activedescendant="@(open && Options.Count > 0 ? $"{listboxId}-{activeIndex}" : null)" @onclick="ToggleAsync" @onkeydown="HandleKeyDown">
+        <span class="pf-select__value @(SelectedOption is null ? "is-placeholder" : null)">@(SelectedOption?.Label ?? Placeholder)</span>
+        <span class="material-symbols-outlined pf-select__chevron" aria-hidden="true">expand_more</span>
+    </button>
+    @if (open)
+    {
+        <div id="@listboxId" class="pf-select__menu" role="listbox" aria-label="@AriaLabel" tabindex="-1" popover="manual">
+            @for (var index = 0; index < Options.Count; index++)
+            {
+                var option = Options[index];
+                var selected = option.Value == Value;
+                <button id="@($"{listboxId}-{index}")" type="button" role="option" class="pf-select__option @(selected ? "is-selected" : null) @(index == activeIndex ? "is-active" : null)" aria-selected="@selected" disabled="@option.Disabled" @onclick="() => SelectAsync(option)">
+                    <span>@option.Label</span>
+                    @if (selected) { <span class="material-symbols-outlined" aria-hidden="true">check</span> }
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public Expression<Func<string>>? ValueExpression { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<PropFlowSelectOption> Options { get; set; } = [];
+    [Parameter] public string Placeholder { get; set; } = "Chọn một mục";
+    [Parameter] public string Variant { get; set; } = "Form";
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+    [CascadingParameter] private EditContext? EditContext { get; set; }
+
+    private readonly string listboxId = $"pf-select-{Guid.NewGuid():N}";
+    private ElementReference root;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<PropFlowSelect>? dotNetReference;
+    private FieldIdentifier? field;
+    private bool open;
+    private bool positionAfterRender;
+    private int activeIndex;
+    private PropFlowSelectOption? SelectedOption => Options.FirstOrDefault(option => option.Value == Value);
+    private string? ValidationClass => field is { } identifier ? EditContext?.FieldCssClass(identifier) : null;
+
+    protected override void OnParametersSet()
+    {
+        if (ValueExpression is not null) field = FieldIdentifier.Create(ValueExpression);
+        activeIndex = Math.Max(0, Options.ToList().FindIndex(option => option.Value == Value));
+    }
+
+    private async Task ToggleAsync()
+    {
+        if (Disabled) return;
+        open = !open;
+        if (!open) { await CloseJsAsync(); return; }
+        positionAfterRender = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!positionAfterRender) return;
+        positionAfterRender = false;
+        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowSelect.razor.js");
+        dotNetReference ??= DotNetObjectReference.Create(this);
+        await module.InvokeVoidAsync("open", root, dotNetReference);
+    }
+
+    private async Task SelectAsync(PropFlowSelectOption option)
+    {
+        if (option.Disabled) return;
+        Value = option.Value;
+        await ValueChanged.InvokeAsync(Value);
+        if (field is { } identifier) EditContext?.NotifyFieldChanged(identifier);
+        open = false;
+        await CloseJsAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (Disabled) return;
+        if (args.Key == "Escape") { open = false; await CloseJsAsync(); return; }
+        if (args.Key is not ("ArrowDown" or "ArrowUp")) return;
+        if (Options.Count == 0) return;
+        if (!open) await ToggleAsync();
+        var direction = args.Key == "ArrowDown" ? 1 : -1;
+        for (var attempts = 0; attempts < Options.Count; attempts++)
+        {
+            activeIndex = (activeIndex + direction + Options.Count) % Options.Count;
+            if (!Options[activeIndex].Disabled) break;
+        }
+    }
+
+    [JSInvokable]
+    public Task CloseFromOutside()
+    {
+        open = false;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task SelectActiveFromKeyboard() =>
+        Options.Count > 0 && !Options[activeIndex].Disabled ? SelectAsync(Options[activeIndex]) : Task.CompletedTask;
+
+    private async Task CloseJsAsync()
+    {
+        if (module is not null) await module.InvokeVoidAsync("close", root);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null) { await module.InvokeVoidAsync("close", root); await module.DisposeAsync(); }
+        dotNetReference?.Dispose();
+    }
+}

@@ -1,0 +1,159 @@
+.app-floating-nav {
+    position: fixed;
+    z-index: 50;
+    top: 50%;
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-height: min(85vh, 40rem);
+    overflow-y: auto;
+    border: 2px solid var(--app-line, #dce8f1);
+    border-radius: 1.4rem;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    transform: translateY(-50%);
+}
+
+.app-nav-drag {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    min-height: 2.25rem;
+    color: var(--app-muted, #64748b);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.app-nav-drag:active {
+    cursor: grabbing;
+}
+
+.app-nav-drag:focus-visible {
+    outline: 2px solid var(--app-accent, #0284c7);
+    outline-offset: -2px;
+}
+
+.app-floating-nav ::deep .app-rail,
+.app-floating-nav ::deep .admin-nav,
+.app-floating-nav ::deep .operations-nav {
+    position: static;
+    width: auto;
+    min-height: 0;
+    max-height: none;
+    padding: 0.35rem 0.5rem 0.7rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.app-floating-nav ::deep .app-rail,
+.app-floating-nav ::deep .admin-nav {
+    flex-direction: column;
+}
+
+.app-floating-nav ::deep .operations-brand,
+.app-floating-nav ::deep .operations-heading {
+    display: none;
+}
+
+.app-floating-nav ::deep .operations-link {
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  overflow: hidden;
+  padding: 0;
+  color: var(--app-text, #17243a);
+  font-size: 0;
+}
+
+  .app-floating-nav ::deep .operations-link:hover,
+  .app-floating-nav ::deep .operations-link.active {
+    background: rgba(2, 132, 199, 0.12);
+    color: var(--app-accent, #0284c7);
+  }
+
+  .app-floating-nav ::deep .operations-link span {
+    font-size: 1.3rem;
+  }
+
+.app-floating-nav ::deep .admin-nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 1rem;
+  color: var(--app-muted, #64748b);
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+  .app-floating-nav ::deep .admin-nav-link svg,
+  .app-floating-nav ::deep .admin-nav-link span {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .app-floating-nav ::deep .admin-nav-link:hover {
+    background-color: rgba(2, 132, 199, 0.12);
+    color: var(--app-accent, #0284c7);
+    transform: translateY(-1px);
+  }
+
+  .app-floating-nav ::deep .admin-nav-link.active {
+    background: rgba(2, 132, 199, 0.12);
+    color: var(--app-accent, #0284c7);
+    box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.18);
+  }
+
+.app-floating-nav ::deep .admin-nav-mark {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(140deg, var(--app-accent, #0284c7), #35c7e0);
+}
+
+.app-floating-nav ::deep .admin-nav-divider {
+  width: 1.5rem;
+  height: 1px;
+  background: var(--app-line, rgba(71, 126, 176, 0.16));
+  margin: 0.2rem 0;
+}
+
+.app-floating-nav ::deep .rail-links,
+.app-floating-nav ::deep .rail-bottom {
+    flex-direction: column;
+    min-width: 0;
+    overflow: visible;
+}
+
+.app-floating-nav ::deep .rail-link {
+    background: transparent;
+    box-shadow: none;
+}
+
+.app-floating-nav ::deep .rail-link:hover,
+.app-floating-nav ::deep .rail-link.active {
+    background: rgba(2, 132, 199, 0.12);
+    color: var(--app-accent, #0284c7);
+    box-shadow: none;
+}
+
+@media (max-width: 42rem) {
+    .app-floating-nav {
+        top: auto;
+        right: 0.75rem;
+        bottom: 0.75rem;
+        max-height: min(70vh, 32rem);
+        transform: none;
+    }
+}

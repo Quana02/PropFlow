@@ -113,13 +113,7 @@
             </div>
             <!-- Status Filter -->
             <div class="relative w-full sm:w-56">
-                <select class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs sm:text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-stitch cursor-pointer"
-                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
-                        @bind="StatusFilterString">
-                    <option value="" style="padding: 8px 12px; font-weight: 500;">Tất cả trạng thái</option>
-                    <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500;">Đang hoạt động </option>
-                    <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500;">Ngưng hoạt động </option>
-                </select>
+                <PropFlowSelect @bind-Value="StatusFilterString" Options="BuildingStatusOptions" Variant="Filter" AriaLabel="Lọc trạng thái tòa nhà" />
             </div>
             <!-- Filter Buttons -->
             <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -319,6 +313,7 @@
 <BuildingDetailDialog IsOpen="IsDetailOpen" Building="SelectedBuildingToView" OnClose="() => IsDetailOpen = false" />
 
 @code {
+    private static readonly PropFlowSelectOption[] BuildingStatusOptions = [new("", "Tất cả trạng thái"), new("ACTIVE", "Đang hoạt động"), new("INACTIVE", "Ngưng hoạt động")];
     private PagedResult<BuildingModel> PagedResult { get; set; } = new();
     private BuildingFilterModel Filter { get; set; } = new();
     private bool IsLoading { get; set; } = true;

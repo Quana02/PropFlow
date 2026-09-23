@@ -1,0 +1,40 @@
+@using System.Globalization
+@using PropFlow.Web.Client.Features.Administration.Models
+
+<article class="chart-card status-chart-card" aria-labelledby="status-chart-title">
+    <header><div><h2 id="status-chart-title">Yêu cầu dịch vụ theo trạng thái</h2><p>Phân bố theo vòng đời hiện tại</p></div></header>
+    @if (Items.Length == 0 || Items.All(item => item.Count == 0))
+    {
+        <p class="chart-empty">Chưa có yêu cầu dịch vụ.</p>
+    }
+    else
+    {
+        <div class="status-bars">
+            @foreach (var item in Items)
+            {
+                <div class="status-row">
+                    <span>@Label(item.Status)</span>
+                    <div class="bar-track" role="img" aria-label="@($"{Label(item.Status)}: {item.Count} yêu cầu")" title="@($"{Label(item.Status)}: {item.Count} yêu cầu")"><i style="width:@Width(item.Count)"></i></div>
+                    <strong>@item.Count</strong>
+                </div>
+            }
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter] public AdministrationOverviewStatus[] Items { get; set; } = [];
+    private int Maximum => Math.Max(1, Items.Select(item => item.Count).DefaultIfEmpty().Max());
+    private string Width(int count) => (count * 100d / Maximum).ToString("0.###", CultureInfo.InvariantCulture) + "%";
+    private static string Label(string status) => status switch
+    {
+        "SUBMITTED" => "Đã gửi",
+        "UNDER_REVIEW" => "Đang xem xét",
+        "ASSIGNED" => "Đã phân công",
+        "IN_PROGRESS" => "Đang xử lý",
+        "RESOLVED" => "Đã xử lý",
+        "CLOSED" => "Đã đóng",
+        "CANCELLED" => "Đã hủy",
+        _ => status
+    };
+}

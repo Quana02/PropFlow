@@ -136,42 +136,17 @@
 
             <!-- Lọc theo Tòa nhà -->
             <div class="w-full sm:w-48 relative">
-                <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none font-medium cursor-pointer outline-none"
-                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
-                        @bind="FilterBuildingIdString">
-                    <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">Tất cả tòa nhà</option>
-                    @foreach (var building in BuildingList)
-                    {
-                        <option value="@building.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@building.Name</option>
-                    }
-                </select>
+                <PropFlowSelect @bind-Value="FilterBuildingIdString" Options="AllBuildingOptions" Variant="Filter" AriaLabel="Lọc theo tòa nhà" />
             </div>
 
             <!-- Lọc theo Cơ sở vật chất -->
             <div class="w-full sm:w-48 relative">
-                <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none font-medium cursor-pointer outline-none"
-                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
-                        @bind="FilterFacilityIdString"
-                        disabled="@(Filter.BuildingId == null)">
-                    <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">Tất cả CSVT</option>
-                    @foreach (var facility in FilteredFacilityList)
-                    {
-                        <option value="@facility.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@facility.Name</option>
-                    }
-                </select>
+                <PropFlowSelect @bind-Value="FilterFacilityIdString" Options="AllFacilityOptions" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" Disabled="@(Filter.BuildingId == null)" />
             </div>
 
             <!-- Lọc theo Trạng thái -->
             <div class="w-full sm:w-48 relative">
-                <select class="w-full pl-3.5 pr-12 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none font-medium cursor-pointer outline-none"
-                        style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
-                        @bind="StatusFilterString">
-                    <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">Tất cả trạng thái</option>
-                    <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Đang hoạt động </option>
-                    <option value="UNDER_MAINTENANCE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Đang bảo trì </option>
-                    <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Ngừng hoạt động </option>
-                    <option value="OUT_OF_SERVICE" style="padding: 8px 12px; font-weight: 500; background-color: white;">● Ngừng phục vụ </option>
-                </select>
+                <PropFlowSelect @bind-Value="StatusFilterString" Options="EquipmentFilterStatusOptions" Variant="Filter" AriaLabel="Lọc theo trạng thái" />
             </div>
 
             
@@ -619,17 +594,7 @@
                             Phân Loại Thiết Bị <span class="text-rose-500">*</span>
                         </label>
                         <div class="relative">
-                            <select @bind="FormModel.EquipmentType"
-                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer"
-                                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
-                                <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">  Chọn phân loại  </option>
-                                <option value="Hệ Thống Cơ Điện (MEP)" style="padding: 8px 12px; font-weight: 500; background-color: white;">Hệ Thống Cơ Điện (MEP)</option>
-                                <option value="Hệ Thống PCCC & Cứu Hộ" style="padding: 8px 12px; font-weight: 500; background-color: white;">Hệ Thống PCCC & Cứu Hộ</option>
-                                <option value="Thang Máy & Nâng Hạ" style="padding: 8px 12px; font-weight: 500; background-color: white;">Thang Máy & Nâng Hạ</option>
-                                <option value="Thiết Bị Tiện Ích Cư Dân" style="padding: 8px 12px; font-weight: 500; background-color: white;">Thiết Bị Tiện Ích Cư Dân</option>
-                                <option value="Hạ Tầng Thông Gió & HVAC" style="padding: 8px 12px; font-weight: 500; background-color: white;">Hạ Tầng Thông Gió & HVAC</option>
-                                <option value="An Ninh & Kiểm Soát Ra Vào" style="padding: 8px 12px; font-weight: 500; background-color: white;">An Ninh & Kiểm Soát Ra Vào</option>
-                            </select>
+                            <PropFlowSelect @bind-Value="FormModel.EquipmentType" Options="EquipmentTypeOptions" Placeholder="Chọn phân loại" AriaLabel="Phân loại thiết bị" />
                         </div>
                     </div>
 
@@ -638,14 +603,7 @@
                             Trạng Thái Vận Hành <span class="text-rose-500">*</span>
                         </label>
                         <div class="relative">
-                            <select @bind="StatusString"
-                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer font-medium"
-                                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
-                                <option value="ACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Đang hoạt động </option>
-                                <option value="UNDER_MAINTENANCE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Đang bảo trì </option>
-                                <option value="INACTIVE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Ngừng hoạt động </option>
-                                <option value="OUT_OF_SERVICE" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Ngừng phục vụ </option>
-                            </select>
+                            <PropFlowSelect @bind-Value="StatusString" Options="EquipmentStatusOptions" AriaLabel="Trạng thái vận hành" />
                         </div>
                     </div>
 
@@ -662,16 +620,7 @@
                                     1. Chọn Tòa Nhà Trực Thuộc:
                                 </label>
                                 <div class="relative">
-                                    <select @bind="BuildingIdString"
-                                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer @((SelectedEquipmentToEdit != null) ? "bg-slate-50 text-slate-500" : "")"
-                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
-                                            disabled="@(SelectedEquipmentToEdit != null)">
-                                        <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;">  Không gắn trực tiếp Tòa nhà  </option>
-                                        @foreach (var b in BuildingList)
-                                        {
-                                            <option value="@b.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@b.Name</option>
-                                        }
-                                    </select>
+                                    <PropFlowSelect @bind-Value="BuildingIdString" Options="OptionalBuildingOptions" AriaLabel="Tòa nhà trực thuộc" Disabled="@(SelectedEquipmentToEdit != null)" />
                                     @if (SelectedEquipmentToEdit != null)
                                     {
                                         <p class="text-[11px] text-amber-600 mt-1">* Không thể thay đổi tòa nhà khi chỉnh sửa thiết bị</p>
@@ -684,16 +633,7 @@
                                     2. Chọn Cơ Sở Vật Chất (Nếu có):
                                 </label>
                                 <div class="relative">
-                                    <select @bind="FacilityIdString"
-                                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 appearance-none pr-12 outline-none cursor-pointer"
-                                            style="-webkit-appearance: none; -moz-appearance: none; appearance: none;"
-                                            disabled="@(FormModel.BuildingId == Guid.Empty)">
-                                        <option value="" style="padding: 8px 12px; font-weight: 500; background-color: white;"> Không thuộc CSVT (Đặt độc lập) --</option>
-                                        @foreach (var f in FormFilteredFacilityList)
-                                        {
-                                            <option value="@f.Id" style="padding: 8px 12px; font-weight: 500; background-color: white;">@f.Name</option>
-                                        }
-                                    </select>
+                                    <PropFlowSelect @bind-Value="FacilityIdString" Options="OptionalFacilityOptions" AriaLabel="Cơ sở vật chất trực thuộc" Disabled="@(FormModel.BuildingId == Guid.Empty)" />
                                 </div>
                             </div>
                         </div>
@@ -729,6 +669,13 @@
 }
 
 @code {
+    private static readonly PropFlowSelectOption[] EquipmentFilterStatusOptions = [new("", "Tất cả trạng thái"), new("ACTIVE", "Đang hoạt động"), new("UNDER_MAINTENANCE", "Đang bảo trì"), new("INACTIVE", "Ngừng hoạt động"), new("OUT_OF_SERVICE", "Ngừng phục vụ")];
+    private static readonly PropFlowSelectOption[] EquipmentStatusOptions = [new("ACTIVE", "Đang hoạt động"), new("UNDER_MAINTENANCE", "Đang bảo trì"), new("INACTIVE", "Ngừng hoạt động"), new("OUT_OF_SERVICE", "Ngừng phục vụ")];
+    private static readonly PropFlowSelectOption[] EquipmentTypeOptions = [new("", "Chọn phân loại"), new("Hệ Thống Cơ Điện (MEP)", "Hệ Thống Cơ Điện (MEP)"), new("Hệ Thống PCCC & Cứu Hộ", "Hệ Thống PCCC & Cứu Hộ"), new("Thang Máy & Nâng Hạ", "Thang Máy & Nâng Hạ"), new("Thiết Bị Tiện Ích Cư Dân", "Thiết Bị Tiện Ích Cư Dân"), new("Hạ Tầng Thông Gió & HVAC", "Hạ Tầng Thông Gió & HVAC"), new("An Ninh & Kiểm Soát Ra Vào", "An Ninh & Kiểm Soát Ra Vào")];
+    private IReadOnlyList<PropFlowSelectOption> AllBuildingOptions => [new("", "Tất cả tòa nhà"), .. BuildingList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
+    private IReadOnlyList<PropFlowSelectOption> OptionalBuildingOptions => [new("", "Không gắn trực tiếp tòa nhà"), .. BuildingList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
+    private IReadOnlyList<PropFlowSelectOption> AllFacilityOptions => [new("", "Tất cả CSVT"), .. FilteredFacilityList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
+    private IReadOnlyList<PropFlowSelectOption> OptionalFacilityOptions => [new("", "Không thuộc CSVT (đặt độc lập)"), .. FormFilteredFacilityList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
     private PagedResult<EquipmentModel> PagedResult { get; set; } = new();
     private EquipmentFilterModel Filter { get; set; } = new();
     private bool IsLoading { get; set; } = true;
