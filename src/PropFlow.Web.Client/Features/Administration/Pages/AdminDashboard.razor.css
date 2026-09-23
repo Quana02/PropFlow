@@ -1,6 +1,8 @@
 .admin-dashboard { display:flex; flex-direction:column; gap:1rem; color:var(--admin-text,#17243a); transition:color var(--theme-duration,620ms) var(--theme-ease,ease); }
 .metrics-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; }
 .overview-metrics { padding:1.2rem; }
+.overview-charts { display:grid; grid-template-columns:minmax(16rem,2fr) minmax(22rem,3fr); gap:1rem; padding:0 1.2rem 1.2rem; }
+.overview-charts ::deep .trend-chart-card { grid-column:1 / -1; }
 .metric-card,.rbac-panel { border:1px solid var(--admin-line,#dce8f1); background:var(--admin-surface,rgba(255,255,255,.88)); box-shadow:0 .6rem 2rem rgba(12,74,110,.07); backdrop-filter:blur(1rem); transition:background-color var(--theme-duration,620ms) var(--theme-ease,ease),border-color var(--theme-duration,620ms) var(--theme-ease,ease),color var(--theme-duration,620ms) var(--theme-ease,ease); }
 .metric-card { display:flex; align-items:center; min-width:0; gap:.85rem; padding:1rem 1.15rem; border-radius:1.1rem; }
 .metric-icon,.section-icon,.role-avatar { display:grid; place-items:center; flex:none; }
@@ -121,6 +123,8 @@ h1 { font-size:clamp(.95rem,1.6vw,1.15rem); }
 
 @media (max-width:58rem) {
     .metrics-grid { grid-template-columns:1fr; }
+    .overview-charts { grid-template-columns:1fr; }
+    .overview-charts ::deep .trend-chart-card { grid-column:auto; }
     .rbac-header { align-items:flex-start; flex-direction:column; }
     .rbac-actions { width:100%; }
     .rbac-actions button { flex:1; }

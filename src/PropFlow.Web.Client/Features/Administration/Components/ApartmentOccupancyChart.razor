@@ -1,0 +1,31 @@
+@using System.Globalization
+
+<article class="chart-card occupancy-chart-card" aria-labelledby="occupancy-chart-title">
+    <header><div><h2 id="occupancy-chart-title">Tình trạng sử dụng căn hộ</h2><p>Căn hộ đang hoạt động</p></div></header>
+    @if (Total == 0)
+    {
+        <p class="chart-empty">Chưa có căn hộ đang hoạt động.</p>
+    }
+    else
+    {
+        <div class="occupancy-content">
+            <div class="donut" style="--occupied-angle: @OccupiedAngle" role="img" aria-label="@AccessibleLabel">
+                <div><strong>@Total</strong><span>Căn hộ</span></div>
+            </div>
+            <dl class="chart-legend">
+                <div><dt><i class="occupied"></i>Có người ở</dt><dd>@Occupied <small>@Percent(Occupied)</small></dd></div>
+                <div><dt><i class="vacant"></i>Trống</dt><dd>@Vacant <small>@Percent(Vacant)</small></dd></div>
+            </dl>
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter] public int Total { get; set; }
+    [Parameter] public int Occupied { get; set; }
+    [Parameter] public int Vacant { get; set; }
+
+    private string OccupiedAngle => (Total == 0 ? 0 : Occupied * 360d / Total).ToString("0.###", CultureInfo.InvariantCulture) + "deg";
+    private string AccessibleLabel => $"Tổng cộng {Total} căn hộ: {Occupied} có người ở, {Vacant} căn hộ trống.";
+    private string Percent(int value) => $"{value * 100d / Total:0.#}%";
+}
