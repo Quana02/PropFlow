@@ -65,6 +65,10 @@ public class CurrentBuildingOverviewResponse
 
 public class UpdateCurrentBuildingModel
 {
+    [Required(ErrorMessage = "Mã chung cư là bắt buộc.")]
+    [StringLength(50, ErrorMessage = "Mã chung cư không được vượt quá 50 ký tự.")]
+    public string? Code { get; set; }
+
     [Required(ErrorMessage = "Tên chung cư là bắt buộc.")]
     [StringLength(200, ErrorMessage = "Tên chung cư không được vượt quá 200 ký tự.")]
     public string Name { get; set; } = string.Empty;

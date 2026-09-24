@@ -5,6 +5,7 @@ using PropFlow.Api.Controllers;
 using PropFlow.Modules.PropertyAssets.Presentation.Controllers;
 using PropFlow.Web.Client.Layout;
 using PropFlow.Web.Client.Services.Authentication;
+using PropFlow.Modules.PropertyAssets.Contracts;
 
 namespace PropFlow.IntegrationTests;
 
@@ -18,7 +19,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER", "STAFF" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.View, authorization.Policy);
         Assert.Equal("api/v1/buildings/current", typeof(CurrentBuildingController).GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.RouteAttribute), true).Cast<Microsoft.AspNetCore.Mvc.RouteAttribute>().Single().Template);
     }
 
@@ -30,7 +31,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.Manage, authorization.Policy);
         Assert.NotNull(update);
         // UpdateCurrent is at class route level "api/v1/buildings/current", so method-level HttpPut has no template
         var httpPut = update.GetCustomAttributes(typeof(HttpPutAttribute), true).Cast<HttpPutAttribute>().SingleOrDefault();
@@ -59,7 +60,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER", "STAFF" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.View, authorization.Policy);
     }
 
     [Fact]
@@ -70,7 +71,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER", "STAFF" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.View, authorization.Policy);
     }
 
     [Fact]
@@ -81,7 +82,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.Manage, authorization.Policy);
     }
 
     [Fact]
@@ -92,7 +93,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.Manage, authorization.Policy);
     }
 
     // FE-04.4: Facility Status Management Test
@@ -104,7 +105,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.Manage, authorization.Policy);
     }
 
     // FE-04.5: Equipment Management Tests
@@ -116,7 +117,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER", "STAFF" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.View, authorization.Policy);
     }
 
     [Fact]
@@ -127,7 +128,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER", "STAFF" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.View, authorization.Policy);
     }
 
     [Fact]
@@ -138,7 +139,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.Manage, authorization.Policy);
     }
 
     [Fact]
@@ -149,7 +150,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.Manage, authorization.Policy);
     }
 
     // FE-04.6: Equipment Status Management Test
@@ -161,7 +162,7 @@ public sealed class Fe04AccessTests
             .Cast<AuthorizeAttribute>()
             .Single();
 
-        Assert.Equal(new[] { "MANAGER" }, SplitRoles(authorization.Roles));
+        Assert.Equal(PropertyAssetsAuthorizationPolicies.Manage, authorization.Policy);
     }
 
     private static string[] SplitRoles(string? roles) => roles!

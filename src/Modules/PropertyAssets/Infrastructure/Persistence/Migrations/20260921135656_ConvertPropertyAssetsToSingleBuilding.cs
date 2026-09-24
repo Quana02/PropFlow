@@ -53,6 +53,7 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                 column: "code",
                 unique: true);
 
+
             migrationBuilder.CreateIndex(
                 name: "IX_equipment_code",
                 schema: "property_assets",

@@ -58,6 +58,7 @@ public static class AuthRegistration
             options.Cookie.SameSite = policy.CrossSiteCookie ? SameSiteMode.None : SameSiteMode.Strict;
         });
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+        services.AddScoped<AccessTokenStateValidator>();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme).Configure<AuthSecrets, AuthPolicy>((options, crypto, policy) =>
         {
             options.MapInboundClaims = false;
@@ -70,10 +71,14 @@ public static class AuthRegistration
             };
             options.Events = new JwtBearerEvents
             {
-                OnTokenValidated = context =>
+                OnTokenValidated = async context =>
                 {
-                    if (!Guid.TryParse(context.Principal?.FindFirst("sub")?.Value, out _)) context.Fail("Invalid subject.");
-                    return Task.CompletedTask;
+                    if (context.Principal is null ||
+                        !await context.HttpContext.RequestServices.GetRequiredService<AccessTokenStateValidator>()
+                            .IsCurrentAsync(context.Principal, context.HttpContext.RequestAborted))
+                    {
+                        context.Fail("Account access has changed or is no longer active.");
+                    }
                 },
                 OnChallenge = async context =>
                 {

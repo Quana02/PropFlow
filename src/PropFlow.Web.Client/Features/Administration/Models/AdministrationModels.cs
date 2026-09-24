@@ -6,6 +6,9 @@ public sealed record InternalAccount(Guid Id, string Username, string DisplayNam
 public sealed record CreateInternalAccount(string Username, string DisplayName, string Email, string Password, string Role, string? PhoneNumber);
 public sealed record ChangeRole(string Role);
 public sealed record ChangeStatus(string Status);
+public sealed record AdministrationPermission(string Code, string Name, string Module, string? Description);
+public sealed record AdministrationRoleAccess(string Code, string Name, string? Description, bool IsActive, AdministrationPermission[] Permissions);
+public sealed record InternalAccountAccess(Guid UserId, string Username, string DisplayName, string Status, string Role, AdministrationPermission[] Permissions);
 public sealed record PagedAdministrationActivities(int Total, int Page, int PageSize, AdministrationActivity[] Items);
 public sealed record AdministrationActivity(Guid Id, DateTimeOffset Timestamp, string Action,
     Guid? ActorUserId, string? ActorUsername, string? ActorDisplayName,

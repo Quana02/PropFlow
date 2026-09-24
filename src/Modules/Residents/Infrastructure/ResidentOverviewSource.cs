@@ -8,22 +8,25 @@ namespace PropFlow.Modules.Residents.Infrastructure;
 
 public sealed class ResidentOverviewSource(ResidentsDbContext db) : IResidentOverviewSource
 {
-    public async Task<ResidentOverviewCounts> GetCountsAsync(IReadOnlyList<ApartmentOccupancyAtDate> apartments, CancellationToken ct)
+    public async Task<ResidentOverviewCounts> GetCountsAsync(
+        DateOnly date,
+        IReadOnlyCollection<Guid> activeApartmentIds,
+        CancellationToken ct)
     {
         var residentCount = await db.Residents.AsNoTracking().CountAsync(resident => resident.Status == ResidentStatus.ACTIVE, ct);
-        var occupied = new HashSet<Guid>();
-        foreach (var group in apartments)
-        {
-            if (group.ActiveApartmentIds.Count == 0) continue;
-            // IsActiveAt is the domain rule; the equivalent predicates keep the filter in PostgreSQL.
-            var ids = await db.ResidentApartments.AsNoTracking()
-                .Where(relation => group.ActiveApartmentIds.Contains(relation.ApartmentUnitId)
-                    && relation.Status == ResidencyStatus.ACTIVE
-                    && relation.StartDate <= group.Date
-                    && (relation.EndDate == null || relation.EndDate >= group.Date))
-                .Select(relation => relation.ApartmentUnitId).Distinct().ToArrayAsync(ct);
-            occupied.UnionWith(ids);
-        }
-        return new ResidentOverviewCounts(residentCount, occupied.Count);
+        if (activeApartmentIds.Count == 0)
+            return new ResidentOverviewCounts(residentCount, 0);
+
+        // IsActiveAt is the domain rule; the equivalent predicates keep the filter in PostgreSQL.
+        var occupiedCount = await db.ResidentApartments.AsNoTracking()
+            .Where(relation => activeApartmentIds.Contains(relation.ApartmentUnitId)
+                && relation.Status == ResidencyStatus.ACTIVE
+                && relation.StartDate <= date
+                && (relation.EndDate == null || relation.EndDate >= date))
+            .Select(relation => relation.ApartmentUnitId)
+            .Distinct()
+            .CountAsync(ct);
+
+        return new ResidentOverviewCounts(residentCount, occupiedCount);
     }
 }

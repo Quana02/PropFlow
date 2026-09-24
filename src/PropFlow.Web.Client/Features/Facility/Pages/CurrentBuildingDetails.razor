@@ -17,10 +17,11 @@
             <h1 id="building-page-title">Chi tiết chung cư</h1>
             <p>Thông tin hồ sơ và tổng quan vận hành của chung cư đang được PropFlow quản lý.</p>
         </div>
-        @if (CanEdit && Building is not null)
+        @if (CanEdit && !IsLoading)
         {
             <button class="primary-action" type="button" @onclick="OpenEditDialog">
-                <span aria-hidden="true">✎</span> Chỉnh sửa
+                <span class="material-symbols-outlined" aria-hidden="true">@(Building is null ? "add_home" : "edit")</span>
+                @(Building is null ? "Thiết lập hồ sơ" : "Chỉnh sửa")
             </button>
         }
     </header>
@@ -29,7 +30,7 @@
     {
         <div class="feedback success" role="status"><span aria-hidden="true">✓</span><span>@SuccessMessage</span></div>
     }
-    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage) && !IsEditDialogOpen)
     {
         <div class="feedback error" role="alert">
             <span aria-hidden="true">!</span><span>@ErrorMessage</span>
@@ -48,9 +49,9 @@
     else if (Building is null && string.IsNullOrWhiteSpace(ErrorMessage))
     {
         <section class="state-panel empty">
-            <span class="state-icon" aria-hidden="true">⌂</span>
+            <span class="state-icon material-symbols-outlined" aria-hidden="true">apartment</span>
             <strong>Chưa có hồ sơ chung cư</strong>
-            <span>Hệ thống chưa được thiết lập thông tin chung cư ban đầu.</span>
+            <span>Hệ thống chưa được thiết lập thông tin chung cư ban đầu.@(CanEdit ? " Chọn “Thiết lập hồ sơ” để bắt đầu." : string.Empty)</span>
         </section>
     }
     else if (Building is not null)
@@ -113,9 +114,9 @@
         </div>
     }
 
-    @if (CanEdit && IsEditDialogOpen && Building is not null)
+    @if (CanEdit && IsEditDialogOpen)
     {
-        <BuildingFormDialog IsOpen="true" Building="Building" OnClose="CloseEditDialog" OnSave="SaveAsync" IsSaving="IsSaving" />
+        <BuildingFormDialog IsOpen="true" Building="Building" OnClose="CloseEditDialog" OnSave="SaveAsync" IsSaving="IsSaving" ErrorMessage="@ErrorMessage" />
     }
 </main>
 
@@ -148,7 +149,13 @@
         finally { IsLoading = false; }
     }
 
-    private void OpenEditDialog() => IsEditDialogOpen = CanEdit;
+    private void OpenEditDialog()
+    {
+        if (!CanEdit) return;
+        ErrorMessage = null;
+        SuccessMessage = null;
+        IsEditDialogOpen = true;
+    }
     private void CloseEditDialog() => IsEditDialogOpen = false;
 
     private async Task SaveAsync(UpdateCurrentBuildingModel model)
@@ -162,7 +169,7 @@
             var result = await BuildingApiClient.UpdateCurrentBuildingAsync(model);
             if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể cập nhật thông tin chung cư."; return; }
             IsEditDialogOpen = false;
-            SuccessMessage = "Đã cập nhật thông tin chung cư.";
+            SuccessMessage = Building is null ? "Đã thiết lập hồ sơ chung cư." : "Đã cập nhật thông tin chung cư.";
             await LoadAsync();
         }
         catch { ErrorMessage = "Không thể kết nối để cập nhật thông tin chung cư. Vui lòng thử lại."; }

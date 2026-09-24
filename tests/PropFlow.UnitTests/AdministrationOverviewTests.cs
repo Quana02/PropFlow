@@ -36,18 +36,18 @@ public sealed class AdministrationOverviewTests
             Task.FromResult<IReadOnlyList<Guid>>(ids);
     }
 
-    private sealed class FixedBuildings : IBuildingTimeZones
+    private sealed class FixedBuildings : ICurrentBuildingTimeZone
     {
-        public Task<string> GetSystemTimeZoneAsync(CancellationToken ct) =>
+        public Task<string> GetAsync(CancellationToken ct) =>
             Task.FromResult("Asia/Ho_Chi_Minh");
     }
 
     private sealed class CapturingResidents : IResidentOverviewSource
     {
         public DateOnly Date { get; private set; }
-        public Task<ResidentOverviewCounts> GetCountsAsync(IReadOnlyList<ApartmentOccupancyAtDate> apartments, CancellationToken ct)
+        public Task<ResidentOverviewCounts> GetCountsAsync(DateOnly date, IReadOnlyCollection<Guid> activeApartmentIds, CancellationToken ct)
         {
-            Date = Assert.Single(apartments).Date;
+            Date = date;
             return Task.FromResult(new ResidentOverviewCounts(7, 1));
         }
     }
@@ -88,13 +88,14 @@ public sealed class AdministrationOverviewTests
     }
 
     [Fact]
-    public async Task Building_time_zone_source_throws_when_no_building()
+    public async Task Building_time_zone_source_uses_system_default_when_no_building()
     {
         await using var db = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => new BuildingTimeZones(db).GetSystemTimeZoneAsync(default));
+        var tz = await new CurrentBuildingTimeZone(db).GetAsync(default);
+
+        Assert.Equal("Asia/Ho_Chi_Minh", tz);
     }
 
     [Fact]
@@ -105,23 +106,25 @@ public sealed class AdministrationOverviewTests
         db.Buildings.Add(new Building("B1", "Building 1", "Address 1", Now, "Asia/Ho_Chi_Minh"));
         await db.SaveChangesAsync();
 
-        var tz = await new BuildingTimeZones(db).GetSystemTimeZoneAsync(default);
+        var tz = await new CurrentBuildingTimeZone(db).GetAsync(default);
 
         Assert.Equal("Asia/Ho_Chi_Minh", tz);
     }
 
     [Fact]
-    public async Task Building_time_zone_source_throws_when_multiple_buildings()
+    public async Task Building_time_zone_source_uses_latest_active_profile_when_historical_buildings_exist()
     {
         await using var db = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        db.Buildings.AddRange(
-            new Building("B1", "Building 1", "Address 1", Now, "Asia/Ho_Chi_Minh"),
-            new Building("B2", "Building 2", "Address 2", Now, "UTC"));
+        var historical = new Building("B1", "Building 1", "Address 1", Now, "UTC");
+        historical.Deactivate(null, Now.AddMinutes(1));
+        var current = new Building("B2", "Building 2", "Address 2", Now.AddMinutes(2), "Asia/Ho_Chi_Minh");
+        db.Buildings.AddRange(historical, current);
         await db.SaveChangesAsync();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => new BuildingTimeZones(db).GetSystemTimeZoneAsync(default));
+        var tz = await new CurrentBuildingTimeZone(db).GetAsync(default);
+
+        Assert.Equal("Asia/Ho_Chi_Minh", tz);
     }
 
     [Fact]
@@ -129,7 +132,6 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new ApartmentsDbContext(new DbContextOptionsBuilder<ApartmentsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var buildingId = Guid.NewGuid();
         var active = new ApartmentUnit("101", 1, Now);
         var inactive = new ApartmentUnit("102", 1, Now);
         inactive.Deactivate(null, Now);
@@ -165,7 +167,7 @@ public sealed class AdministrationOverviewTests
         await db.SaveChangesAsync();
 
         var counts = await new ResidentOverviewSource(db).GetCountsAsync(
-            [new ApartmentOccupancyAtDate(date, [occupiedApartment, vacantApartment, expiredApartment, futureApartment])], default);
+            date, [occupiedApartment, vacantApartment, expiredApartment, futureApartment], default);
         Assert.Equal(2, counts.TotalActiveResidents);
         Assert.Equal(1, counts.OccupiedActiveApartments);
     }
@@ -176,7 +178,6 @@ public sealed class AdministrationOverviewTests
         await using var db = new ServiceRequestsDbContext(new DbContextOptionsBuilder<ServiceRequestsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         var statuses = Enum.GetValues<ServiceRequestStatus>();
-        var buildingId = Guid.NewGuid();
         foreach (var status in statuses)
         {
             var request = CreateRequest(new DateTimeOffset(2026, 9, 22, 10, 0, 0, TimeSpan.Zero));

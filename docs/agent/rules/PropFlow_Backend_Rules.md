@@ -38,7 +38,7 @@ Không biến khuyến nghị production thành scope đồ án mới; không bi
 
 Tài liệu này dài; không phải task nào cũng cần đọc hết. Agent nên:
 
-1. Luôn đọc phần **core** (ngắn, áp dụng cho mọi task): mục 1 (ưu tiên/phân loại), 4 (ngôn ngữ), 5 (PII), 7 (multi-building scope), 8 (dependency/ownership tổng quát), 10 (phân quyền), 22–24 (truy vết UC, kiểm soát thay đổi, quy tắc cuối).
+1. Luôn đọc phần **core** (ngắn, áp dụng cho mọi task): mục 1 (ưu tiên/phân loại), 4 (ngôn ngữ), 5 (PII), 7 (bối cảnh chung cư hiện hành), 8 (dependency/ownership tổng quát), 10 (phân quyền), 22–24 (truy vết UC, kiểm soát thay đổi, quy tắc cuối).
 2. Chỉ đọc thêm đúng mục liên quan vùng code đang đụng tới, theo bảng dưới — dùng `view` với line range hoặc tìm theo số mục thay vì đọc tuần tự từ đầu tới cuối.
 
 | Task đụng tới... | Đọc thêm mục |
@@ -307,7 +307,7 @@ Không hard-code `localhost`, development port, frontend domain, production API 
 Code phải hỗ trợ same-origin (`/api/...`) hoặc separate-origin bằng configuration mà không sửa business feature code. Coding rule này không yêu cầu Agent thiết kế domain, certificate, CI/CD, backup schedule hay server infrastructure.
 
 ### 3.4. CORS boundary
-CORS thuộc `PropFlow.Api`/Composition Root và lấy từ configuration. Business module không tự thêm CORS policy; không wildcard origin cùng credentials; CORS không thay authentication/authorization/Building scope; không thêm workaround CORS trong controller chỉ để môi trường dev chạy được.
+CORS thuộc `PropFlow.Api`/Composition Root và lấy từ configuration. Business module không tự thêm CORS policy; không wildcard origin cùng credentials; CORS không thay authentication/authorization/resource ownership; không thêm workaround CORS trong controller chỉ để môi trường dev chạy được.
 
 ### 3.5. Compatibility rule
 Khi thay đổi endpoint, DTO, permission, auth flow hoặc error contract frontend đang sử dụng, Agent phải xác định contract bị ảnh hưởng, tránh breaking change chưa được phê duyệt, cập nhật OpenAPI/tests và không âm thầm đổi semantics chỉ vì refactor.
@@ -348,16 +348,16 @@ Chỉ tạo assembly/project `Modules.<Name>.Contracts` riêng khi có **compile
 
 Không tạo global Controllers/Services/Repositories/Models, GodService, CommonRepository hoặc AppDbContext chung. Không tự chuyển sang microservices hay thêm external message broker. Implementation không được lộ qua public contract. ArchitectureTests và các module tests liên quan phải được Agent chạy/xác minh trước khi coi thay đổi hoàn thành.
 
-## 7. Multi-building và cách ly dữ liệu — BẮT BUỘC
+## 7. Bối cảnh chung cư hiện hành — BẮT BUỘC
 
-PropFlow hỗ trợ phạm vi nhiều tòa nhà theo đặc tả. Multi-building không tự động đồng nghĩa SaaS multi-tenancy. Không tự thêm Tenant/Organization, subscription hoặc tenant isolation model khi chưa có quyết định kiến trúc và đặc tả riêng.
+Mỗi deployment PropFlow vận hành cho một chung cư hiện hành; toàn bộ dữ liệu nghiệp vụ trong deployment mặc nhiên thuộc chung cư đó. `Building` chỉ là hồ sơ thông tin và nguồn timezone dùng chung, không phải tenant, authorization scope, filter hay ngữ cảnh người dùng có thể chọn. Nếu cần vận hành chung cư khác thì dùng deployment khác, không chuyển Building bên trong cùng hệ thống. Không thêm Building selector, báo cáo xuyên chung cư, `SelectedBuildingId`, User–Building assignment hoặc `building_id` dư thừa vào aggregate nghiệp vụ.
 
-- Mỗi aggregate nghiệp vụ có phạm vi tòa nhà phải xác định được BuildingId trực tiếp hoặc qua quan hệ sở hữu được kiểm soát. Không bắt buộc mọi bảng đều có `building_id NOT NULL`; identity, role, permission, cấu hình toàn hệ thống và một số bảng con có thể không có cột này.
-- Application layer phải enforce scope bằng access assignment và ownership thực tế. Không tin building_id do client gửi. Với truy vấn theo ID, phải kiểm tra tài nguyên thuộc phạm vi được phép trước khi trả dữ liệu hoặc thay đổi trạng thái.
-- Administration sở hữu User–Building access assignment; PropertyAssets sở hữu Building master data. Không sao chép master entity để phân quyền.
-- Reporting phải enforce scope trước khi trả dữ liệu. Quyền tổng hợp liên tòa nhà phải được đặc tả và cấp rõ ràng; không mặc định Admin có quyền xem toàn bộ dữ liệu cư dân/tài chính.
-- PostgreSQL RLS là lớp phòng vệ bổ sung theo ADR riêng. Nếu triển khai, phải thiết kế database role, session/transaction context, connection pooling, reset context, migration/background jobs và Reporting; không bật RLS nửa vời.
-- Test bắt buộc: người dùng tòa nhà A không đọc/sửa dữ liệu tòa nhà B bằng guessed ID, filter, export hoặc API khác; kiểm tra cả assignment và ownership cá nhân.
+- Dữ liệu nghiệp vụ trong deployment mặc nhiên thuộc tòa nhà hiện tại; vẫn phải kiểm tra ownership/assignment nghiệp vụ theo từng use case.
+- PropertyAssets sở hữu hồ sơ Building singleton và timezone. Không sao chép master entity sang module khác.
+- Administration không sở hữu User–Building access assignment. ADMIN có administrative scope nhưng không tự động có business CRUD permission.
+- Reporting tổng hợp toàn deployment khi contract được phê duyệt; module nguồn vẫn sở hữu business semantics và chỉ expose narrow Contracts.
+- Không tin ID, role, permission, ResidentId, ApartmentId hoặc ownership do frontend gửi.
+- Test bắt buộc: không có API/UI chọn tòa nhà và người dùng không đọc/sửa tài nguyên ngoài ownership/assignment nghiệp vụ của mình.
 
 ## 8. Phụ thuộc và ownership
 Dependency rule nội bộ module (Presentation → Application → Domain, Infrastructure implement abstraction) và quy tắc giao tiếp xuyên module (chỉ qua public contract/stable ID/integration event, không inject Repository/DbContext/handler nội bộ/EF navigation xuyên module) đã quy định đầy đủ ở mục 2.3 và 2.6; áp dụng nguyên vẹn ở đây, không lặp lại.
@@ -367,7 +367,7 @@ Phần dưới đây là ranh giới **ownership khái niệm** giữa các enti
 User Account khác Resident và Apartment. Service Request khác Complaint và Maintenance Task. Maintenance Schedule khác Maintenance Task. Invoice khác Payment. Notification khác Announcement. FE-01 (Authentication — identity/credential/login) đến FE-15 (Administration — role/permission) đều có nghiệp vụ riêng, không được gộp; FE-10, FE-11 và FE-12 (AiClassification, AiRecommendation, AiChatbot theo thứ tự) có nghiệp vụ riêng.
 
 ## 9. Authentication và Administration
-Authentication sở hữu identity, credential, password hash, refresh token, xác minh email, reset password và trạng thái bảo mật đăng nhập. Administration sở hữu role assignment, permission mapping, User–Building access assignment (mục 7/10) và quy trình cấp tài khoản nội bộ.
+Authentication sở hữu identity, credential, password hash, refresh token, xác minh email, reset password và trạng thái bảo mật đăng nhập. Administration sở hữu role assignment, permission mapping và quy trình cấp tài khoản nội bộ; không có User–Building access assignment vì deployment không có chức năng chọn hoặc chuyển chung cư.
 
 Administration có thể gọi Authentication contract để tạo identity rồi gán quyền. Authentication lấy access claims qua abstraction/projection không tạo circular dependency. Không truy vấn trực tiếp bảng nội bộ của Administration hoặc sao chép logic role assignment.
 
@@ -398,14 +398,14 @@ Administration có thể gọi Authentication contract để tạo identity rồ
 - **Retention của security/audit log liên quan login (lịch sử đăng nhập, số lần thử sai, IP, lockout event):** đây là log vận hành/bảo mật, có mục đích khác PII nghiệp vụ ở mục 5 (hồ sơ cư dân, tài chính...). Vẫn phải tuân thủ mục 5 về nguyên tắc chung (không tự đặt retention tùy tiện, không log password/token), nhưng cần xin xác nhận riêng một retention ngắn hạn hợp lý cho nhóm log này (ví dụ phục vụ điều tra brute-force/incident) thay vì để trống hoặc lưu vô thời hạn — không tự suy diễn theo retention của dữ liệu nghiệp vụ dài hạn khác.
 
 ## 10. Phân quyền
-Mọi protected operation phải kiểm tra Authentication → Role/Permission → Business Scope (bao gồm scope tòa nhà theo mục 7). JWT và role không chứng minh quyền sở hữu tài nguyên.
+Mọi protected operation phải kiểm tra Authentication → Role/Permission → Resource Ownership/Assignment → Business Rules. JWT và role không chứng minh quyền sở hữu tài nguyên.
 
 **Scope model:**
-- **Resident:** `Authenticated UserId` → Account–Resident linkage → `ResidentId` → Resident–Apartment relationship hợp lệ → `ApartmentId` → `BuildingId`. Backend **không được giả định `UserId == ResidentId`**, kể cả khi hiện tại cùng dùng kiểu UUID/GUID. Không tạo User–Building assignment cho Resident chỉ để đồng nhất mô hình.
-- **Staff / Accountant / Manager:** building scope đến từ **User–Building access assignment** do Administration sở hữu; mỗi use case vẫn phải kiểm tra assignment/ownership nghiệp vụ cụ thể.
+- **Resident:** `Authenticated UserId` → Account–Resident linkage → `ResidentId` → Resident–Apartment relationship hợp lệ → `ApartmentId`. Backend **không được giả định `UserId == ResidentId`**, kể cả khi hiện tại cùng dùng kiểu UUID/GUID.
+- **Staff / Accountant / Manager:** mỗi use case phải kiểm tra permission và assignment/ownership nghiệp vụ cụ thể; không dùng Building assignment.
 - **Admin:** có administrative scope nhưng **không mặc định là business superuser** và không mặc định được đọc toàn bộ dữ liệu cư dân/tài chính/vận hành.
 
-PropertyAssets vẫn sở hữu Building master data. Không tin ID, role, permission hoặc `building_id` do frontend gửi.
+PropertyAssets vẫn sở hữu hồ sơ Building singleton. Không tin ID, role, permission hoặc ownership do frontend gửi.
 
 ## 11. Quy tắc nghiệp vụ
 FE-01 sở hữu identity, đăng nhập, phiên làm việc và bảo mật tài khoản (không chứa role/permission — thuộc FE-15). FE-02 sở hữu hồ sơ cư dân và quan hệ cư dân–căn hộ, bảo toàn lịch sử. FE-03 sở hữu căn hộ; FE-04 sở hữu tòa nhà, cơ sở vật chất và thiết bị. Không sao chép master data.
@@ -490,7 +490,7 @@ Có structured logging, CorrelationId, module/entity ID; không log token, secre
 ## 21. Kiểm thử và Definition of Done
 Bắt buộc unit/integration tests cho domain rules, state transitions, authorization, scope (bao gồm cách ly theo tòa nhà — mục 7), finance, concurrency, AI fallback, PostgreSQL và cross-module contracts.
 
-Kiểm thử cư dân không xem dữ liệu người khác, Staff không xử lý ngoài assignment, Manager/Accountant không vượt building scope (mục 7/10) kể cả khi đoán đúng ID, payment không giảm nợ khi pending/rejected, xác nhận trùng không double-apply, AI lỗi không chặn workflow, outbox không mất event sau crash, consumer không duplicate, attachment không bị truy cập bằng guessed URL, seed chạy lại không tạo trùng. Với các trường đã áp dụng NFC normalization theo mục 4 (có search/uniqueness): input đến ở NFD vẫn phải khớp/không tạo bản ghi trùng với dữ liệu đã lưu ở NFC; không yêu cầu test này cho các trường không thuộc phạm vi normalization ở mục 4.
+Kiểm thử cư dân không xem dữ liệu người khác, Staff không xử lý ngoài assignment, Manager/Accountant không vượt permission/ownership nghiệp vụ kể cả khi đoán đúng ID, payment không giảm nợ khi pending/rejected, xác nhận trùng không double-apply, AI lỗi không chặn workflow, outbox không mất event sau crash, consumer không duplicate, attachment không bị truy cập bằng guessed URL, seed chạy lại không tạo trùng. Với các trường đã áp dụng NFC normalization theo mục 4 (có search/uniqueness): input đến ở NFD vẫn phải khớp/không tạo bản ghi trùng với dữ liệu đã lưu ở NFC; không yêu cầu test này cho các trường không thuộc phạm vi normalization ở mục 4.
 
 Riêng Login/Logout: outward response cho credential không hợp lệ, tài khoản không tồn tại và tài khoản bị lockout không được tiết lộ trạng thái tồn tại của tài khoản; test phải kiểm tra message/status/body không tạo enumeration oracle và implementation không có timing difference rõ ràng có thể khai thác, **không yêu cầu HTTP response constant-time tuyệt đối**. Refresh token cũ bị revoke sau khi rotate hoặc logout không dùng lại được; vượt ngưỡng lockout thì các lần thử tiếp theo bị chặn đúng cấu hình; token hết hạn bị từ chối đúng hạn.
 
@@ -502,7 +502,7 @@ Feature Specification → Consolidated UC → Handler/API → Domain Rules → A
 
 Không tự tạo capability ngoài catalogue, không biến mỗi nút CRUD thành UC mới. Class giữ tên tiếng Anh; **UC ID phải có trong documentation/test trait** (bắt buộc, không phải khuyến nghị). Nếu task không map được UC, báo rõ technical requirement hay scope extension.
 
-Trước khi code: đọc đặc tả, xác định FE/UC, actor, permission, scope (bao gồm building scope), dependency; kiểm tra code hiện có; thực hiện thay đổi nhỏ nhất hoàn chỉnh; viết test; chạy build/test; báo cáo file thay đổi, quyết định, giả định và khoảng trống.
+Trước khi code: đọc đặc tả, xác định FE/UC, actor, permission, resource ownership/assignment và dependency; kiểm tra code hiện có; thực hiện thay đổi nhỏ nhất hoàn chỉnh; viết test; chạy build/test; báo cáo file thay đổi, quyết định, giả định và khoảng trống.
 
 ## 23. Quy tắc áp dụng và kiểm soát thay đổi
 
@@ -518,7 +518,7 @@ Modular Monolith là bắt buộc. Business ownership và module boundary không
 ### 25.1. Đã chốt
 
 - Frontend là **Blazor Web App + Global Interactive WebAssembly**, với `InteractiveWebAssemblyRenderMode(prerender: false)` cho application shell/routes. `PropFlow.Web` là server host/composition root; routed business UI và authentication state chạy trong `PropFlow.Web.Client`. Baseline token transport: access token trong memory + Bearer header; refresh token trong Secure/HttpOnly cookie; refresh/logout/revoke tuân theo CSRF protection phù hợp khi dựa trên cookie. Chỉ thay đổi render mode hoặc mô hình token khi có ADR mới được phê duyệt.
-- Baseline là **multi-building trong cùng hệ thống**, không mặc định SaaS multi-tenancy. Không tự thêm Tenant/Organization, subscription hoặc tenant isolation model.
+- Baseline là **một deployment vận hành cho một chung cư hiện hành**. Không tự thêm Tenant/Organization, subscription, bộ chọn nhiều chung cư hoặc building access scope.
 - Backend là **Modular Monolith**, một ASP.NET Core Web API deployable, một PostgreSQL database, ưu tiên schema-per-module.
 - FE–BE tích hợp qua HTTP API contract `/api/v1/...`; URL/origin phụ thuộc môi trường phải đi qua configuration, không hard-code trong business feature code.
 - Money baseline: **VND only**; monetary amount dùng .NET `decimal` + PostgreSQL `numeric(18,0)`; billing quantity cần phần lẻ dùng `numeric(18,4)`; round từng invoice line bằng `MidpointRounding.AwayFromZero` về 0 decimal trước khi cộng tổng; multi-currency/exchange-rate nằm ngoài baseline.
@@ -528,7 +528,7 @@ Modular Monolith là bắt buộc. Business ownership và module boundary không
 
 Agent phải yêu cầu đặc tả/ADR/quyết định trước khi hard-code hoặc coi các nội dung sau là final:
 
-- permission catalogue chi tiết và Building scope/User–Building access assignment chưa được đặc tả đầy đủ cho từng use case;
+- permission catalogue chi tiết và resource ownership/assignment chưa được đặc tả đầy đủ cho từng use case;
 - retention schedule;
 - AI provider, dữ liệu được phép gửi, quota/budget, timeout và fallback;
 - access token TTL và refresh token TTL chính xác;

@@ -14,7 +14,7 @@ public sealed class AuthExceptionHandler(ILogger<AuthExceptionHandler> logger) :
         var failure = exception as AuthFailure;
         var csrf = exception is AntiforgeryValidationException;
         var status = failure?.Status ?? (csrf ? 400 : 500);
-        if (status == 500) logger.LogError("Unhandled API failure {ExceptionType}, trace {TraceId}.", exception.GetType().Name, context.TraceIdentifier);
+        if (status == 500) logger.LogError(exception, "Unhandled API failure {ExceptionType}, trace {TraceId}.", exception.GetType().Name, context.TraceIdentifier);
         await Results.Problem(statusCode: status, title: failure?.Message ?? (csrf
             ? "Phiên bảo vệ yêu cầu đã thay đổi. Vui lòng thử lại."
             : "Không thể hoàn tất yêu cầu lúc này. Vui lòng thử lại sau."), extensions: new Dictionary<string, object?>

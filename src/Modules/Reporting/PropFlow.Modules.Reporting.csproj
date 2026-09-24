@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../Administration.Contracts/PropFlow.Modules.Administration.Contracts.csproj" />
     <ProjectReference Include="../Apartments.Contracts/PropFlow.Modules.Apartments.Contracts.csproj" />
     <ProjectReference Include="../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj" />
     <ProjectReference Include="../ServiceRequests.Contracts/PropFlow.Modules.ServiceRequests.Contracts.csproj" />

@@ -68,6 +68,11 @@ Frontend:
 
 Do not change these architecture decisions without an approved ADR.
 
+Deployment context:
+- One PropFlow deployment operates one current condominium.
+- `Building` is shared property information and the timezone source, not a tenant, selectable scope, or User–Building assignment.
+- A different condominium uses a separate deployment; do not introduce in-app Building selection, switching, or cross-condominium reporting.
+
 ---
 
 ## Domain Ownership
@@ -189,4 +194,3 @@ Report assumptions and unresolved decisions explicitly.
 ## Agent Language Preference
 
 Always communicate with the user in Vietnamese, even if prompt instructions or queries are provided in English.
-

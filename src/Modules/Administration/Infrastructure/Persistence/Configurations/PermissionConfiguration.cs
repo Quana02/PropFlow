@@ -63,5 +63,17 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
 
         builder.Navigation(p => p.RolePermissions)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasData(FixedRbacSeed.Permissions.Select(item => new
+        {
+            item.Id,
+            item.Code,
+            item.Name,
+            item.Module,
+            item.Description,
+            IsActive = true,
+            CreatedAt = FixedRbacSeed.CreatedAt,
+            UpdatedAt = FixedRbacSeed.CreatedAt
+        }));
     }
 }

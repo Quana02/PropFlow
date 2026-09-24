@@ -31,7 +31,7 @@ public class Building
         Code = code.Trim();
         Name = name.Trim();
         Address = address.Trim();
-        TimeZoneId = timeZoneId.Trim();
+        TimeZoneId = ValidateTimeZoneId(timeZoneId);
         NumberOfFloors = numberOfFloors;
         Description = description?.Trim();
         Status = MasterDataStatus.ACTIVE;
@@ -74,7 +74,7 @@ public class Building
 
         Name = name.Trim();
         Address = address.Trim();
-        TimeZoneId = timeZoneId.Trim();
+        TimeZoneId = ValidateTimeZoneId(timeZoneId);
         NumberOfFloors = numberOfFloors;
         Description = description?.Trim();
         UpdatedBy = updatedBy;
@@ -93,5 +93,23 @@ public class Building
         Status = MasterDataStatus.ACTIVE;
         UpdatedBy = updatedBy;
         UpdatedAt = now;
+    }
+
+    private static string ValidateTimeZoneId(string timeZoneId)
+    {
+        var normalized = timeZoneId.Trim();
+        try
+        {
+            _ = TimeZoneInfo.FindSystemTimeZoneById(normalized);
+            return normalized;
+        }
+        catch (TimeZoneNotFoundException exception)
+        {
+            throw new ArgumentException("Múi giờ không hợp lệ.", nameof(timeZoneId), exception);
+        }
+        catch (InvalidTimeZoneException exception)
+        {
+            throw new ArgumentException("Múi giờ không hợp lệ.", nameof(timeZoneId), exception);
+        }
     }
 }

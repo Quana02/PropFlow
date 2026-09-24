@@ -1520,10 +1520,6 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Contains("UX_announcement_audiences_announcement_role", indexes.Keys);
         Assert.Contains("'ROLE'::text", indexes["UX_announcement_audiences_announcement_role"]);
         Assert.Contains("role_id IS NOT NULL", indexes["UX_announcement_audiences_announcement_role"]);
-        // REMOVED: BUILDING audience type deleted in single-building refactor
-        // Assert.Contains("UX_announcement_audiences_announcement_building", indexes.Keys);
-        // Assert.Contains("'BUILDING'::text", indexes["UX_announcement_audiences_announcement_building"]);
-        // Assert.Contains("building_id IS NOT NULL", indexes["UX_announcement_audiences_announcement_building"]);
         Assert.Contains("UX_announcement_audiences_announcement_apartment", indexes.Keys);
         Assert.Contains("'APARTMENT'::text", indexes["UX_announcement_audiences_announcement_apartment"]);
         Assert.Contains("apartment_unit_id IS NOT NULL", indexes["UX_announcement_audiences_announcement_apartment"]);
@@ -1538,8 +1534,6 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         await AssertDuplicateAudienceRejected("ALL_USERS");
         await AssertDuplicateAudienceRejected("ALL_RESIDENTS");
         await AssertDuplicateAudienceRejected("ROLE", roleId: Guid.NewGuid());
-        // REMOVED: BUILDING audience type deleted in single-building refactor
-        // await AssertDuplicateAudienceRejected("BUILDING", buildingId: Guid.NewGuid());
         await AssertDuplicateAudienceRejected("APARTMENT", apartmentUnitId: Guid.NewGuid());
         await AssertDuplicateAudienceRejected("RESIDENT", residentId: Guid.NewGuid());
     }
@@ -1559,9 +1553,6 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "ROLE", now, roleId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "ROLE", now, roleId: Guid.NewGuid());
-        // REMOVED: BUILDING audience type deleted in single-building refactor
-        // await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: Guid.NewGuid());
-        // await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "APARTMENT", now, apartmentUnitId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "APARTMENT", now, apartmentUnitId: Guid.NewGuid());
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "RESIDENT", now, residentId: Guid.NewGuid());
@@ -1569,8 +1560,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
 
         var sameGuidAcrossTypes = Guid.NewGuid();
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "ROLE", now, roleId: sameGuidAcrossTypes);
-        // REMOVED: BUILDING audience type deleted in single-building refactor
-        // await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "BUILDING", now, buildingId: sameGuidAcrossTypes);        await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "APARTMENT", now, apartmentUnitId: sameGuidAcrossTypes);
+        await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "APARTMENT", now, apartmentUnitId: sameGuidAcrossTypes);
         await InsertAnnouncementAudienceForUniquenessTest(context, announcementId, "RESIDENT", now, residentId: sameGuidAcrossTypes);
 
         await transaction.RollbackAsync();
@@ -1907,15 +1897,19 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     
 
     [Fact]
-    public async Task Administration_ShouldNotContainSeededUsersPermissionsOrDemoAssignments()
+    public async Task Administration_ShouldContainFixedRbacCatalogButNoDemoAssignments()
     {
         await using var context = new AdministrationDbContext(
             new DbContextOptionsBuilder<AdministrationDbContext>()
                 .UseNpgsql(_connectionString)
                 .Options);
 
-        Assert.Empty(await context.Permissions.AsNoTracking().ToListAsync());
-        Assert.Empty(await context.RolePermissions.AsNoTracking().ToListAsync());
+        var permissions = await context.Permissions.AsNoTracking().ToListAsync();
+        var rolePermissions = await context.RolePermissions.AsNoTracking().ToListAsync();
+        Assert.Equal(7, permissions.Count);
+        Assert.Equal(7, rolePermissions.Count);
+        Assert.Equal(permissions.Count, permissions.Select(x => x.Code).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(permissions, permission => Assert.True(permission.IsActive));
         Assert.Empty(await context.UserRoleAssignments.AsNoTracking().ToListAsync());
         
         Assert.Empty(await context.UserAccessHistories.AsNoTracking().ToListAsync());

@@ -2,23 +2,34 @@
 
 @if (IsOpen)
 {
-    <div class="dialog-backdrop" role="presentation" @onclick="Close">
-        <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="building-edit-title" @onclick:stopPropagation>
+    <div class="dialog-backdrop" role="presentation">
+        <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="building-edit-title">
             <header>
-                <div><span>FE-04.1</span><h2 id="building-edit-title">Chỉnh sửa thông tin chung cư</h2><p>Cập nhật hồ sơ của chung cư hiện tại.</p></div>
+                <div><span>FE-04.1</span><h2 id="building-edit-title">@(IsCreating ? "Thiết lập hồ sơ chung cư" : "Chỉnh sửa thông tin chung cư")</h2><p>@(IsCreating ? "Nhập thông tin chung cư được PropFlow quản lý." : "Cập nhật hồ sơ của chung cư hiện tại.")</p></div>
                 <button class="close-button" type="button" @onclick="Close" disabled="@IsSaving" aria-label="Đóng">×</button>
             </header>
             <EditForm Model="UpdateModel" OnValidSubmit="SubmitAsync">
                 <DataAnnotationsValidator />
+                @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+                {
+                    <div class="dialog-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span>@ErrorMessage</span></div>
+                }
                 <div class="form-grid">
-                    <div class="field"><label>Mã chung cư</label><input value="@Building?.Code" disabled /><small>Mã định danh không thể thay đổi.</small></div>
+                    @if (IsCreating)
+                    {
+                        <div class="field"><label for="building-code">Mã chung cư <b>*</b></label><InputText id="building-code" @bind-Value="UpdateModel.Code" /><ValidationMessage For="() => UpdateModel.Code" /><small>Mã định danh không thể thay đổi sau khi thiết lập.</small></div>
+                    }
+                    else
+                    {
+                        <div class="field"><label>Mã chung cư</label><input value="@Building!.Code" disabled /><small>Mã định danh không thể thay đổi.</small></div>
+                    }
                     <div class="field"><label for="building-name">Tên chung cư <b>*</b></label><InputText id="building-name" @bind-Value="UpdateModel.Name" /><ValidationMessage For="() => UpdateModel.Name" /></div>
                     <div class="field wide"><label for="building-address">Địa chỉ <b>*</b></label><InputText id="building-address" @bind-Value="UpdateModel.Address" /><ValidationMessage For="() => UpdateModel.Address" /></div>
                     <div class="field"><label for="building-floors">Số tầng <b>*</b></label><InputNumber id="building-floors" @bind-Value="UpdateModel.NumberOfFloors" /><ValidationMessage For="() => UpdateModel.NumberOfFloors" /></div>
                     <div class="field"><label for="building-timezone">Múi giờ <b>*</b></label><InputText id="building-timezone" @bind-Value="UpdateModel.TimeZoneId" /><ValidationMessage For="() => UpdateModel.TimeZoneId" /></div>
                     <div class="field wide"><label for="building-description">Mô tả</label><InputTextArea id="building-description" @bind-Value="UpdateModel.Description" rows="4" /><ValidationMessage For="() => UpdateModel.Description" /></div>
                 </div>
-                <footer><button class="secondary" type="button" @onclick="Close" disabled="@IsSaving">Hủy</button><button class="primary" type="submit" disabled="@IsSaving">@(IsSaving ? "Đang lưu…" : "Lưu thay đổi")</button></footer>
+                <footer><button class="secondary" type="button" @onclick="Close" disabled="@IsSaving">Hủy</button><button class="primary" type="submit" disabled="@IsSaving">@(IsSaving ? "Đang lưu…" : IsCreating ? "Thiết lập hồ sơ" : "Lưu thay đổi")</button></footer>
             </EditForm>
         </section>
     </div>
@@ -30,14 +41,29 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<UpdateCurrentBuildingModel> OnSave { get; set; }
     [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
     private UpdateCurrentBuildingModel UpdateModel { get; set; } = new();
     private Guid? LoadedProfileKey;
+    private bool WasCreating;
+    private bool IsCreating => Building is null;
 
     protected override void OnParametersSet()
     {
-        if (Building is null || LoadedProfileKey == Building.Id) return;
+        if (Building is null)
+        {
+            if (!WasCreating)
+            {
+                UpdateModel = new();
+                LoadedProfileKey = null;
+                WasCreating = true;
+            }
+            return;
+        }
+
+        if (!WasCreating && LoadedProfileKey == Building.Id) return;
+        WasCreating = false;
         LoadedProfileKey = Building.Id;
-        UpdateModel = new() { Name = Building.Name, Address = Building.Address, TimeZoneId = Building.TimeZoneId, NumberOfFloors = Building.NumberOfFloors, Description = Building.Description };
+        UpdateModel = new() { Code = Building.Code, Name = Building.Name, Address = Building.Address, TimeZoneId = Building.TimeZoneId, NumberOfFloors = Building.NumberOfFloors, Description = Building.Description };
     }
 
     private Task Close() => IsSaving ? Task.CompletedTask : OnClose.InvokeAsync();

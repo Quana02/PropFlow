@@ -6,6 +6,7 @@ h1,h2,p,dl,dd { margin:0; }
 h1 { margin-top:.2rem; font-size:clamp(1.15rem,2vw,1.45rem); }
 .page-header p,.section-header p { margin-top:.25rem; color:var(--admin-muted,#64748b); font-size:.74rem; }
 .primary-action { display:inline-flex; align-items:center; gap:.4rem; padding:.65rem .9rem; border:1px solid #0284c7; border-radius:.7rem; background:#0284c7; color:#fff; font-size:.75rem; font-weight:750; white-space:nowrap; }
+.primary-action .material-symbols-outlined { font-size:1rem; }
 .feedback { display:flex; align-items:center; gap:.65rem; padding:.8rem 1rem; border:1px solid; border-radius:.85rem; font-size:.75rem; }
 .feedback.success { border-color:#a7f3d0; background:#ecfdf5; color:#047857; }
 .feedback.error { border-color:#fecaca; background:#fff1f2; color:#be123c; }

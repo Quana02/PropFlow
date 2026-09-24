@@ -51,7 +51,7 @@ Tài liệu này dài; không phải task nào cũng cần đọc hết. Agent n
 | Render mode, global interactivity, prerender/DI | 2, 2.1, 2.2, 2.3 |
 | Login/session UI, token, refresh flow | 8, 8.1, 8.2 |
 | Ẩn/hiện UI theo quyền, bảo vệ route | 9 |
-| Multi-building selector/scope UI | 10 |
+| Current-building context UI | 10 |
 | Global/shared state | 11 |
 | Model dùng chung | 12 |
 | Xử lý lỗi API trong Feature Service | 13 |
@@ -575,26 +575,22 @@ Authentication
     +
 Permission / Policy
     +
-Building Scope
+Resource Ownership / Assignment
     +
 Resource Ownership / Assignment
     +
 Business Rules
 ```
 
-Frontend không được tin Role, Permission, BuildingId, ResidentId hoặc ownership chỉ vì giá trị đó đang tồn tại trong browser state.
+Frontend không được tin Role, Permission, ResidentId hoặc ownership chỉ vì giá trị đó đang tồn tại trong browser state.
 
 ---
 
-## 10. Building Scope
+## 10. Bối cảnh chung cư hiện hành
 
-PropFlow hỗ trợ multi-building.
+Mỗi deployment PropFlow vận hành cho một chung cư hiện hành. Frontend hiển thị hồ sơ chung cư đó khi feature cần, nhưng không tạo Building selector, không giữ `SelectedBuildingId`, không gửi building filter và không cung cấp UX chuyển hoặc so sánh giữa nhiều chung cư. Nếu vận hành chung cư khác, người dùng truy cập deployment tương ứng.
 
-Frontend có thể giữ `SelectedBuildingId` để phục vụ UX và filter, nhưng đây không phải authorization boundary.
-
-Frontend có thể gửi building context khi API contract yêu cầu, nhưng không được giả định backend sẽ tin giá trị đó. Không lọc dữ liệu ở client rồi coi đó là data isolation.
-
-Backend phải enforce scope. Frontend phải xử lý đúng trường hợp backend trả `403` hoặc resource không accessible.
+Thông tin Building hiện tại là hồ sơ hệ thống singleton do PropertyAssets cung cấp. Backend vẫn enforce role/permission, resource ownership và assignment nghiệp vụ; frontend phải xử lý đúng `403` hoặc resource không accessible.
 
 ---
 
@@ -606,7 +602,7 @@ Ví dụ:
 
 ```text
 CurrentUserState
-SelectedBuildingState
+CurrentBuildingProfileState
 NotificationState
 ```
 

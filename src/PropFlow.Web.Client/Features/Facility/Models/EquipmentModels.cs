@@ -37,11 +37,12 @@ public class CreateEquipmentModel
     public string Code { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Tên thiết bị là bắt buộc.")]
-    [StringLength(200, ErrorMessage = "Tên thiết bị không được vượt quá 200 ký tự.")]
+    [StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")]
     public string Name { get; set; } = string.Empty;
 
     public Guid? FacilityId { get; set; }
 
+    [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc.")]
     [StringLength(100, ErrorMessage = "Loại thiết bị không được vượt quá 100 ký tự.")]
     public string? EquipmentType { get; set; }
 
@@ -70,11 +71,12 @@ public class CreateEquipmentModel
 public class UpdateEquipmentModel
 {
     [Required(ErrorMessage = "Tên thiết bị là bắt buộc.")]
-    [StringLength(200, ErrorMessage = "Tên thiết bị không được vượt quá 200 ký tự.")]
+    [StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")]
     public string Name { get; set; } = string.Empty;
 
     public Guid? FacilityId { get; set; }
 
+    [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc.")]
     [StringLength(100, ErrorMessage = "Loại thiết bị không được vượt quá 100 ký tự.")]
     public string? EquipmentType { get; set; }
 

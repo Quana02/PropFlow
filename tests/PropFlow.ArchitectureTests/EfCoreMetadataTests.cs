@@ -113,10 +113,6 @@ public class EfCoreMetadataTests
         Assert.Equal("apartment_units", apartmentUnitEntity.GetTableName());
         Assert.Equal("apartments", apartmentUnitEntity.GetSchema());
 
-        // REMOVED: BuildingId deleted in single-building refactor
-        // var buildingIdProp = apartmentUnitEntity.FindProperty("BuildingId");
-        // Assert.NotNull(buildingIdProp);
-        // Assert.Equal("building_id", buildingIdProp.GetColumnName());
         Assert.Empty(apartmentUnitEntity.GetNavigations());
         var unitNumberProp = apartmentUnitEntity.FindProperty("UnitNumber");
         Assert.NotNull(unitNumberProp);
@@ -314,7 +310,7 @@ public class EfCoreMetadataTests
         Assert.Equal("audit_logs", alEntity.GetTableName());
         Assert.Equal("administration", alEntity.GetSchema());
 
-        // Ensure exactly 7 entities mapped (UserBuildingAccess removed in single-building refactor)
+        // Ensure exactly 7 entities mapped; obsolete UserBuildingAccess is not part of the live model.
         Assert.Equal(7, model.GetEntityTypes().Count());
 
         Assert.Contains(rolePermEntity.GetForeignKeys(), fk =>
@@ -334,7 +330,7 @@ public class EfCoreMetadataTests
             fk.Properties.Single().Name == "NewRoleId");
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
-            fk.Properties.Any(p => p.Name is "UserId" or "BuildingId" or "AssignedBy" or "UpdatedBy" or "GrantedBy" or "RevokedBy" or "TargetUserId" or "PerformedBy" or "ActorUserId" or "CreatedBy"));
+            fk.Properties.Any(p => p.Name is "UserId" or "AssignedBy" or "UpdatedBy" or "TargetUserId" or "PerformedBy" or "ActorUserId" or "CreatedBy"));
 
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
         var designTimeRoleEntity = designTimeModel.FindEntityType(typeof(Role));
@@ -348,7 +344,10 @@ public class EfCoreMetadataTests
         Assert.Contains(roleSeedData, row => string.Equals(row["Code"] as string, SystemRoleCodes.Admin, StringComparison.Ordinal));
         var designTimePermissionEntity = designTimeModel.FindEntityType(typeof(Permission));
         Assert.NotNull(designTimePermissionEntity);
-        Assert.Empty(designTimePermissionEntity.GetSeedData());
+        Assert.Equal(7, designTimePermissionEntity.GetSeedData().Count());
+        var designTimeRolePermissionEntity = designTimeModel.FindEntityType(typeof(RolePermission));
+        Assert.NotNull(designTimeRolePermissionEntity);
+        Assert.Equal(7, designTimeRolePermissionEntity.GetSeedData().Count());
 
         // No external entities
         Assert.Null(model.FindEntityType(typeof(UserAccount)));
@@ -464,7 +463,7 @@ public class EfCoreMetadataTests
             fk.Properties.Single().Name == nameof(ServiceRequestActivity.AssignmentId));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
-            fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "BuildingId" or "ApartmentUnitId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));
+            fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "ApartmentUnitId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));
     }
 
     [Fact]
@@ -505,7 +504,7 @@ public class EfCoreMetadataTests
             fk.Properties.Single().Name == nameof(ComplaintActivity.FollowupId));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
-            fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "BuildingId" or "ApartmentUnitId" or "RelatedServiceRequestId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));
+            fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "ApartmentUnitId" or "RelatedServiceRequestId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));
     }
 
     [Fact]
@@ -590,7 +589,7 @@ public class EfCoreMetadataTests
             constraint.Name == "CK_maintenance_results_attempt_no");
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
-            fk.Properties.Any(p => p.Name is "BuildingId" or "FacilityId" or "EquipmentId" or "SourceServiceRequestId" or "SourceComplaintId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "CreatedBy" or "UpdatedBy" or "PerformedBy" or "SubmittedBy" or "ReviewedBy"));
+            fk.Properties.Any(p => p.Name is "FacilityId" or "EquipmentId" or "SourceServiceRequestId" or "SourceComplaintId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "CreatedBy" or "UpdatedBy" or "PerformedBy" or "SubmittedBy" or "ReviewedBy"));
     }
 
     [Fact]
@@ -674,7 +673,7 @@ public class EfCoreMetadataTests
             fk.Properties.Single().Name == nameof(InvoiceStatusHistory.InvoiceId));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
-            fk.Properties.Any(p => p.Name is "ApartmentUnitId" or "BuildingId" or "CreatedBy" or "UpdatedBy" or "IssuedBy" or "CancelledBy" or "ChangedBy"));
+            fk.Properties.Any(p => p.Name is "ApartmentUnitId" or "CreatedBy" or "UpdatedBy" or "IssuedBy" or "CancelledBy" or "ChangedBy"));
     }
 
     [Fact]
@@ -955,6 +954,6 @@ public class EfCoreMetadataTests
             constraint.Name == "CK_announcement_versions_version_no");
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
-            fk.Properties.Any(p => p.Name is "RecipientUserId" or "CreatedBy" or "UpdatedBy" or "ChangedBy" or "RoleId" or "BuildingId" or "ApartmentUnitId" or "ResidentId" or "SourceId"));
+            fk.Properties.Any(p => p.Name is "RecipientUserId" or "CreatedBy" or "UpdatedBy" or "ChangedBy" or "RoleId" or "ApartmentUnitId" or "ResidentId" or "SourceId"));
     }
 }
