@@ -16,7 +16,7 @@ public class Complaint
         string complaintNumber,
         Guid residentId,
         Guid residentApartmentId,
-        Guid buildingId,
+        
         string subject,
         string description,
         DateTimeOffset now,
@@ -30,13 +30,13 @@ public class Complaint
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
         ThrowIfEmpty(residentId, nameof(residentId));
         ThrowIfEmpty(residentApartmentId, nameof(residentApartmentId));
-        ThrowIfEmpty(buildingId, nameof(buildingId));
+        
 
         Id = Guid.NewGuid();
         ComplaintNumber = complaintNumber.Trim();
         ResidentId = residentId;
         ResidentApartmentId = residentApartmentId;
-        BuildingId = buildingId;
+       
         ApartmentUnitId = apartmentUnitId;
         RelatedServiceRequestId = relatedServiceRequestId;
         FacilityId = facilityId;
@@ -53,7 +53,7 @@ public class Complaint
     public string ComplaintNumber { get; private set; } = null!;
     public Guid ResidentId { get; private set; }
     public Guid ResidentApartmentId { get; private set; }
-    public Guid BuildingId { get; private set; }
+    
     public Guid? ApartmentUnitId { get; private set; }
     public Guid? RelatedServiceRequestId { get; private set; }
     public Guid? FacilityId { get; private set; }

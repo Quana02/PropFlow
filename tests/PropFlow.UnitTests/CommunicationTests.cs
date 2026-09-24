@@ -128,16 +128,16 @@ public class CommunicationTests
     {
         var announcement = NewDraftAnnouncement();
         var roleId = Guid.NewGuid();
-        var buildingId = Guid.NewGuid();
+        
         var apartmentId = Guid.NewGuid();
         var residentId = Guid.NewGuid();
 
         Assert.Equal(AnnouncementAudienceType.ALL_USERS, announcement.AddAllUsersAudience(_now).AudienceType);
         Assert.Equal(roleId, announcement.AddRoleAudience(roleId, _now).RoleId);
-        Assert.Equal(buildingId, announcement.AddBuildingAudience(buildingId, _now).BuildingId);
+        
         Assert.Equal(apartmentId, announcement.AddApartmentAudience(apartmentId, _now).ApartmentUnitId);
         Assert.Equal(residentId, announcement.AddResidentAudience(residentId, _now).ResidentId);
-        Assert.Equal(5, announcement.Audiences.Count);
+        Assert.Equal(4, announcement.Audiences.Count);
 
         Assert.Throws<ArgumentException>(() => announcement.AddRoleAudience(Guid.Empty, _now));
         Assert.Throws<ArgumentOutOfRangeException>(() => announcement.AddAllResidentsAudience(_now.AddTicks(-1)));
@@ -152,8 +152,7 @@ public class CommunicationTests
         var roleId = Guid.NewGuid();
         AssertDuplicateIsRejected(announcement => announcement.AddRoleAudience(roleId, _now));
 
-        var buildingId = Guid.NewGuid();
-        AssertDuplicateIsRejected(announcement => announcement.AddBuildingAudience(buildingId, _now));
+        
 
         var apartmentId = Guid.NewGuid();
         AssertDuplicateIsRejected(announcement => announcement.AddApartmentAudience(apartmentId, _now));
@@ -169,23 +168,22 @@ public class CommunicationTests
 
         announcement.AddRoleAudience(Guid.NewGuid(), _now);
         announcement.AddRoleAudience(Guid.NewGuid(), _now);
-        announcement.AddBuildingAudience(Guid.NewGuid(), _now);
-        announcement.AddBuildingAudience(Guid.NewGuid(), _now);
+       
         announcement.AddApartmentAudience(Guid.NewGuid(), _now);
         announcement.AddApartmentAudience(Guid.NewGuid(), _now);
         announcement.AddResidentAudience(Guid.NewGuid(), _now);
         announcement.AddResidentAudience(Guid.NewGuid(), _now);
 
-        Assert.Equal(8, announcement.Audiences.Count);
+        Assert.Equal(6, announcement.Audiences.Count);
 
         var sameGuidAcrossTypes = Guid.NewGuid();
         var anotherAnnouncement = NewDraftAnnouncement();
         anotherAnnouncement.AddRoleAudience(sameGuidAcrossTypes, _now);
-        anotherAnnouncement.AddBuildingAudience(sameGuidAcrossTypes, _now);
+        
         anotherAnnouncement.AddApartmentAudience(sameGuidAcrossTypes, _now);
         anotherAnnouncement.AddResidentAudience(sameGuidAcrossTypes, _now);
 
-        Assert.Equal(4, anotherAnnouncement.Audiences.Count);
+        Assert.Equal(3, anotherAnnouncement.Audiences.Count);
     }
 
     [Fact]
@@ -233,8 +231,9 @@ public class CommunicationTests
         Assert.Throws<InvalidOperationException>(() => draft.Withdraw(Guid.NewGuid(), "Cancelled", _now));
 
         var announcement = NewDraftAnnouncement();
-        announcement.AddBuildingAudience(Guid.NewGuid(), _now);
-        announcement.Publish(Guid.NewGuid(), _now.AddMinutes(5));
+        announcement.AddAllUsersAudience(_now);
+        
+        announcement.Publish(Guid.NewGuid(), _now.AddMinutes(5), "[{\"audienceType\":\"ALL_USERS\"}]");
 
         var withdrawnBy = Guid.NewGuid();
         var withdrawnAt = _now.AddMinutes(10);

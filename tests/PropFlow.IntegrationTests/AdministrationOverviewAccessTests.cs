@@ -39,13 +39,13 @@ public sealed class AdministrationOverviewAccessTests
 
     private sealed class Apartments : IApartmentOverviewSource
     {
-        public Task<IReadOnlyList<ActiveApartmentIds>> GetActiveApartmentsAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<ActiveApartmentIds>>([]);
+        public Task<IReadOnlyList<Guid>> GetActiveApartmentIdsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<Guid>>([]);
     }
     private sealed class Buildings : IBuildingTimeZones
     {
-        public Task<IReadOnlyList<BuildingTimeZone>> GetAllAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<BuildingTimeZone>>([]);
+        public Task<string> GetSystemTimeZoneAsync(CancellationToken ct) =>
+            Task.FromResult("UTC");
     }
     private sealed class Residents : IResidentOverviewSource
     {
@@ -55,7 +55,7 @@ public sealed class AdministrationOverviewAccessTests
     private sealed class Requests : IServiceRequestOverviewSource
     {
         public Task<ServiceRequestOverviewData> GetOverviewAsync(DateTimeOffset instant, int trendDays,
-            IReadOnlyList<ServiceRequestBuildingTimeZone> buildingTimeZones, CancellationToken ct) =>
+            string timeZoneId, CancellationToken ct) =>
             Task.FromResult(new ServiceRequestOverviewData(0, [], []));
     }
 

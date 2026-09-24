@@ -8,9 +8,9 @@ public sealed class FacilityApiClient(AuthenticatedApiClient api) : IFacilityApi
     public Task<ApiResult<PagedResult<FacilityModel>>> GetFacilitiesAsync(FacilityFilterModel filter, CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
-        if (filter.BuildingId.HasValue) query.Add($"buildingId={filter.BuildingId}");
         if (!string.IsNullOrWhiteSpace(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
         if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
+        if (!string.IsNullOrWhiteSpace(filter.FacilityType)) query.Add($"facilityType={Uri.EscapeDataString(filter.FacilityType)}");
         query.Add($"pageIndex={filter.PageIndex}");
         query.Add($"pageSize={filter.PageSize}");
         return api.SendAsync<PagedResult<FacilityModel>>(HttpMethod.Get, $"api/v1/facilities?{string.Join("&", query)}", ct: cancellationToken);

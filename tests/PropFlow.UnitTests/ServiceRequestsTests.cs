@@ -33,7 +33,7 @@ public class ServiceRequestsTests
         Assert.Equal(_now, request.SubmittedAt);
         Assert.Null(request.ResolvedAt);
         Assert.Null(request.ClosedAt);
-        Assert.Throws<ArgumentException>(() => new ServiceRequest("SR-2", Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), "Title", "Description", _now));
+        Assert.Throws<ArgumentException>(() => new ServiceRequest("SR-2", Guid.Empty, Guid.NewGuid(), "Title", "Description", _now));
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class ServiceRequestsTests
             "SR-2026-0001",
             Guid.NewGuid(),
             Guid.NewGuid(),
-            Guid.NewGuid(),
+            
             "Leaking pipe",
             "Water is leaking near the kitchen",
             _now,

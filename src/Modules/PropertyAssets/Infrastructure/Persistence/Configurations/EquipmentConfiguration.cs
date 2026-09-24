@@ -14,10 +14,6 @@ public class EquipmentConfiguration : IEntityTypeConfiguration<Equipment>
         builder.Property(e => e.Id)
             .HasColumnName("id");
 
-        builder.Property(e => e.BuildingId)
-            .HasColumnName("building_id")
-            .IsRequired();
-
         builder.Property(e => e.FacilityId)
             .HasColumnName("facility_id");
 
@@ -86,7 +82,7 @@ public class EquipmentConfiguration : IEntityTypeConfiguration<Equipment>
             .IsRequired();
 
         // Indexes
-        builder.HasIndex(e => new { e.BuildingId, e.Code })
+        builder.HasIndex(e => e.Code)
             .IsUnique();
 
         builder.HasIndex(e => e.FacilityId);
@@ -94,11 +90,6 @@ public class EquipmentConfiguration : IEntityTypeConfiguration<Equipment>
         builder.HasIndex(e => e.Status);
 
         // Within-module relationships
-        builder.HasOne(e => e.Building)
-            .WithMany(b => b.Equipment)
-            .HasForeignKey(e => e.BuildingId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasOne(e => e.Facility)
             .WithMany(f => f.Equipment)
             .HasForeignKey(e => e.FacilityId)

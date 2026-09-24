@@ -8,7 +8,7 @@ public class ApartmentUnit
     }
 
     public ApartmentUnit(
-        Guid buildingId,
+        
         string unitNumber,
         int floorNumber,
         DateTimeOffset now,
@@ -17,15 +17,12 @@ public class ApartmentUnit
         string? description = null,
         Guid? createdBy = null)
     {
-        if (buildingId == Guid.Empty)
-        {
-            throw new ArgumentException("BuildingId cannot be empty.", nameof(buildingId));
-        }
+        
 
         ArgumentException.ThrowIfNullOrWhiteSpace(unitNumber);
 
         Id = Guid.NewGuid();
-        BuildingId = buildingId;
+        
         UnitNumber = unitNumber.Trim();
         FloorNumber = floorNumber;
         AreaM2 = areaM2;
@@ -40,8 +37,7 @@ public class ApartmentUnit
 
     public Guid Id { get; private set; }
 
-    // Cross-module scalar ID to property_assets.buildings.id
-    public Guid BuildingId { get; private set; }
+    
 
     public string UnitNumber { get; private set; } = null!;
     public int FloorNumber { get; private set; }

@@ -1,0 +1,23 @@
+<article class="summary" aria-label="@Title">
+    <header><h3>@Title</h3><strong>@Total</strong></header>
+    <dl>
+        <div><dt>Đang hoạt động</dt><dd class="active">@Active</dd></div>
+        <div><dt>Đang bảo trì</dt><dd class="maintenance">@UnderMaintenance</dd></div>
+        <div><dt>Ngưng hoạt động</dt><dd>@Inactive</dd></div>
+        @if (Unavailable.HasValue)
+        {
+            <div><dt>Không khả dụng</dt><dd>@Unavailable</dd></div>
+        }
+        <div><dt>Hết phục vụ</dt><dd class="unavailable">@OutOfService</dd></div>
+    </dl>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public int Total { get; set; }
+    [Parameter] public int Active { get; set; }
+    [Parameter] public int UnderMaintenance { get; set; }
+    [Parameter] public int Inactive { get; set; }
+    [Parameter] public int? Unavailable { get; set; }
+    [Parameter] public int OutOfService { get; set; }
+}
