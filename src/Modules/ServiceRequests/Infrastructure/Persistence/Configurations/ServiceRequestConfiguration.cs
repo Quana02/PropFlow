@@ -23,8 +23,7 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
         builder.HasIndex(request => request.ResidentId);
 
         builder.Property(request => request.ResidentApartmentId).HasColumnName("resident_apartment_id").IsRequired();
-        builder.Property(request => request.BuildingId).HasColumnName("building_id").IsRequired();
-        builder.HasIndex(request => request.BuildingId);
+        
 
         builder.Property(request => request.ApartmentUnitId).HasColumnName("apartment_unit_id");
         builder.HasIndex(request => request.ApartmentUnitId);

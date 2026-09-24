@@ -13,83 +13,30 @@ public class BuildingService : IBuildingService
         _store = store ?? throw new ArgumentNullException(nameof(store));
     }
 
-    public async Task<PagedResult<BuildingDto>> GetBuildingsAsync(BuildingFilterQuery query, CancellationToken cancellationToken = default)
+    public async Task<CurrentBuildingPropertyOverviewDto?> GetCurrentBuildingOverviewAsync(CancellationToken cancellationToken = default)
     {
-        var page = await _store.BuildingsAsync(query, cancellationToken);
-        return new PagedResult<BuildingDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.PageIndex, page.PageSize);
+        return await _store.CurrentBuildingOverviewAsync(cancellationToken);
     }
 
-    public async Task<BuildingDto?> GetBuildingByIdAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        var building = await _store.BuildingAsync(id, false, cancellationToken);
-
-        return building is null ? null : MapToDto(building);
-    }
-
-    public async Task<BuildingDetailDto?> GetBuildingDetailByIdAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        var building = await _store.BuildingAsync(id, false, cancellationToken);
-
-        if (building is null) return null;
-
-        var counts = await _store.BuildingAssetCountsAsync(id, cancellationToken);
-
-        return new BuildingDetailDto(
-            building.Id,
-            building.Code,
-            building.Name,
-            building.Address,
-            building.TimeZoneId,
-            building.NumberOfFloors,
-            building.Description,
-            building.Status,
-            counts.Facilities,
-            counts.Equipment,
-            counts.ActiveFacilities,
-            counts.ActiveEquipment,
-            building.CreatedBy,
-            building.UpdatedBy,
-            building.CreatedAt,
-            building.UpdatedAt);
-    }
-
-    public async Task<BuildingDto> CreateBuildingAsync(CreateBuildingCommand command, CancellationToken cancellationToken = default)
+    public async Task<BuildingDto> UpdateCurrentBuildingAsync(UpdateCurrentBuildingCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var codeUpper = command.Code.Trim();
-        var existingBuilding = await _store.BuildingCodeExistsAsync(codeUpper, cancellationToken);
-
-        if (existingBuilding)
+        if (command.NumberOfFloors <= 0)
         {
-            throw new InvalidOperationException($"Mã tòa nhà '{command.Code}' đã tồn tại trong hệ thống.");
+            throw new ArgumentException("Tổng số tầng phải lớn hơn 0.");
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var building = new Building(
-            command.Code,
-            command.Name,
-            command.Address,
-            now,
-            string.IsNullOrWhiteSpace(command.TimeZoneId) ? "Asia/Ho_Chi_Minh" : command.TimeZoneId,
-            command.NumberOfFloors,
-            command.Description,
-            command.CreatedBy);
+        var overview = await _store.CurrentBuildingOverviewAsync(cancellationToken);
+        if (overview is null)
+        {
+            throw new InvalidOperationException("Không tìm thấy thông tin chung cư. Vui lòng thiết lập dữ liệu khởi tạo.");
+        }
 
-        _store.Add(building);
-        await _store.SaveAsync(cancellationToken);
-
-        return MapToDto(building);
-    }
-
-    public async Task<BuildingDto> UpdateBuildingAsync(Guid id, UpdateBuildingCommand command, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        var building = await _store.BuildingAsync(id, true, cancellationToken);
+        var building = await _store.BuildingAsync(overview.Id, true, cancellationToken);
         if (building is null)
         {
-            throw new KeyNotFoundException($"Không tìm thấy tòa nhà với mã định danh ID = {id}.");
+            throw new KeyNotFoundException($"Không tìm thấy tòa nhà với mã định danh ID = {overview.Id}.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -101,31 +48,6 @@ public class BuildingService : IBuildingService
             command.Description,
             command.UpdatedBy,
             now);
-
-        await _store.SaveAsync(cancellationToken);
-
-        return MapToDto(building);
-    }
-
-    public async Task<BuildingDto> SetBuildingStatusAsync(Guid id, SetBuildingStatusCommand command, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        var building = await _store.BuildingAsync(id, true, cancellationToken);
-        if (building is null)
-        {
-            throw new KeyNotFoundException($"Không tìm thấy tòa nhà với mã định danh ID = {id}.");
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        if (command.Status == MasterDataStatus.INACTIVE)
-        {
-            building.Deactivate(command.UpdatedBy, now);
-        }
-        else
-        {
-            building.Activate(command.UpdatedBy, now);
-        }
 
         await _store.SaveAsync(cancellationToken);
 

@@ -33,7 +33,7 @@ using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Domain.SystemConfigurations;
 using PropFlow.Modules.Administration.Domain.UserAccessHistories;
-using PropFlow.Modules.Administration.Domain.UserBuildingAccesses;
+
 using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
 using PropFlow.Modules.Administration.Infrastructure.Persistence;
 using PropFlow.Modules.Complaints.Domain.ComplaintActivities;
@@ -113,11 +113,17 @@ public class EfCoreMetadataTests
         Assert.Equal("apartment_units", apartmentUnitEntity.GetTableName());
         Assert.Equal("apartments", apartmentUnitEntity.GetSchema());
 
-        // Verify BuildingId is scalar and has no navigation
-        var buildingIdProp = apartmentUnitEntity.FindProperty("BuildingId");
-        Assert.NotNull(buildingIdProp);
-        Assert.Equal("building_id", buildingIdProp.GetColumnName());
+        // REMOVED: BuildingId deleted in single-building refactor
+        // var buildingIdProp = apartmentUnitEntity.FindProperty("BuildingId");
+        // Assert.NotNull(buildingIdProp);
+        // Assert.Equal("building_id", buildingIdProp.GetColumnName());
         Assert.Empty(apartmentUnitEntity.GetNavigations());
+        var unitNumberProp = apartmentUnitEntity.FindProperty("UnitNumber");
+        Assert.NotNull(unitNumberProp);
+        Assert.Equal("unit_number", unitNumberProp.GetColumnName());
+        var uniqueIndex = apartmentUnitEntity.GetIndexes().SingleOrDefault(idx => idx.IsUnique);
+        Assert.NotNull(uniqueIndex);
+        Assert.Equal("IX_apartment_units_unit_number", uniqueIndex.GetDatabaseName());
 
         // No external entities
         Assert.Null(model.FindEntityType(typeof(Building)));
@@ -288,22 +294,7 @@ public class EfCoreMetadataTests
         Assert.NotNull(userIdProp);
         Assert.Equal("user_id", userIdProp.GetColumnName());
 
-        // UserBuildingAccess
-        var ubaEntity = model.FindEntityType(typeof(UserBuildingAccess));
-        Assert.NotNull(ubaEntity);
-        Assert.Equal("user_building_accesses", ubaEntity.GetTableName());
-        Assert.Equal("administration", ubaEntity.GetSchema());
-        var activeAccessIndex = ubaEntity.GetIndexes().SingleOrDefault(index =>
-            index.Properties.Select(property => property.Name).SequenceEqual(["UserId", "BuildingId"]));
-        Assert.NotNull(activeAccessIndex);
-        Assert.True(activeAccessIndex.IsUnique);
-        Assert.Equal("\"revoked_at\" IS NULL", activeAccessIndex.GetFilter());
-
-        var accessHistoryIndex = ubaEntity.GetIndexes().SingleOrDefault(index =>
-            index.Properties.Select(property => property.Name).SequenceEqual(["UserId", "BuildingId", "GrantedAt"]));
-        Assert.NotNull(accessHistoryIndex);
-        Assert.False(accessHistoryIndex.IsUnique);
-
+        
         // UserAccessHistory
         var uahEntity = model.FindEntityType(typeof(UserAccessHistory));
         Assert.NotNull(uahEntity);
@@ -323,8 +314,8 @@ public class EfCoreMetadataTests
         Assert.Equal("audit_logs", alEntity.GetTableName());
         Assert.Equal("administration", alEntity.GetSchema());
 
-        // Ensure exactly 8 entities mapped
-        Assert.Equal(8, model.GetEntityTypes().Count());
+        // Ensure exactly 7 entities mapped (UserBuildingAccess removed in single-building refactor)
+        Assert.Equal(7, model.GetEntityTypes().Count());
 
         Assert.Contains(rolePermEntity.GetForeignKeys(), fk =>
             fk.PrincipalEntityType.ClrType == typeof(Role) &&
@@ -385,7 +376,7 @@ public class EfCoreMetadataTests
             typeof(Permission),
             typeof(RolePermission),
             typeof(UserRoleAssignment),
-            typeof(UserBuildingAccess),
+            
             typeof(UserAccessHistory),
             typeof(SystemConfiguration),
             typeof(AuditLog),
@@ -418,7 +409,7 @@ public class EfCoreMetadataTests
             typeof(AnnouncementAudience)
         };
 
-        Assert.Equal(45, businessEntities.Distinct().Count());
+        Assert.Equal(44, businessEntities.Distinct().Count());
     }
 
     [Fact]
@@ -929,15 +920,7 @@ public class EfCoreMetadataTests
                 nameof(AnnouncementAudience.RoleId)
             ]));
         Assert.Contains(audienceEntity.GetIndexes(), index =>
-            index.IsUnique &&
-            index.GetDatabaseName() == "UX_announcement_audiences_announcement_building" &&
-            index.GetFilter() == "audience_type = 'BUILDING' AND building_id IS NOT NULL" &&
-            index.Properties.Select(property => property.Name).SequenceEqual([
-                nameof(AnnouncementAudience.AnnouncementId),
-                nameof(AnnouncementAudience.BuildingId)
-            ]));
-        Assert.Contains(audienceEntity.GetIndexes(), index =>
-            index.IsUnique &&
+            index.IsUnique &&           
             index.GetDatabaseName() == "UX_announcement_audiences_announcement_apartment" &&
             index.GetFilter() == "audience_type = 'APARTMENT' AND apartment_unit_id IS NOT NULL" &&
             index.Properties.Select(property => property.Name).SequenceEqual([

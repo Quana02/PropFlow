@@ -6,8 +6,17 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure;
 
 public sealed class BuildingTimeZones(PropertyAssetsDbContext db) : IBuildingTimeZones
 {
-    public async Task<IReadOnlyList<BuildingTimeZone>> GetAllAsync(CancellationToken ct) =>
-        await db.Buildings.AsNoTracking()
-            .Select(building => new BuildingTimeZone(building.Id, building.TimeZoneId))
+    public async Task<string> GetSystemTimeZoneAsync(CancellationToken ct)
+    {
+        var timeZones = await db.Buildings.AsNoTracking()
+            .Select(b => b.TimeZoneId)
             .ToArrayAsync(ct);
+
+        return timeZones.Length switch
+        {
+            0 => throw new InvalidOperationException("System building profile is not configured."),
+            1 => timeZones[0],
+            _ => throw new InvalidOperationException("Multiple building profiles found. System invariant violated.")
+        };
+    }
 }

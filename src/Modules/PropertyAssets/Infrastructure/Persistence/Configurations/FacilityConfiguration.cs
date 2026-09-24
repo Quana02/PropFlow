@@ -15,10 +15,6 @@ public class FacilityConfiguration : IEntityTypeConfiguration<Facility>
         builder.Property(f => f.Id)
             .HasColumnName("id");
 
-        builder.Property(f => f.BuildingId)
-            .HasColumnName("building_id")
-            .IsRequired();
-
         builder.Property(f => f.Code)
             .HasColumnName("code")
             .HasMaxLength(30)
@@ -64,19 +60,13 @@ public class FacilityConfiguration : IEntityTypeConfiguration<Facility>
             .IsRequired();
 
         // Indexes
-        builder.HasIndex(f => new { f.BuildingId, f.Code })
+        builder.HasIndex(f => f.Code)
             .IsUnique();
 
-        builder.HasIndex(f => f.BuildingId);
         builder.HasIndex(f => f.FacilityType);
         builder.HasIndex(f => f.Status);
 
         // Within-module relationships
-        builder.HasOne(f => f.Building)
-            .WithMany(b => b.Facilities)
-            .HasForeignKey(f => f.BuildingId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasMany(f => f.Equipment)
             .WithOne(e => e.Facility)
             .HasForeignKey(e => e.FacilityId)
