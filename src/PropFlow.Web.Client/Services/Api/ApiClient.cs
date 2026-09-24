@@ -40,7 +40,7 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
                     try { problem = await response.Content.ReadFromJsonAsync<Problem>(cancellationToken: ct); }
                     catch (JsonException) { logger.LogWarning("Invalid API error body for status {Status}.", status); }
                 }
-                return new(false, StatusCode: status, Code: problem?.Code, Message: problem?.Title ?? MessageFor(status),
+                return new(false, StatusCode: status, Code: problem?.Code, Message: problem?.Detail ?? problem?.Title ?? MessageFor(status),
                     TraceId: problem?.TraceId, ValidationErrors: problem?.Errors);
             }
             if (typeof(T) == typeof(EmptyResponse)) return new(true, (T)(object)new EmptyResponse(), status);

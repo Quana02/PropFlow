@@ -65,7 +65,7 @@ public class FacilityService : IFacilityService
         var codeExists = await _store.FacilityCodeExistsAsync(command.Code.Trim(), cancellationToken);
         if (codeExists)
         {
-            throw new ArgumentException($"Mã tiện ích '{command.Code}' đã tồn tại.");
+            throw new InvalidOperationException($"Mã tiện ích '{command.Code}' đã tồn tại.");
         }
 
         var facility = new Facility(

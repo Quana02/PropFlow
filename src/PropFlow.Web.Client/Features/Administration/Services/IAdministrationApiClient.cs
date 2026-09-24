@@ -11,5 +11,7 @@ public interface IAdministrationApiClient
     Task<ApiResult<InternalAccount>> CreateAsync(CreateInternalAccount request, CancellationToken ct = default);
     Task<ApiResult> ChangeRoleAsync(Guid userId, string role, CancellationToken ct = default);
     Task<ApiResult> ChangeStatusAsync(Guid userId, string status, CancellationToken ct = default);
+    Task<ApiResult<AdministrationRoleAccess[]>> GetRolesAsync(CancellationToken ct = default);
+    Task<ApiResult<InternalAccountAccess>> GetEffectiveAccessAsync(Guid userId, CancellationToken ct = default);
     Task<ApiResult<PagedAdministrationActivities>> GetActivityAsync(string? action, int page, CancellationToken ct = default);
 }

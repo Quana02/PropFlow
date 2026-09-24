@@ -107,7 +107,7 @@ public class Equipment
     {
         if (Status == EquipmentStatus.OUT_OF_SERVICE)
         {
-            throw new InvalidOperationException("Cannot place out of service equipment under maintenance directly.");
+            throw new InvalidOperationException("Thiết bị đã ngừng phục vụ không thể chuyển thẳng sang trạng thái đang bảo trì.");
         }
 
         Status = EquipmentStatus.UNDER_MAINTENANCE;

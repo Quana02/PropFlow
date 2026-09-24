@@ -24,10 +24,13 @@ public sealed record CsrfResponse(string Token);
 // Public Administration-facing identity boundary.  Account credentials and
 // status remain owned by Authentication; Administration owns role assignment.
 public sealed record InternalAccountRecord(Guid Id, string Username, string DisplayName, string? Email, string Status);
+public sealed record PagedInternalAccountRecords(int Total, IReadOnlyList<InternalAccountRecord> Items);
 public sealed record CreateInternalAccount(string Username, string DisplayName, string Email, string Password, string? PhoneNumber);
+public sealed class InternalAccountConflictException(string message) : Exception(message);
 public interface IInternalAccountDirectory
 {
     Task<IReadOnlyList<InternalAccountRecord>> GetAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct);
+    Task<PagedInternalAccountRecords> SearchAsync(IReadOnlyCollection<Guid> userIds, string? search, string? status, int page, int pageSize, CancellationToken ct);
     Task<InternalAccountRecord> CreateAsync(CreateInternalAccount request, Guid actorUserId, CancellationToken ct);
     Task<InternalAccountRecord?> SetStatusAsync(Guid userId, string status, Guid actorUserId, CancellationToken ct);
 }

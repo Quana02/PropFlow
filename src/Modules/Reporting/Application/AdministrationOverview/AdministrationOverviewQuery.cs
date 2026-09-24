@@ -18,7 +18,7 @@ public sealed record AdministrationOverviewDto(
 
 public sealed class AdministrationOverviewQuery(
     IApartmentOverviewSource apartments,
-    IBuildingTimeZones buildings,
+    ICurrentBuildingTimeZone buildingTimeZone,
     IResidentOverviewSource residents,
     IServiceRequestOverviewSource requests,
     TimeProvider clock)
@@ -27,16 +27,14 @@ public sealed class AdministrationOverviewQuery(
 
     public async Task<AdministrationOverviewDto> GetAsync(CancellationToken ct)
     {
-        var timeZoneId = await buildings.GetSystemTimeZoneAsync(ct);
+        var timeZoneId = await buildingTimeZone.GetAsync(ct);
         var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
         
         var instant = clock.GetUtcNow();
         var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
 
         var activeApartmentIds = await apartments.GetActiveApartmentIdsAsync(ct);
-        var occupancy = new[] { new ApartmentOccupancyAtDate(localDate, activeApartmentIds.ToArray()) };
-        
-        var residentCounts = await residents.GetCountsAsync(occupancy, ct);
+        var residentCounts = await residents.GetCountsAsync(localDate, activeApartmentIds, ct);
         var totalApartments = activeApartmentIds.Count;
         
         if (residentCounts.OccupiedActiveApartments > totalApartments)

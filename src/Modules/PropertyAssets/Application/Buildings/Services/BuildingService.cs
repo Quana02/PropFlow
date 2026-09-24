@@ -30,7 +30,25 @@ public class BuildingService : IBuildingService
         var overview = await _store.CurrentBuildingOverviewAsync(cancellationToken);
         if (overview is null)
         {
-            throw new InvalidOperationException("Không tìm thấy thông tin chung cư. Vui lòng thiết lập dữ liệu khởi tạo.");
+            if (string.IsNullOrWhiteSpace(command.Code))
+            {
+                throw new ArgumentException("Mã chung cư là bắt buộc khi thiết lập hồ sơ ban đầu.");
+            }
+
+            var createdAt = DateTimeOffset.UtcNow;
+            var newBuilding = new Building(
+                command.Code,
+                command.Name,
+                command.Address,
+                createdAt,
+                string.IsNullOrWhiteSpace(command.TimeZoneId) ? "Asia/Ho_Chi_Minh" : command.TimeZoneId,
+                command.NumberOfFloors,
+                command.Description,
+                command.UpdatedBy);
+
+            _store.Add(newBuilding);
+            await _store.SaveAsync(cancellationToken);
+            return MapToDto(newBuilding);
         }
 
         var building = await _store.BuildingAsync(overview.Id, true, cancellationToken);

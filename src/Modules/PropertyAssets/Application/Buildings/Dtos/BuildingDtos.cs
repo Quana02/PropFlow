@@ -1,6 +1,8 @@
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
 using PropFlow.Modules.PropertyAssets.Domain.Equipment;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 
@@ -48,9 +50,10 @@ public record CurrentBuildingPropertyOverviewDto(
     DateTimeOffset UpdatedAt);
 
 public record UpdateCurrentBuildingCommand(
-    string Name,
-    string Address,
-    string TimeZoneId = "Asia/Ho_Chi_Minh",
-    int NumberOfFloors = 1,
+    [Required(ErrorMessage = "Tên chung cư là bắt buộc."), StringLength(150, ErrorMessage = "Tên chung cư không được vượt quá 150 ký tự.")] string Name,
+    [Required(ErrorMessage = "Địa chỉ chung cư là bắt buộc.")] string Address,
+    [Required, StringLength(64, ErrorMessage = "Múi giờ không được vượt quá 64 ký tự.")] string TimeZoneId = "Asia/Ho_Chi_Minh",
+    [Range(1, int.MaxValue, ErrorMessage = "Tổng số tầng phải lớn hơn 0.")] int NumberOfFloors = 1,
     string? Description = null,
-    Guid? UpdatedBy = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null,
+    [StringLength(50, ErrorMessage = "Mã chung cư không được vượt quá 50 ký tự.")] string? Code = null);

@@ -29,6 +29,30 @@ public sealed class ClientAuthenticationTests
         new(new ApiClient(new HttpClient(new Transport(send)) { BaseAddress = new("https://test.invalid/") }, NullLogger<ApiClient>.Instance));
 
     [Fact]
+    public async Task Api_client_preserves_specific_problem_message_and_metadata()
+    {
+        using var http = new HttpClient(new Transport(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict)
+        {
+            Content = JsonContent.Create(new
+            {
+                title = "Email đã được sử dụng.",
+                code = "email_conflict",
+                traceId = "trace-test",
+                errors = new Dictionary<string, string[]> { ["Email"] = ["Email không hợp lệ."] }
+            })
+        }))) { BaseAddress = new("https://test.invalid/") };
+        var api = new ApiClient(http, NullLogger<ApiClient>.Instance);
+
+        var result = await api.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/register", new { });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("email_conflict", result.Code);
+        Assert.Equal("Email đã được sử dụng.", result.Message);
+        Assert.Equal("trace-test", result.TraceId);
+        Assert.Equal("Email không hợp lệ.", Assert.Single(result.ValidationErrors!["Email"]));
+    }
+
+    [Fact]
     public async Task Concurrent_401s_share_one_refresh_and_replay_once_with_new_bearer()
     {
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

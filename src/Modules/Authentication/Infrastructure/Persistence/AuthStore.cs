@@ -25,10 +25,20 @@ public sealed class AuthStore(AuthenticationDbContext db) : IAuthStore
             transaction.Complete();
             return result;
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgres)
         {
-            throw new AuthFailure(409, "account_conflict", "Thông tin tài khoản không thể sử dụng. Vui lòng kiểm tra hoặc liên hệ ban quản lý.");
+            throw ConflictFor(postgres.ConstraintName);
         }
+    }
+    private static AuthFailure ConflictFor(string? constraintName)
+    {
+        if (constraintName?.Contains("username", StringComparison.OrdinalIgnoreCase) == true)
+            return new(409, "username_conflict", "Tên đăng nhập đã được sử dụng.");
+        if (constraintName?.Contains("email", StringComparison.OrdinalIgnoreCase) == true)
+            return new(409, "email_conflict", "Email đã được sử dụng.");
+        if (constraintName?.Contains("phone", StringComparison.OrdinalIgnoreCase) == true)
+            return new(409, "phone_conflict", "Số điện thoại đã được sử dụng.");
+        return new(409, "account_conflict", "Thông tin tài khoản không thể sử dụng. Vui lòng kiểm tra lại.");
     }
     public Task<UserAccount?> UserAsync(Guid id, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<UserAccount?> UsernameAsync(string username, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.Username == username, ct);

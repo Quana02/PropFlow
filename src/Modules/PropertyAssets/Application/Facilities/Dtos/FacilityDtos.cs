@@ -1,4 +1,6 @@
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
 
@@ -31,23 +33,23 @@ public record FacilityDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateFacilityCommand(
-    string Code,
-    string Name,
-    string? FacilityType = null,
-    string? LocationDescription = null,
+    [Required(ErrorMessage = "Mã cơ sở vật chất là bắt buộc."), StringLength(30, ErrorMessage = "Mã cơ sở vật chất không được vượt quá 30 ký tự.")] string Code,
+    [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc."), StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")] string Name,
+    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")] string? FacilityType = null,
+    [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")] string? LocationDescription = null,
     string? Description = null,
-    Guid? CreatedBy = null);
+    [property: JsonIgnore] Guid? CreatedBy = null);
 
 public record UpdateFacilityCommand(
-    string Name,
-    string? FacilityType = null,
-    string? LocationDescription = null,
+    [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc."), StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")] string Name,
+    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")] string? FacilityType = null,
+    [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")] string? LocationDescription = null,
     string? Description = null,
-    Guid? UpdatedBy = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null);
 
 public record SetFacilityStatusCommand(
     MasterDataStatus Status,
-    Guid? UpdatedBy = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null);
 
 public record FacilityFilterQuery(
     string? SearchKeyword = null,

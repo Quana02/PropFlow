@@ -13,9 +13,12 @@ public sealed partial class AuthUseCases
         var normalizedEmail = NormalizeEmail(request.Email);
         var result = await store.SerializedAsync("registration:" + normalizedEmail, async () =>
         {
-            if (await store.UsernameAsync(request.Username.Trim(), ct) != null || await store.EmailAsync(normalizedEmail, ct) != null
-                || (Phone(request.PhoneNumber) is { } phone && await store.PhoneInUseAsync(phone, null, ct)))
-                throw new AuthFailure(409, "account_conflict", "Không thể sử dụng thông tin đăng ký này. Nếu đã đăng ký, hãy tiếp tục xác minh bằng tên đăng nhập và mật khẩu.");
+            if (await store.UsernameAsync(request.Username.Trim(), ct) != null)
+                throw new AuthFailure(409, "username_conflict", "Tên đăng nhập đã được sử dụng.");
+            if (await store.EmailAsync(normalizedEmail, ct) != null)
+                throw new AuthFailure(409, "email_conflict", "Email đã được sử dụng.");
+            if (Phone(request.PhoneNumber) is { } phone && await store.PhoneInUseAsync(phone, null, ct))
+                throw new AuthFailure(409, "phone_conflict", "Số điện thoại đã được sử dụng.");
             var user = new UserAccount(request.Username, "pending", request.DisplayName, Now, normalizedEmail, Phone(request.PhoneNumber));
             user.ChangePasswordHash(secrets.HashPassword(user, request.Password), null, Now);
             store.Add(user);

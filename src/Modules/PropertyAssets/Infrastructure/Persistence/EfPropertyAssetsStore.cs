@@ -22,15 +22,14 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
 
     public async Task<CurrentBuildingPropertyOverviewDto?> CurrentBuildingOverviewAsync(CancellationToken ct)
     {
-        var buildingCount = await db.Buildings.CountAsync(ct);
+        var building = await db.Buildings.AsNoTracking()
+            .OrderByDescending(b => b.Status == MasterDataStatus.ACTIVE)
+            .ThenByDescending(b => b.UpdatedAt)
+            .ThenByDescending(b => b.CreatedAt)
+            .FirstOrDefaultAsync(ct);
 
-        if (buildingCount == 0)
+        if (building is null)
             return null;
-
-        if (buildingCount > 1)
-            throw new InvalidOperationException($"Database invariant violation: Expected exactly 1 building, found {buildingCount}. Please clean up test data before applying single-building architecture.");
-
-        var building = await db.Buildings.AsNoTracking().FirstAsync(ct);
 
         // Facility statistics by status
         var facilityStatsRaw = await db.Facilities
@@ -85,6 +84,8 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
 
     public async Task<FacilityPage> FacilitiesAsync(FacilityFilterQuery query, CancellationToken ct)
     {
+        var pageIndex = Math.Max(1, query.PageIndex);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var source = db.Facilities.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
         {
@@ -96,8 +97,8 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
         if (!string.IsNullOrWhiteSpace(query.FacilityType)) source = source.Where(f => f.FacilityType == query.FacilityType);
         var count = await source.CountAsync(ct);
         var items = await source.OrderByDescending(f => f.CreatedAt)
-            .Skip((query.PageIndex - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
-        return new FacilityPage(items, count, query.PageIndex, query.PageSize);
+            .Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return new FacilityPage(items, count, pageIndex, pageSize);
     }
 
     public Task<Facility?> FacilityAsync(Guid id, bool tracking, bool includeEquipment, CancellationToken ct)
@@ -128,7 +129,7 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
         if (!string.IsNullOrWhiteSpace(query.EquipmentType)) source = source.Where(e => e.EquipmentType == query.EquipmentType);
         var count = await source.CountAsync(ct);
         var pageIndex = Math.Max(1, query.PageIndex);
-        var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var items = await source.OrderByDescending(e => e.CreatedAt).Skip((pageIndex - 1) * pageSize)
             .Take(pageSize).ToListAsync(ct);
         return new EquipmentPage(items, count, pageIndex, pageSize);

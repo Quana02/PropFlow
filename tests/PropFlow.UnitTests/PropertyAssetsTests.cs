@@ -6,6 +6,7 @@ using PropFlow.Modules.PropertyAssets.Application.Equipment.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Facilities.Services;
 using PropFlow.Modules.PropertyAssets.Application.Equipment.Services;
+using System.Text.Json;
 
 namespace PropFlow.UnitTests;
 
@@ -49,16 +50,20 @@ public class PropertyAssetsTests
     }
 
     [Fact]
-    public async Task CurrentBuildingOverview_RejectsMultipleBuildings()
+    public async Task CurrentBuildingOverview_UsesLatestActiveProfile_WhenHistoricalBuildingExists()
     {
         await using var context = CreateContext();
-        context.Buildings.AddRange(
-            new Building("TWR-A", "Tower A", "Address A", _now),
-            new Building("TWR-B", "Tower B", "Address B", _now));
+        var historical = new Building("TWR-A", "Tower A", "Address A", _now);
+        historical.Deactivate(null, _now.AddMinutes(1));
+        var current = new Building("TWR-B", "Tower B", "Address B", _now.AddMinutes(2));
+        context.Buildings.AddRange(historical, current);
         await context.SaveChangesAsync();
         var store = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(context);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CurrentBuildingOverviewAsync(default));
+        var overview = await store.CurrentBuildingOverviewAsync(default);
+
+        Assert.NotNull(overview);
+        Assert.Equal(current.Id, overview.Id);
     }
 
     [Fact]
@@ -85,6 +90,17 @@ public class PropertyAssetsTests
     public void Building_Constructor_ThrowsWhenRequiredFieldIsEmpty(string code, string name, string address)
     {
         Assert.Throws<ArgumentException>(() => new Building(code, name, address, _now));
+    }
+
+    [Fact]
+    public void Building_RejectsInvalidTimeZoneOnCreateAndUpdate()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new Building("BLD-01", "Tower A", "123 Main St", _now, "Not/A_Time_Zone"));
+
+        var building = new Building("BLD-01", "Tower A", "123 Main St", _now);
+        Assert.Throws<ArgumentException>(() => building.Update(
+            "Tower A", "123 Main St", "Not/A_Time_Zone", 10, null, null, _now.AddMinutes(1)));
     }
 
     [Fact]
@@ -210,7 +226,7 @@ public class PropertyAssetsTests
     }
 
     [Fact]
-    public async Task EquipmentService_CreateEquipment_ThrowsWhenFacilityBelongsToDifferentBuilding()
+    public async Task EquipmentService_CreateEquipment_WithExistingFacility_Succeeds()
     {
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -224,7 +240,7 @@ public class PropertyAssetsTests
         dbContext.Facilities.Add(facility);
         await dbContext.SaveChangesAsync();
 
-        // Try to create equipment with valid facilityId - should succeed (single building)
+        // Equipment with a valid Facility in the current deployment should succeed.
         var command = new CreateEquipmentCommand(
             "EQ-01",
             "Test Equipment",
@@ -870,6 +886,130 @@ public class PropertyAssetsTests
         Assert.NotNull(result);
         Assert.Equal("EQ-01", result.Code);
         Assert.Equal(facility.Id, result.FacilityId);
+    }
+
+    [Fact]
+    public async Task FacilityService_GetFacilities_NormalizesInvalidPagination()
+    {
+        await using var dbContext = CreateContext();
+        dbContext.Facilities.Add(new Facility("FAC-01", "Gym", _now));
+        await dbContext.SaveChangesAsync();
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(
+            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        var result = await service.GetFacilitiesAsync(new FacilityFilterQuery(PageIndex: 0, PageSize: 0));
+
+        Assert.Equal(1, result.PageIndex);
+        Assert.Equal(1, result.PageSize);
+        Assert.Single(result.Items);
+    }
+
+    [Fact]
+    public async Task BuildingService_UpdateCurrent_CreatesInitialProfile_WhenBuildingIsMissing()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        await using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(
+            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var actor = Guid.NewGuid();
+        var command = new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.UpdateCurrentBuildingCommand(
+            "Sunshore", "123 Nguyễn Huệ", "Asia/Ho_Chi_Minh", 28, "Chung cư trung tâm", actor, "TWR-A");
+
+        var created = await service.UpdateCurrentBuildingAsync(command);
+
+        Assert.Equal("TWR-A", created.Code);
+        Assert.Equal("Sunshore", created.Name);
+        Assert.Equal(actor, created.CreatedBy);
+        Assert.Single(dbContext.Buildings);
+    }
+
+    [Fact]
+    public async Task BuildingService_UpdateCurrent_RequiresCode_WhenCreatingInitialProfile()
+    {
+        var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        await using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+        var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(
+            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var command = new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.UpdateCurrentBuildingCommand(
+            "Sunshore", "123 Nguyễn Huệ", "Asia/Ho_Chi_Minh", 28);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.UpdateCurrentBuildingAsync(command));
+
+        Assert.Contains("Mã chung cư là bắt buộc", exception.Message);
+        Assert.Empty(dbContext.Buildings);
+    }
+
+    [Fact]
+    public void UpdateCurrentBuildingCommand_Validation_IsDeclaredOnRecordConstructorParameters()
+    {
+        var constructor = typeof(PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.UpdateCurrentBuildingCommand)
+            .GetConstructors()
+            .Single();
+        var parameters = constructor.GetParameters().ToDictionary(parameter => parameter.Name!);
+
+        Assert.Contains(parameters["Name"].GetCustomAttributes(false), attribute => attribute is System.ComponentModel.DataAnnotations.RequiredAttribute);
+        Assert.Contains(parameters["Address"].GetCustomAttributes(false), attribute => attribute is System.ComponentModel.DataAnnotations.RequiredAttribute);
+        Assert.Contains(parameters["TimeZoneId"].GetCustomAttributes(false), attribute => attribute is System.ComponentModel.DataAnnotations.StringLengthAttribute { MaximumLength: 64 });
+        Assert.Contains(parameters["NumberOfFloors"].GetCustomAttributes(false), attribute => attribute is System.ComponentModel.DataAnnotations.RangeAttribute);
+        Assert.Contains(parameters["Code"].GetCustomAttributes(false), attribute => attribute is System.ComponentModel.DataAnnotations.StringLengthAttribute { MaximumLength: 50 });
+    }
+
+    [Fact]
+    public void Fe04WriteCommands_Validation_IsDeclaredOnRecordConstructorParameters()
+    {
+        AssertRecordValidationTargetsConstructor(typeof(CreateFacilityCommand));
+        AssertRecordValidationTargetsConstructor(typeof(UpdateFacilityCommand));
+        AssertRecordValidationTargetsConstructor(typeof(CreateEquipmentCommand));
+        AssertRecordValidationTargetsConstructor(typeof(UpdateEquipmentCommand));
+    }
+
+    private static void AssertRecordValidationTargetsConstructor(Type commandType)
+    {
+        var constructor = commandType.GetConstructors().Single();
+        Assert.Contains(constructor.GetParameters().SelectMany(parameter => parameter.GetCustomAttributes(false)),
+            attribute => attribute is System.ComponentModel.DataAnnotations.ValidationAttribute);
+        Assert.DoesNotContain(commandType.GetProperties().SelectMany(property => property.GetCustomAttributes(false)),
+            attribute => attribute is System.ComponentModel.DataAnnotations.ValidationAttribute);
+    }
+
+    [Fact]
+    public async Task EquipmentService_GetEquipments_LimitsPageSizeToOneHundred()
+    {
+        await using var dbContext = CreateContext();
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(
+            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+
+        var result = await service.GetEquipmentsAsync(new EquipmentFilterQuery(PageIndex: 1, PageSize: 1000));
+
+        Assert.Equal(100, result.PageSize);
+    }
+
+    [Fact]
+    public void Equipment_CannotMoveDirectlyFromOutOfServiceToMaintenance_ReturnsVietnameseMessage()
+    {
+        var equipment = new Equipment("EQ-01", "Pump", _now);
+        equipment.MarkOutOfService(Guid.NewGuid(), _now.AddMinutes(1));
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            equipment.MarkUnderMaintenance(Guid.NewGuid(), _now.AddMinutes(2)));
+
+        Assert.Equal("Thiết bị đã ngừng phục vụ không thể chuyển thẳng sang trạng thái đang bảo trì.", error.Message);
+    }
+
+    [Fact]
+    public void FacilityCommands_DoNotAcceptAuditActorFromJson()
+    {
+        var spoofedActor = Guid.NewGuid();
+        var json = $$"""{"code":"FAC-01","name":"Gym","createdBy":"{{spoofedActor}}"}""";
+
+        var command = JsonSerializer.Deserialize<CreateFacilityCommand>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(command);
+        Assert.Null(command.CreatedBy);
     }
 
     private static PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext CreateContext()

@@ -24,7 +24,7 @@ All paths below are relative to `/api/v1/auth`. Request/response DTOs live in `A
 
 `ChallengeId == Guid.Empty` on registration means pending eligibility; no OTP was issued. Recovery uses an opaque nonempty challenge even for unknown/ineligible accounts. Registration success does not authenticate. Activation links the existing Resident, assigns RESIDENT through Administration, verifies email, and activates the account in one database transaction. The client cannot supply resident/apartment IDs or privileged roles.
 
-400 = invalid input/challenge/proof/CSRF; 401 = invalid credentials or session; 403 = no active role/access; 409 = uniqueness/eligibility conflict; 429 = rate/resend limit; 500 = safe generic error. An absent route returns 404. Client distinguishes network and timeout failures from HTTP failures.
+400 = invalid input/challenge/proof/CSRF; 401 = invalid credentials/session or a bearer token whose account, role or effective permissions are no longer current; 403 = an authenticated/current identity lacking permission for an operation, or an account that cannot receive an access grant during login/refresh; 409 = uniqueness/eligibility conflict; 429 = rate/resend limit; 500 = safe generic error. An absent route returns 404. Client distinguishes network and timeout failures from HTTP failures.
 
 ## Session behavior
 
@@ -97,4 +97,4 @@ dotnet test tests/PropFlow.IntegrationTests --filter FullyQualifiedName~Authenti
 dotnet test tests/PropFlow.IntegrationTests --filter FullyQualifiedName~WebShellRouteTests
 ```
 
-AuthenticationFlowTests require the test PostgreSQL server configured by appsettings.Testing.json and CREATE DATABASE permission. They create a uniquely named `propflow_fe01_test_<guid>`, verify each context points at it, apply migrations, and drop only that database afterward. Existing DatabaseVerificationTests use `propflow_test` and require its separately prepared full schema; they are not part of the isolated FE-01 test command above.
+AuthenticationFlowTests require PostgreSQL and CREATE DATABASE permission. The test connection comes from `ConnectionStrings:PropFlowTestDatabase` in API User Secrets/environment; when that key is absent, the test helper derives the dedicated database name `propflow_test` from `ConnectionStrings:PropFlowDatabase`. It rejects every database name other than `propflow_test`. Each authentication flow then creates a uniquely named `propflow_fe01_test_<guid>`, verifies every context points at it, applies migrations, and drops only that isolated database afterward. Existing DatabaseVerificationTests use the separately prepared full schema in `propflow_test`; they are not part of the isolated FE-01 test command above.
