@@ -18,7 +18,7 @@ public sealed record AdministrationOverviewDto(
 
 public sealed class AdministrationOverviewQuery(
     IApartmentOverviewSource apartments,
-    IBuildingTimeZones buildings,
+    ICurrentBuildingTimeZone buildingTimeZone,
     IResidentOverviewSource residents,
     IServiceRequestOverviewSource requests,
     TimeProvider clock)
@@ -27,24 +27,21 @@ public sealed class AdministrationOverviewQuery(
 
     public async Task<AdministrationOverviewDto> GetAsync(CancellationToken ct)
     {
-        var buildingTimeZones = await buildings.GetAllAsync(ct);
-        var zones = buildingTimeZones.ToDictionary(building => building.BuildingId);
+        var timeZoneId = await buildingTimeZone.GetAsync(ct);
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        
         var instant = clock.GetUtcNow();
-        var activeApartments = await apartments.GetActiveApartmentsAsync(ct);
-        var occupancy = activeApartments.Select(group =>
-        {
-            if (!zones.TryGetValue(group.BuildingId, out var building))
-                throw new InvalidOperationException("Active apartment references a building without a time zone.");
-            var zone = TimeZoneInfo.FindSystemTimeZoneById(building.TimeZoneId);
-            var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
-            return new ApartmentOccupancyAtDate(localDate, group.ApartmentIds);
-        }).ToArray();
-        var residentCounts = await residents.GetCountsAsync(occupancy, ct);
-        var totalApartments = activeApartments.Sum(group => group.ApartmentIds.Length);
+        var localDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
+
+        var activeApartmentIds = await apartments.GetActiveApartmentIdsAsync(ct);
+        var residentCounts = await residents.GetCountsAsync(localDate, activeApartmentIds, ct);
+        var totalApartments = activeApartmentIds.Count;
+        
         if (residentCounts.OccupiedActiveApartments > totalApartments)
             throw new InvalidOperationException("Occupancy count exceeds active apartment count.");
-        var requestOverview = await requests.GetOverviewAsync(instant, TrendDays,
-            buildingTimeZones.Select(building => new ServiceRequestBuildingTimeZone(building.BuildingId, building.TimeZoneId)).ToArray(), ct);
+            
+        var requestOverview = await requests.GetOverviewAsync(instant, TrendDays, timeZoneId, ct);
+        
         return new AdministrationOverviewDto(
             totalApartments,
             totalApartments - residentCounts.OccupiedActiveApartments,

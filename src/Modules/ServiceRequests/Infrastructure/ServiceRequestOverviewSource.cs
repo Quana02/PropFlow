@@ -10,15 +10,13 @@ public sealed class ServiceRequestOverviewSource(ServiceRequestsDbContext db) : 
     public async Task<ServiceRequestOverviewData> GetOverviewAsync(
         DateTimeOffset instant,
         int trendDays,
-        IReadOnlyList<ServiceRequestBuildingTimeZone> buildingTimeZones,
+        string timeZoneId,
         CancellationToken ct)
     {
         if (trendDays < 1)
             throw new ArgumentOutOfRangeException(nameof(trendDays));
 
-        var zones = buildingTimeZones.ToDictionary(
-            building => building.BuildingId,
-            building => TimeZoneInfo.FindSystemTimeZoneById(building.TimeZoneId));
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
 
         var groupedStatuses = await db.ServiceRequests.AsNoTracking()
             .GroupBy(request => request.Status)
@@ -30,30 +28,25 @@ public sealed class ServiceRequestOverviewSource(ServiceRequestsDbContext db) : 
             .ToArray();
 
         ServiceRequestDailyCount[] trend = [];
-        if (zones.Count > 0)
-        {
-            var throughDate = zones.Values
-                .Select(zone => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime))
-                .Max();
-            var fromDate = throughDate.AddDays(-(trendDays - 1));
-            var startUtc = zones.Values.Select(zone => ToUtc(fromDate, zone)).Min();
-            var endExclusiveUtc = zones.Values.Select(zone => ToUtc(throughDate.AddDays(1), zone)).Max();
-            var created = await db.ServiceRequests.AsNoTracking()
-                .Where(request => request.CreatedAt >= startUtc && request.CreatedAt < endExclusiveUtc)
-                .Select(request => new { request.BuildingId, request.CreatedAt })
-                .ToArrayAsync(ct);
-            var localDates = created.Select(request =>
-            {
-                if (!zones.TryGetValue(request.BuildingId, out var zone))
-                    throw new InvalidOperationException("A service request references a building without a configured time zone.");
-                return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(request.CreatedAt, zone).DateTime);
-            }).Where(date => date >= fromDate && date <= throughDate);
-            var groupedDates = localDates.GroupBy(date => date).ToDictionary(group => group.Key, group => group.Count());
-            trend = Enumerable.Range(0, trendDays)
-                .Select(offset => fromDate.AddDays(offset))
-                .Select(date => new ServiceRequestDailyCount(date, groupedDates.GetValueOrDefault(date)))
-                .ToArray();
-        }
+        
+        var throughDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
+        var fromDate = throughDate.AddDays(-(trendDays - 1));
+        var startUtc = ToUtc(fromDate, zone);
+        var endExclusiveUtc = ToUtc(throughDate.AddDays(1), zone);
+        
+        var created = await db.ServiceRequests.AsNoTracking()
+            .Where(request => request.CreatedAt >= startUtc && request.CreatedAt < endExclusiveUtc)
+            .Select(request => request.CreatedAt)
+            .ToArrayAsync(ct);
+            
+        var localDates = created.Select(createdAt => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(createdAt, zone).DateTime))
+            .Where(date => date >= fromDate && date <= throughDate);
+            
+        var groupedDates = localDates.GroupBy(date => date).ToDictionary(group => group.Key, group => group.Count());
+        trend = Enumerable.Range(0, trendDays)
+            .Select(offset => fromDate.AddDays(offset))
+            .Select(date => new ServiceRequestDailyCount(date, groupedDates.GetValueOrDefault(date)))
+            .ToArray();
 
         var openCount = statusCounts
             .Where(item => item.Status is not (nameof(ServiceRequestStatus.CLOSED) or nameof(ServiceRequestStatus.CANCELLED)))

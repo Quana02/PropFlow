@@ -1,11 +1,11 @@
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
 
 public record FacilityDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     string Code,
     string Name,
     string? FacilityType,
@@ -19,8 +19,6 @@ public record FacilityDto(
 
 public record FacilityDetailDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     string Code,
     string Name,
     string? FacilityType,
@@ -35,31 +33,38 @@ public record FacilityDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateFacilityCommand(
-    Guid BuildingId,
-    string Code,
-    string Name,
-    string? FacilityType = null,
-    string? LocationDescription = null,
+    [Required(ErrorMessage = "Mã cơ sở vật chất là bắt buộc."), StringLength(30, ErrorMessage = "Mã cơ sở vật chất không được vượt quá 30 ký tự.")] string Code,
+    [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc."), StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")] string Name,
+    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")] string? FacilityType = null,
+    [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")] string? LocationDescription = null,
     string? Description = null,
-    Guid? CreatedBy = null,
-    MasterDataStatus InitialStatus = MasterDataStatus.ACTIVE);
+    [property: JsonIgnore] Guid? CreatedBy = null);
 
 public record UpdateFacilityCommand(
-    Guid BuildingId,
-    string Name,
-    string? FacilityType = null,
-    string? LocationDescription = null,
+    [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc."), StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")] string Name,
+    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")] string? FacilityType = null,
+    [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")] string? LocationDescription = null,
     string? Description = null,
-    MasterDataStatus? Status = null,
-    Guid? UpdatedBy = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null);
 
 public record SetFacilityStatusCommand(
     MasterDataStatus Status,
-    Guid? UpdatedBy = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null);
 
 public record FacilityFilterQuery(
-    Guid? BuildingId = null,
     string? SearchKeyword = null,
     MasterDataStatus? Status = null,
+    string? FacilityType = null,
     int PageIndex = 1,
     int PageSize = 10);
+
+public record PagedResult<T>(
+    IReadOnlyList<T> Items,
+    int TotalCount,
+    int PageIndex,
+    int PageSize)
+{
+    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
+    public bool HasPreviousPage => PageIndex > 1;
+    public bool HasNextPage => PageIndex < TotalPages;
+}

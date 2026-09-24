@@ -70,8 +70,7 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root != null && !File.Exists(Path.Combine(root.FullName, "PropFlow.sln"))) root = root.Parent;
         if (root == null) throw new DirectoryNotFoundException("Không tìm thấy PropFlow.sln từ thư mục kiểm thử.");
-        var config = new ConfigurationBuilder().AddJsonFile(Path.Combine(root.FullName, "src/PropFlow.Api/appsettings.Testing.json")).Build();
-        var configured = new NpgsqlConnectionStringBuilder(config.GetConnectionString("PropFlowDatabase"));
+        var configured = new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString());
         if (configured.Database != "propflow_test") throw new InvalidOperationException("Auth tests require the configured propflow_test connection as the isolated test server source.");
         databaseName = "propflow_fe01_test_" + Guid.NewGuid().ToString("N");
         configured.Database = "postgres";
@@ -113,7 +112,9 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         var now = DateTimeOffset.UtcNow;
         var building = new Building(Guid.NewGuid().ToString("N")[..12], "Tòa nhà kiểm thử", "Địa chỉ kiểm thử", now);
         var assets = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>(); assets.Buildings.Add(building); await assets.SaveChangesAsync();
-        var apartment = new ApartmentUnit(building.Id, "A101", 1, now);
+        // Generate unique unit_number to avoid duplicate key constraint in test reuse
+        var uniqueUnitNumber = $"A{Guid.NewGuid():N}".Substring(0, 10);
+        var apartment = new ApartmentUnit(uniqueUnitNumber, 1, now);
         var apartments = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>(); apartments.ApartmentUnits.Add(apartment); await apartments.SaveChangesAsync();
         var resident = new Resident(Guid.NewGuid().ToString("N")[..20], "Cư dân kiểm thử", now, email: email);
         var residents = scope.ServiceProvider.GetRequiredService<ResidentsDbContext>(); residents.Residents.Add(resident);
@@ -152,6 +153,40 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             Assert.NotNull(history.NewRoleId);
         }
         return (username, email);
+    }
+
+    [Fact, Trait("UseCase", "FE-01.1")]
+    public async Task Registration_conflicts_identify_the_exact_field()
+    {
+        using var client = Client();
+        var suffix = Guid.NewGuid().ToString("N")[..12];
+        var username = "resident_" + suffix;
+        var email = username + "@example.invalid";
+        var phone = "+849" + suffix[..8];
+
+        var created = await Post(client, "register", new RegisterRequest(username, "Cư dân", email, Password, phone));
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+
+        await AssertConflictAsync(
+            await Post(client, "register", new RegisterRequest(username, "Tên khác", $"other_{suffix}@example.invalid", Password, "+848" + suffix[..8])),
+            "username_conflict", "Tên đăng nhập đã được sử dụng.");
+        await AssertConflictAsync(
+            await Post(client, "register", new RegisterRequest("other_" + suffix, "Tên khác", email, Password, "+847" + suffix[..8])),
+            "email_conflict", "Email đã được sử dụng.");
+        await AssertConflictAsync(
+            await Post(client, "register", new RegisterRequest("phone_" + suffix, "Tên khác", $"phone_{suffix}@example.invalid", Password, phone)),
+            "phone_conflict", "Số điện thoại đã được sử dụng.");
+    }
+
+    private static async Task AssertConflictAsync(HttpResponseMessage response, string code, string title)
+    {
+        using (response)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(code, problem.RootElement.GetProperty("code").GetString());
+            Assert.Equal(title, problem.RootElement.GetProperty("title").GetString());
+        }
     }
 
     [Fact, Trait("UseCase", "FE-01.1/FE-01.2/FE-01.3/FE-01.6/FE-01.7")]
@@ -299,7 +334,7 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
     }
 
     [Fact, Trait("UseCase", "FE-01.2/FE-01.6")]
-    public async Task Expired_bearer_is_401_but_removed_account_access_is_403()
+    public async Task Expired_bearer_and_stale_account_access_are_401()
     {
         using var client = Client(); var account = await ActivatedAccount(client);
         var login = await Post(client, "login", new LoginRequest(account.Username, Password), true);
@@ -315,7 +350,10 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         client.DefaultRequestHeaders.Authorization = new("Bearer", (await refreshed.Content.ReadFromJsonAsync<SessionResponse>())!.AccessToken);
         using (var scope = database.Factory.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<AdministrationDbContext>().UserRoleAssignments.Where(x => x.UserId == session.User.Id).ExecuteDeleteAsync();
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("api/v1/auth/me")).StatusCode);
+        // Access tokens are validated against the current account, role and effective
+        // permissions. Removing the role assignment makes this bearer token stale,
+        // so it is no longer accepted as an authenticated identity.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("api/v1/auth/me")).StatusCode);
     }
 
     [Fact, Trait("UseCase", "FE-01.2")]

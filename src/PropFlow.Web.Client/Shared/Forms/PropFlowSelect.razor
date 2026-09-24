@@ -65,7 +65,7 @@
     {
         if (!positionAfterRender) return;
         positionAfterRender = false;
-        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowSelect.razor.js");
+        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowSelect.razor.js?v=20260924.2");
         dotNetReference ??= DotNetObjectReference.Create(this);
         await module.InvokeVoidAsync("open", root, dotNetReference);
     }

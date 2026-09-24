@@ -1,19 +1,25 @@
 @page "/equipment"
 @layout PropFlow.Web.Client.Layout.MainLayout
-@attribute [Authorize(Roles = "MANAGER")]
+@attribute [Authorize(Roles = "MANAGER,STAFF")]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.ComponentModel.DataAnnotations
 @inject IEquipmentApiClient EquipmentApiClient
-@inject IBuildingApiClient BuildingApiClient
 @inject IFacilityApiClient FacilityApiClient
+@inject IBuildingApiClient BuildingApiClient
 @inject NavigationManager Navigation
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using PropFlow.Web.Client.Shared.Forms
 
 <PageTitle>Quản Lý Thiết Bị - PropFlow</PageTitle>
 
-<div class="min-h-screen bg-[#f8f9fc] font-sans text-slate-800 antialiased">
+<div class="fe04-page font-sans text-slate-800 antialiased">
 
     <!-- ===== PAGE HEADER ===== -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
+    <div class="fe04-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
         <div class="flex items-start gap-3.5">
             <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shadow-xs mt-0.5">
                 <span class="material-symbols-outlined text-2xl">precision_manufacturing</span>
@@ -24,34 +30,40 @@
                     
                 </div>
                 <p class="text-xs text-slate-500 mt-1 max-w-2xl">
-                    Theo dõi danh mục máy móc kỹ thuật, phân cấp vị trí theo Tòa nhà / Cơ sở vật chất cụ thể và cập nhật trạng thái vận hành tức thì.
+                    Theo dõi danh mục máy móc kỹ thuật, phân cấp vị trí theo Cơ sở vật chất cụ thể và cập nhật trạng thái vận hành tức thì.
                 </p>
             </div>
         </div>
         <div class="flex items-center gap-2.5 flex-wrap">
-            
-            <button type="button"
-                    class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors"
-                    @onclick="OpenCreateDialog">
-                <span class="material-symbols-outlined text-[17px]">add_circle</span>
-                <span>Thêm Thiết Bị Mới</span>
-            </button>
+            @if (IsManager)
+            {
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors"
+                        @onclick="OpenCreateDialog">
+                    <span class="material-symbols-outlined text-[17px]">add_circle</span>
+                    <span>Thêm Thiết Bị Mới</span>
+                </button>
+            }
         </div>
     </div>
 
     <!-- ===== KPI STAT CARDS ===== -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-sky-300 hover:shadow-sm transition-all group">
+    <div class="fe04-metrics grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-sky-300 hover:shadow-sm transition-all group">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Tổng Thiết Bị</span>
                 <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <span class="material-symbols-outlined text-xl">devices_other</span>
                 </div>
             </div>
-            
+            <div class="mt-3 flex items-baseline gap-2">
+                <span class="text-3xl font-bold font-display text-slate-800">
+                    @(EquipmentSummary?.Total ?? 0)
+                </span>
+            </div>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-emerald-300 hover:shadow-sm transition-all group">
+        <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-emerald-300 hover:shadow-sm transition-all group">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">Đang Hoạt Động</span>
                 <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -60,14 +72,14 @@
             </div>
             <div class="mt-3 flex items-baseline gap-2">
                 <span class="text-3xl font-bold font-display text-emerald-600">
-                    @(PagedResult.Items?.Count(x => x.Status == EquipmentStatus.ACTIVE) ?? 0)
+                    @(EquipmentSummary?.Active ?? 0)
                 </span>
                 
             </div>
             
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-sm transition-all group">
+        <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-sm transition-all group">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-bold uppercase tracking-wider text-amber-700">Đang Bảo Trì</span>
                 <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -76,14 +88,14 @@
             </div>
             <div class="mt-3 flex items-baseline gap-2">
                 <span class="text-3xl font-bold font-display text-amber-600">
-                    @(PagedResult.Items?.Count(x => x.Status == EquipmentStatus.UNDER_MAINTENANCE) ?? 0)
+                    @(EquipmentSummary?.UnderMaintenance ?? 0)
                 </span>
                 
             </div>
             
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-sm transition-all group">
+        <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-sm transition-all group">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-bold uppercase tracking-wider text-rose-700">Tạm Ngưng</span>
                 <div class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -92,7 +104,7 @@
             </div>
             <div class="mt-3 flex items-baseline gap-2">
                 <span class="text-3xl font-bold font-display text-rose-600">
-                    @((PagedResult.Items?.Count(x => x.Status == EquipmentStatus.INACTIVE) ?? 0) + (PagedResult.Items?.Count(x => x.Status == EquipmentStatus.OUT_OF_SERVICE) ?? 0))
+                    @((EquipmentSummary?.Inactive ?? 0) + (EquipmentSummary?.OutOfService ?? 0))
                 </span>
                
             </div>
@@ -123,30 +135,30 @@
     }
 
     <!-- ===== SEARCH & FILTER TOOLBAR ===== -->
-    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-50/50">
+    <div class="fe04-toolbar bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-50/50">
         <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-3xl">
             <!-- Search Box -->
             <div class="relative flex-1">
                 <span class="material-symbols-outlined text-slate-400 absolute left-3.5 top-2.5 text-lg pointer-events-none">search</span>
                 <input type="text"
-                       placeholder="Tìm theo Mã thiết bị, Tên thiết bị, Vị trí nơi đặt..."
+                       placeholder="Tìm theo Mã thiết bị, Tên thiết bị, Hãng sản xuất, Model..."
                        class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm text-slate-900 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all outline-none"
                        @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
             </div>
 
-            <!-- Lọc theo Tòa nhà -->
-            <div class="w-full sm:w-48 relative">
-                <PropFlowSelect @bind-Value="FilterBuildingIdString" Options="AllBuildingOptions" Variant="Filter" AriaLabel="Lọc theo tòa nhà" />
-            </div>
-
             <!-- Lọc theo Cơ sở vật chất -->
             <div class="w-full sm:w-48 relative">
-                <PropFlowSelect @bind-Value="FilterFacilityIdString" Options="AllFacilityOptions" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" Disabled="@(Filter.BuildingId == null)" />
+                <PropFlowSelect Options="FacilityOptions" @bind-Value="FilterFacilityIdString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" />
             </div>
 
             <!-- Lọc theo Trạng thái -->
             <div class="w-full sm:w-48 relative">
-                <PropFlowSelect @bind-Value="StatusFilterString" Options="EquipmentFilterStatusOptions" Variant="Filter" AriaLabel="Lọc theo trạng thái" />
+                <PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo trạng thái" />
+            </div>
+
+            <!-- Lọc theo Loại thiết bị -->
+            <div class="w-full sm:w-48 relative">
+                <PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="Filter.EquipmentType" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" />
             </div>
 
             
@@ -164,7 +176,7 @@
     </div>
 
     <!-- ===== DATA TABLE ===== -->
-    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-stitch-card overflow-hidden">
+    <div class="fe04-panel bg-white rounded-2xl border border-slate-200/80 shadow-stitch-card overflow-hidden">
         @if (IsLoading)
         {
             <div class="flex flex-col items-center justify-center py-20 gap-4">
@@ -174,20 +186,23 @@
         }
         else if (PagedResult.Items == null || !PagedResult.Items.Any())
         {
-            <div class="flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
+            <div class="fe04-empty flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
                 <span class="material-symbols-outlined text-[64px] text-slate-300">precision_manufacturing</span>
                 <h5 class="text-lg font-bold font-display text-slate-700">Chưa có thiết bị nào</h5>
                 <p class="text-sm text-slate-400 max-w-sm">Không tìm thấy thiết bị khớp với tiêu chí tìm kiếm.</p>
-                <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow-md transition-stitch"
-                        @onclick="OpenCreateDialog">
-                    <span class="material-symbols-outlined text-[18px]">add_circle</span>
-                    <span>Thêm mới ngay</span>
-                </button>
+                @if (IsManager)
+                {
+                    <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow-md transition-stitch"
+                            @onclick="OpenCreateDialog">
+                        <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                        <span>Thêm mới ngay</span>
+                    </button>
+                }
             </div>
         }
         else
         {
-            <div class="overflow-x-auto custom-scrollbar">
+            <div class="fe04-table-scroll overflow-x-auto custom-scrollbar @(OpenStatusDropdownId.HasValue ? "status-menu-open" : string.Empty)">
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -195,7 +210,7 @@
                             <th class="py-3.5 px-4">Tên Thiết Bị & Mô Tả</th>
                             <th class="py-3.5 px-4">Phân Loại</th>
                             <th class="py-3.5 px-4">Nơi Đặt (Tòa Nhà / CSVT)</th>
-                            <th class="py-3.5 px-4 text-center">Trạng Thái Vận Hành (FE-04.6)</th>
+                            <th class="py-3.5 px-4 text-center">Trạng Thái Vận Hành </th>
                             <th class="py-3.5 px-5 text-right">Thao Tác Quản Lý</th>
                         </tr>
                     </thead>
@@ -225,20 +240,14 @@
                                     {
                                         <div class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200/80">
                                             <span class="material-symbols-outlined text-sm text-slate-500">domain</span>
-                                            <span>@item.BuildingName (Trực tiếp)</span>
+                                            <span>Cấp chung cư</span>
                                         </div>
                                     }
                                     else
                                     {
-                                        <div class="space-y-1">
-                                            <div class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-800 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-100">
-                                                <span class="material-symbols-outlined text-sm text-sky-600">apartment</span>
-                                                <span>@item.FacilityName</span>
-                                            </div>
-                                            <div class="text-[11px] text-slate-400 flex items-center gap-1 pl-1">
-                                                <span>Trực thuộc:</span>
-                                                <span class="text-slate-600 font-medium">@item.BuildingName</span>
-                                            </div>
+                                        <div class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-800 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-100">
+                                            <span class="material-symbols-outlined text-sm text-sky-600">apartment</span>
+                                            <span>@item.FacilityName</span>
                                         </div>
                                     }
                                 </td>
@@ -273,6 +282,8 @@
                                 </td>
                                 <td class="py-4 px-5 text-right">
                                     <div class="inline-flex items-center gap-1.5 justify-end">
+                                        @if (IsManager)
+                                        {
                                         <button type="button"
                                                 class="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-all"
                                                 title="Xem chi tiết thiết bị"
@@ -287,10 +298,12 @@
                                             <span class="material-symbols-outlined text-lg">edit</span>
                                         </button>
 
-                                        <div class="relative inline-block text-left">
+                                        <div class="relative inline-block text-left status-dropdown-container">
                                             <button type="button"
                                                     class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-slate-700 hover:text-sky-700 bg-slate-100 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-200 transition-all shadow-2xs"
                                                     title="Đổi trạng thái vận hành"
+                                                    aria-haspopup="menu"
+                                                    aria-expanded="@(OpenStatusDropdownId == item.Id)"
                                                     @onclick="() => ToggleStatusDropdown(item.Id)">
                                                 <span class="material-symbols-outlined text-base text-sky-600">sync_alt</span>
                                                 <span class="hidden sm:inline">Đổi trạng thái</span>
@@ -298,9 +311,10 @@
 
                                             @if (OpenStatusDropdownId == item.Id)
                                             {
-                                                <div class="absolute right-0 mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-left text-xs divide-y divide-slate-100">
+                                                <div class="status-dropdown-menu absolute right-0 mt-1.5 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 text-left text-xs divide-y divide-slate-100"
+                                                     role="menu">
                                                     <div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                                                        <span>Quyền Quản Lý (FE-04.6)</span>
+                                                        <span>Quyền Quản Lý </span>
                                                         <span class="material-symbols-outlined text-xs">tune</span>
                                                     </div>
                                                     <div class="py-1">
@@ -344,6 +358,7 @@
                                                 </div>
                                             }
                                         </div>
+                                        }
                                     </div>
                                 </td>
                             </tr>
@@ -438,8 +453,8 @@
 
 @if (IsDetailOpen && SelectedEquipmentToEdit != null)
 {
-    <div class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-        <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+    <div class="fe04-modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
             <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
@@ -498,36 +513,65 @@
                         </dd>
                     </div>
 
-                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 sm:col-span-2">
-                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vị Trí Cụ Thể (Nơi Đặt)</dt>
-                        <dd class="mt-1.5 text-sm font-semibold text-slate-800 space-y-2">
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Phạm Vi / Cơ Sở Vật Chất</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
                             @if (string.IsNullOrEmpty(SelectedEquipmentToEdit.FacilityName))
                             {
                                 <div class="flex items-center gap-1.5">
                                     <span class="material-symbols-outlined text-sm text-slate-500">domain</span>
-                                    <span>@SelectedEquipmentToEdit.BuildingName (Trực tiếp)</span>
+                                    <span>Cấp chung cư</span>
                                 </div>
                             }
                             else
                             {
-                                <div class="space-y-1">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-sm text-sky-600">apartment</span>
-                                        <span>@SelectedEquipmentToEdit.FacilityName</span>
-                                    </div>
-                                    <div class="text-[11px] text-slate-500 flex items-center gap-1">
-                                        <span>Trực thuộc:</span>
-                                        <span class="text-slate-600 font-medium">@SelectedEquipmentToEdit.BuildingName</span>
-                                    </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-sm text-sky-600">apartment</span>
+                                    <span>@SelectedEquipmentToEdit.FacilityName</span>
                                 </div>
                             }
-                            @if (!string.IsNullOrEmpty(SelectedEquipmentToEdit.LocationDescription))
-                            {
-                                <div class="flex items-start gap-1.5 text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-200">
-                                    <span class="material-symbols-outlined text-sm text-slate-400 mt-0.5">location_on</span>
-                                    <span>@SelectedEquipmentToEdit.LocationDescription</span>
-                                </div>
-                            }
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 sm:col-span-2">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Vị Trí Cụ Thể</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.LocationDescription) ? "Chưa có thông tin vị trí cụ thể." : SelectedEquipmentToEdit.LocationDescription)
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Hãng Sản Xuất</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.Manufacturer) ? "-" : SelectedEquipmentToEdit.Manufacturer)
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Model</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.Model) ? "-" : SelectedEquipmentToEdit.Model)
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Số Serial</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.SerialNumber) ? "-" : SelectedEquipmentToEdit.SerialNumber)
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ngày Lắp Đặt</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                            @(SelectedEquipmentToEdit.InstallationDate?.ToString("dd/MM/yyyy") ?? "-")
+                        </dd>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                        <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Hạn Bảo Hành</dt>
+                        <dd class="mt-1.5 text-sm font-semibold text-slate-800">
+                            @(SelectedEquipmentToEdit.WarrantyExpiryDate?.ToString("dd/MM/yyyy") ?? "-")
                         </dd>
                     </div>
 
@@ -550,8 +594,8 @@
 
 @if (IsFormOpen)
 {
-    <div class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-        <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+    <div class="fe04-modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
+        <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
             <div class="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
@@ -564,12 +608,14 @@
                         <p class="text-xs text-slate-500">Khai báo hồ sơ kỹ thuật, phân cấp nơi đặt và tình trạng thiết bị</p>
                     </div>
                 </div>
-                <button @onclick="CloseDialog" class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-xl transition-all" title="Đóng">
-                    <span class="material-symbols-outlined text-xl">close</span>
-                </button>
+                
             </div>
 
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                @if (ErrorMessage != null)
+                {
+                    <p class="text-rose-700 bg-rose-50 border border-rose-200 p-3 rounded-xl text-sm" role="alert">@ErrorMessage</p>
+                }
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -594,16 +640,7 @@
                             Phân Loại Thiết Bị <span class="text-rose-500">*</span>
                         </label>
                         <div class="relative">
-                            <PropFlowSelect @bind-Value="FormModel.EquipmentType" Options="EquipmentTypeOptions" Placeholder="Chọn phân loại" AriaLabel="Phân loại thiết bị" />
-                        </div>
-                    </div>
-
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                            Trạng Thái Vận Hành <span class="text-rose-500">*</span>
-                        </label>
-                        <div class="relative">
-                            <PropFlowSelect @bind-Value="StatusString" Options="EquipmentStatusOptions" AriaLabel="Trạng thái vận hành" />
+                            <PropFlowSelect Options="EquipmentTypeCreateOptions" @bind-Value="FormModel.EquipmentType"  />
                         </div>
                     </div>
 
@@ -611,43 +648,92 @@
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined text-sky-600 text-lg">location_city</span>
                             <span class="text-xs font-bold uppercase tracking-wider text-slate-800">Cấu Hình Vị Trí Lắp Đặt (Nơi Đặt)</span>
-                            <span class="text-[11px] text-slate-500">(Chọn Tòa nhà hoặc gắn vào CSVT cụ thể)</span>
+                            <span class="text-[11px] text-slate-500">(Chọn Cơ sở vật chất nếu có)</span>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-700">
+                                Chọn Cơ Sở Vật Chất (Nếu có):
+                            </label>
+                            <div class="relative">
+                                <PropFlowSelect Options="FormFacilityOptions" @bind-Value="FacilityIdString"  />
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="block text-xs font-semibold text-slate-700">
+                                Vị Trí Cụ Thể:
+                            </label>
+                            <input @bind="FormModel.LocationDescription" type="text" placeholder="VD: Phòng kỹ thuật tầng hầm B1"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all" />
+                        </div>
+
+                        <p class="text-[11px] text-slate-500 italic">
+                            * Lưu ý: Thiết bị có thể gắn vào chung cư (Cấp chung cư) hoặc thuộc một Cơ sở vật chất cụ thể (ví dụ máy chạy bộ trong Phòng Gym).
+                        </p>
+                    </div>
+
+                    <div class="sm:col-span-2 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sky-600 text-lg">build</span>
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-800">Thông Tin Kỹ Thuật</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-700">
+                                    Hãng Sản Xuất:
+                                </label>
+                                <input @bind="FormModel.Manufacturer" type="text" placeholder="VD: Mitsubishi"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all" />
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-700">
+                                    Model:
+                                </label>
+                                <input @bind="FormModel.Model" type="text" placeholder="VD: EQ-5000"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all" />
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-700">
+                                    Số Serial:
+                                </label>
+                                <input @bind="FormModel.SerialNumber" type="text" placeholder="VD: SN-2024-001"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-2 p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sky-600 text-lg">event</span>
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-800">Thông Tin Vòng Đời</span>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div class="space-y-1.5">
                                 <label class="block text-xs font-semibold text-slate-700">
-                                    1. Chọn Tòa Nhà Trực Thuộc:
+                                    Ngày Lắp Đặt:
                                 </label>
-                                <div class="relative">
-                                    <PropFlowSelect @bind-Value="BuildingIdString" Options="OptionalBuildingOptions" AriaLabel="Tòa nhà trực thuộc" Disabled="@(SelectedEquipmentToEdit != null)" />
-                                    @if (SelectedEquipmentToEdit != null)
-                                    {
-                                        <p class="text-[11px] text-amber-600 mt-1">* Không thể thay đổi tòa nhà khi chỉnh sửa thiết bị</p>
-                                    }
-                                </div>
+                                <PropFlowDatePicker @bind-Value="FormModel.InstallationDate" AriaLabel="Ngày lắp đặt" />
                             </div>
 
                             <div class="space-y-1.5">
                                 <label class="block text-xs font-semibold text-slate-700">
-                                    2. Chọn Cơ Sở Vật Chất (Nếu có):
+                                    Hạn Bảo Hành:
                                 </label>
-                                <div class="relative">
-                                    <PropFlowSelect @bind-Value="FacilityIdString" Options="OptionalFacilityOptions" AriaLabel="Cơ sở vật chất trực thuộc" Disabled="@(FormModel.BuildingId == Guid.Empty)" />
-                                </div>
+                                <PropFlowDatePicker @bind-Value="FormModel.WarrantyExpiryDate" AriaLabel="Hạn bảo hành" />
                             </div>
                         </div>
-
-                        <p class="text-[11px] text-slate-500 italic">
-                            * Lưu ý: Thiết bị có thể gắn vào riêng Tòa nhà (ví dụ trạm biến áp chung) hoặc nằm bên trong một Cơ sở vật chất cụ thể (ví dụ máy chạy bộ trong Phòng Gym).
-                        </p>
                     </div>
 
                     <div class="sm:col-span-2 space-y-1.5">
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                            Mô Tả Kỹ Thuật / Thông Số Vận Hành
+                            Mô Tả / Ghi Chú
                         </label>
-                        <textarea @bind="FormModel.Description" rows="3" placeholder="Ghi chú công suất, hạn bảo hành, hãng sản xuất, quy chuẩn bảo trì..."
+                        <textarea @bind="FormModel.Description" rows="3" placeholder="Ghi chú thêm về thiết bị..."
                                   class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all resize-none leading-relaxed"></textarea>
                     </div>
                 </div>
@@ -669,14 +755,46 @@
 }
 
 @code {
-    private static readonly PropFlowSelectOption[] EquipmentFilterStatusOptions = [new("", "Tất cả trạng thái"), new("ACTIVE", "Đang hoạt động"), new("UNDER_MAINTENANCE", "Đang bảo trì"), new("INACTIVE", "Ngừng hoạt động"), new("OUT_OF_SERVICE", "Ngừng phục vụ")];
-    private static readonly PropFlowSelectOption[] EquipmentStatusOptions = [new("ACTIVE", "Đang hoạt động"), new("UNDER_MAINTENANCE", "Đang bảo trì"), new("INACTIVE", "Ngừng hoạt động"), new("OUT_OF_SERVICE", "Ngừng phục vụ")];
-    private static readonly PropFlowSelectOption[] EquipmentTypeOptions = [new("", "Chọn phân loại"), new("Hệ Thống Cơ Điện (MEP)", "Hệ Thống Cơ Điện (MEP)"), new("Hệ Thống PCCC & Cứu Hộ", "Hệ Thống PCCC & Cứu Hộ"), new("Thang Máy & Nâng Hạ", "Thang Máy & Nâng Hạ"), new("Thiết Bị Tiện Ích Cư Dân", "Thiết Bị Tiện Ích Cư Dân"), new("Hạ Tầng Thông Gió & HVAC", "Hạ Tầng Thông Gió & HVAC"), new("An Ninh & Kiểm Soát Ra Vào", "An Ninh & Kiểm Soát Ra Vào")];
-    private IReadOnlyList<PropFlowSelectOption> AllBuildingOptions => [new("", "Tất cả tòa nhà"), .. BuildingList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
-    private IReadOnlyList<PropFlowSelectOption> OptionalBuildingOptions => [new("", "Không gắn trực tiếp tòa nhà"), .. BuildingList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
-    private IReadOnlyList<PropFlowSelectOption> AllFacilityOptions => [new("", "Tất cả CSVT"), .. FilteredFacilityList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
-    private IReadOnlyList<PropFlowSelectOption> OptionalFacilityOptions => [new("", "Không thuộc CSVT (đặt độc lập)"), .. FormFilteredFacilityList.Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name))];
+    private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
+        new("", "Tất cả trạng thái"),
+        new("ACTIVE", "● Đang hoạt động"),
+        new("UNDER_MAINTENANCE", "● Đang bảo trì"),
+        new("INACTIVE", "● Ngừng hoạt động"),
+        new("OUT_OF_SERVICE", "● Ngừng phục vụ")
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions = [
+        new("", "Tất cả loại thiết bị"),
+        new("Máy lạnh", "Máy lạnh"),
+        new("Máy phát điện", "Máy phát điện"),
+        new("Thang máy", "Thang máy"),
+        new("Bơm nước", "Bơm nước"),
+        new("Hệ thống điện", "Hệ thống điện"),
+        new("Khác", "Khác")
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> EquipmentTypeCreateOptions = [
+        new("", "Chọn phân loại"),
+        new("Máy lạnh", "Máy lạnh"),
+        new("Máy phát điện", "Máy phát điện"),
+        new("Thang máy", "Thang máy"),
+        new("Bơm nước", "Bơm nước"),
+        new("Hệ thống điện", "Hệ thống điện"),
+        new("Khác", "Khác")
+    ];
+
+    private IReadOnlyList<PropFlowSelectOption> FacilityOptions =>
+        new[] { new PropFlowSelectOption("", "Tất cả CSVT") }
+        .Concat(FacilityList.Select(f => new PropFlowSelectOption(f.Id.ToString(), f.Name)))
+        .ToList();
+
+    private IReadOnlyList<PropFlowSelectOption> FormFacilityOptions =>
+        new[] { new PropFlowSelectOption("", "Không thuộc CSVT (Cấp chung cư)") }
+        .Concat(FacilityList.Select(f => new PropFlowSelectOption(f.Id.ToString(), f.Name)))
+        .ToList();
+
     private PagedResult<EquipmentModel> PagedResult { get; set; } = new();
+    private EquipmentSummaryModel? EquipmentSummary { get; set; }
     private EquipmentFilterModel Filter { get; set; } = new();
     private bool IsLoading { get; set; } = true;
     private bool IsFormOpen { get; set; }
@@ -688,8 +806,9 @@
     private CreateEquipmentModel FormModel { get; set; } = new();
     private Guid? OpenStatusDropdownId { get; set; }
 
-    private List<BuildingModel> BuildingList { get; set; } = new();
     private List<FacilityModel> FacilityList { get; set; } = new();
+
+    private bool IsManager { get; set; }
 
     private string StatusFilterString
     {
@@ -697,17 +816,6 @@
         set
         {
             Filter.Status = Enum.TryParse<EquipmentStatus>(value, out var s) ? s : null;
-        }
-    }
-
-    private string FilterBuildingIdString
-    {
-        get => Filter.BuildingId?.ToString() ?? "";
-        set
-        {
-            Filter.BuildingId = Guid.TryParse(value, out var g) ? g : null;
-            // Reset facility filter when building changes
-            Filter.FacilityId = null;
         }
     }
 
@@ -720,70 +828,19 @@
         }
     }
 
-    private List<FacilityModel> FilteredFacilityList
-    {
-        get
-        {
-            if (Filter.BuildingId == null)
-                return new List<FacilityModel>();
-            return FacilityList.Where(f => f.BuildingId == Filter.BuildingId.Value).ToList();
-        }
-    }
-
-    private string StatusString
-    {
-        get => FormModel.Status.ToString();
-        set
-        {
-            if (Enum.TryParse<EquipmentStatus>(value, out var s))
-            {
-                FormModel.Status = s;
-            }
-        }
-    }
-
-    private string BuildingIdString
-    {
-        get => FormModel.BuildingId == Guid.Empty ? "" : FormModel.BuildingId.ToString();
-        set
-        {
-            var newBuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
-            if (FormModel.BuildingId != newBuildingId)
-            {
-                FormModel.BuildingId = newBuildingId;
-                // Reset facility when building changes
-                FormModel.FacilityId = null;
-            }
-        }
-    }
-
     private string FacilityIdString
     {
         get => FormModel.FacilityId?.ToString() ?? "";
         set => FormModel.FacilityId = Guid.TryParse(value, out var g) ? g : null;
     }
 
-    private List<FacilityModel> FormFilteredFacilityList
-    {
-        get
-        {
-            if (FormModel.BuildingId == Guid.Empty)
-                return new List<FacilityModel>();
-            return FacilityList.Where(f => f.BuildingId == FormModel.BuildingId).ToList();
-        }
-    }
-
     protected override async Task OnInitializedAsync()
     {
-        var buildingResult = await BuildingApiClient.GetBuildingsAsync(new BuildingFilterModel { PageSize = 1000 });
-        if (buildingResult.IsSuccess) BuildingList = buildingResult.Data?.Items?.ToList() ?? new();
-        else ErrorMessage = buildingResult.Message ?? "Không thể tải danh sách tòa nhà.";
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        IsManager = user.IsInRole("MANAGER");
 
-        var facilityResult = await FacilityApiClient.GetFacilitiesAsync(new FacilityFilterModel { PageSize = 1000 });
-        if (facilityResult.IsSuccess) FacilityList = facilityResult.Data?.Items?.ToList() ?? new();
-        else ErrorMessage = facilityResult.Message ?? "Không thể tải danh sách cơ sở vật chất.";
-        
-        await LoadData();
+        await LoadFacilitiesAsync();
+        await Task.WhenAll(LoadData(), LoadSummaryAsync());
     }
 
     private async Task LoadData()
@@ -799,6 +856,37 @@
         finally { IsLoading = false; }
     }
 
+    private async Task LoadSummaryAsync()
+    {
+        var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
+        if (result.IsSuccess && result.Data is not null)
+        {
+            EquipmentSummary = result.Data.Equipment;
+        }
+    }
+
+    private async Task LoadFacilitiesAsync()
+    {
+        const int pageSize = 100;
+        var facilities = new List<FacilityModel>();
+        var pageIndex = 1;
+        while (true)
+        {
+            var result = await FacilityApiClient.GetFacilitiesAsync(new FacilityFilterModel { PageIndex = pageIndex, PageSize = pageSize });
+            if (!result.IsSuccess || result.Data is null)
+            {
+                ErrorMessage = result.Message ?? "Không thể tải danh sách cơ sở vật chất.";
+                return;
+            }
+
+            facilities.AddRange(result.Data.Items);
+            if (!result.Data.HasNextPage) break;
+            pageIndex++;
+        }
+
+        FacilityList = facilities;
+    }
+
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
     {
         if (e.Key == "Enter") await ApplyFilter();
@@ -810,6 +898,9 @@
 
     private void OpenCreateDialog()
     {
+        if (!IsManager) return;
+        ErrorMessage = null;
+        SuccessMessage = null;
         SelectedEquipmentToEdit = null;
         FormModel = new CreateEquipmentModel();
         IsFormOpen = true;
@@ -823,15 +914,16 @@
 
     private void OpenEditDialog(EquipmentModel item)
     {
+        if (!IsManager) return;
+        ErrorMessage = null;
+        SuccessMessage = null;
         SelectedEquipmentToEdit = item;
         FormModel = new CreateEquipmentModel
         {
-            BuildingId = item.BuildingId,
             Code = item.Code,
             Name = item.Name,
             FacilityId = item.FacilityId,
             EquipmentType = item.EquipmentType,
-            Status = item.Status,
             Manufacturer = item.Manufacturer,
             Model = item.Model,
             SerialNumber = item.SerialNumber,
@@ -847,6 +939,28 @@
 
     private async Task SaveEquipment()
     {
+        if (!IsManager) return;
+        ErrorMessage = null;
+        var validationModel = SelectedEquipmentToEdit == null
+            ? (object)FormModel
+            : new UpdateEquipmentModel
+            {
+                Name = FormModel.Name,
+                FacilityId = FormModel.FacilityId,
+                EquipmentType = FormModel.EquipmentType,
+                Manufacturer = FormModel.Manufacturer,
+                Model = FormModel.Model,
+                SerialNumber = FormModel.SerialNumber,
+                InstallationDate = FormModel.InstallationDate,
+                WarrantyExpiryDate = FormModel.WarrantyExpiryDate,
+                LocationDescription = FormModel.LocationDescription,
+                Description = FormModel.Description
+            };
+        if (!TryValidate(validationModel, out var validationMessage))
+        {
+            ErrorMessage = validationMessage;
+            return;
+        }
         IsSaving = true;
         ErrorMessage = null;
         try
@@ -864,7 +978,6 @@
                     Name = FormModel.Name,
                     FacilityId = FormModel.FacilityId,
                     EquipmentType = FormModel.EquipmentType,
-                    Status = FormModel.Status,
                     Manufacturer = FormModel.Manufacturer,
                     Model = FormModel.Model,
                     SerialNumber = FormModel.SerialNumber,
@@ -878,9 +991,17 @@
                 SuccessMessage = $"Đã cập nhật '{FormModel.Name}' thành công!";
             }
             CloseDialog();
-            await LoadData();
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
         }
         finally { IsSaving = false; }
+    }
+
+    private static bool TryValidate(object model, out string? message)
+    {
+        var results = new List<ValidationResult>();
+        var isValid = Validator.TryValidateObject(model, new ValidationContext(model), results, validateAllProperties: true);
+        message = isValid ? null : results.FirstOrDefault()?.ErrorMessage ?? "Vui lòng kiểm tra thông tin đã nhập.";
+        return isValid;
     }
 
     private void ToggleStatusDropdown(Guid id)
@@ -890,11 +1011,12 @@
 
     private async Task ChangeStatus(EquipmentModel item, EquipmentStatus newStatus)
     {
+        if (!IsManager) return;
         OpenStatusDropdownId = null;
         ErrorMessage = null; SuccessMessage = null;
         var result = await EquipmentApiClient.SetEquipmentStatusAsync(item.Id, newStatus);
         if (!result.IsSuccess) { ErrorMessage = result.Message; return; }
-        await LoadData();
+        await Task.WhenAll(LoadData(), LoadSummaryAsync());
         if (ErrorMessage == null) SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
     }
 }

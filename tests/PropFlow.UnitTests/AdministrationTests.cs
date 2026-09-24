@@ -1,16 +1,42 @@
+using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.Administration.Domain.AuditLogs;
 using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Domain.SystemConfigurations;
 using PropFlow.Modules.Administration.Domain.UserAccessHistories;
-using PropFlow.Modules.Administration.Domain.UserBuildingAccesses;
+
 using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
+using PropFlow.Modules.Administration.Infrastructure;
+using PropFlow.Modules.Administration.Infrastructure.Persistence;
 
 namespace PropFlow.UnitTests;
 
 public class AdministrationTests
 {
     private readonly DateTimeOffset _now = new(2026, 9, 14, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task FixedRbacSeed_ProvidesEffectivePermissionsWithoutGrantingBusinessCrudToAdmin()
+    {
+        await using var db = new AdministrationDbContext(new DbContextOptionsBuilder<AdministrationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        await db.Database.EnsureCreatedAsync();
+        var adminRole = await db.Roles.SingleAsync(x => x.Code == SystemRoleCodes.Admin);
+        var userId = Guid.NewGuid();
+        db.UserRoleAssignments.Add(new UserRoleAssignment(userId, adminRole.Id, _now));
+        await db.SaveChangesAsync();
+
+        var access = await new AccountAccessService(db).GetAsync(userId, default);
+
+        Assert.NotNull(access);
+        Assert.Equal(SystemRoleCodes.Admin, access!.Role);
+        Assert.Equal(3, access.Permissions.Length);
+        Assert.Contains(SystemPermissionCodes.ManageInternalAccounts, access.Permissions);
+        Assert.Contains(SystemPermissionCodes.ViewAdministrationActivity, access.Permissions);
+        Assert.Contains(SystemPermissionCodes.ViewSystemOverview, access.Permissions);
+        Assert.DoesNotContain(SystemPermissionCodes.ManageOperations, access.Permissions);
+        Assert.DoesNotContain(SystemPermissionCodes.ManageFinance, access.Permissions);
+    }
 
     [Fact]
     public void Role_Constructor_GeneratesId_AndUppercasesCode()
@@ -153,32 +179,7 @@ public class AdministrationTests
         Assert.Throws<ArgumentException>(() => assignment.ChangeRole(Guid.Empty, actor, changeTime));
     }
 
-    [Fact]
-    public void UserBuildingAccess_Constructor_AndRevoke_WorkCorrectly()
-    {
-        var userId = Guid.NewGuid();
-        var buildingId = Guid.NewGuid();
-        var actor = Guid.NewGuid();
-
-        Assert.Throws<ArgumentException>(() => new UserBuildingAccess(Guid.Empty, buildingId, _now));
-        Assert.Throws<ArgumentException>(() => new UserBuildingAccess(userId, Guid.Empty, _now));
-
-        var access = new UserBuildingAccess(userId, buildingId, _now, actor, "Assigned as manager");
-        Assert.NotEqual(Guid.Empty, access.Id);
-        Assert.Equal(userId, access.UserId);
-        Assert.Equal(buildingId, access.BuildingId);
-        Assert.Equal("Assigned as manager", access.Reason);
-        Assert.Null(access.RevokedAt);
-
-        var revoker = Guid.NewGuid();
-        var revokeTime = _now.AddMonths(1);
-        access.Revoke(revoker, revokeTime, "Transferred to other site");
-        Assert.Equal(revoker, access.RevokedBy);
-        Assert.Equal(revokeTime, access.RevokedAt);
-        Assert.Equal("Transferred to other site", access.Reason);
-
-        Assert.Throws<ArgumentException>(() => access.Revoke(Guid.Empty, revokeTime));
-    }
+    
 
     [Fact]
     public void UserAccessHistory_IsAppendOnly_AndSetsProperties()

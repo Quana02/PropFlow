@@ -1,6 +1,7 @@
 using PropFlow.Modules.PropertyAssets.Application;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
+using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Facilities.Services;
@@ -19,8 +20,6 @@ public class FacilityService : IFacilityService
         var page = await _store.FacilitiesAsync(query, cancellationToken);
         var items = page.Items.Select(f => new FacilityDto(
                 f.Id,
-                f.BuildingId,
-                f.Building != null ? f.Building.Name : string.Empty,
                 f.Code,
                 f.Name,
                 f.FacilityType,
@@ -47,8 +46,6 @@ public class FacilityService : IFacilityService
 
         return new FacilityDetailDto(
             facility.Id,
-            facility.BuildingId,
-            facility.Building != null ? facility.Building.Name : string.Empty,
             facility.Code,
             facility.Name,
             facility.FacilityType,
@@ -65,20 +62,13 @@ public class FacilityService : IFacilityService
 
     public async Task<FacilityDto> CreateFacilityAsync(CreateFacilityCommand command, CancellationToken cancellationToken = default)
     {
-        var buildingExists = await _store.BuildingExistsAsync(command.BuildingId, cancellationToken);
-        if (!buildingExists)
-        {
-            throw new ArgumentException("Tòa nhà không tồn tại.");
-        }
-
         var codeExists = await _store.FacilityCodeExistsAsync(command.Code.Trim(), cancellationToken);
         if (codeExists)
         {
-            throw new ArgumentException($"Mã tiện ích '{command.Code}' đã tồn tại.");
+            throw new InvalidOperationException($"Mã tiện ích '{command.Code}' đã tồn tại.");
         }
 
         var facility = new Facility(
-            command.BuildingId,
             command.Code,
             command.Name,
             DateTimeOffset.UtcNow,
@@ -86,7 +76,7 @@ public class FacilityService : IFacilityService
             command.LocationDescription,
             command.Description,
             command.CreatedBy,
-            command.InitialStatus);
+            MasterDataStatus.ACTIVE);
 
         _store.Add(facility);
         await _store.SaveAsync(cancellationToken);
@@ -103,26 +93,12 @@ public class FacilityService : IFacilityService
             throw new KeyNotFoundException("Không tìm thấy tiện ích.");
         }
 
-        // Validate Building exists
-        var buildingExists = await _store.BuildingExistsAsync(command.BuildingId, cancellationToken);
-        if (!buildingExists)
-        {
-            throw new ArgumentException("Tòa nhà không tồn tại.");
-        }
-
-        // Prevent moving Facility to a different Building if it has Equipment
-        if (facility.BuildingId != command.BuildingId && facility.Equipment.Any())
-        {
-            throw new InvalidOperationException($"Không thể chuyển cơ sở vật chất '{facility.Name}' sang tòa nhà khác vì có {facility.Equipment.Count} thiết bị đang gắn với cơ sở vật chất này. Vui lòng chuyển hoặc xóa các thiết bị trước khi thay đổi tòa nhà.");
-        }
-
         facility.Update(
-            command.BuildingId,
             command.Name,
             command.FacilityType,
             command.LocationDescription,
             command.Description,
-            command.Status,
+            null,
             command.UpdatedBy,
             DateTimeOffset.UtcNow);
 
@@ -147,16 +123,10 @@ public class FacilityService : IFacilityService
         return await MapToDtoAsync(facility, cancellationToken);
     }
 
-    private async Task<FacilityDto> MapToDtoAsync(Facility facility, CancellationToken cancellationToken)
+    private Task<FacilityDto> MapToDtoAsync(Facility facility, CancellationToken cancellationToken)
     {
-        var buildingName = facility.BuildingId == Guid.Empty
-            ? string.Empty
-            : await _store.BuildingNameAsync(facility.BuildingId, cancellationToken) ?? string.Empty;
-
-        return new FacilityDto(
+        return Task.FromResult(new FacilityDto(
             facility.Id,
-            facility.BuildingId,
-            buildingName,
             facility.Code,
             facility.Name,
             facility.FacilityType,
@@ -166,6 +136,6 @@ public class FacilityService : IFacilityService
             facility.CreatedBy,
             facility.UpdatedBy,
             facility.CreatedAt,
-            facility.UpdatedAt);
+            facility.UpdatedAt));
     }
 }

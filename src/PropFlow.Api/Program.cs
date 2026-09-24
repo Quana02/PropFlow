@@ -6,6 +6,8 @@ using PropFlow.Modules.Authentication.Presentation;
 using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.Residents.Infrastructure;
 using PropFlow.Modules.Administration.Contracts;
+using PropFlow.Modules.Administration.Domain.Permissions;
+using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Infrastructure;
 using PropFlow.Modules.AiClassification.Infrastructure.Persistence;
 using PropFlow.Modules.AiRecommendation.Infrastructure.Persistence;
@@ -27,6 +29,8 @@ using PropFlow.Modules.PropertyAssets.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
+using Npgsql;
+using PropFlow.Api.Composition;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +39,11 @@ builder.Services.AddOptions<DatabaseConnectionOptions>()
     .Validate(options => !string.IsNullOrWhiteSpace(options.PropFlowDatabase),
         "Connection string 'PropFlowDatabase' must be configured through the environment or secret provider.")
     .ValidateOnStart();
+
+// Authentication and Administration share one scoped connection so their
+// account-provisioning workflow can commit atomically across module DbContexts.
+builder.Services.AddScoped(services => new NpgsqlConnection(
+    services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase")));
 
 // Register Batch 1 DbContexts with schema-specific migration history tables
 builder.Services.AddDbContext<PropertyAssetsDbContext>((services, options) =>
@@ -53,7 +62,7 @@ builder.Services.AddDbContext<ApartmentsDbContext>((services, options) =>
 
 builder.Services.AddDbContext<AuthenticationDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "auth")));
@@ -67,7 +76,7 @@ builder.Services.AddDbContext<ResidentsDbContext>((services, options) =>
 
 builder.Services.AddDbContext<AdministrationDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "administration")));
@@ -133,16 +142,34 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IPropertyAssetsStore, PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Facilities.Services.IFacilityService, PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment.Services.IEquipmentService, PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService>();
+builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
 // Add services to the container.
-builder.Services.AddControllers();
-builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly);
-builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly);
+builder.Services.AddControllers()
+    .AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly);
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
 builder.Services.AddScoped<IAccountAccess, AccountAccessService>();
+builder.Services.AddScoped<IAdministrationTransaction, AdministrationTransaction>();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AdministrationAuthorizationPolicies.ManageInternalAccounts,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageInternalAccounts));
+    options.AddPolicy(AdministrationAuthorizationPolicies.ViewAdministrationActivity,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ViewAdministrationActivity));
+    options.AddPolicy(AdministrationAuthorizationPolicies.ViewSystemOverview,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ViewSystemOverview));
+    options.AddPolicy(PropertyAssetsAuthorizationPolicies.View, policy =>
+        policy.RequireAssertion(context =>
+            (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
+            (context.User.IsInRole(SystemRoleCodes.Staff) && context.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations))));
+    options.AddPolicy(PropertyAssetsAuthorizationPolicies.Manage,
+        policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+});
 builder.Services.AddScoped<IApartmentOverviewSource, ApartmentOverviewSource>();
-builder.Services.AddScoped<IBuildingTimeZones, BuildingTimeZones>();
+builder.Services.AddScoped<ICurrentBuildingTimeZone, CurrentBuildingTimeZone>();
 builder.Services.AddScoped<IResidentOverviewSource, ResidentOverviewSource>();
 builder.Services.AddScoped<IServiceRequestOverviewSource, ServiceRequestOverviewSource>();
 builder.Services.AddScoped<AdministrationOverviewQuery>();

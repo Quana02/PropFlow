@@ -16,6 +16,10 @@ The application-defined, read-only relationship between a predefined role and it
 
 A UserAccount provisioned for a member of the management organization with the MANAGER, STAFF, or ACCOUNTANT role. FE-15 administers these accounts.
 
+## Current Building
+
+The one condominium represented by a PropFlow deployment. All live business data in that deployment belongs to this condominium implicitly. Building is a shared property profile and timezone source, not a tenant boundary, selectable scope, user assignment, or dashboard filter. Supporting multiple condominiums means operating separate PropFlow deployments, not switching buildings inside one deployment.
+
 ## Resident
 
 A resident business-domain record, separate from UserAccount. Resident Management belongs to FE-02; registration and self-account authentication functions belong to FE-01.

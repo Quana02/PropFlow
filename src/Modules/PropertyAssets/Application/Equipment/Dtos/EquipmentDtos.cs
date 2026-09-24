@@ -1,4 +1,6 @@
 using PropFlow.Modules.PropertyAssets.Domain.Equipment;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Equipment.Dtos;
 
@@ -15,12 +17,10 @@ public record PagedResult<T>(
 
 public record EquipmentDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     Guid? FacilityId,
     string? FacilityName,
-    string Code,
-    string Name,
+    [property: Required(ErrorMessage = "Mã thiết bị là bắt buộc."), StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")] string Code,
+    [property: Required(ErrorMessage = "Tên thiết bị là bắt buộc."), StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")] string Name,
     string? EquipmentType,
     string? Manufacturer,
     string? Model,
@@ -37,8 +37,6 @@ public record EquipmentDto(
 
 public record EquipmentDetailDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     Guid? FacilityId,
     string? FacilityName,
     string Code,
@@ -58,11 +56,10 @@ public record EquipmentDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateEquipmentCommand(
-    Guid BuildingId,
-    string Code,
-    string Name,
+    [Required(ErrorMessage = "Mã thiết bị là bắt buộc."), StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")] string Code,
+    [Required(ErrorMessage = "Tên thiết bị là bắt buộc."), StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")] string Name,
     Guid? FacilityId = null,
-    string? EquipmentType = null,
+    [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc."), StringLength(100, ErrorMessage = "Phân loại thiết bị không được vượt quá 100 ký tự.")] string? EquipmentType = null,
     string? Manufacturer = null,
     string? Model = null,
     string? SerialNumber = null,
@@ -70,13 +67,12 @@ public record CreateEquipmentCommand(
     DateOnly? WarrantyExpiryDate = null,
     string? LocationDescription = null,
     string? Description = null,
-    Guid? CreatedBy = null);
+    [property: JsonIgnore] Guid? CreatedBy = null);
 
 public record UpdateEquipmentCommand(
-    string Name,
+    [Required(ErrorMessage = "Tên thiết bị là bắt buộc."), StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")] string Name,
     Guid? FacilityId = null,
-    string? EquipmentType = null,
-    EquipmentStatus? Status = null,
+    [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc."), StringLength(100, ErrorMessage = "Phân loại thiết bị không được vượt quá 100 ký tự.")] string? EquipmentType = null,
     string? Manufacturer = null,
     string? Model = null,
     string? SerialNumber = null,
@@ -84,16 +80,16 @@ public record UpdateEquipmentCommand(
     DateOnly? WarrantyExpiryDate = null,
     string? LocationDescription = null,
     string? Description = null,
-    Guid? UpdatedBy = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null);
 
 public record SetEquipmentStatusCommand(
     EquipmentStatus Status,
-    Guid? UpdatedBy = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null);
 
 public record EquipmentFilterQuery(
-    Guid? BuildingId = null,
     Guid? FacilityId = null,
     string? SearchKeyword = null,
     EquipmentStatus? Status = null,
+    string? EquipmentType = null,
     int PageIndex = 1,
     int PageSize = 10);

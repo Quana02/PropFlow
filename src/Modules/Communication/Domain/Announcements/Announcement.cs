@@ -77,10 +77,7 @@ public class Announcement
         return AddAudience(AnnouncementAudienceType.ROLE, now, roleId: roleId);
     }
 
-    public AnnouncementAudience AddBuildingAudience(Guid buildingId, DateTimeOffset now)
-    {
-        return AddAudience(AnnouncementAudienceType.BUILDING, now, buildingId: buildingId);
-    }
+    
 
     public AnnouncementAudience AddApartmentAudience(Guid apartmentUnitId, DateTimeOffset now)
     {
@@ -135,7 +132,7 @@ public class Announcement
         AnnouncementAudienceType audienceType,
         DateTimeOffset now,
         Guid? roleId = null,
-        Guid? buildingId = null,
+        
         Guid? apartmentUnitId = null,
         Guid? residentId = null)
     {
@@ -146,9 +143,9 @@ public class Announcement
             throw new ArgumentOutOfRangeException(nameof(now), "Audience creation time cannot be before announcement creation time.");
         }
 
-        EnsureAudienceIsUnique(audienceType, roleId, buildingId, apartmentUnitId, residentId);
+        EnsureAudienceIsUnique(audienceType, roleId, apartmentUnitId, residentId);
 
-        var audience = new AnnouncementAudience(Id, audienceType, now, roleId, buildingId, apartmentUnitId, residentId);
+        var audience = new AnnouncementAudience(Id, audienceType, now, roleId, apartmentUnitId, residentId);
         _audiences.Add(audience);
         return audience;
     }
@@ -156,7 +153,7 @@ public class Announcement
     private void EnsureAudienceIsUnique(
         AnnouncementAudienceType audienceType,
         Guid? roleId,
-        Guid? buildingId,
+        
         Guid? apartmentUnitId,
         Guid? residentId)
     {
@@ -166,8 +163,7 @@ public class Announcement
                 _audiences.Any(audience => audience.AudienceType == audienceType),
             AnnouncementAudienceType.ROLE =>
                 _audiences.Any(audience => audience.AudienceType == audienceType && audience.RoleId == roleId),
-            AnnouncementAudienceType.BUILDING =>
-                _audiences.Any(audience => audience.AudienceType == audienceType && audience.BuildingId == buildingId),
+            
             AnnouncementAudienceType.APARTMENT =>
                 _audiences.Any(audience => audience.AudienceType == audienceType && audience.ApartmentUnitId == apartmentUnitId),
             AnnouncementAudienceType.RESIDENT =>

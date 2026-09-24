@@ -24,8 +24,7 @@ public class MaintenanceScheduleConfiguration : IEntityTypeConfiguration<Mainten
             .IsRequired();
         builder.HasIndex(schedule => schedule.ScheduleCode).IsUnique();
 
-        builder.Property(schedule => schedule.BuildingId).HasColumnName("building_id").IsRequired();
-        builder.HasIndex(schedule => schedule.BuildingId);
+        
 
         builder.Property(schedule => schedule.FacilityId).HasColumnName("facility_id");
         builder.HasIndex(schedule => schedule.FacilityId);

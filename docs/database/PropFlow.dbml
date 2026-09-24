@@ -53,8 +53,6 @@ Enum access_action_type {
   DISABLED
   RE_ENABLED
   ROLE_CHANGED
-  BUILDING_ACCESS_GRANTED
-  BUILDING_ACCESS_REVOKED
 }
 
 Enum config_value_type {
@@ -169,7 +167,6 @@ Enum maintenance_result_status {
 }
 
 
-
 Enum invoice_status {
   DRAFT
   ISSUED
@@ -217,7 +214,6 @@ Enum announcement_audience_type {
   ALL_USERS
   ALL_RESIDENTS
   ROLE
-  BUILDING
   APARTMENT
   RESIDENT
 }
@@ -309,26 +305,8 @@ Table administration.user_role_assignments {
   Note: 'Administration owns the approved one-primary-business-role assignment. UNIQUE(user_id) prevents accidental multi-role expansion.'
 }
 
-Table administration.user_building_accesses {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null, ref: > auth.users.id]
-  building_id uuid [not null, ref: > property_assets.buildings.id]
-  granted_by uuid [ref: > auth.users.id]
-  granted_at timestamptz [not null, default: `now()`]
-  revoked_by uuid [ref: > auth.users.id]
-  revoked_at timestamptz
-  reason text
-  created_at timestamptz [not null, default: `now()`]
-
-  Indexes {
-    user_id
-    building_id
-    (user_id, building_id, granted_at)
-    (user_id, building_id) [unique, note: 'PostgreSQL partial unique index WHERE revoked_at IS NULL']
-  }
-
-  Note: 'Administration-owned building scope for Staff, Accountant and Manager. PostgreSQL migration should enforce only one active row per user/building where revoked_at IS NULL.'
-}
+// Current-building deployment baseline: user_building_accesses removed; Building is not a selectable user scope.
+// Authorization is role/permission based; there is no per-building access scope.
 
 Table auth.refresh_tokens {
   id uuid [pk, default: `gen_random_uuid()`]
@@ -476,6 +454,9 @@ Table residents.residents {
   Note: 'Business resident profile. May exist before a login account is linked.'
 }
 
+// CURRENT-BUILDING DEPLOYMENT BASELINE:
+// This table stores the one current property's information (name, address, timezone, status).
+// It is not an authorization scope and child business tables do not carry building_id.
 Table property_assets.buildings {
   id uuid [pk, default: `gen_random_uuid()`]
   code varchar(30) [not null, unique]
@@ -498,7 +479,6 @@ Table property_assets.buildings {
 
 Table apartments.apartment_units {
   id uuid [pk, default: `gen_random_uuid()`]
-  building_id uuid [not null, ref: > property_assets.buildings.id]
   unit_number varchar(30) [not null]
   floor_number int [not null]
   area_m2 numeric(10,2)
@@ -511,7 +491,7 @@ Table apartments.apartment_units {
   updated_at timestamptz [not null, default: `now()`]
 
   Indexes {
-    (building_id, unit_number) [unique]
+    unit_number [unique]
     floor_number
     status
   }
@@ -546,7 +526,6 @@ Table residents.resident_apartments {
 
 Table property_assets.facilities {
   id uuid [pk, default: `gen_random_uuid()`]
-  building_id uuid [not null, ref: > property_assets.buildings.id]
   code varchar(30) [not null]
   name varchar(150) [not null]
   facility_type varchar(80)
@@ -559,8 +538,7 @@ Table property_assets.facilities {
   updated_at timestamptz [not null, default: `now()`]
 
   Indexes {
-    (building_id, code) [unique]
-    building_id
+    code [unique]
     facility_type
     status
   }
@@ -568,7 +546,6 @@ Table property_assets.facilities {
 
 Table property_assets.equipment {
   id uuid [pk, default: `gen_random_uuid()`]
-  building_id uuid [not null, ref: > property_assets.buildings.id]
   facility_id uuid [ref: > property_assets.facilities.id]
   code varchar(50) [not null]
   name varchar(150) [not null]
@@ -587,13 +564,13 @@ Table property_assets.equipment {
   updated_at timestamptz [not null, default: `now()`]
 
   Indexes {
-    (building_id, code) [unique]
+    code [unique]
     facility_id
     equipment_type
     status
   }
 
-  Note: 'building_id is required; facility_id is optional so equipment may belong directly to a building.'
+  Note: 'Current-building deployment: facility_id is optional. NULL means condominium-level equipment; otherwise the equipment belongs to the referenced Facility.'
 }
 
 // =========================================================
@@ -619,7 +596,6 @@ Table service_requests.service_requests {
   request_number varchar(30) [not null, unique]
   resident_id uuid [not null, ref: > residents.residents.id]
   resident_apartment_id uuid [not null, ref: > residents.resident_apartments.id]
-  building_id uuid [not null, ref: > property_assets.buildings.id]
   apartment_unit_id uuid [ref: > apartments.apartment_units.id]
   category_id uuid [ref: > service_requests.service_request_categories.id, note: 'Final/current category. May be set by Manager after AI suggestion.']
   facility_id uuid [ref: > property_assets.facilities.id]
@@ -637,7 +613,6 @@ Table service_requests.service_requests {
 
   Indexes {
     resident_id
-    building_id
     apartment_unit_id
     category_id
     status
@@ -645,7 +620,7 @@ Table service_requests.service_requests {
     (status, final_priority_code)
   }
 
-  Note: 'resident_apartment_id is the submission/authorization context. building/apartment/facility/equipment are the issue-location context and may differ from the resident home unit. Full assignment/progress history is stored separately.'
+  Note: 'resident_apartment_id is the submission/authorization context. apartment/facility/equipment are optional issue-location context inside the single property and may differ from the resident home unit. Full assignment/progress history is stored separately.'
 }
 
 Table service_requests.service_request_assignments {
@@ -702,7 +677,6 @@ Table complaints.complaints {
   complaint_number varchar(30) [not null, unique]
   resident_id uuid [not null, ref: > residents.residents.id]
   resident_apartment_id uuid [not null, ref: > residents.resident_apartments.id]
-  building_id uuid [not null, ref: > property_assets.buildings.id]
   apartment_unit_id uuid [ref: > apartments.apartment_units.id]
   related_service_request_id uuid [note: 'Stable scalar reference to FE-05; no cross-module EF navigation.']
   facility_id uuid [ref: > property_assets.facilities.id]
@@ -720,14 +694,13 @@ Table complaints.complaints {
 
   Indexes {
     resident_id
-    building_id
     apartment_unit_id
     related_service_request_id
     status
     submitted_at
   }
 
-  Note: 'Complaint remains separate from Service Request. resident_apartment_id is the resident context; building/apartment/facility/equipment provide optional operational context.'
+  Note: 'Complaint remains separate from Service Request. resident_apartment_id is the resident context; apartment/facility/equipment provide optional operational context inside the single property.'
 }
 
 Table complaints.complaint_followups {
@@ -780,7 +753,6 @@ Table complaints.complaint_activities {
 Table maintenance.maintenance_schedules {
   id uuid [pk, default: `gen_random_uuid()`]
   schedule_code varchar(30) [not null, unique]
-  building_id uuid [not null, note: 'Cross-module scalar reference to property_assets.buildings.id; no cross-module EF navigation or physical FK.']
   facility_id uuid [note: 'Cross-module scalar reference to property_assets.facilities.id; no cross-module EF navigation or physical FK.']
   equipment_id uuid [note: 'Cross-module scalar reference to property_assets.equipment.id; no cross-module EF navigation or physical FK.']
   title varchar(200) [not null]
@@ -794,7 +766,6 @@ Table maintenance.maintenance_schedules {
   updated_at timestamptz [not null, default: `now()`]
 
   Indexes {
-    building_id
     facility_id
     equipment_id
     planned_start_at
@@ -808,7 +779,6 @@ Table maintenance.maintenance_tasks {
   schedule_id uuid [ref: > maintenance.maintenance_schedules.id]
   source_service_request_id uuid [note: 'Optional stable scalar reference to FE-05; no cross-module EF navigation.']
   source_complaint_id uuid [note: 'Optional stable scalar reference to FE-06 when maintenance originates from complaint follow-up.']
-  building_id uuid [not null, note: 'Cross-module scalar reference to property_assets.buildings.id; no cross-module EF navigation or physical FK.']
   facility_id uuid [note: 'Cross-module scalar reference to property_assets.facilities.id; no cross-module EF navigation or physical FK.']
   equipment_id uuid [note: 'Cross-module scalar reference to property_assets.equipment.id; no cross-module EF navigation or physical FK.']
   title varchar(200) [not null]
@@ -829,7 +799,6 @@ Table maintenance.maintenance_tasks {
     schedule_id
     source_service_request_id
     source_complaint_id
-    building_id
     equipment_id
     status
     priority_code
@@ -927,7 +896,6 @@ Table billing.fee_types {
 Table billing.fee_rate_rules {
   id uuid [pk, default: `gen_random_uuid()`]
   fee_type_id uuid [not null, ref: > billing.fee_types.id]
-  building_id uuid [note: 'Cross-module scalar reference to property_assets.buildings.id; no cross-module EF navigation or physical FK.']
   rule_name varchar(150) [not null]
   calculation_method_code varchar(50) [not null]
   billing_frequency_code varchar(50) [not null]
@@ -946,8 +914,7 @@ Table billing.fee_rate_rules {
 
   Indexes {
     fee_type_id
-    building_id
-    (fee_type_id, building_id, effective_from)
+    (fee_type_id, effective_from)
     is_active
   }
 
@@ -1310,7 +1277,6 @@ Table communication.announcement_audiences {
   announcement_id uuid [not null, ref: > communication.announcements.id]
   audience_type announcement_audience_type [not null]
   role_id uuid [note: 'Logical scalar reference to administration.roles.id; no physical FK across module boundary.']
-  building_id uuid [note: 'Logical scalar reference to property_assets.buildings.id; no physical FK across module boundary.']
   apartment_unit_id uuid [note: 'Logical scalar reference to apartments.apartment_units.id; no physical FK across module boundary.']
   resident_id uuid [note: 'Logical scalar reference to residents.residents.id; no physical FK across module boundary.']
   created_at timestamptz [not null, default: `now()`]
@@ -1319,17 +1285,15 @@ Table communication.announcement_audiences {
     announcement_id
     audience_type
     role_id
-    building_id
     apartment_unit_id
     resident_id
     (announcement_id, audience_type) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type IN ('ALL_USERS', 'ALL_RESIDENTS'). Prevents duplicate global audience scopes per announcement."]
     (announcement_id, role_id) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type = 'ROLE' AND role_id IS NOT NULL."]
-    (announcement_id, building_id) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type = 'BUILDING' AND building_id IS NOT NULL."]
     (announcement_id, apartment_unit_id) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type = 'APARTMENT' AND apartment_unit_id IS NOT NULL."]
     (announcement_id, resident_id) [unique, note: "Partial unique in PostgreSQL: WHERE audience_type = 'RESIDENT' AND resident_id IS NOT NULL."]
   }
 
-  Note: 'Depending on audience_type, the matching scalar target id is populated. Backend must validate legal combinations and authorization; no physical FK is created to other business modules. An Announcement cannot contain two identical audience scopes.'
+  Note: 'Depending on audience_type, the matching scalar target id is populated. The current-building deployment model removes BUILDING audience targeting; use ALL_USERS/ALL_RESIDENTS, ROLE, APARTMENT or RESIDENT. Backend must validate legal combinations and authorization; no physical FK is created to other business modules. An Announcement cannot contain two identical audience scopes.'
 }
 
 // =========================================================
@@ -1366,8 +1330,9 @@ Table communication.announcement_audiences {
 // 1) [DATABASE + APPLICATION]
 // resident_apartments: CHECK end_date IS NULL OR end_date >= start_date; prevent invalid overlapping active residency intervals according to the approved relationship rule.
 //
-// 2) [DATABASE]
-// user_building_accesses: partial UNIQUE(user_id, building_id) WHERE revoked_at IS NULL.
+// 2) [DATABASE + APPLICATION]
+// Current-building deployment: no user_building_accesses table and no selectable per-building authorization scope.
+// User access is controlled by the approved primary role, permissions, and resource/work assignment rules.
 //
 // 3) [DATABASE + APPLICATION + TEST]
 // service_request_assignments: at most one active assignment per request unless a later approved workflow explicitly supports multiple assignees.
@@ -1391,16 +1356,15 @@ Table communication.announcement_audiences {
 // maintenance_results and AI attempts: attempt_no >= 1; AI token/latency counters >= 0; confidence_score, when present, must be between 0 and 1.
 //
 // 10) [DATABASE + APPLICATION]
-// announcement_audiences: only the scalar target id matching audience_type may be populated; ALL_* audience types must have all target ids NULL. No cross-module physical FK.
+// announcement_audiences: only the scalar target id matching audience_type may be populated; ALL_* audience types must have all target ids NULL. BUILDING audience targeting is absent because each deployment already represents its current condominium. No cross-module physical FK.
 // announcement_audiences: an Announcement must not contain duplicate audience scopes. Enforce with PostgreSQL partial UNIQUE indexes:
 //   - UNIQUE(announcement_id, audience_type) WHERE audience_type IN ('ALL_USERS', 'ALL_RESIDENTS')
 //   - UNIQUE(announcement_id, role_id) WHERE audience_type = 'ROLE' AND role_id IS NOT NULL
-//   - UNIQUE(announcement_id, building_id) WHERE audience_type = 'BUILDING' AND building_id IS NOT NULL
 //   - UNIQUE(announcement_id, apartment_unit_id) WHERE audience_type = 'APARTMENT' AND apartment_unit_id IS NOT NULL
 //   - UNIQUE(announcement_id, resident_id) WHERE audience_type = 'RESIDENT' AND resident_id IS NOT NULL
 //
 // 11) [APPLICATION + TEST]
-// property references in equipment/service requests/complaints/maintenance must resolve to one consistent building context.
+// Current-building property-reference consistency: Facility/Equipment/Apartment references must resolve to valid records in this deployment. When equipment_id is associated with facility_id, the relationship must be valid; no cross-deployment validation exists.
 //
 // 12) [DATABASE + APPLICATION]
 // historical business records should use RESTRICT/NO ACTION for destructive relationships; prefer status/inactivation over cascade deletion.
@@ -1419,9 +1383,9 @@ Table communication.announcement_audiences {
 // APPROVED TIMEZONE BASELINE — MUST be implemented consistently:
 //     - instant/event/audit timestamps use PostgreSQL timestamptz and are processed/stored as UTC instants;
 //     - calendar-only business values such as billing period, issue date, due date, residency dates and warranty dates use PostgreSQL date;
-//     - each Building owns time_zone_id as an IANA timezone identifier; baseline default is Asia/Ho_Chi_Minh;
-//     - due/overdue boundaries, daily business reporting and building-local scheduling use the relevant Building timezone, not server-local time and not the UTC calendar date;
-//     - APIs return ISO-8601 timestamps; frontend presentation converts instants to the relevant Building timezone;
+//     - the singleton Building record owns time_zone_id as the system property timezone; baseline default is Asia/Ho_Chi_Minh;
+//     - due/overdue boundaries, daily business reporting and property-local scheduling use the singleton Building timezone, not server-local time and not the UTC calendar date;
+//     - APIs return ISO-8601 timestamps; frontend presentation converts instants to the singleton Building timezone;
 //     - do not persist localized display strings or raw UTC offsets as timezone identifiers.
 //
 // 14) [MODULE CONTRACT + APPLICATION + INTEGRATION TEST]

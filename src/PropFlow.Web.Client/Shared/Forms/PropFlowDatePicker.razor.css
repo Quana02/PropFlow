@@ -1,0 +1,25 @@
+.pf-date { position:relative; width:100%; color:var(--admin-text,#17243a); }
+.pf-date__trigger { display:flex; align-items:center; justify-content:space-between; gap:.75rem; width:100%; min-height:2.65rem; padding:.62rem .75rem; border:1px solid var(--admin-line,#d7e2eb); border-radius:.75rem; background:#fff; color:inherit; font:inherit; font-size:.82rem; text-align:left; cursor:pointer; }
+.pf-date__trigger:hover { border-color:#38bdf8; }
+.pf-date__trigger:focus-visible,.is-open .pf-date__trigger { border-color:#0284c7; outline:0; box-shadow:0 0 0 3px rgba(2,132,199,.15); }
+.pf-date__trigger .is-placeholder { color:var(--admin-muted,#64748b); }
+.pf-date__trigger .material-symbols-outlined { color:var(--admin-muted,#64748b); font-size:1.15rem; }
+.pf-date__calendar { position:fixed; z-index:1250; inset:auto; top:var(--pf-date-top); left:var(--pf-date-left); width:min(18rem,calc(100vw - 1rem)); margin:0; padding:.7rem; border:1px solid var(--admin-line,#d7e2eb); border-radius:.85rem; background:#fff; color:#17243a; box-shadow:0 1rem 2.5rem rgba(15,23,42,.2); opacity:1; }
+.pf-date__calendar::backdrop { background:transparent; }
+.pf-date__calendar header,.pf-date__calendar footer { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+.pf-date__calendar header { padding-bottom:.55rem; }
+.pf-date__calendar header strong { font-size:.78rem; }
+.pf-date__calendar button { border:0; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.pf-date__calendar header button { display:grid; place-items:center; width:2rem; height:2rem; border-radius:.55rem; color:#0284c7; }
+.pf-date__calendar header button:hover { background:rgba(2,132,199,.1); }
+.pf-date__weekdays,.pf-date__days { display:grid; grid-template-columns:repeat(7,1fr); gap:.2rem; }
+.pf-date__weekdays span { padding:.35rem 0; color:var(--admin-muted,#64748b); font-size:.62rem; font-weight:750; text-align:center; }
+.pf-date__days button { aspect-ratio:1; border-radius:.5rem; font-size:.7rem; }
+.pf-date__days button:hover { background:rgba(2,132,199,.1); color:#0275b8; }
+.pf-date__days button.is-outside { color:#a8b4c4; }
+.pf-date__days button.is-today { outline:1px solid rgba(2,132,199,.45); color:#0275b8; font-weight:750; }
+.pf-date__days button.is-selected { background:#0284c7; color:#fff; font-weight:800; outline:0; }
+.pf-date__calendar footer { margin-top:.55rem; padding-top:.55rem; border-top:1px solid var(--admin-line,#d7e2eb); }
+.pf-date__calendar footer button { padding:.35rem .5rem; border-radius:.45rem; color:#0275b8; font-size:.68rem; font-weight:700; }
+.pf-date__calendar footer button:hover { background:rgba(2,132,199,.1); }
+html.dark .pf-date__trigger,html.dark .pf-date__calendar { border-color:#334155; background:#0f172a; color:#f8fafc; }

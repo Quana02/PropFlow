@@ -70,16 +70,5 @@ public class BuildingConfiguration : IEntityTypeConfiguration<Building>
         builder.HasIndex(b => b.Name);
 
         builder.HasIndex(b => b.Status);
-
-        // Within-module relationships
-        builder.HasMany(b => b.Facilities)
-            .WithOne(f => f.Building)
-            .HasForeignKey(f => f.BuildingId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasMany(b => b.Equipment)
-            .WithOne(e => e.Building)
-            .HasForeignKey(e => e.BuildingId)
-            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -140,6 +140,85 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                     b.HasIndex("Module");
 
                     b.ToTable("permissions", "administration");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666661"),
+                            Code = "USE_RESIDENT_SERVICES",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Truy cập các chức năng tự phục vụ dành cho cư dân.",
+                            IsActive = true,
+                            Module = "Residents",
+                            Name = "Sử dụng dịch vụ cư dân",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666662"),
+                            Code = "PERFORM_ASSIGNED_OPERATIONS",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Xử lý các công việc vận hành được phân công.",
+                            IsActive = true,
+                            Module = "Operations",
+                            Name = "Thực hiện công việc được giao",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666663"),
+                            Code = "MANAGE_FINANCE",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Thực hiện nghiệp vụ hóa đơn và thanh toán.",
+                            IsActive = true,
+                            Module = "Finance",
+                            Name = "Quản lý tài chính",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666664"),
+                            Code = "MANAGE_OPERATIONS",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Quản lý dữ liệu và quy trình vận hành chung cư.",
+                            IsActive = true,
+                            Module = "Operations",
+                            Name = "Quản lý vận hành",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666665"),
+                            Code = "MANAGE_INTERNAL_ACCOUNTS",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Tạo và quản lý vai trò, trạng thái tài khoản Ban quản lý.",
+                            IsActive = true,
+                            Module = "Administration",
+                            Name = "Quản lý tài khoản nội bộ",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666666"),
+                            Code = "VIEW_ADMINISTRATION_ACTIVITY",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Xem lịch sử thay đổi tài khoản nội bộ.",
+                            IsActive = true,
+                            Module = "Administration",
+                            Name = "Xem nhật ký quản trị",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666667"),
+                            Code = "VIEW_SYSTEM_OVERVIEW",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Xem chỉ số tổng hợp toàn hệ thống ở chế độ chỉ đọc.",
+                            IsActive = true,
+                            Module = "Reporting",
+                            Name = "Xem tổng quan hệ thống",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Administration.Domain.Roles.Role", b =>
@@ -268,6 +347,50 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                     b.HasIndex("PermissionId");
 
                     b.ToTable("role_permissions", "administration");
+
+                    b.HasData(
+                        new
+                        {
+                            RoleId = new Guid("11111111-1111-4111-8111-111111111111"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666661"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("22222222-2222-4222-8222-222222222222"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666662"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("33333333-3333-4333-8333-333333333333"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666663"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("44444444-4444-4444-8444-444444444444"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666664"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("55555555-5555-4555-8555-555555555555"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666665"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("55555555-5555-4555-8555-555555555555"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666666"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("55555555-5555-4555-8555-555555555555"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666667"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Administration.Domain.SystemConfigurations.SystemConfiguration", b =>
@@ -396,64 +519,6 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                     b.HasIndex("TargetUserId");
 
                     b.ToTable("user_access_history", "administration");
-                });
-
-            modelBuilder.Entity("PropFlow.Modules.Administration.Domain.UserBuildingAccesses.UserBuildingAccess", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("building_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<DateTimeOffset>("GrantedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("granted_at")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<Guid?>("GrantedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("granted_by");
-
-                    b.Property<string>("Reason")
-                        .HasColumnType("text")
-                        .HasColumnName("reason");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<Guid?>("RevokedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("revoked_by");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BuildingId");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("UserId", "BuildingId")
-                        .IsUnique()
-                        .HasFilter("\"revoked_at\" IS NULL");
-
-                    b.HasIndex("UserId", "BuildingId", "GrantedAt");
-
-                    b.ToTable("user_building_accesses", "administration");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Administration.Domain.UserRoleAssignments.UserRoleAssignment", b =>

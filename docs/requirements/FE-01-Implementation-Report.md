@@ -1,6 +1,6 @@
 # FE-01 IMPLEMENTATION REPORT
 
-Ngày kiểm tra tiếp: 2026-09-17. Đã triển khai FE/BE cho FE-01; chưa xác nhận sẵn sàng phát hành vì còn kiểm tra browser và cấu hình môi trường. Không commit/push; không chạy migration trên database ứng dụng.
+Ngày kiểm tra gần nhất: 2026-09-24. Đã triển khai FE/BE cho FE-01; chưa xác nhận sẵn sàng phát hành vì còn kiểm tra browser, SMTP thật và cấu hình môi trường. Không commit/push trong lượt kiểm tra; không chạy migration trên database ứng dụng.
 
 ## 1. Implemented Use Cases
 
@@ -122,10 +122,10 @@ Password hashing dùng PasswordHasher. OTP HMAC với salt ngẫu nhiên và sec
 
 | Kiểm tra | Kết quả |
 |---|---|
-| PropFlow.UnitTests | 126/126 đạt: bao gồm restore, concurrent refresh, 401/403/429/500, logout race, reset-proof expiry/single-use |
-| PropFlow.ArchitectureTests | 61/61 đạt |
-| AuthenticationFlowTests | 9/9 đạt trên PostgreSQL tạm: registration/activation, login, cookie/CSRF, refresh/replay/logout scope, reset/change/profile, lockout, resend/expiry/attempt, 401 so với 403, CORS credentials chỉ cho origin được cấu hình |
-| WebShellRouteTests | 10/10 đạt: GET trực tiếp các auth/account/resident routes trả 200, có shell, không prerender protected UI |
+| PropFlow.UnitTests | 192/192 đạt; bao gồm session restore, concurrent refresh, API error/message mapping, reset-proof expiry/single-use và access-token state validation |
+| PropFlow.ArchitectureTests | 62/62 đạt |
+| AuthenticationFlowTests | 10/10 đạt trên PostgreSQL tạm: registration/activation, field-specific registration conflicts, login, cookie/CSRF, refresh/replay/logout scope, reset/change/profile, lockout, resend/expiry/attempt, stale bearer 401 và CORS credentials chỉ cho origin được cấu hình |
+| WebShellRouteTests | 16/16 đạt: GET trực tiếp các auth/account và application routes trả 200, có shell, không prerender protected UI |
 | Diff whitespace | Không có lỗi whitespace; Git có cảnh báo chuyển LF/CRLF |
 | Browser UI / responsive / real browser cookies | Chưa xác nhận: công cụ browser bị lỗi tải request-header policy và timeout; development certificate hợp lệ, nằm trong CurrentUser Trusted Root |
 | SMTP delivery thật | Chưa chạy: chưa có cấu hình SMTP môi trường |
@@ -137,7 +137,7 @@ Các lỗi được tìm và sửa trong quá trình kiểm chứng: cấu hình
 
 ## 7. Build Result
 
-Build toàn solution bằng .NET 8. Kết quả cuối: 0 warnings, 0 errors. Một lần build trước bị khóa apphost vì Web host kiểm thử còn chạy; đã dừng process và build lại thành công.
+Build toàn solution bằng .NET 8. Kết quả kiểm tra ngày 2026-09-24: 0 warnings, 0 errors. Vì API development đang chạy và giữ DLL output mặc định, lượt kiểm tra dùng `--artifacts-path` tách biệt để build cùng solution mà không phải dừng phiên phát triển hiện tại.
 
 ## 8. Remaining Blockers
 
@@ -145,8 +145,7 @@ Build toàn solution bằng .NET 8. Kết quả cuối: 0 warnings, 0 errors. M�
 - Cần browser end-to-end và responsive check khi công cụ browser hoạt động; test HTTP xác nhận CORS response nhưng không chứng minh cookie/CORS thực trong browser. `dotnet dev-certs https --check` xác nhận certificate còn hạn, và kiểm tra read-only certificate store xác nhận thumbprint của certificate trong CurrentUser Trusted Root. Công cụ browser hai lần không tải được request-header policy.
 - Cần log sink với retention 30 ngày và quyền truy cập vận hành; code phát security event an toàn nhưng không provision hạ tầng lưu log.
 - Email queue ở memory, không durable qua restart; retry tối đa ba lần; có thể cần yêu cầu mã mới nếu queue đầy/gửi thất bại.
-- Chưa có PropFlow_15FE.docx và Report3 SRS trong repository để đối chiếu consolidated UC IDs.
-- JWT đã phát vẫn có hiệu lực đến expiry; logout/password reset/change revoke refresh sessions theo baseline. Single-flight chỉ trong một WASM instance, không phối hợp nhiều tab.
+- Access JWT được đối chiếu account status, role và effective permissions hiện tại ở mỗi request; token trở thành không hợp lệ ngay khi các dữ liệu này thay đổi. Đổi/reset mật khẩu vẫn thu hồi toàn bộ refresh sessions; access JWT không chứa password state nên tiếp tục có hiệu lực đến expiry nếu account/role/permissions không đổi. Single-flight chỉ trong một WASM instance, không phối hợp nhiều tab.
 
 ## 9. Requirement Traceability
 

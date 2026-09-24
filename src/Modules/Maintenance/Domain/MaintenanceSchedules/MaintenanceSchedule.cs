@@ -8,7 +8,7 @@ public class MaintenanceSchedule
 
     public MaintenanceSchedule(
         string scheduleCode,
-        Guid buildingId,
+        
         string title,
         DateTimeOffset plannedStartAt,
         Guid createdBy,
@@ -20,13 +20,13 @@ public class MaintenanceSchedule
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scheduleCode);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
-        ThrowIfEmpty(buildingId, nameof(buildingId));
+        
         ThrowIfEmpty(createdBy, nameof(createdBy));
         EnsureEndAfterStart(plannedStartAt, plannedEndAt);
 
         Id = Guid.NewGuid();
         ScheduleCode = scheduleCode.Trim();
-        BuildingId = buildingId;
+        
         FacilityId = facilityId;
         EquipmentId = equipmentId;
         Title = title.Trim();
@@ -41,7 +41,7 @@ public class MaintenanceSchedule
 
     public Guid Id { get; private set; }
     public string ScheduleCode { get; private set; } = null!;
-    public Guid BuildingId { get; private set; }
+    
     public Guid? FacilityId { get; private set; }
     public Guid? EquipmentId { get; private set; }
     public string Title { get; private set; } = null!;

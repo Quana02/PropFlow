@@ -16,6 +16,10 @@ public class PropFlowApiFactory : WebApplicationFactory<Program>
         {
             // Ensures appsettings.Testing.json is loaded and takes precedence
             config.AddJsonFile("appsettings.Testing.json", optional: false, reloadOnChange: false);
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:PropFlowDatabase"] = TestDatabaseConfiguration.GetConnectionString()
+            });
             using var rsa = RSA.Create(2048);
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {

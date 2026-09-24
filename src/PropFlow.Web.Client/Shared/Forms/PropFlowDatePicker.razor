@@ -1,0 +1,87 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div @ref="root" class="pf-date @(open ? "is-open" : null)">
+    <button type="button" class="pf-date__trigger" aria-label="@AriaLabel" aria-haspopup="dialog" aria-expanded="@open" @onclick="ToggleAsync">
+        <span class="@(Value is null ? "is-placeholder" : null)">@(Value?.ToString("dd/MM/yyyy") ?? Placeholder)</span>
+        <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+    </button>
+    @if (open)
+    {
+        <section class="pf-date__calendar" role="dialog" aria-label="@AriaLabel" popover="manual">
+            <header>
+                <button type="button" aria-label="Tháng trước" title="Tháng trước" @onclick="PreviousMonth"><span class="material-symbols-outlined">chevron_left</span></button>
+                <strong>@MonthLabel</strong>
+                <button type="button" aria-label="Tháng sau" title="Tháng sau" @onclick="NextMonth"><span class="material-symbols-outlined">chevron_right</span></button>
+            </header>
+            <div class="pf-date__weekdays" aria-hidden="true">@foreach (var label in Weekdays) { <span>@label</span> }</div>
+            <div class="pf-date__days">
+                @foreach (var day in CalendarDays)
+                {
+                    <button type="button" class="@(day.Month != visibleMonth.Month ? "is-outside" : null) @(Value == day ? "is-selected" : null) @(DateOnly.FromDateTime(DateTime.Today) == day ? "is-today" : null)" aria-label="@day.ToString("dd/MM/yyyy")" aria-pressed="@(Value == day)" @onclick="() => SelectDateAsync(day)">@day.Day</button>
+                }
+            </div>
+            <footer>
+                <button type="button" @onclick="ClearAsync">Xóa</button>
+                <button type="button" @onclick="SelectTodayAsync">Hôm nay</button>
+            </footer>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public DateOnly? Value { get; set; }
+    [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "dd/mm/yyyy";
+    [Parameter] public string AriaLabel { get; set; } = "Chọn ngày";
+
+    private static readonly string[] Weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+    private static readonly string[] Months = ["Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu", "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một", "Tháng Mười Hai"];
+    private ElementReference root;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<PropFlowDatePicker>? reference;
+    private bool open;
+    private bool positionAfterRender;
+    private DateOnly visibleMonth;
+    private string MonthLabel => $"{Months[visibleMonth.Month - 1]} {visibleMonth.Year}";
+    private IEnumerable<DateOnly> CalendarDays
+    {
+        get
+        {
+            var first = new DateOnly(visibleMonth.Year, visibleMonth.Month, 1);
+            var mondayOffset = ((int)first.DayOfWeek + 6) % 7;
+            var start = first.AddDays(-mondayOffset);
+            return Enumerable.Range(0, 42).Select(start.AddDays);
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        var initial = Value ?? DateOnly.FromDateTime(DateTime.Today);
+        visibleMonth = new DateOnly(initial.Year, initial.Month, 1);
+    }
+
+    private async Task ToggleAsync()
+    {
+        open = !open;
+        if (open) positionAfterRender = true;
+        else if (module is not null) await module.InvokeVoidAsync("close", root);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!positionAfterRender) return;
+        positionAfterRender = false;
+        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowDatePicker.razor.js?v=20260924.2");
+        reference ??= DotNetObjectReference.Create(this);
+        await module.InvokeVoidAsync("open", root, reference);
+    }
+
+    private void PreviousMonth() => visibleMonth = visibleMonth.AddMonths(-1);
+    private void NextMonth() => visibleMonth = visibleMonth.AddMonths(1);
+    private Task SelectTodayAsync() => SelectDateAsync(DateOnly.FromDateTime(DateTime.Today));
+    private async Task SelectDateAsync(DateOnly day) { Value = day; await ValueChanged.InvokeAsync(Value); open = false; if (module is not null) await module.InvokeVoidAsync("close", root); }
+    private async Task ClearAsync() { Value = null; await ValueChanged.InvokeAsync(Value); open = false; if (module is not null) await module.InvokeVoidAsync("close", root); }
+    [JSInvokable] public Task CloseFromOutside() { open = false; return InvokeAsync(StateHasChanged); }
+    public async ValueTask DisposeAsync() { if (module is not null) { await module.InvokeVoidAsync("close", root); await module.DisposeAsync(); } reference?.Dispose(); }
+}

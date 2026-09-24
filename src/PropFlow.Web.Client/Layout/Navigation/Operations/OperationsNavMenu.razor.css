@@ -36,6 +36,16 @@
     text-decoration: none;
 }
 
+.operations-nav ::deep .operations-icon {
+    display: grid;
+    flex: 0 0 1.5rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    place-items: center;
+    font-size: 1.35rem;
+    line-height: 1;
+}
+
 .operations-nav ::deep .operations-link:hover,
 .operations-nav ::deep .operations-link.active {
     background: #e0f2fe;
