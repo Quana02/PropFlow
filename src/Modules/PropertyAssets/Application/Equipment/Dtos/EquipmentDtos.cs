@@ -15,8 +15,6 @@ public record PagedResult<T>(
 
 public record EquipmentDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     Guid? FacilityId,
     string? FacilityName,
     string Code,
@@ -37,8 +35,6 @@ public record EquipmentDto(
 
 public record EquipmentDetailDto(
     Guid Id,
-    Guid BuildingId,
-    string BuildingName,
     Guid? FacilityId,
     string? FacilityName,
     string Code,
@@ -58,7 +54,6 @@ public record EquipmentDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateEquipmentCommand(
-    Guid BuildingId,
     string Code,
     string Name,
     Guid? FacilityId = null,
@@ -76,7 +71,6 @@ public record UpdateEquipmentCommand(
     string Name,
     Guid? FacilityId = null,
     string? EquipmentType = null,
-    EquipmentStatus? Status = null,
     string? Manufacturer = null,
     string? Model = null,
     string? SerialNumber = null,
@@ -91,9 +85,9 @@ public record SetEquipmentStatusCommand(
     Guid? UpdatedBy = null);
 
 public record EquipmentFilterQuery(
-    Guid? BuildingId = null,
     Guid? FacilityId = null,
     string? SearchKeyword = null,
     EquipmentStatus? Status = null,
+    string? EquipmentType = null,
     int PageIndex = 1,
     int PageSize = 10);

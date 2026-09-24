@@ -27,8 +27,7 @@ public class FeeRateRuleConfiguration : IEntityTypeConfiguration<FeeRateRule>
         builder.Property(rule => rule.FeeTypeId).HasColumnName("fee_type_id").IsRequired();
         builder.HasIndex(rule => rule.FeeTypeId);
 
-        builder.Property(rule => rule.BuildingId).HasColumnName("building_id");
-        builder.HasIndex(rule => rule.BuildingId);
+        
 
         builder.Property(rule => rule.RuleName)
             .HasColumnName("rule_name")
@@ -81,7 +80,7 @@ public class FeeRateRuleConfiguration : IEntityTypeConfiguration<FeeRateRule>
             .IsRequired();
         builder.HasIndex(rule => rule.IsActive);
 
-        builder.HasIndex(rule => new { rule.FeeTypeId, rule.BuildingId, rule.EffectiveFrom });
+        builder.HasIndex(rule => new { rule.FeeTypeId, rule.EffectiveFrom });
 
         builder.Property(rule => rule.CreatedBy).HasColumnName("created_by").IsRequired();
         builder.Property(rule => rule.UpdatedBy).HasColumnName("updated_by");

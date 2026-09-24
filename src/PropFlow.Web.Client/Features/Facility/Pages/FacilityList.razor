@@ -1,15 +1,19 @@
 @page "/facilities"
 @layout PropFlow.Web.Client.Layout.MainLayout
-@attribute [Authorize(Roles = "MANAGER")]
+@attribute [Authorize(Roles = "ADMIN,MANAGER,STAFF")]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IFacilityApiClient FacilityApiClient
-@inject IBuildingApiClient BuildingApiClient
 @inject NavigationManager Navigation
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using PropFlow.Web.Client.Shared.Forms
 
 <PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
 
-<div class="min-h-screen bg-[#f8f9fc] font-sans text-slate-800 antialiased">
+<div class="font-sans text-slate-800 antialiased">
 
     <!-- Page Header & Title Section -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
@@ -25,11 +29,13 @@
             </div>
         </div>
         <div class="flex items-center gap-2.5 flex-wrap">
-            
-            <button class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors" @onclick="OpenCreateDialog">
-                <span class="material-symbols-outlined text-[17px]">add_circle</span>
-                Thêm Cơ Sở Vật Chất
-            </button>
+            @if (IsManager)
+            {
+                <button class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors" @onclick="OpenCreateDialog">
+                    <span class="material-symbols-outlined text-[17px]">add_circle</span>
+                    Thêm Cơ Sở Vật Chất
+                </button>
+            }
         </div>
     </div>
 
@@ -145,7 +151,12 @@
 
                 <!-- Status Dropdown Filter -->
                 <div class="w-full sm:w-56 relative">
-                    <PropFlowSelect @bind-Value="StatusFilterString" Options="FacilityStatusOptions" Variant="Filter" AriaLabel="Lọc trạng thái cơ sở vật chất" />
+                    <PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" @bind-Value:after="ApplyFilter"  />
+                </div>
+
+                <!-- FacilityType Dropdown Filter -->
+                <div class="w-full sm:w-56 relative">
+                    <PropFlowSelect Options="FacilityTypeFilterOptions" @bind-Value="FacilityTypeFilterString" @bind-Value:after="ApplyFilter"  />
                 </div>
             </div>
 
@@ -187,7 +198,6 @@
                         <tr class="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-[#64748b]">
                             <th class="py-3.5 px-5">Mã CSVT</th>
                             <th class="py-3.5 px-4">Tên Cơ Sở Vật Chất</th>
-                            <th class="py-3.5 px-4">Tòa Nhà</th>
                             <th class="py-3.5 px-4">Phân Loại</th>
                             <th class="py-3.5 px-4">Vị Trí Cụ Thể</th>
                             <th class="py-3.5 px-4 text-center">Trạng Thái </th>
@@ -211,12 +221,6 @@
                                     {
                                         <div class="text-xs text-[#64748b] line-clamp-1">@item.Description</div>
                                     }
-                                </td>
-                                <td class="py-4 px-4">
-                                    <span class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200/60">
-                                        <span class="material-symbols-outlined text-sm text-[#0284c7]">apartment</span>
-                                        @item.BuildingName
-                                    </span>
                                 </td>
                                 <td class="py-4 px-4">
                                     <span class="text-xs font-medium text-slate-600 bg-blue-50/70 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
@@ -423,67 +427,30 @@
                             <input @bind="CreateFormModel.Name" type="text" placeholder="VD: Khu vui chơi trẻ em KidZone" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
 
-                        <!-- Field 3: Tòa Nhà Dropdown (BuildingId Guid -> BuildingName) -->
+                        <!-- Field 3: Loại CSVT (FacilityType) -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Tòa Nhà Trực Thuộc <span class="text-rose-500">*</span>
+                                Loại Cơ Sở Vật Chất
                             </label>
                             <div class="relative">
-                                <PropFlowSelect @bind-Value="BuildingIdString" Options="BuildingOptions" Placeholder="Chọn tòa nhà" AriaLabel="Tòa nhà trực thuộc" />
+                                <PropFlowSelect Options="FacilityTypeCreateOptions" @bind-Value="CreateFormModel.FacilityType"  />
                             </div>
                         </div>
 
-                        <!-- Field 4: Loại CSVT (FacilityType) -->
+                        <!-- Field 4: Vị trí -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Phân Loại Tiện Ích <span class="text-rose-500">*</span>
+                                Vị trí
                             </label>
-                            <div class="relative">
-                                <PropFlowSelect @bind-Value="CreateFormModel.FacilityType" Options="FacilityTypeOptions" Placeholder="Chọn phân loại" AriaLabel="Phân loại tiện ích" />
-                            </div>
+                            <input @bind="CreateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 1, khu vực A" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
 
-                        <!-- Field 5: Trạng thái ban đầu (Status Enum) -->
+                        <!-- Field 5: Mô tả -->
                         <div class="space-y-1.5 sm:col-span-2">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Trạng Thái Vận Hành Ban Đầu  <span class="text-rose-500">*</span>
+                                Mô tả
                             </label>
-                            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                                @foreach (var (status, label, color, subLabel) in new[]
-                                {
-                                    (MasterDataStatus.ACTIVE, "Đang hoạt động", "emerald", "Hoạt động tốt"),
-                                    (MasterDataStatus.UNDER_MAINTENANCE, "Đang bảo trì", "amber", "Bảo dưỡng kỹ thuật"),
-                                    (MasterDataStatus.UNAVAILABLE, "Tạm ngưng / Kín", "indigo", "Kín chỗ/Hạn chế"),
-                                    (MasterDataStatus.INACTIVE, "Ngừng kích hoạt", "slate", "Tạm ngưng sử dụng"),
-                                    (MasterDataStatus.OUT_OF_SERVICE, "Ngừng phục vụ", "rose", "Hỏng / Thay thế")
-                                })
-                                {
-                                    var s = status;
-                                    var isSelected = CreateFormModel.InitialStatus == s;
-                                    <button type="button"
-                                            class="cursor-pointer border rounded-xl p-2.5 text-center transition-all @(isSelected ? $"bg-{color}-50 border-{color}-500" : $"border-{color}-200 hover:bg-{color}-50")"
-                                            @onclick="() => CreateFormModel.InitialStatus = s">
-                                        <span class="block text-xs font-bold text-@(color)-700">@label</span>
-                                        <span class="text-[10px] text-@(color)-600">@subLabel</span>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-
-                        <!-- Field 6: Vị trí cụ thể (LocationDescription) -->
-                        <div class="sm:col-span-2 space-y-1.5">
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Mô Tả Vị Trí Cụ Thể <span class="text-rose-500">*</span>
-                            </label>
-                            <input @bind="CreateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 3 - Cánh Tây, Liền kề phòng sinh hoạt cộng đồng" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
-                        </div>
-
-                        <!-- Field 7: Mô tả chi tiết (Description) -->
-                        <div class="sm:col-span-2 space-y-1.5">
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Ghi Chú / Mô Tả Kỹ Thuật 
-                            </label>
-                            <textarea @bind="CreateFormModel.Description" rows="3" placeholder="Nhập thông số kỹ thuật, quy định sử dụng hoặc lịch bảo dưỡng định kỳ..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all resize-none leading-relaxed"></textarea>
+                            <textarea @bind="CreateFormModel.Description" rows="3" placeholder="Mô tả chi tiết về cơ sở vật chất" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all resize-none"></textarea>
                         </div>
                     }
                     else
@@ -507,67 +474,30 @@
                             <input @bind="UpdateFormModel.Name" type="text" placeholder="VD: Khu vui chơi trẻ em KidZone" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
 
-                        <!-- Field 3: Tòa Nhà Dropdown (BuildingId Guid -> BuildingName) -->
+                        <!-- Field 3: Loại CSVT (FacilityType) -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Tòa Nhà Trực Thuộc <span class="text-rose-500">*</span>
+                                Loại Cơ Sở Vật Chất
                             </label>
                             <div class="relative">
-                                <PropFlowSelect @bind-Value="UpdateBuildingIdString" Options="BuildingOptions" Placeholder="Chọn tòa nhà" AriaLabel="Tòa nhà trực thuộc" />
+                                <PropFlowSelect Options="FacilityTypeCreateOptions" @bind-Value="UpdateFormModel.FacilityType"  />
                             </div>
                         </div>
 
-                        <!-- Field 4: Loại CSVT (FacilityType) -->
+                        <!-- Field 4: Vị trí -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Phân Loại Tiện Ích <span class="text-rose-500">*</span>
+                                Vị trí
                             </label>
-                            <div class="relative">
-                                <PropFlowSelect @bind-Value="UpdateFormModel.FacilityType" Options="FacilityTypeOptions" Placeholder="Chọn phân loại" AriaLabel="Phân loại tiện ích" />
-                            </div>
+                            <input @bind="UpdateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 1, khu vực A" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
 
-                        <!-- Field 5: Trạng thái vận hành (Status Enum) -->
+                        <!-- Field 5: Mô tả -->
                         <div class="space-y-1.5 sm:col-span-2">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Trạng Thái Vận Hành  <span class="text-rose-500">*</span>
+                                Mô tả
                             </label>
-                            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                                @foreach (var (status, label, color, subLabel) in new[]
-                                {
-                                    (MasterDataStatus.ACTIVE, "Đang hoạt động", "emerald", "Hoạt động tốt"),
-                                    (MasterDataStatus.UNDER_MAINTENANCE, "Đang bảo trì", "amber", "Bảo dưỡng kỹ thuật"),
-                                    (MasterDataStatus.UNAVAILABLE, "Tạm ngưng / Kín", "indigo", "Kín chỗ/Hạn chế"),
-                                    (MasterDataStatus.INACTIVE, "Ngừng kích hoạt", "slate", "Tạm ngưng sử dụng"),
-                                    (MasterDataStatus.OUT_OF_SERVICE, "Ngừng phục vụ", "rose", "Hỏng / Thay thế")
-                                })
-                                {
-                                    var s = status;
-                                    var isSelected = UpdateFormModel.Status == s;
-                                    <button type="button"
-                                            class="cursor-pointer border rounded-xl p-2.5 text-center transition-all @(isSelected ? $"bg-{color}-50 border-{color}-500" : $"border-{color}-200 hover:bg-{color}-50")"
-                                            @onclick="() => UpdateFormModel.Status = s">
-                                        <span class="block text-xs font-bold text-@(color)-700">@label</span>
-                                        <span class="text-[10px] text-@(color)-600">@subLabel</span>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-
-                        <!-- Field 6: Vị trí cụ thể (LocationDescription) -->
-                        <div class="sm:col-span-2 space-y-1.5">
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Mô Tả Vị Trí Cụ Thể  <span class="text-rose-500">*</span>
-                            </label>
-                            <input @bind="UpdateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 3 - Cánh Tây" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
-                        </div>
-
-                        <!-- Field 7: Mô tả chi tiết (Description) -->
-                        <div class="sm:col-span-2 space-y-1.5">
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Ghi Chú / Mô Tả Kỹ Thuật 
-                            </label>
-                            <textarea @bind="UpdateFormModel.Description" rows="3" placeholder="Nhập thông số kỹ thuật, quy định sử dụng hoặc lịch bảo dưỡng định kỳ..." class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all resize-none leading-relaxed"></textarea>
+                            <textarea @bind="UpdateFormModel.Description" rows="3" placeholder="Mô tả chi tiết về cơ sở vật chất" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all resize-none"></textarea>
                         </div>
                     }
 
@@ -593,12 +523,43 @@
 <PropFlow.Web.Client.Features.Facility.Components.FacilityDetailDialog IsOpen="IsDetailOpen" Facility="SelectedFacilityToView" OnClose="() => IsDetailOpen = false" />
 
 @code {
-    private static readonly PropFlowSelectOption[] FacilityStatusOptions = [new("", "Tất cả trạng thái"), new("ACTIVE", "Đang hoạt động"), new("UNDER_MAINTENANCE", "Đang bảo trì"), new("UNAVAILABLE", "Tạm ngưng / Kín lịch"), new("INACTIVE", "Ngừng kích hoạt"), new("OUT_OF_SERVICE", "Ngừng phục vụ")];
-    private static readonly PropFlowSelectOption[] FacilityTypeOptions = [new("", "Chọn phân loại"), new("Thể Thao & Giải Trí", "Thể Thao & Giải Trí"), new("Sức Khỏe & Fitness", "Sức Khỏe & Fitness"), new("Tiện Ích Chung", "Tiện Ích Chung"), new("Hạ Tầng Kỹ Thuật", "Hạ Tầng Kỹ Thuật"), new("An Ninh & PCCC", "An Ninh & PCCC"), new("Cảnh Quan & Môi Trường", "Cảnh Quan & Môi Trường")];
-    private IReadOnlyList<PropFlowSelectOption> BuildingOptions => [new("", "Chọn tòa nhà"), .. Buildings.Select(building => new PropFlowSelectOption(building.Id.ToString(), building.Name))];
+    private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
+        new("", "Tất cả trạng thái"),
+        new("ACTIVE", "● Đang hoạt động"),
+        new("UNDER_MAINTENANCE", "● Đang bảo trì"),
+        new("UNAVAILABLE", "● Tạm ngưng / Kín lịch"),
+        new("INACTIVE", "● Ngừng kích hoạt"),
+        new("OUT_OF_SERVICE", "● Ngừng phục vụ")
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> FacilityTypeFilterOptions = [
+        new("", "Tất cả loại CSVT"),
+        new("Phòng GYM / Fitness", "Phòng GYM / Fitness"),
+        new("Hồ Bơi", "Hồ Bơi"),
+        new("Sân Tennis / Cầu Lông", "Sân Tennis / Cầu Lông"),
+        new("Sân Bóng / Thể Thao", "Sân Bóng / Thể Thao"),
+        new("Khu Vui Chơi & Giải Trí", "Khu Vui Chơi & Giải Trí"),
+        new("Khu Thương Mại", "Khu Thương Mại"),
+        new("Phòng Tiệc / Sự Kiện", "Phòng Tiệc / Sự Kiện"),
+        new("Khu Giáo Dục", "Khu Giáo Dục"),
+        new("Khác", "Khác")
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> FacilityTypeCreateOptions = [
+        new("", "Chọn loại cơ sở vật chất"),
+        new("Phòng GYM / Fitness", "Phòng GYM / Fitness"),
+        new("Hồ Bơi", "Hồ Bơi"),
+        new("Sân Tennis / Cầu Lông", "Sân Tennis / Cầu Lông"),
+        new("Sân Bóng / Thể Thao", "Sân Bóng / Thể Thao"),
+        new("Khu Vui Chơi & Giải Trí", "Khu Vui Chơi & Giải Trí"),
+        new("Khu Thương Mại", "Khu Thương Mại"),
+        new("Phòng Tiệc / Sự Kiện", "Phòng Tiệc / Sự Kiện"),
+        new("Khu Giáo Dục", "Khu Giáo Dục"),
+        new("Khác", "Khác")
+    ];
+
     private PagedResult<FacilityModel> PagedResult { get; set; } = new();
     private FacilityFilterModel Filter { get; set; } = new();
-    private List<BuildingModel> Buildings { get; set; } = new();
     private bool IsLoading { get; set; } = true;
     private bool IsFormOpen { get; set; }
     private bool IsSaving { get; set; }
@@ -612,6 +573,8 @@
     private bool IsDetailOpen { get; set; }
     private FacilityModel? SelectedFacilityToView { get; set; }
 
+    private bool IsManager { get; set; }
+
     private string StatusFilterString
     {
         get => Filter.Status?.ToString() ?? "";
@@ -623,10 +586,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        IsManager = user.IsInRole("MANAGER");
         await LoadData();
-        var buildingsResult = await BuildingApiClient.GetBuildingsAsync(new BuildingFilterModel { PageSize = 200 });
-        if (buildingsResult.IsSuccess) Buildings = buildingsResult.Data?.Items?.ToList() ?? new();
-        else ErrorMessage = buildingsResult.Message ?? "Không thể tải danh sách tòa nhà.";
     }
 
     private async Task LoadData()
@@ -669,12 +631,10 @@
         SelectedFacilityToEdit = item;
         UpdateFormModel = new UpdateFacilityModel
         {
-            BuildingId = item.BuildingId,
             Name = item.Name,
             FacilityType = item.FacilityType,
             LocationDescription = item.LocationDescription,
-            Description = item.Description,
-            Status = item.Status
+            Description = item.Description
         };
         IsFormOpen = true;
     }
@@ -723,15 +683,10 @@
         await LoadData();
         if (ErrorMessage == null) SuccessMessage = $"Đã {actionText} thành công '{item.Name}'.";
     }
-    private string BuildingIdString
-{
-    get => CreateFormModel.BuildingId == Guid.Empty ? "" : CreateFormModel.BuildingId.ToString();
-    set => CreateFormModel.BuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
-}
 
-private string UpdateBuildingIdString
-{
-    get => UpdateFormModel.BuildingId == Guid.Empty ? "" : UpdateFormModel.BuildingId.ToString();
-    set => UpdateFormModel.BuildingId = Guid.TryParse(value, out var g) ? g : Guid.Empty;
-}
+    private string FacilityTypeFilterString
+    {
+        get => Filter.FacilityType ?? "";
+        set => Filter.FacilityType = string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 }

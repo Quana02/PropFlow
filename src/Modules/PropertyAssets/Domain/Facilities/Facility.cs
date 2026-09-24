@@ -13,7 +13,6 @@ public class Facility
     }
 
     public Facility(
-        Guid buildingId,
         string code,
         string name,
         DateTimeOffset now,
@@ -23,16 +22,10 @@ public class Facility
         Guid? createdBy = null,
         MasterDataStatus initialStatus = MasterDataStatus.ACTIVE)
     {
-        if (buildingId == Guid.Empty)
-        {
-            throw new ArgumentException("BuildingId cannot be empty.", nameof(buildingId));
-        }
-
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Id = Guid.NewGuid();
-        BuildingId = buildingId;
         Code = code.Trim();
         Name = name.Trim();
         FacilityType = facilityType?.Trim();
@@ -46,7 +39,6 @@ public class Facility
     }
 
     public Guid Id { get; private set; }
-    public Guid BuildingId { get; private set; }
     public string Code { get; private set; } = null!;
     public string Name { get; private set; } = null!;
     public string? FacilityType { get; private set; }
@@ -59,11 +51,9 @@ public class Facility
     public DateTimeOffset UpdatedAt { get; private set; }
 
     // Within-module navigation
-    public Building? Building { get; private set; }
     public IReadOnlyCollection<EquipmentEntity> Equipment => _equipment.AsReadOnly();
 
     public void Update(
-        Guid buildingId,
         string name,
         string? facilityType,
         string? locationDescription,
@@ -72,14 +62,8 @@ public class Facility
         Guid? updatedBy,
         DateTimeOffset now)
     {
-        if (buildingId == Guid.Empty)
-        {
-            throw new ArgumentException("BuildingId cannot be empty.", nameof(buildingId));
-        }
-
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        BuildingId = buildingId;
         Name = name.Trim();
         FacilityType = facilityType?.Trim();
         LocationDescription = locationDescription?.Trim();

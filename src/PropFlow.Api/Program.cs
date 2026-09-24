@@ -133,11 +133,13 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IPropertyAssetsStore, PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Facilities.Services.IFacilityService, PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment.Services.IEquipmentService, PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService>();
+builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
 // Add services to the container.
-builder.Services.AddControllers();
-builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly);
-builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly);
+builder.Services.AddControllers()
+    .AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly);
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
 builder.Services.AddScoped<IAccountAccess, AccountAccessService>();

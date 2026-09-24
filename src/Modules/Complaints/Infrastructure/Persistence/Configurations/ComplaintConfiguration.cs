@@ -23,8 +23,7 @@ public class ComplaintConfiguration : IEntityTypeConfiguration<Complaint>
         builder.HasIndex(complaint => complaint.ResidentId);
 
         builder.Property(complaint => complaint.ResidentApartmentId).HasColumnName("resident_apartment_id").IsRequired();
-        builder.Property(complaint => complaint.BuildingId).HasColumnName("building_id").IsRequired();
-        builder.HasIndex(complaint => complaint.BuildingId);
+        
 
         builder.Property(complaint => complaint.ApartmentUnitId).HasColumnName("apartment_unit_id");
         builder.HasIndex(complaint => complaint.ApartmentUnitId);

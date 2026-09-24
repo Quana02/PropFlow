@@ -7,7 +7,6 @@ using PropFlow.Modules.PropertyAssets.Application.Equipment.Services;
 namespace PropFlow.Modules.PropertyAssets.Presentation.Controllers;
 
 [ApiController]
-[Authorize(Roles = "MANAGER")]
 [Route("api/v1/[controller]")]
 public class EquipmentsController : ControllerBase
 {
@@ -19,6 +18,7 @@ public class EquipmentsController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "ADMIN,MANAGER,STAFF")]
     public async Task<ActionResult<PagedResult<EquipmentDto>>> GetEquipments([FromQuery] EquipmentFilterQuery query, CancellationToken cancellationToken)
     {
         var result = await _equipmentService.GetEquipmentsAsync(query, cancellationToken);
@@ -26,6 +26,7 @@ public class EquipmentsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Roles = "ADMIN,MANAGER,STAFF")]
     public async Task<ActionResult<EquipmentDetailDto>> GetEquipmentById(Guid id, CancellationToken cancellationToken)
     {
         var result = await _equipmentService.GetEquipmentDetailByIdAsync(id, cancellationToken);
@@ -37,6 +38,7 @@ public class EquipmentsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "MANAGER")]
     public async Task<ActionResult<EquipmentDto>> CreateEquipment([FromBody] CreateEquipmentCommand command, CancellationToken cancellationToken)
     {
         try
@@ -65,6 +67,7 @@ public class EquipmentsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "MANAGER")]
     public async Task<ActionResult<EquipmentDto>> UpdateEquipment(Guid id, [FromBody] UpdateEquipmentCommand command, CancellationToken cancellationToken)
     {
         try
@@ -93,6 +96,7 @@ public class EquipmentsController : ControllerBase
     }
 
     [HttpPatch("{id:guid}/status")]
+    [Authorize(Roles = "MANAGER")]
     public async Task<ActionResult<EquipmentDto>> SetEquipmentStatus(Guid id, [FromBody] SetEquipmentStatusCommand command, CancellationToken cancellationToken)
     {
         try

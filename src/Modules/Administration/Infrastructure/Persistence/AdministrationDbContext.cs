@@ -1,10 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.Administration.Domain.AuditLogs;
 using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Domain.SystemConfigurations;
 using PropFlow.Modules.Administration.Domain.UserAccessHistories;
-using PropFlow.Modules.Administration.Domain.UserBuildingAccesses;
+
 using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
 
 namespace PropFlow.Modules.Administration.Infrastructure.Persistence;
@@ -20,7 +20,7 @@ public class AdministrationDbContext : DbContext
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRoleAssignment> UserRoleAssignments => Set<UserRoleAssignment>();
-    public DbSet<UserBuildingAccess> UserBuildingAccesses => Set<UserBuildingAccess>();
+
     public DbSet<UserAccessHistory> UserAccessHistories => Set<UserAccessHistory>();
     public DbSet<SystemConfiguration> SystemConfigurations => Set<SystemConfiguration>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
