@@ -1,0 +1,36 @@
+<PageTitle>@BrowserTitle — PropFlow</PageTitle>
+
+<div class="finance-list-page">
+    <FinancePageHeader CurrentPage="@CurrentPage"
+                       Title="@Title"
+                       Description="@Description" />
+
+    <section aria-labelledby="@HeadingId">
+        <div class="finance-list-card">
+            <div class="finance-list-heading">
+                <div>
+                    <h2 id="@HeadingId">@ListTitle</h2>
+                    <p>@ListDescription</p>
+                </div>
+                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
+            </div>
+
+            @ChildContent
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string BrowserTitle { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CurrentPage { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Description { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string HeadingId { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ListTitle { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ListDescription { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public IReadOnlyList<string> Columns { get; set; } = [];
+    [Parameter, EditorRequired] public string UnavailableTitle { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string UnavailableMessage { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = "database_off";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

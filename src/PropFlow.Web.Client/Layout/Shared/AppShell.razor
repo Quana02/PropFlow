@@ -144,7 +144,7 @@
         if (!firstRender) return;
         if (ShowAmbientBackground)
         {
-            ambientModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-ambient.js?v=20260919-2");
+            ambientModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-ambient.js?v=20260927-7");
             ambientHandle = await ambientModule.InvokeAsync<IJSObjectReference>("initialize", ambientCanvas, motionButton);
         }
         if (ShowWeatherAndClock)

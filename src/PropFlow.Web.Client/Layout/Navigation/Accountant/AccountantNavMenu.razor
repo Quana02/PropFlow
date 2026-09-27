@@ -1,8 +1,6 @@
 @using Microsoft.AspNetCore.Components.Authorization
 
 <nav class="app-rail" aria-label="Điều hướng ứng dụng">
-    <a class="rail-logo" href="/" aria-label="PropFlow">P</a>
-
     <div class="rail-links">
         <AuthorizeView Roles="ACCOUNTANT">
             <NavLink href="/finance/dashboard" Match="NavLinkMatch.All" class="rail-link"
