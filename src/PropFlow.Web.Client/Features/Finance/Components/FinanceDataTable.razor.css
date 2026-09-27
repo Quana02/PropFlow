@@ -1,0 +1,10 @@
+.finance-table-scroll { overflow-x: auto; }
+table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; font-size: 12px; }
+th { padding: 12px 10px; border-block: 1px solid var(--line, #e1e8f0); color: var(--muted, #64748b); font-size: 10px; white-space: nowrap; }
+td { padding: 11px 10px; border-bottom: 1px solid var(--line, #e1e8f0); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+.finance-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 4px 2px; color: var(--muted, #64748b); font-size: 11px; }
+.finance-pagination div { display: flex; align-items: center; gap: 10px; }
+button { border: 1px solid var(--line, #e1e8f0); border-radius: 8px; padding: 6px 10px; background: var(--surface, #fff); color: var(--text, #17243a); cursor: pointer; }
+button:disabled { cursor: default; opacity: .45; }
+.finance-retry { display: block; margin: -18px auto 20px; }
