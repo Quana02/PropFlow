@@ -15,7 +15,7 @@ public sealed record EmptyResponse;
 public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
 {
     private sealed record Problem(string? Title, string? Detail, string? Code, string? TraceId, Dictionary<string, string[]>? Errors);
-    public async Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string path, object? body = null, bool csrf = false, CancellationToken ct = default)
+    public async Task<ApiResult<T>> SendAsync<T>(HttpMethod method, string path, object? body = null, bool csrf = false, IReadOnlyDictionary<string, string>? headers = null, CancellationToken ct = default)
     {
         try
         {
@@ -27,6 +27,7 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
                 csrfToken = protection.Data!.Token;
             }
             using var request = new HttpRequestMessage(method, path);
+            if (headers is not null) foreach (var header in headers) request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             request.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
             if (body != null) request.Content = JsonContent.Create(body, body.GetType());
             if (csrfToken != null) request.Headers.Add("X-CSRF-TOKEN", csrfToken);

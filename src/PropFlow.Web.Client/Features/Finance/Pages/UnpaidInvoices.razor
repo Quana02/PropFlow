@@ -1,105 +1,93 @@
 @page "/finance/invoices/unpaid"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
-@using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "ACCOUNTANT")]
+@using PropFlow.Web.Client.Features.Finance.Models
+@using PropFlow.Web.Client.Features.Finance.Services
+@inject IFinanceApiClient Finance
 
 <PageTitle>Hóa đơn chưa thanh toán — PropFlow</PageTitle>
 
 <div class="unpaid-page">
     <header class="unpaid-heading">
         <div>
-            <nav class="unpaid-breadcrumb" aria-label="Đường dẫn trang">
-                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
-                <span aria-hidden="true">›</span>
-                <span aria-current="page">Hóa đơn &amp; Công nợ</span>
-            </nav>
-            <h1>Hóa đơn chưa thanh toán</h1>
-            <p>Theo dõi các kỳ phí sinh hoạt, dịch vụ và tiện ích còn nghĩa vụ thanh toán trong phạm vi được cấp quyền.</p>
+            <nav class="unpaid-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Hóa đơn &amp; Công nợ</span></nav>
+            <div class="title-row"><h1>Hóa đơn chưa thanh toán</h1>@if (NearestDueDate is not null) { <span class="due-badge">Hạn gần nhất @NearestDueDate.Value.ToString("dd/MM/yyyy")</span> }</div>
+            <p>Theo dõi các kỳ phí sinh hoạt, dịch vụ và tiện ích chưa được thanh toán hoặc thanh toán dở dang.</p>
         </div>
         <div class="unpaid-actions">
-            <span title="Chưa khả dụng: chưa có API xuất danh sách hóa đơn"><button type="button" disabled><span class="material-symbols-outlined" aria-hidden="true">download</span> Xuất danh sách (Excel)</button></span>
-            <span title="Chưa khả dụng: chờ xác nhận tích hợp Communication"><button type="button" disabled><span class="material-symbols-outlined" aria-hidden="true">mail</span> Gửi thông báo nhắc nợ</button></span>
+            <span title="Chưa khả dụng: chưa có dịch vụ xuất danh sách hóa đơn"><button type="button" disabled><span class="material-symbols-outlined">description</span> Xuất danh sách (Excel)</button></span>
+            <span title="Chưa khả dụng: chưa có tích hợp gửi thông báo nhắc nợ"><button type="button" disabled><span class="material-symbols-outlined">mail</span> Gửi thông báo nhắc nợ (@(data?.Total ?? 0) hóa đơn)</button></span>
         </div>
     </header>
 
     <section class="unpaid-summary" aria-label="Tổng quan hóa đơn chưa thanh toán">
-        <article class="unpaid-card">
-            <span class="card-label">TỔNG CĂN CHƯA ĐÓNG</span>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Chờ dữ liệu tổng hợp từ Billing và Payments</small>
-        </article>
-        <article class="unpaid-card amount">
-            <span class="card-label">TỔNG TIỀN CHƯA THU</span>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Chờ số dư công nợ từ backend</small>
-        </article>
-        <article class="unpaid-card due-soon">
-            <span class="card-label">SẮP ĐẾN HẠN</span>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Chờ kỳ hạn và múi giờ tòa nhà</small>
-        </article>
-        <article class="unpaid-card partial">
-            <span class="card-label">THANH TOÁN MỘT PHẦN</span>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Chờ trạng thái tổng hợp từ backend</small>
-        </article>
+        <article class="unpaid-card"><div class="card-label"><span>TỔNG CĂN CHƯA ĐÓNG</span><span class="material-symbols-outlined">apartment</span></div><strong>@ApartmentCount <small>căn hộ</small></strong><p>Dữ liệu từ các hóa đơn đang hiển thị</p></article>
+        <article class="unpaid-card amount"><div class="card-label"><span>TỔNG TIỀN CHƯA THU</span><span class="material-symbols-outlined">payments</span></div><strong>@Money(OutstandingTotal)</strong><p>Tổng dư nợ của các bản ghi đang hiển thị</p></article>
+        <article class="unpaid-card due-soon"><div class="card-label"><span>SẮP ĐẾN HẠN (≤ 3 NGÀY)</span><span class="material-symbols-outlined">schedule</span></div><strong>@DueSoonCount <small>hóa đơn</small></strong><p>Dựa trên hạn thanh toán trong hệ thống</p></article>
+        <article class="unpaid-card partial"><div class="card-label"><span>THANH TOÁN MỘT PHẦN</span><span class="material-symbols-outlined">pie_chart</span></div><strong>@PartialCount <small>hóa đơn</small></strong><p>Còn lại @Money(PartialOutstanding)</p></article>
     </section>
 
-    <section class="unpaid-content" aria-labelledby="unpaid-list-title">
-        <div class="unpaid-toolbar">
-            <div class="unpaid-filters">
-                <label class="unpaid-search" title="Chưa khả dụng: chưa có API tìm kiếm hóa đơn">
-                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
-                    <span class="visually-hidden">Tìm hóa đơn</span>
-                    <input type="search" disabled placeholder="Tìm theo mã hóa đơn hoặc căn hộ..." />
-                </label>
-                <label class="unpaid-field" title="Chưa khả dụng: chưa có API lọc kỳ hóa đơn">
-                    <span>Kỳ hóa đơn</span>
-                    <input type="month" disabled />
-                </label>
-                <label class="unpaid-field" title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền">
-                    <span>Tòa nhà</span>
-                    <PropFlowSelect Value="@string.Empty" Options="PropFlowSelectOptions.UnavailableBuilding" Variant="Filter" AriaLabel="Chọn tòa nhà" Disabled="true" />
-                </label>
-            </div>
-            <p class="unpaid-filter-note">Bộ lọc sẽ hoạt động khi Billing cung cấp API tìm kiếm theo phạm vi được cấp quyền.</p>
+    <section class="unpaid-toolbar" aria-label="Bộ lọc hóa đơn">
+        <div class="unpaid-filters">
+            <label class="unpaid-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm hóa đơn</span><input type="search" placeholder="Tìm theo mã hóa đơn..." @bind="search" @bind:event="oninput" @onkeyup="HandleSearchKey" /></label>
+            <button class="unpaid-field" type="button" disabled title="Chưa có API lọc kỳ hóa đơn"><span class="material-symbols-outlined">calendar_month</span>Kỳ hóa đơn hiện tại<span class="material-symbols-outlined">expand_more</span></button>
+            <button class="unpaid-field" type="button" disabled title="Dữ liệu thuộc phạm vi được phân quyền">Tất cả phạm vi<span class="material-symbols-outlined">expand_more</span></button>
         </div>
+        <div class="status-filters" aria-label="Lọc trạng thái hóa đơn">
+            <button class="@(filter == "ALL" ? "active" : null)" type="button" @onclick='() => SetFilter("ALL")'>Tất cả (@(data?.Total ?? 0))</button>
+            <button class="@(filter == "UNPAID" ? "active" : null)" type="button" @onclick='() => SetFilter("UNPAID")'>Chưa thanh toán (@UnpaidCount)</button>
+            <button class="@(filter == "DUE_SOON" ? "active due" : "due")" type="button" @onclick='() => SetFilter("DUE_SOON")'>Sắp tới hạn 3 ngày (@DueSoonCount)</button>
+            <button class="@(filter == "PARTIAL" ? "active partial" : "partial")" type="button" @onclick='() => SetFilter("PARTIAL")'>Thanh toán một phần (@PartialCount)</button>
+            <span title="Chưa có API liên kết giao dịch chờ xác nhận"><button type="button" disabled>Chờ xác nhận giao dịch (—)</button></span>
+        </div>
+    </section>
 
-        <div class="unpaid-table-card">
-            <div class="unpaid-table-heading">
-                <div>
-                    <h2 id="unpaid-list-title">Danh sách hóa đơn chưa thanh toán</h2>
-                    <p>Trạng thái thanh toán và số dư cần được backend tổng hợp từ hóa đơn cùng khoản thu đã xác nhận.</p>
-                </div>
-                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
-            </div>
-            <div class="unpaid-table-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th scope="col">Mã hóa đơn &amp; ngày phát hành</th>
-                            <th scope="col">Căn hộ</th>
-                            <th scope="col">Chi tiết khoản phí</th>
-                            <th scope="col">Tổng tiền</th>
-                            <th scope="col">Hạn thanh toán</th>
-                            <th scope="col">Trạng thái thanh toán</th>
-                            <th scope="col">Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="7">
-                                <div class="unpaid-unavailable" role="status">
-                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
-                                    <strong>Danh sách hóa đơn chưa sẵn sàng</strong>
-                                    <span>Billing chưa cung cấp API danh sách và số dư hóa đơn. Khi có contract, dữ liệu sẽ hiển thị tại đây.</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <footer class="unpaid-table-footer">Chưa có tổng số bản ghi và phân trang từ API.</footer>
-        </div>
+    <section class="unpaid-table-card" aria-labelledby="unpaid-list-title">
+        <h2 class="visually-hidden" id="unpaid-list-title">Danh sách hóa đơn chưa thanh toán</h2>
+        <div class="unpaid-table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ HĐ &amp; NGÀY PHÁT<br />HÀNH</th><th>CĂN HỘ</th><th>CHI TIẾT KHOẢN PHÍ</th><th>TỔNG TIỀN CẦN THU</th><th>HẠN THANH TOÁN</th><th>TRẠNG THÁI</th><th>THAO TÁC</th></tr></thead><tbody>
+            @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
+            else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
+            else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có hóa đơn phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc trạng thái." Icon="inbox" /></td></tr> }
+            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong>@item.InvoiceNumber</strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @ShortId(item.ApartmentUnitId)</strong><small>Mã căn hộ</small></td><td><strong>Kỳ phí @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><button class="collect-button" type="button" disabled title="Chưa có API ghi nhận khoản thu"><span aria-hidden="true">＋</span> Thu tiền</button></td></tr> } }
+        </tbody></table></div>
+        @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="unpaid-pagination"><span>Hiển thị @FilteredItems.Count bản ghi phù hợp trên trang; tổng cộng @data.Total hóa đơn chưa thanh toán</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
 </div>
+
+@code {
+    private PagedFinanceResult<InvoiceBalance>? data;
+    private bool loading;
+    private string? error;
+    private string search = string.Empty;
+    private string filter = "ALL";
+    private int page = 1;
+    private const int PageSize = 20;
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private IReadOnlyList<InvoiceBalance> FilteredItems => (data?.Items ?? []).Where(MatchesFilter).ToArray();
+    private int ApartmentCount => data?.Items.Select(x => x.ApartmentUnitId).Distinct().Count() ?? 0;
+    private decimal OutstandingTotal => data?.Items.Sum(x => x.OutstandingAmount) ?? 0;
+    private int UnpaidCount => data?.Items.Count(x => x.ConfirmedPaidAmount <= 0) ?? 0;
+    private int PartialCount => data?.Items.Count(IsPartial) ?? 0;
+    private decimal PartialOutstanding => data?.Items.Where(IsPartial).Sum(x => x.OutstandingAmount) ?? 0;
+    private int DueSoonCount => data?.Items.Count(IsDueSoon) ?? 0;
+    private DateOnly? NearestDueDate => data?.Items.Where(x => x.DueDate is not null).Select(x => x.DueDate!.Value).OrderBy(x => Math.Abs(x.DayNumber - Today.DayNumber)).FirstOrDefault();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((data?.Total ?? 0) / (double)PageSize));
+
+    protected override Task OnInitializedAsync() => LoadAsync(1);
+    private async Task LoadAsync(int target) { page = target; loading = true; error = null; var result = await Finance.GetUnpaidInvoicesAsync(page, search); data = result.Data; if (!result.IsSuccess) error = result.Message; loading = false; }
+    private Task ReloadAsync() => LoadAsync(page);
+    private Task PreviousPage() => LoadAsync(page - 1);
+    private Task NextPage() => LoadAsync(page + 1);
+    private async Task HandleSearchKey(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(1); }
+    private void SetFilter(string value) => filter = value;
+    private bool MatchesFilter(InvoiceBalance item) => filter switch { "UNPAID" => item.ConfirmedPaidAmount <= 0, "DUE_SOON" => IsDueSoon(item), "PARTIAL" => IsPartial(item), _ => true };
+    private bool IsDueSoon(InvoiceBalance item) => item.DueDate is { } due && due.DayNumber >= Today.DayNumber && due.DayNumber - Today.DayNumber <= 3;
+    private static bool IsPartial(InvoiceBalance item) => item.ConfirmedPaidAmount > 0 && item.OutstandingAmount > 0;
+    private string DueText(InvoiceBalance item) { if (item.DueDate is not { } due) return "Chưa có hạn"; var days = due.DayNumber - Today.DayNumber; return days switch { < 0 => $"Quá hạn {-days} ngày", 0 => "Đến hạn hôm nay", 1 => "Còn 1 ngày", _ => $"Còn {days} ngày" }; }
+    private string DueClass(InvoiceBalance item) => item.DueDate is { } due && due < Today ? "due-cell overdue" : "due-cell";
+    private static string StatusName(InvoiceBalance item) => IsPartial(item) ? "Đóng một phần" : "Chưa nộp";
+    private static string StatusClass(InvoiceBalance item) => IsPartial(item) ? "status-partial" : "status-unpaid";
+    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy") ?? "—";
+    private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
+}

@@ -1,0 +1,27 @@
+.finance-unavailable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 180px;
+    padding: 24px;
+    color: var(--muted, #64748b);
+    text-align: center;
+}
+
+.finance-unavailable .material-symbols-outlined {
+    color: var(--accent, #07966a);
+    font-size: 32px;
+}
+
+.finance-unavailable strong {
+    color: var(--text, #17243a);
+    font-size: 14px;
+}
+
+.finance-unavailable span:last-child {
+    max-width: 540px;
+    font-size: 12px;
+    line-height: 1.55;
+}

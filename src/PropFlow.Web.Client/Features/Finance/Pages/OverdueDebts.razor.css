@@ -3,7 +3,7 @@
     --overdue-text: var(--text, #17243a);
     --overdue-muted: var(--muted, #64748b);
     --overdue-line: var(--line, #e1e8f0);
-    --overdue-accent: #e64269;
+    --overdue-accent: #ed315d;
     display: flex;
     flex-direction: column;
     gap: 20px;
@@ -12,319 +12,82 @@
     font-family: Inter, sans-serif;
 }
 
-.overdue-heading {
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 16px;
-}
+.overdue-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.overdue-breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; color: var(--overdue-muted); font-size: 11px; }
+.overdue-breadcrumb ::deep a { color: var(--overdue-muted); text-decoration: none; }
+.overdue-breadcrumb ::deep a:hover, .overdue-breadcrumb [aria-current] { color: var(--overdue-accent); }
+.overdue-breadcrumb [aria-current] { font-weight: 700; }
+.title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.overdue-heading h1 { margin: 0 0 5px; font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif; letter-spacing: -.025em; text-transform: capitalize; }
+.overdue-heading p { margin: 0; color: var(--overdue-muted); font-size: 12px; }
+.overdue-badge { display: inline-flex; align-items: center; padding: 5px 9px; border: 1px solid #fecdd3; border-radius: 999px; background: #fff1f2; color: #e11d48; font-size: 9px; font-weight: 750; }
+.overdue-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
+.overdue-actions button { min-height: 40px; padding: 8px 15px; border: 1px solid var(--overdue-line); border-radius: 10px; background: var(--overdue-surface); color: var(--overdue-muted); font-size: 11px; font-weight: 700; cursor: not-allowed; opacity: .72; }
+.overdue-actions .material-symbols-outlined { margin-right: 5px; font-size: 15px; vertical-align: -3px; }
+.overdue-actions span:last-child button { background: var(--overdue-accent); color: #fff; }
 
-.overdue-breadcrumb {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 7px;
-    color: var(--overdue-muted);
-    font-size: 11px;
-}
+.overdue-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.overdue-card, .overdue-toolbar, .overdue-table-card { border: 1px solid var(--overdue-line); border-radius: 16px; background: var(--overdue-surface); box-shadow: 0 12px 30px rgba(29,49,82,.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.overdue-card { display: flex; flex-direction: column; gap: 7px; min-height: 110px; padding: 16px 18px; }
+.overdue-card-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--overdue-muted); font-size: 9px; font-weight: 750; letter-spacing: .03em; }
+.overdue-card-label .material-symbols-outlined { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; background: #fff1f2; color: var(--overdue-accent); font-size: 16px; }
+.overdue-card strong { margin-top: auto; color: var(--overdue-text); font: 700 25px/1.1 'Space Grotesk', sans-serif; white-space: nowrap; }
+.overdue-card strong small { color: var(--overdue-muted); font: 500 10px/1 Inter, sans-serif; }
+.overdue-card p { margin: 0; color: var(--overdue-muted); font-size: 9px; }
+.overdue-card.principal strong { color: var(--overdue-accent); }
+.overdue-card.interest strong { color: #e97905; }
+.overdue-card.interest .material-symbols-outlined { background: #fff8e7; color: #e97905; }
+.overdue-card.intervention strong { color: #9333ea; }
+.overdue-card.intervention .material-symbols-outlined { background: #faf5ff; color: #9333ea; }
 
-.overdue-breadcrumb ::deep a {
-    color: var(--overdue-muted);
-    text-decoration: none;
-}
+.overdue-toolbar { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.overdue-filters { display: grid; grid-template-columns: minmax(280px, 1.6fr) minmax(210px, .8fr) minmax(150px, .6fr); gap: 8px; }
+.overdue-search, .overdue-field { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 37px; padding: 6px 10px; border: 1px solid var(--overdue-line); border-radius: 10px; background: rgba(148,163,184,.05); color: var(--overdue-muted); font-size: 11px; }
+.overdue-search .material-symbols-outlined, .overdue-field .material-symbols-outlined { font-size: 16px; }
+.overdue-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--overdue-text); font: inherit; }
+.overdue-field { justify-content: space-between; cursor: not-allowed; }
+.overdue-range-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.overdue-range-filters button { padding: 6px 10px; border: 0; border-radius: 9px; background: rgba(148,163,184,.12); color: var(--overdue-muted); font-size: 9px; font-weight: 700; cursor: pointer; }
+.overdue-range-filters button.active { background: #111827; color: #fff; }
 
-.overdue-breadcrumb ::deep a:hover,
-.overdue-breadcrumb [aria-current] {
-    color: var(--overdue-accent);
-}
-
-.overdue-breadcrumb [aria-current] {
-    font-weight: 700;
-}
-
-.overdue-heading h1 {
-    margin: 0 0 5px;
-    font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif;
-    letter-spacing: -0.025em;
-}
-
-.overdue-heading p {
-    margin: 0;
-    color: var(--overdue-muted);
-    font-size: 12px;
-}
-
-.overdue-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 9px;
-}
-
-.overdue-actions button {
-    min-height: 36px;
-    padding: 8px 13px;
-    border: 1px solid var(--overdue-line);
-    border-radius: 10px;
-    background: var(--overdue-surface);
-    color: var(--overdue-muted);
-    font-size: 11px;
-    font-weight: 700;
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-
-.overdue-actions span:last-child button {
-    background: var(--overdue-accent);
-    color: #fff;
-}
-
-.overdue-summary {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-}
-
-.overdue-card,
-.overdue-toolbar,
-.overdue-table-card {
-    border: 1px solid var(--overdue-line);
-    border-radius: 16px;
-    background: var(--overdue-surface);
-    box-shadow: 0 12px 30px rgba(29, 49, 82, 0.05);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-}
-
-.overdue-card {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    min-height: 110px;
-    padding: 16px 18px;
-}
-
-.overdue-card-label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    color: var(--overdue-muted);
-    font-size: 10px;
-    font-weight: 750;
-    letter-spacing: 0.03em;
-}
-
-.overdue-card-label .material-symbols-outlined {
-    color: var(--overdue-accent);
-    font-size: 18px;
-}
-
-.overdue-card strong {
-    margin-top: auto;
-    color: var(--overdue-text);
-    font: 700 27px/1.1 'Space Grotesk', sans-serif;
-}
-
-.overdue-card.principal strong {
-    color: var(--overdue-accent);
-}
-
-.overdue-card small {
-    color: var(--overdue-muted);
-    font-size: 10px;
-}
-
-.overdue-content {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.overdue-toolbar {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 14px;
-}
-
-.overdue-filters {
-    display: grid;
-    grid-template-columns: minmax(210px, 1.5fr) repeat(2, minmax(125px, 0.7fr)) minmax(155px, 0.8fr);
-    gap: 8px;
-}
-
-.overdue-search,
-.overdue-field {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    min-height: 37px;
-    padding: 6px 10px;
-    border: 1px solid var(--overdue-line);
-    border-radius: 10px;
-    background: rgba(148, 163, 184, 0.05);
-    color: var(--overdue-muted);
-    font-size: 11px;
-}
-
-.overdue-search .material-symbols-outlined {
-    font-size: 16px;
-}
-
-.overdue-search input,
-.overdue-field input,
-.overdue-field select {
-    min-width: 0;
-    width: 100%;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--overdue-muted);
-    font: inherit;
-}
-
-.overdue-field span {
-    flex: none;
-    white-space: nowrap;
-}
-
-.overdue-filters :disabled {
-    cursor: not-allowed;
-}
-
-.overdue-range-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.overdue-range-filters button {
-    padding: 6px 10px;
-    border: 0;
-    border-radius: 9px;
-    background: rgba(148, 163, 184, 0.12);
-    color: var(--overdue-muted);
-    font-size: 10px;
-    font-weight: 700;
-    cursor: not-allowed;
-    opacity: 0.8;
-}
-
-.overdue-table-card {
-    overflow: hidden;
-    padding: 14px 16px 0;
-}
-
-.overdue-table-heading {
-    display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 5px 2px 14px;
-}
-
-.overdue-table-heading h2 {
-    margin: 0 0 3px;
-    font-size: 13px;
-    font-weight: 750;
-}
-
-.overdue-table-heading p {
-    margin: 0;
-    color: var(--overdue-muted);
-    font-size: 10px;
-}
-
-.overdue-table-heading ::deep a {
-    flex: none;
-    color: var(--overdue-accent);
-    text-decoration: none;
-    font-size: 11px;
-    font-weight: 750;
-}
-
-.overdue-table-heading ::deep a:hover {
-    text-decoration: underline;
-}
-
-.overdue-table-scroll {
-    overflow-x: auto;
-}
-
-.overdue-table-card table {
-    width: 100%;
-    min-width: 700px;
-    border-collapse: collapse;
-    text-align: left;
-    font-size: 11px;
-}
-
-.overdue-table-card th {
-    padding: 12px 9px;
-    border-top: 1px solid var(--overdue-line);
-    border-bottom: 1px solid var(--overdue-line);
-    color: var(--overdue-muted);
-    font-size: 10px;
-    font-weight: 750;
-    white-space: nowrap;
-}
-
-.overdue-table-card th:nth-child(4),
-.overdue-table-card th:last-child {
-    text-align: right;
-}
-
-.overdue-unavailable {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    min-height: 225px;
-    padding: 18px;
-    color: var(--overdue-muted);
-    text-align: center;
-}
-
-.overdue-unavailable .material-symbols-outlined {
-    color: var(--overdue-accent);
-    font-size: 30px;
-}
-
-.overdue-unavailable strong {
-    color: var(--overdue-text);
-    font-size: 13px;
-}
-
-.overdue-unavailable span:last-child {
-    max-width: 440px;
-    font-size: 11px;
-}
+.overdue-table-card { overflow: hidden; padding: 14px 16px 0; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.overdue-table-scroll { overflow-x: auto; }
+.overdue-table-card table { width: 100%; min-width: 900px; border-collapse: collapse; text-align: left; font-size: 11px; }
+.overdue-table-card th { padding: 12px 9px; border-top: 1px solid var(--overdue-line); border-bottom: 1px solid var(--overdue-line); color: var(--overdue-muted); font-size: 9px; font-weight: 750; white-space: nowrap; }
+.overdue-table-card th:nth-child(5), .overdue-table-card th:last-child { text-align: right; }
+.overdue-table-card td { padding: 13px 9px; border-bottom: 1px solid var(--overdue-line); color: var(--overdue-text); vertical-align: middle; }
+.overdue-table-card td strong { display: block; font-size: 10px; line-height: 1.35; }
+.overdue-table-card td small { display: block; margin-top: 3px; color: var(--overdue-muted); font-size: 8px; line-height: 1.35; }
+.overdue-table-card td:first-child { width: 25px; }
+.overdue-table-card input[type="checkbox"] { accent-color: #1687eb; }
+.debt-cell { text-align: right; }
+.debt-cell strong { color: var(--overdue-accent); font-size: 12px !important; white-space: nowrap; }
+.days-pill, .level-pill { display: inline-flex; align-items: center; justify-content: center; padding: 6px 8px; border-radius: 8px; font-size: 8px; font-weight: 750; white-space: nowrap; }
+.days-normal { background: #fff8e7; color: #b56600; }
+.days-warning { background: #fff1f2; color: #e11d48; }
+.days-critical { background: #ffe4e6; color: #be123c; }
+.level-normal { border: 1px solid #bfdbfe; background: #eff6ff; color: #2563eb; }
+.level-warning { border: 1px solid #fde68a; background: #fffbeb; color: #b45309; }
+.level-critical { border: 1px solid #fecdd3; background: #fff1f2; color: #e11d48; }
+.process-button { min-width: 62px; padding: 7px 9px; border: 0; border-radius: 9px; color: #fff; font-size: 9px; font-weight: 700; cursor: not-allowed; opacity: .78; }
+.action-normal { background: #111827; }
+.action-critical { background: var(--overdue-accent); }
+.retry-button { display: block; margin: -14px auto 18px; padding: 7px 12px; border: 1px solid var(--overdue-line); border-radius: 9px; background: var(--overdue-surface); color: var(--overdue-text); cursor: pointer; }
+.overdue-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; color: var(--overdue-muted); font-size: 9px; }
+.overdue-pagination > div { display: flex; align-items: center; gap: 7px; }
+.overdue-pagination button, .overdue-pagination strong { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--overdue-line); border-radius: 9px; background: var(--overdue-surface); color: var(--overdue-text); }
+.overdue-pagination strong { border-color: #111827; background: #111827; color: #fff; }
+.overdue-pagination button:not(:disabled) { cursor: pointer; }
+.overdue-pagination button:disabled { opacity: .45; }
 
 @media (max-width: 1100px) {
-    .overdue-filters {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+    .overdue-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .overdue-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 700px) {
-    .overdue-heading {
-        align-items: start;
-        flex-direction: column;
-    }
-
-    .overdue-actions {
-        justify-content: flex-start;
-    }
-
-    .overdue-summary,
-    .overdue-filters {
-        grid-template-columns: 1fr;
-    }
-
-    .overdue-table-heading {
-        flex-direction: column;
-    }
+    .overdue-heading { align-items: start; flex-direction: column; }
+    .overdue-actions { justify-content: flex-start; }
+    .overdue-summary, .overdue-filters { grid-template-columns: 1fr; }
 }

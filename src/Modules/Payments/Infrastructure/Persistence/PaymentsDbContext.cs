@@ -12,6 +12,7 @@ public class PaymentsDbContext : DbContext
 
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentStatusHistory> PaymentStatusHistory => Set<PaymentStatusHistory>();
+    public DbSet<PaymentOperation> PaymentOperations => Set<PaymentOperation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
