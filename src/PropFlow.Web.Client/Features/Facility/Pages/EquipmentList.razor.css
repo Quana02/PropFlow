@@ -13,10 +13,12 @@
 .fe04-toolbar input { min-height:2.5rem; font-size:.72rem; }
 .fe04-toolbar ::deep .pf-select__trigger { min-height:2.5rem; padding:.5rem .7rem; border-radius:.7rem; font-size:.72rem; }
 .fe04-panel { min-height:19rem; }
-.fe04-table-scroll { position:relative; transition:padding-bottom .18s ease; }
+.fe04-table-scroll { position:relative; isolation:isolate; transition:padding-bottom .18s ease; }
 .fe04-table-scroll.status-menu-open { padding-bottom:15rem; }
-.status-dropdown-container { z-index:2; }
-.status-dropdown-menu { z-index:60; }
+.fe04-table-scroll .status-dropdown-row-open { position:relative; z-index:10; }
+.status-dropdown-container { position:relative; z-index:1; }
+.status-dropdown-container.is-open { z-index:20; }
+.status-dropdown-menu { z-index:30; }
 .fe04-empty { min-height:14rem; padding:2rem; text-align:center; }
 .fe04-empty .material-symbols-outlined { font-size:2.5rem; }
 .fe04-empty h5 { font-size:.9rem; }

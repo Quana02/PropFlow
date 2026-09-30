@@ -1,0 +1,29 @@
+.pf-date-range { position:relative; width:100%; color:var(--admin-text,#17243a); }
+.pf-date-range__trigger { display:flex; align-items:center; gap:.5rem; width:100%; min-height:2.65rem; padding:.62rem .75rem; border:1px solid var(--admin-line,#d7e2eb); border-radius:.75rem; background:#fff; color:inherit; font:inherit; font-size:.82rem; text-align:left; cursor:pointer; }
+.pf-date-range__trigger:hover { border-color:#38bdf8; }
+.pf-date-range__trigger:focus-visible,.is-open .pf-date-range__trigger { border-color:#0284c7; outline:0; box-shadow:0 0 0 3px rgba(2,132,199,.15); }
+.pf-date-range__value { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pf-date-range__trigger .is-placeholder { color:var(--admin-muted,#64748b); }
+.pf-date-range__trigger .material-symbols-outlined { color:var(--admin-muted,#64748b); font-size:1.1rem; }
+.pf-date-range__calendar-icon { color:#0284c7 !important; }
+.pf-date-range__chevron { transition:transform .18s ease; }
+.is-open .pf-date-range__chevron { transform:rotate(180deg); }
+.pf-date-range__calendar { position:fixed; z-index:1250; inset:auto; top:var(--pf-date-range-top); left:var(--pf-date-range-left); width:min(18rem,calc(100vw - 1rem)); margin:0; padding:.7rem; border:1px solid var(--admin-line,#d7e2eb); border-radius:.85rem; background:#fff; color:#17243a; box-shadow:0 1rem 2.5rem rgba(15,23,42,.2); }
+.pf-date-range__calendar::backdrop { background:transparent; }
+.pf-date-range__calendar header,.pf-date-range__calendar footer { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+.pf-date-range__calendar header { padding-bottom:.25rem; }
+.pf-date-range__calendar header strong { font-size:.78rem; }
+.pf-date-range__calendar button { border:0; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.pf-date-range__calendar header button { display:grid; place-items:center; width:2rem; height:2rem; border-radius:.55rem; color:#0284c7; }
+.pf-date-range__calendar header button:hover,.pf-date-range__calendar footer button:hover { background:rgba(2,132,199,.1); }
+.pf-date-range__hint { margin:.1rem 0 .35rem; color:var(--admin-muted,#64748b); font-size:.64rem; }
+.pf-date-range__weekdays,.pf-date-range__days { display:grid; grid-template-columns:repeat(7,1fr); gap:.2rem; }
+.pf-date-range__weekdays span { padding:.35rem 0; color:var(--admin-muted,#64748b); font-size:.62rem; font-weight:750; text-align:center; }
+.pf-date-range__days button { aspect-ratio:1; border-radius:.5rem; font-size:.7rem; }
+.pf-date-range__days button:hover { background:rgba(2,132,199,.1); color:#0275b8; }
+.pf-date-range__days button.is-outside { color:#a8b4c4; }
+.pf-date-range__days button.is-today { outline:1px solid rgba(2,132,199,.45); color:#0275b8; font-weight:750; }
+.pf-date-range__days button.is-between { border-radius:.15rem; background:rgba(2,132,199,.12); }
+.pf-date-range__days button.is-start,.pf-date-range__days button.is-end { background:#0284c7; color:#fff; font-weight:800; outline:0; }
+.pf-date-range__calendar footer { margin-top:.55rem; padding-top:.55rem; border-top:1px solid var(--admin-line,#d7e2eb); }
+.pf-date-range__calendar footer button { padding:.35rem .5rem; border-radius:.45rem; color:#0275b8; font-size:.68rem; font-weight:700; }
