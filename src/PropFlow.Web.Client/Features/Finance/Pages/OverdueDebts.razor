@@ -1,99 +1,85 @@
 @page "/finance/payments/overdue"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
-@using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "ACCOUNTANT")]
+@using PropFlow.Web.Client.Features.Finance.Models
+@using PropFlow.Web.Client.Features.Finance.Services
+@inject IFinanceApiClient Finance
 
 <PageTitle>Xử lý nợ quá hạn — PropFlow</PageTitle>
 
 <div class="overdue-page">
     <header class="overdue-heading">
         <div>
-            <nav class="overdue-breadcrumb" aria-label="Đường dẫn trang">
-                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
-                <span aria-hidden="true">›</span>
-                <span aria-current="page">Công nợ quá hạn</span>
-            </nav>
-            <h1>Xử lý nợ quá hạn</h1>
-            <p>Theo dõi hóa đơn còn dư nợ sau ngày đến hạn trong phạm vi được cấp quyền.</p>
+            <nav class="overdue-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Công nợ quá hạn</span></nav>
+            <div class="title-row"><h1>Xử lý nợ quá hạn</h1><span class="overdue-badge">Quá hạn &gt; 30 ngày</span></div>
+            <p>Theo dõi hồ sơ công nợ tồn đọng, thời gian quá hạn và số tiền cần xử lý.</p>
         </div>
         <div class="overdue-actions">
-            <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ nợ"><button type="button" disabled>Xuất sổ nợ (Excel)</button></span>
-            <span title="Chưa khả dụng — chờ xác nhận nghiệp vụ và API gửi nhắc nợ"><button type="button" disabled>Gửi nhắc nợ</button></span>
+            <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ nợ"><button type="button" disabled><span class="material-symbols-outlined">download</span> Xuất sổ nợ (Excel)</button></span>
+            <span title="Chưa khả dụng: chưa có tích hợp ZNS hoặc quy trình gửi nhắc nợ"><button type="button" disabled><span class="material-symbols-outlined">warning</span> Kích hoạt ZNS / Gửi nhắc nhở (@ApartmentCount căn)</button></span>
         </div>
     </header>
 
-    <section class="overdue-summary" aria-label="Tổng quan nợ quá hạn">
-        <article class="overdue-card">
-            <div class="overdue-card-label"><span>SỐ CĂN QUÁ HẠN</span><span class="material-symbols-outlined" aria-hidden="true">apartment</span></div>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Dữ liệu chưa sẵn sàng</small>
-        </article>
-        <article class="overdue-card principal">
-            <div class="overdue-card-label"><span>TỔNG NỢ GỐC QUÁ HẠN</span><span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span></div>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Dữ liệu chưa sẵn sàng</small>
-        </article>
+    <section class="overdue-summary" aria-label="Tổng quan công nợ quá hạn">
+        <article class="overdue-card"><div class="overdue-card-label"><span>SỐ CĂN QUÁ HẠN TRANG HIỆN TẠI</span><span class="material-symbols-outlined">apartment</span></div><strong>@ApartmentCount <small>căn hộ</small></strong><p>Dữ liệu từ các hồ sơ đang hiển thị</p></article>
+        <article class="overdue-card principal"><div class="overdue-card-label"><span>TỔNG NỢ QUÁ HẠN TRANG HIỆN TẠI</span><span class="material-symbols-outlined">paid</span></div><strong>@Money(OutstandingTotal)</strong><p>Tổng dư nợ của các bản ghi đang hiển thị</p></article>
+        <article class="overdue-card interest"><div class="overdue-card-label"><span>LÃI CHẬM NỘP ĐÃ TÍNH</span><span class="material-symbols-outlined">trending_up</span></div><strong>—</strong><p>Chưa có nghiệp vụ tính lãi chậm nộp</p></article>
+        <article class="overdue-card intervention"><div class="overdue-card-label"><span>CAN THIỆP CẤP 3</span><span class="material-symbols-outlined">block</span></div><strong>—</strong><p>Chưa có dữ liệu can thiệp dịch vụ</p></article>
     </section>
 
-    <section class="overdue-content" aria-labelledby="overdue-list-title">
-        <div class="overdue-toolbar">
-            <div class="overdue-filters">
-                <label class="overdue-search" title="Chưa khả dụng: chưa có API tìm kiếm công nợ">
-                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
-                    <span class="visually-hidden">Tìm hóa đơn quá hạn</span>
-                    <input type="search" disabled placeholder="Tìm theo số hóa đơn hoặc mã căn hộ..." />
-                </label>
-                <label class="overdue-field" title="Chưa khả dụng: chưa có API lọc theo ngày đến hạn">
-                    <span>Từ ngày</span><input type="date" disabled />
-                </label>
-                <label class="overdue-field" title="Chưa khả dụng: chưa có API lọc theo ngày đến hạn">
-                    <span>Đến ngày</span><input type="date" disabled />
-                </label>
-                <label class="overdue-field" title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền">
-                    <span>Tòa nhà</span><PropFlowSelect Value="@string.Empty" Options="PropFlowSelectOptions.UnavailableBuilding" Variant="Filter" AriaLabel="Chọn tòa nhà" Disabled="true" />
-                </label>
-            </div>
-            <div class="overdue-range-filters" aria-label="Lọc theo số ngày quá hạn" title="Chưa khả dụng: chưa có API lọc theo số ngày quá hạn">
-                <button type="button" disabled>Tất cả</button>
-                <button type="button" disabled>30–60 ngày</button>
-                <button type="button" disabled>60–90 ngày</button>
-                <button type="button" disabled>Trên 90 ngày</button>
-            </div>
+    <section class="overdue-toolbar" aria-label="Bộ lọc công nợ quá hạn">
+        <div class="overdue-filters">
+            <label class="overdue-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm công nợ</span><input type="search" placeholder="Tìm theo mã hóa đơn..." @bind="search" @bind:event="oninput" @onkeyup="HandleSearchKey" /></label>
+            <button class="overdue-field" type="button" disabled title="Chưa có API lọc kỳ đối soát"><span class="material-symbols-outlined">calendar_month</span>Kỳ đối soát hiện tại<span class="material-symbols-outlined">expand_more</span></button>
+            <button class="overdue-field" type="button" disabled title="Dữ liệu thuộc phạm vi được phân quyền">Tất cả phạm vi<span class="material-symbols-outlined">expand_more</span></button>
         </div>
+        <div class="overdue-range-filters" aria-label="Lọc theo số ngày quá hạn">
+            <button class="@(range == "ALL" ? "active" : null)" type="button" @onclick='() => SetRange("ALL")'>Tất cả công nợ (@(data?.Total ?? 0))</button>
+            <button class="@(range == "30_60" ? "active" : null)" type="button" @onclick='() => SetRange("30_60")'>Quá hạn 30 - 60 ngày (@CountRange(31, 60))</button>
+            <button class="@(range == "60_90" ? "active" : null)" type="button" @onclick='() => SetRange("60_90")'>Quá hạn 61 - 90 ngày (@CountRange(61, 90))</button>
+            <button class="@(range == "OVER_90" ? "active" : null)" type="button" @onclick='() => SetRange("OVER_90")'>Quá hạn nghiêm trọng &gt; 90 ngày (@CountRange(91, int.MaxValue))</button>
+        </div>
+    </section>
 
-        <div class="overdue-table-card">
-            <div class="overdue-table-heading">
-                <div>
-                    <h2 id="overdue-list-title">Hóa đơn có dư nợ quá hạn</h2>
-                    <p>Dư nợ chỉ giảm khi thanh toán được hệ thống xác nhận.</p>
-                </div>
-                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
-            </div>
-            <div class="overdue-table-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th scope="col">Số hóa đơn</th>
-                            <th scope="col">Căn hộ</th>
-                            <th scope="col">Khoản phí tồn đọng</th>
-                            <th scope="col">Nợ gốc</th>
-                            <th scope="col">Ngày đến hạn</th>
-                            <th scope="col">Số ngày quá hạn</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="6">
-                                <div class="overdue-unavailable" role="status">
-                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
-                                    <strong>Danh sách công nợ chưa sẵn sàng</strong>
-                                    <span>Thông tin sẽ hiển thị khi dữ liệu hóa đơn và thanh toán được kết nối.</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <section class="overdue-table-card" aria-labelledby="overdue-list-title">
+        <h2 class="visually-hidden" id="overdue-list-title">Danh sách công nợ quá hạn</h2>
+        <div class="overdue-table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ HỒ SƠ &amp;<br />KỲ NỢ</th><th>CĂN HỘ</th><th>KHOẢN PHÍ TỒN ĐỌNG</th><th>NỢ GỐC</th><th>SỐ NGÀY<br />QUÁ HẠN</th><th>CẤP ĐỘ XỬ LÝ</th><th>THAO TÁC</th></tr></thead><tbody>
+            @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
+            else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
+            else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có công nợ phù hợp" Message="Hãy thay đổi từ khóa hoặc khoảng ngày quá hạn." Icon="inbox" /></td></tr> }
+            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hồ sơ @item.InvoiceNumber" /></td><td><strong>@item.InvoiceNumber</strong><small>Kỳ @Period(item)</small></td><td><strong>Căn hộ @ShortId(item.ApartmentUnitId)</strong><small>Mã căn hộ</small></td><td><strong>Nghĩa vụ kỳ @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>Hạn thanh toán: @Date(item.DueDate)</small></td><td class="debt-cell"><strong>@Money(item.OutstandingAmount)</strong><small>Dư nợ chưa xác nhận thanh toán</small></td><td><span class="days-pill @DaysClass(item.DaysOverdue)">@item.DaysOverdue ngày</span></td><td><span class="level-pill @LevelClass(item.DaysOverdue)">@LevelName(item.DaysOverdue)</span></td><td><button class="process-button @ActionClass(item.DaysOverdue)" type="button" disabled title="Chưa có API quy trình xử lý nợ">Xử lý nợ</button></td></tr> } }
+        </tbody></table></div>
+        @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="overdue-pagination"><span>Hiển thị @FilteredItems.Count bản ghi phù hợp trên trang; tổng cộng @data.Total hồ sơ nợ quá hạn</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
 </div>
+
+@code {
+    private PagedFinanceResult<InvoiceBalance>? data;
+    private bool loading;
+    private string? error;
+    private string search = string.Empty;
+    private string range = "ALL";
+    private int page = 1;
+    private const int PageSize = 20;
+    private IReadOnlyList<InvoiceBalance> FilteredItems => (data?.Items ?? []).Where(MatchesRange).ToArray();
+    private int ApartmentCount => data?.Items.Select(x => x.ApartmentUnitId).Distinct().Count() ?? 0;
+    private decimal OutstandingTotal => data?.Items.Sum(x => x.OutstandingAmount) ?? 0;
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((data?.Total ?? 0) / (double)PageSize));
+    protected override Task OnInitializedAsync() => LoadAsync(1);
+    private async Task LoadAsync(int target) { page = target; loading = true; error = null; var result = await Finance.GetOverdueDebtsAsync(page, search); data = result.Data; if (!result.IsSuccess) error = result.Message; loading = false; }
+    private Task ReloadAsync() => LoadAsync(page);
+    private Task PreviousPage() => LoadAsync(page - 1);
+    private Task NextPage() => LoadAsync(page + 1);
+    private async Task HandleSearchKey(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(1); }
+    private void SetRange(string value) => range = value;
+    private bool MatchesRange(InvoiceBalance item) => range switch { "30_60" => item.DaysOverdue is >= 31 and <= 60, "60_90" => item.DaysOverdue is >= 61 and <= 90, "OVER_90" => item.DaysOverdue > 90, _ => true };
+    private int CountRange(int min, int max) => data?.Items.Count(x => x.DaysOverdue >= min && x.DaysOverdue <= max) ?? 0;
+    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy") ?? "—";
+    private static string Period(InvoiceBalance item) => $"{item.BillingPeriodStart:MM/yyyy} – {item.BillingPeriodEnd:MM/yyyy}";
+    private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
+    private static string LevelName(int days) => days > 90 ? "Quá hạn nghiêm trọng" : days > 60 ? "Ưu tiên nhắc nợ" : "Theo dõi quá hạn";
+    private static string LevelClass(int days) => days > 90 ? "level-critical" : days > 60 ? "level-warning" : "level-normal";
+    private static string DaysClass(int days) => days > 90 ? "days-critical" : days > 60 ? "days-warning" : "days-normal";
+    private static string ActionClass(int days) => days > 90 ? "action-critical" : "action-normal";
+}

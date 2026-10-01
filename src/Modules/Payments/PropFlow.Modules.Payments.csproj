@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Payments.Contracts/PropFlow.Modules.Payments.Contracts.csproj" />
+    <ProjectReference Include="../Billing.Contracts/PropFlow.Modules.Billing.Contracts.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
   </ItemGroup>
 

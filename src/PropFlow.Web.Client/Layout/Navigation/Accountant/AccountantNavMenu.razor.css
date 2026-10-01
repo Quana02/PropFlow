@@ -17,7 +17,6 @@
     z-index: 4;
 }
 
-.rail-logo,
 .app-rail ::deep .rail-link {
     display: grid;
     place-items: center;
@@ -26,13 +25,6 @@
     height: 2.75rem;
     border-radius: 14px;
     text-decoration: none;
-}
-
-.rail-logo {
-    background: linear-gradient(135deg, #047857, #34d399);
-    color: #fff;
-    font: 800 20px 'Space Grotesk', sans-serif;
-    box-shadow: 0 8px 18px rgba(7, 150, 106, 0.23);
 }
 
 .rail-links {
