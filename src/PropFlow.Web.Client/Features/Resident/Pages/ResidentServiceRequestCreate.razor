@@ -1,0 +1,64 @@
+@page "/resident/service-requests/new"
+@attribute [Authorize(Roles = "RESIDENT")]
+@layout PropFlow.Web.Client.Features.Resident.Components.ResidentPortalLayout
+@using PropFlow.Web.Client.Features.Resident.Components
+@using PropFlow.Web.Client.Features.Resident.Models
+
+<PageTitle>Tạo yêu cầu dịch vụ - PropFlow</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <a href="/resident/service-requests" class="back-link">← Yêu cầu của tôi</a>
+        <p class="eyebrow">FE-05.1 · Gửi yêu cầu</p>
+        <h1>Tạo yêu cầu dịch vụ mới</h1>
+        <p>Mô tả rõ vấn đề để Ban quản lý có đủ thông tin tiếp nhận.</p>
+    </div>
+</div>
+
+<div class="create-grid">
+    <section class="form-card" aria-labelledby="create-form-title">
+        <div class="card-heading">
+            <span class="heading-icon" aria-hidden="true">✨</span>
+            <div>
+                <h2 id="create-form-title">Thông tin yêu cầu</h2>
+                <p>Các trường bên dưới phản ánh đúng dữ liệu đã có trong mô hình FE-05.</p>
+            </div>
+        </div>
+
+        <ServiceRequestApiUnavailable />
+
+        <EditForm Model="_form" class="request-form">
+            <DataAnnotationsValidator />
+            <div class="field-group">
+                <label for="request-title">Tiêu đề yêu cầu <span>*</span></label>
+                <InputText id="request-title" @bind-Value="_form.Title" disabled
+                           placeholder="Ví dụ: Rò rỉ nước tại phòng tắm" />
+                <ValidationMessage For="@(() => _form.Title)" />
+            </div>
+            <div class="field-group">
+                <label for="request-description">Mô tả chi tiết <span>*</span></label>
+                <InputTextArea id="request-description" @bind-Value="_form.Description" disabled rows="6"
+                               placeholder="Mô tả hiện tượng, vị trí và thông tin cần thiết..." />
+                <ValidationMessage For="@(() => _form.Description)" />
+            </div>
+            <div class="form-actions">
+                <a href="/resident/service-requests">Hủy bỏ</a>
+                <button type="submit" disabled title="Chưa có API gửi yêu cầu">Gửi yêu cầu tới Ban quản lý</button>
+            </div>
+        </EditForm>
+    </section>
+
+    <aside class="guidance-card" aria-labelledby="guidance-title">
+        <p class="guidance-label">Hướng dẫn</p>
+        <h2 id="guidance-title">Thông tin nào sẽ được gửi?</h2>
+        <ul>
+            <li><span>01</span><div><strong>Tài khoản cư dân</strong><p>Backend phải tự xác định cư dân từ phiên đăng nhập, không nhận ID giả từ trình duyệt.</p></div></li>
+            <li><span>02</span><div><strong>Ngữ cảnh cư trú hợp lệ</strong><p>API cần xác định `ResidentApartmentId` thuộc phạm vi được phép.</p></div></li>
+            <li><span>03</span><div><strong>Tiêu đề và mô tả</strong><p>Hai trường bắt buộc hiện đã có trong mô hình miền FE-05.</p></div></li>
+        </ul>
+    </aside>
+</div>
+
+@code {
+    private readonly SubmitServiceRequestForm _form = new();
+}

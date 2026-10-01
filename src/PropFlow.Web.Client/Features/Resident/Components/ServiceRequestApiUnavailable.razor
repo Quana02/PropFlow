@@ -1,0 +1,18 @@
+<section class="api-state" role="status" aria-labelledby="api-state-title">
+    <div class="api-state-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 4.4 2.7 17.5A2 2 0 0 0 4.4 20h15.2a2 2 0 0 0 1.7-2.5L13.7 4.4a2 2 0 0 0-3.4 0Z" /></svg>
+    </div>
+    <div>
+        <p class="api-state-label">Kết nối nghiệp vụ FE-05</p>
+        <h2 id="api-state-title">Chức năng này chưa thể kết nối với máy chủ</h2>
+        <p>Backend hiện chưa công bố API cho cư dân tạo, tìm kiếm, xem chi tiết và theo dõi lịch sử yêu cầu. PropFlow không hiển thị dữ liệu mẫu hoặc giả lập gửi thành công.</p>
+        @if (ShowBackLink)
+        {
+            <a href="/resident/service-requests">Quay lại yêu cầu của tôi</a>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter] public bool ShowBackLink { get; set; }
+}
