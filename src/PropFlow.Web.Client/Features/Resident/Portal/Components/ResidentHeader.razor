@@ -48,8 +48,8 @@
     </div>
 </header>
 
-<div class="resident-modal" id="profileModal" hidden>
-    <button class="resident-modal-backdrop" type="button" aria-label="Đóng" onclick="window.propFlowResident.closeProfile()"></button>
+<div class="resident-portal-modal" id="profileModal" hidden>
+    <button class="resident-portal-modal-backdrop" type="button" aria-label="Đóng" onclick="window.propFlowResident.closeProfile()"></button>
     <section class="profile-modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
         <header><span><h3 id="profile-modal-title">Cập nhật hồ sơ cư dân</h3><p>@ProfileContext.ApartmentLabel</p></span><button type="button" aria-label="Đóng" onclick="window.propFlowResident.closeProfile()">×</button></header>
         <form onsubmit="event.preventDefault(); window.propFlowResident.closeProfile();">
