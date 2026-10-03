@@ -2,6 +2,10 @@
 bin/
 obj/
 out/
+artifacts/
+**/artifacts/
+.codex-tmp/
+**/.codex-tmp/
 [Bb]in/
 [Oo]bj/
 .vs/

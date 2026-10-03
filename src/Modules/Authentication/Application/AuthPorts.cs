@@ -14,6 +14,8 @@ public interface IAuthStore
     Task<bool> PhoneInUseAsync(string phone, Guid? except, CancellationToken ct);
     Task<ResidentVerification?> VerificationAsync(Guid id, CancellationToken ct);
     Task<List<ResidentVerification>> VerificationsAsync(Guid userId, CancellationToken ct);
+    Task<ResidentVerification?> PendingRegistrationAsync(string username, CancellationToken ct);
+    Task<List<ResidentVerification>> RegistrationAttemptsAsync(string username, string email, CancellationToken ct);
     Task<PasswordResetToken?> RecoveryAsync(Guid id, CancellationToken ct);
     Task<List<PasswordResetToken>> RecoveriesAsync(Guid userId, CancellationToken ct);
     Task<RefreshToken?> RefreshAsync(string hash, CancellationToken ct);
@@ -30,11 +32,16 @@ public interface IAuthSecrets
 {
     string HashPassword(UserAccount user, string password);
     bool VerifyPassword(UserAccount? user, string password);
+    string HashRegistrationPassword(string username, string password);
+    bool VerifyRegistrationPassword(string username, string? passwordHash, string password);
     string NewToken();
     string NewOtp();
     string HashToken(string value);
     string HashOtp(string code);
     bool MatchesOtp(string code, string hash);
+    string BindOtp(string code, string binding);
+    bool IsOtpBoundTo(string hash, string binding);
+    bool MatchesBoundOtp(string code, string hash, string binding);
     SessionResponse Issue(AccountResponse user, DateTimeOffset now);
 }
 public interface IAuthEmail { Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct); }

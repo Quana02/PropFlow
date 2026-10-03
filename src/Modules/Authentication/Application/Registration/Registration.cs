@@ -1,29 +1,43 @@
 using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Modules.Authentication.Domain.Users;
 using PropFlow.Modules.Authentication.Domain.ResidentVerifications;
+using PropFlow.Modules.Residents.Contracts;
 
 namespace PropFlow.Modules.Authentication.Application;
 
 public sealed partial class AuthUseCases
 {
+    private const string RegistrationMismatch = "Thông tin cư dân không khớp hoặc chưa đủ điều kiện đăng ký tài khoản.";
+
     // FE-01.1: Registration never creates or modifies residency records.
     public async Task<ChallengeResponse> RegisterAsync(RegisterRequest request, CancellationToken ct)
     {
         Password(request.Password);
-        var normalizedEmail = NormalizeEmail(request.Email);
-        var result = await store.SerializedAsync("registration:" + normalizedEmail, async () =>
+        var normalizedEmail = ResidentRegistrationNormalization.Email(request.Email);
+        var accountEmail = NormalizeEmail(request.Email);
+        var normalizedPhone = ResidentRegistrationNormalization.Phone(request.PhoneNumber!);
+        var identityType = ResidentRegistrationNormalization.IdentityType(request.IdentityType!);
+        var normalizedIdentityNumber = ResidentRegistrationNormalization.IdentityNumber(request.IdentityNumber!);
+        var candidate = await residents.FindRegistrationCandidateAsync(
+            normalizedEmail, normalizedPhone, identityType, normalizedIdentityNumber, Today, ct);
+        if (candidate is null)
+            return new(Guid.Empty, Now.AddMinutes(policy.OtpMinutes), Now.AddSeconds(policy.ResendSeconds), RegistrationMismatch);
+        var username = request.Username.Trim();
+        var result = await store.SerializedAsync("registration", async () =>
         {
-            if (await store.UsernameAsync(request.Username.Trim(), ct) != null)
+            if (await store.UsernameAsync(username, ct) != null)
                 throw new AuthFailure(409, "username_conflict", "Tên đăng nhập đã được sử dụng.");
-            if (await store.EmailAsync(normalizedEmail, ct) != null)
+            if (await store.EmailAsync(accountEmail, ct) != null)
                 throw new AuthFailure(409, "email_conflict", "Email đã được sử dụng.");
-            if (Phone(request.PhoneNumber) is { } phone && await store.PhoneInUseAsync(phone, null, ct))
-                throw new AuthFailure(409, "phone_conflict", "Số điện thoại đã được sử dụng.");
-            var user = new UserAccount(request.Username, "pending", request.DisplayName, Now, normalizedEmail, Phone(request.PhoneNumber));
-            user.ChangePasswordHash(secrets.HashPassword(user, request.Password), null, Now);
-            store.Add(user);
-            await store.SaveAsync(ct);
-            return await CreateRegistrationChallengeAsync(user, ct);
+            var previous = await store.RegistrationAttemptsAsync(username, accountEmail, ct);
+            foreach (var expired in previous.Where(x => x.Status == VerificationStatus.PENDING && x.IsExpiredAt(Now)))
+                expired.Expire(Now);
+            if (previous.Any(x => x.Status == VerificationStatus.PENDING && x.RegistrationUsername == username))
+                throw new AuthFailure(409, "username_conflict", "Tên đăng nhập đã được sử dụng.");
+            if (previous.Any(x => x.Status == VerificationStatus.PENDING && x.RegistrationEmail == accountEmail))
+                throw new AuthFailure(409, "email_conflict", "Email đã được sử dụng.");
+            var passwordHash = secrets.HashRegistrationPassword(username, request.Password);
+            return CreateRegistrationChallenge(username, request.DisplayName, accountEmail, passwordHash, candidate, previous);
         }, ct);
         await DeliverAsync(result, false, ct);
         return result.Response;
@@ -31,18 +45,22 @@ public sealed partial class AuthUseCases
 
     public async Task<ChallengeResponse> ResumeRegistrationAsync(ResumeRegistrationRequest request, CancellationToken ct)
     {
-        var candidate = await store.UsernameAsync(request.Username.Trim(), ct);
-        if (candidate == null) { secrets.VerifyPassword(null, request.Password); throw InvalidCredentials(); }
-        var result = await store.SerializedAsync("user:" + candidate.Id, async () =>
+        var username = request.Username.Trim();
+        var initial = await store.PendingRegistrationAsync(username, ct);
+        if (initial == null) { secrets.VerifyRegistrationPassword(username, null, request.Password); throw InvalidCredentials(); }
+        var result = await store.SerializedAsync("registration", async () =>
         {
-            var user = (await store.UserAsync(candidate.Id, ct))!;
-            var valid = secrets.VerifyPassword(user, request.Password);
-            if (!valid || user.Status != AccountStatus.PENDING || user.IsLockedOutAt(Now))
-            {
-                if (!valid && !user.IsLockedOutAt(Now)) user.RecordLoginFailure(policy.LockoutFailures, TimeSpan.FromMinutes(policy.LockoutMinutes), Now);
-                return null;
-            }
-            return await CreateRegistrationChallengeAsync(user, ct);
+            var current = await store.PendingRegistrationAsync(username, ct);
+            if (current == null || current.IsExpiredAt(Now)
+                || !secrets.VerifyRegistrationPassword(username, current.RegistrationPasswordHash, request.Password)) return null;
+            var candidate = await residents.RevalidateRegistrationCandidateAsync(
+                current.ResidentId, Today, ct);
+            if (candidate is null) return null;
+            var existing = await store.RegistrationAttemptsAsync(username, current.RegistrationEmail!, ct);
+            var next = CreateRegistrationChallenge(username, current.RegistrationDisplayName!, current.RegistrationEmail!,
+                current.RegistrationPasswordHash!, candidate, existing);
+            current.Cancel(Now);
+            return next;
         }, ct);
         if (result == null) throw InvalidCredentials();
         await DeliverAsync(result, false, ct);
@@ -55,19 +73,21 @@ public sealed partial class AuthUseCases
         if (result.Address != null && result.Code != null)
             await email.SendCodeAsync(result.Address, result.Code, recovery, policy.OtpMinutes, ct);
     }
-    private async Task<OutgoingChallenge> CreateRegistrationChallengeAsync(UserAccount user, CancellationToken ct)
+    private OutgoingChallenge CreateRegistrationChallenge(
+        string username,
+        string displayName,
+        string accountEmail,
+        string passwordHash,
+        RegistrationResidentCandidate eligible,
+        IReadOnlyCollection<ResidentVerification> existing)
     {
-        var existing = await store.VerificationsAsync(user.Id, ct);
         CheckSendRate(existing.Select(x => x.CreatedAt));
-        var eligible = await residents.FindEligibleAsync(user.Email!, Today, ct);
         var expires = Now.AddMinutes(policy.OtpMinutes);
-        if (eligible == null)
-            return new(new(Guid.Empty, expires, Now.AddSeconds(policy.ResendSeconds), "Tài khoản đang chờ xác minh thông tin cư dân. Vui lòng liên hệ ban quản lý và tiếp tục xác minh sau khi hồ sơ được cập nhật."), null, null);
-        foreach (var old in existing.Where(x => x.Status == VerificationStatus.PENDING)) old.Cancel(Now);
         var code = secrets.NewOtp();
-        var challenge = new ResidentVerification(user.Id, eligible.Id, secrets.HashOtp(code), expires, Now, eligible.ApartmentUnitId);
+        var challenge = new ResidentVerification(eligible.Id, username, displayName, accountEmail, passwordHash,
+            secrets.BindOtp(code, CandidateBinding(eligible)), expires, Now, eligible.ApartmentUnitId);
         store.Add(challenge);
-        return new(new(challenge.Id, expires, Now.AddSeconds(policy.ResendSeconds), "Vui lòng kiểm tra email để xác minh tài khoản cư dân."), user.Email, code);
+        return new(new(challenge.Id, expires, Now.AddSeconds(policy.ResendSeconds), "Vui lòng kiểm tra email để xác minh tài khoản cư dân."), accountEmail, code);
     }
 
     // FE-01.3: Eligibility is rechecked at activation, under the account transaction.
@@ -75,23 +95,35 @@ public sealed partial class AuthUseCases
     {
         var candidate = await store.VerificationAsync(request.ChallengeId, ct);
         if (candidate == null) throw InvalidChallenge();
-        var success = await store.SerializedAsync("user:" + candidate.UserId, async () =>
+        var success = await store.SerializedAsync("registration", async () =>
         {
             var challenge = (await store.VerificationAsync(request.ChallengeId, ct))!;
-            var user = (await store.UserAsync(challenge.UserId, ct))!;
-            if (challenge.Status != VerificationStatus.PENDING || user.Status != AccountStatus.PENDING) return false;
+            if (challenge.Status != VerificationStatus.PENDING || challenge.RegistrationUsername == null
+                || challenge.RegistrationDisplayName == null || challenge.RegistrationEmail == null
+                || challenge.RegistrationPasswordHash == null) return false;
             if (challenge.IsExpiredAt(Now)) { challenge.Expire(Now); return false; }
             if (challenge.AttemptCount >= policy.OtpAttempts) return false;
-            if (!secrets.MatchesOtp(request.Code, challenge.VerificationCodeHash))
+            var eligible = await residents.RevalidateRegistrationCandidateAsync(challenge.ResidentId, Today, ct);
+            if (eligible is null || !secrets.IsOtpBoundTo(challenge.VerificationCodeHash, CandidateBinding(eligible)))
+                throw new AuthFailure(409, "eligibility_changed", RegistrationMismatch);
+            if (!secrets.MatchesBoundOtp(request.Code, challenge.VerificationCodeHash, CandidateBinding(eligible)))
             {
                 challenge.RecordFailedAttempt(Now);
                 if (challenge.AttemptCount >= policy.OtpAttempts) challenge.Cancel(Now);
                 return false;
             }
-            if (!await residents.LinkEligibleAsync(challenge.ResidentId, user.Id, user.Email!, Today, Now, ct))
-                throw new AuthFailure(409, "eligibility_changed", "Không thể liên kết hồ sơ cư dân. Vui lòng liên hệ ban quản lý.");
+            if (await store.UsernameAsync(challenge.RegistrationUsername, ct) != null)
+                throw new AuthFailure(409, "username_conflict", "Tên đăng nhập đã được sử dụng.");
+            if (await store.EmailAsync(challenge.RegistrationEmail, ct) != null)
+                throw new AuthFailure(409, "email_conflict", "Email đã được sử dụng.");
+            var user = new UserAccount(challenge.RegistrationUsername, challenge.RegistrationPasswordHash,
+                challenge.RegistrationDisplayName, Now, challenge.RegistrationEmail);
+            store.Add(user);
+            await store.SaveAsync(ct);
+            if (!await residents.LinkEligibleAsync(eligible, user.Id, Today, Now, ct))
+                throw new AuthFailure(409, "eligibility_changed", RegistrationMismatch);
             await access.GrantResidentAsync(user.Id, Now, ct);
-            challenge.Verify(Now);
+            challenge.CompleteRegistration(user.Id, Now);
             user.MarkEmailVerified(Now);
             user.Activate(null, Now);
             return true;

@@ -371,7 +371,7 @@ Authentication sở hữu identity, credential, password hash, refresh token, x�
 
 Administration có thể gọi Authentication contract để tạo identity rồi gán quyền. Authentication lấy access claims qua abstraction/projection không tạo circular dependency. Không truy vấn trực tiếp bảng nội bộ của Administration hoặc sao chép logic role assignment.
 
-**Ownership tạo tài khoản cư dân — ĐÃ CHỐT:** Authentication sở hữu self-registration của Resident theo FE-01; Residents (FE-02) sở hữu Resident record và Resident–Apartment relationship, đồng thời cung cấp contract kiểm tra eligibility/liên kết hồ sơ hợp lệ. Administration chỉ provisioning tài khoản nội bộ và role/permission/access assignment. Resident không được tự tạo Resident record, tự claim Apartment hoặc tự tạo/chỉnh quan hệ cư trú để hoàn tất đăng ký.
+**Eligibility tạo tài khoản cư dân — ĐÃ CHỐT:** Authentication sở hữu self-registration của Resident theo FE-01. Request bắt buộc email, phone, IdentityType và IdentityNumber; cả bốn giá trị normalized phải khớp cùng một Resident. Email trim/lowercase; phone dùng canonical FE-02; IdentityType chỉ `CCCD`/`CMND`; IdentityNumber digits-only (`CCCD` 12 số, `CMND` 9 hoặc 12 số). Phone bắt buộc nhưng không phải unique Resident key và không được dùng độc lập để identify Resident. Eligibility yêu cầu đúng một Resident `ACTIVE`, `UserId == null` và có active residency (FE-02) hoặc current ownership (FE-03); historical-only relationship không đủ. `OWNER_ONLY`, `RESIDENT_ONLY` và `OWNER_AND_RESIDENT` đều có thể đăng ký nếu quan hệ hiện hành tương ứng tồn tại. Mismatch public trả generic message và không tạo account/OTP. OTP bind đúng Resident fingerprint; trước activation phải revalidate Resident tồn tại, `ACTIVE`, chưa link, còn qualifying relationship và fingerprint còn khớp. Authentication chỉ dùng `Residents.Contracts`, không truy cập `ResidentsDbContext`, `ApartmentsDbContext` hoặc entity hạ tầng. Residents sở hữu Resident/Residency và có thể đọc ownership qua Apartments public Contracts. Administration chỉ provisioning tài khoản nội bộ và role/permission/access assignment. Resident không được tự tạo Resident record, tự claim Apartment hoặc tự tạo/chỉnh quan hệ cư trú/quyền sở hữu để hoàn tất đăng ký. Ownership eligibility không tạo residency và không cấp quyền occupant/household.
 
 **Chi tiết bảo mật — phần BẮT BUỘC TUYỆT ĐỐI (không tự thay đổi, không cần chờ đặc tả):**
 - **Password hashing:** với ASP.NET Core, mặc định ưu tiên `Microsoft.AspNetCore.Identity.PasswordHasher<TUser>` hoặc `IPasswordHasher<TUser>` tương đương đã được framework hỗ trợ, vì có format marker/versioning và hỗ trợ nâng cấp hash khi policy thay đổi. Argon2id/bcrypt chỉ dùng khi ADR yêu cầu thư viện ngoài và đã đánh giá dependency/operational cost. **Không tự triển khai hashing/KDF, không dùng MD5/SHA1/SHA256 trần**, không lưu plaintext dưới bất kỳ hình thức nào (kể cả log, cache, tạm thời).
@@ -401,7 +401,7 @@ Administration có thể gọi Authentication contract để tạo identity rồ
 Mọi protected operation phải kiểm tra Authentication → Role/Permission → Resource Ownership/Assignment → Business Rules. JWT và role không chứng minh quyền sở hữu tài nguyên.
 
 **Scope model:**
-- **Resident:** `Authenticated UserId` → Account–Resident linkage → `ResidentId` → Resident–Apartment relationship hợp lệ → `ApartmentId`. Backend **không được giả định `UserId == ResidentId`**, kể cả khi hiện tại cùng dùng kiểu UUID/GUID.
+- **Resident:** `Authenticated UserId` → Account–Resident linkage → `ResidentId`. Self profile được resolve trực tiếp từ linkage này. Với operation theo căn hộ, backend phải kiểm tra đúng loại quan hệ mà use case yêu cầu (ví dụ active residency cho occupant/household, current ownership khi đặc tả cho phép owner); quan hệ dùng để đủ điều kiện đăng ký không tự trở thành authorization scope chung. Backend **không được giả định `UserId == ResidentId`**, kể cả khi hiện tại cùng dùng kiểu UUID/GUID.
 - **Staff / Accountant / Manager:** mỗi use case phải kiểm tra permission và assignment/ownership nghiệp vụ cụ thể; không dùng Building assignment.
 - **Admin:** có administrative scope nhưng **không mặc định là business superuser** và không mặc định được đọc toàn bộ dữ liệu cư dân/tài chính/vận hành.
 
@@ -409,6 +409,10 @@ PropertyAssets vẫn sở hữu hồ sơ Building singleton. Không tin ID, role
 
 ## 11. Quy tắc nghiệp vụ
 FE-01 sở hữu identity, đăng nhập, phiên làm việc và bảo mật tài khoản (không chứa role/permission — thuộc FE-15). FE-02 sở hữu hồ sơ cư dân và quan hệ cư dân–căn hộ, bảo toàn lịch sử. FE-03 sở hữu căn hộ; FE-04 sở hữu tòa nhà, cơ sở vật chất và thiết bị. Không sao chép master data.
+
+FE-03 lifecycle invariant: Apartment chỉ được INACTIVE khi không có active residency và không có current ownership (`ApartmentOwnership.EndDate == null`). Apartment INACTIVE không được nhận current ownership mới. Ownership vẫn độc lập với occupancy: owner-only không làm apartment thành occupied, nhưng vẫn bắt buộc apartment duy trì ACTIVE.
+
+FE-02 residency invariant: một Resident có thể có `0..N` active residencies ở các Apartment khác nhau; cùng Resident + Apartment không được overlap active. Add Residency không end quan hệ cũ; Move Residency phải end source + create target trong transaction nguyên tử. `HouseholdRole` độc lập `ResidencyType`; member không bắt buộc cùng ResidencyType với head.
 
 FE-05 sở hữu vòng đời Service Request; Manager assign/reassign và đóng cuối cùng, Staff cập nhật công việc được giao. FE-06 sở hữu Complaint riêng; Manager phản hồi chính thức và đóng, Staff chỉ follow-up. FE-07 sở hữu lịch, task, kết quả và lịch sử bảo trì; không biến Service Request thành Maintenance Task.
 

@@ -23,15 +23,20 @@ public class ResidentApartmentConfiguration : IEntityTypeConfiguration<ResidentA
             .HasColumnName("apartment_unit_id")
             .IsRequired();
 
-        builder.Property(ra => ra.RelationshipTypeCode)
-            .HasColumnName("relationship_type_code")
-            .HasMaxLength(50)
+        builder.Property(ra => ra.HouseholdRole)
+            .HasColumnName("household_role")
+            .HasConversion<string>()
+            .HasMaxLength(30)
             .IsRequired();
 
-        builder.Property(ra => ra.IsPrimary)
-            .HasColumnName("is_primary")
-            .HasDefaultValue(false)
+        builder.Property(ra => ra.ResidencyType)
+            .HasColumnName("residency_type")
+            .HasConversion<string>()
+            .HasMaxLength(30)
             .IsRequired();
+
+        builder.Property(ra => ra.HouseholdHeadResidencyId).HasColumnName("household_head_residency_id");
+        builder.Property(ra => ra.RelationshipToHead).HasColumnName("relationship_to_head").HasConversion<string>().HasMaxLength(30);
 
         builder.Property(ra => ra.StartDate)
             .HasColumnName("start_date")
@@ -75,11 +80,18 @@ public class ResidentApartmentConfiguration : IEntityTypeConfiguration<ResidentA
         builder.HasIndex(ra => ra.ResidentId);
         builder.HasIndex(ra => ra.ApartmentUnitId);
         builder.HasIndex(ra => ra.Status);
+        builder.HasIndex(ra => new { ra.ApartmentUnitId, ra.HouseholdRole, ra.Status });
+        builder.HasIndex(ra => ra.HouseholdHeadResidencyId);
 
         // Within-module relationship
         builder.HasOne(ra => ra.Resident)
             .WithMany(r => r.ResidentApartments)
             .HasForeignKey(ra => ra.ResidentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(ra => ra.HouseholdHeadResidency)
+            .WithMany()
+            .HasForeignKey(ra => ra.HouseholdHeadResidencyId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

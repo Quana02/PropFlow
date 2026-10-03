@@ -22,7 +22,11 @@ All paths below are relative to `/api/v1/auth`. Request/response DTOs live in `A
 | GET me | None | 200 AccountResponse | Bearer; current account only |
 | PUT me | UpdateProfileRequest | 200 AccountResponse | Bearer; current account only |
 
-`ChallengeId == Guid.Empty` on registration means pending eligibility; no OTP was issued. Recovery uses an opaque nonempty challenge even for unknown/ineligible accounts. Registration success does not authenticate. Activation links the existing Resident, assigns RESIDENT through Administration, verifies email, and activates the account in one database transaction. The client cannot supply resident/apartment IDs or privileged roles.
+`RegisterRequest` requires username, display name, email, password, phone number, identity type and identity number. Resident matching uses exactly four normalized values on the same Resident row: email (`trim + lowercase`), phone (canonical FE-02 representation), identity type (`CCCD` or `CMND`) and digits-only identity number (`CCCD`: 12 digits; `CMND`: 9 or 12 digits). Phone is required but is not a globally unique Resident identifier and is never used as a standalone lookup key.
+
+`ChallengeId == Guid.Empty` means the generic registration mismatch response and no account or OTP was created. Eligibility requires exactly one matching Resident that is `ACTIVE`, has `UserId == null`, and has either an active residency or a current ownership. This admits `OWNER_ONLY`, `RESIDENT_ONLY` and `OWNER_AND_RESIDENT`; historical residency/ownership alone does not qualify. Public mismatch never reveals which field failed, whether the Resident exists, whether an account is already linked, or whether the Resident is inactive.
+
+The email OTP challenge is bound to the matched Resident fingerprint. Activation revalidates Resident existence, `ACTIVE` status, unlinked state, a qualifying current relationship, and the same registration fingerprint before linking. Registration success does not authenticate. Activation links the existing Resident, assigns RESIDENT through Administration, verifies email, and activates the account in one database transaction. The client cannot supply resident/apartment IDs or privileged roles.
 
 400 = invalid input/challenge/proof/CSRF; 401 = invalid credentials/session or a bearer token whose account, role or effective permissions are no longer current; 403 = an authenticated/current identity lacking permission for an operation, or an account that cannot receive an access grant during login/refresh; 409 = uniqueness/eligibility conflict; 429 = rate/resend limit; 500 = safe generic error. An absent route returns 404. Client distinguishes network and timeout failures from HTTP failures.
 
@@ -77,7 +81,7 @@ On an empty database, apply initial migrations in dependency order:
 
 The new cross-schema FKs are migration SQL and scalar IDs only, without cross-module EF navigations. The resident/apartment ACTIVE date-range exclusion constraint is also migration SQL. Do not expect EF model snapshots alone to recreate these raw SQL constraints. The auth reset-proof columns/self-audit FKs are represented in the generated snapshot.
 
-Real eligible Resident records and current ResidentApartment rows must be managed through FE-02; FE-01 never creates them for onboarding. No bootstrap user/password or privileged self-registration is supplied.
+Real eligible Resident records and active `ResidentApartment` rows are managed through FE-02; current ownership is managed through FE-03. FE-01 consumes the Residents public onboarding contract only; Residents may compose qualifying ownership through the Apartments public relationship contract. Authentication does not access `ResidentsDbContext`, `ApartmentsDbContext`, or cross-module entities. FE-01 never creates, converts, or changes either relationship during registration. A deterministic qualifying Apartment ID may be stored as verification audit context, but it is not account authorization scope. No bootstrap user/password or privileged self-registration is supplied.
 
 ## Operations and known verification limits
 

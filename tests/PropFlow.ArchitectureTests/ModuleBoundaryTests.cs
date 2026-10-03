@@ -391,7 +391,9 @@ public class ModuleBoundaryTests
             "../Modules/Complaints/PropFlow.Modules.Complaints.csproj",
             "../Modules/Maintenance/PropFlow.Modules.Maintenance.csproj",
             "../Modules/Billing/PropFlow.Modules.Billing.csproj",
+            "../Modules/Billing.Contracts/PropFlow.Modules.Billing.Contracts.csproj",
             "../Modules/Payments/PropFlow.Modules.Payments.csproj",
+            "../Modules/Payments.Contracts/PropFlow.Modules.Payments.Contracts.csproj",
             "../Modules/AiClassification/PropFlow.Modules.AiClassification.csproj",
             "../Modules/AiRecommendation/PropFlow.Modules.AiRecommendation.csproj",
             "../Modules/Communication/PropFlow.Modules.Communication.csproj",
@@ -480,7 +482,9 @@ public class ModuleBoundaryTests
 
         foreach (var pr in projectReferences)
         {
-            Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+            Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase)
+                || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
+                $"Business modules may reference public contracts, not another implementation: {pr}");
         }
     }
 
@@ -536,7 +540,9 @@ public class ModuleBoundaryTests
 
         foreach (var pr in projectReferences)
         {
-            Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+            Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase)
+                || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
+                $"Business modules may reference public contracts, not another implementation: {pr}");
         }
     }
 
@@ -592,7 +598,9 @@ public class ModuleBoundaryTests
 
         foreach (var pr in projectReferences)
         {
-            Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+            Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase)
+                || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
+                $"Business modules may reference public contracts, not another implementation: {pr}");
         }
     }
 

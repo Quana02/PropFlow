@@ -12,8 +12,11 @@ public class ApartmentUnit
         string unitNumber,
         int floorNumber,
         DateTimeOffset now,
-        decimal? areaM2 = null,
+        Guid apartmentUnitTypeId,
+        decimal usableAreaM2 = 1,
         int? bedroomCount = null,
+        int? bathroomCount = null,
+        DateOnly? handoverDate = null,
         string? description = null,
         Guid? createdBy = null)
     {
@@ -25,8 +28,17 @@ public class ApartmentUnit
         
         UnitNumber = unitNumber.Trim();
         FloorNumber = floorNumber;
-        AreaM2 = areaM2;
+        if (apartmentUnitTypeId == Guid.Empty) throw new ArgumentException("Apartment unit type is required.", nameof(apartmentUnitTypeId));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(usableAreaM2, 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(floorNumber);
+        if (bedroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bedroomCount));
+        if (bathroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bathroomCount));
+
+        ApartmentUnitTypeId = apartmentUnitTypeId;
+        UsableAreaM2 = usableAreaM2;
         BedroomCount = bedroomCount;
+        BathroomCount = bathroomCount;
+        HandoverDate = handoverDate;
         Description = description?.Trim();
         Status = MasterDataStatus.ACTIVE;
         CreatedBy = createdBy;
@@ -41,8 +53,12 @@ public class ApartmentUnit
 
     public string UnitNumber { get; private set; } = null!;
     public int FloorNumber { get; private set; }
-    public decimal? AreaM2 { get; private set; }
+    public Guid ApartmentUnitTypeId { get; private set; }
+    public ApartmentUnitType ApartmentUnitType { get; private set; } = null!;
+    public decimal UsableAreaM2 { get; private set; }
     public int? BedroomCount { get; private set; }
+    public int? BathroomCount { get; private set; }
+    public DateOnly? HandoverDate { get; private set; }
     public string? Description { get; private set; }
     public MasterDataStatus Status { get; private set; } = MasterDataStatus.ACTIVE;
     public Guid? CreatedBy { get; private set; }
@@ -51,16 +67,31 @@ public class ApartmentUnit
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public void Update(
+        string unitNumber,
         int floorNumber,
-        decimal? areaM2,
+        Guid apartmentUnitTypeId,
+        decimal usableAreaM2,
         int? bedroomCount,
+        int? bathroomCount,
+        DateOnly? handoverDate,
         string? description,
         Guid? updatedBy,
         DateTimeOffset now)
     {
         FloorNumber = floorNumber;
-        AreaM2 = areaM2;
+        ArgumentException.ThrowIfNullOrWhiteSpace(unitNumber);
+        if (apartmentUnitTypeId == Guid.Empty) throw new ArgumentException("Apartment unit type is required.", nameof(apartmentUnitTypeId));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(usableAreaM2, 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(floorNumber);
+        if (bedroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bedroomCount));
+        if (bathroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bathroomCount));
+
+        UnitNumber = unitNumber.Trim();
+        ApartmentUnitTypeId = apartmentUnitTypeId;
+        UsableAreaM2 = usableAreaM2;
         BedroomCount = bedroomCount;
+        BathroomCount = bathroomCount;
+        HandoverDate = handoverDate;
         Description = description?.Trim();
         UpdatedBy = updatedBy;
         UpdatedAt = now;

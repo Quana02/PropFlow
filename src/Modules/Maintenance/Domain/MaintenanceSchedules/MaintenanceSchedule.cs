@@ -99,6 +99,20 @@ public class MaintenanceSchedule
         UpdatedAt = now;
     }
 
+    public void Extend(TimeSpan duration, Guid updatedBy, DateTimeOffset now)
+    {
+        EnsureActive();
+        ThrowIfEmpty(updatedBy, nameof(updatedBy));
+        if (duration <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(duration), "Thời lượng gia hạn phải lớn hơn 0.");
+        if (PlannedEndAt is null)
+            throw new InvalidOperationException("Lịch bảo trì chưa có thời điểm kết thúc để gia hạn.");
+
+        PlannedEndAt = PlannedEndAt.Value.Add(duration);
+        UpdatedBy = updatedBy;
+        UpdatedAt = now;
+    }
+
     private void EnsureActive()
     {
         if (Status != MaintenanceScheduleStatus.ACTIVE)

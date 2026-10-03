@@ -225,6 +225,30 @@ public class AuthenticationTests
     }
 
     [Fact]
+    public void ResidentVerification_RegistrationDraft_DoesNotRequireUser_AndClearsCredentialAtTerminalState()
+    {
+        var verification = new ResidentVerification(
+            Guid.NewGuid(),
+            "resident.pending",
+            "Cư dân chờ OTP",
+            "resident@example.test",
+            "password-hash",
+            "otp-hash",
+            _now.AddMinutes(5),
+            _now);
+
+        Assert.Null(verification.UserId);
+        Assert.Equal("resident.pending", verification.RegistrationUsername);
+        Assert.Equal("RESIDENT@EXAMPLE.TEST", verification.RegistrationEmail);
+        Assert.Equal("password-hash", verification.RegistrationPasswordHash);
+
+        verification.Cancel(_now.AddMinutes(1));
+
+        Assert.Null(verification.RegistrationPasswordHash);
+        Assert.Equal(VerificationStatus.CANCELLED, verification.Status);
+    }
+
+    [Fact]
     public void ResidentVerification_Constructor_ValidatesRequiredFields()
     {
         var userId = Guid.NewGuid();

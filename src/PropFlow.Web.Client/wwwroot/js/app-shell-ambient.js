@@ -1,14 +1,15 @@
+let canvasState = null;
+
 export function initialize(canvas, toggle) {
+    if (canvasState?.canvas === canvas) return canvasState;
+    canvasState?.dispose();
+
     const context = canvas.getContext("2d", { alpha: true });
     if (!context) return { dispose() {} };
 
     const shell = canvas.closest(".app-shell");
     const preferenceKey = "propflow-app-ambient-motion";
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const autonomousSpeedMultiplier = 20;
-    const pointerInteractionMultiplier = 2;
-    const minimumAutonomousSpeed = 2;
-    const maximumAutonomousSpeed = 3;
 
     let savedPreference = null;
     try {
@@ -22,7 +23,6 @@ export function initialize(canvas, toggle) {
     let height = 0;
     let dpr = Math.min(window.devicePixelRatio || 1, 2);
     let frame = 0;
-    let lastFrameTime = 0;
     let disposed = false;
 
     const pointer = {
@@ -88,8 +88,7 @@ export function initialize(canvas, toggle) {
 
             const speed = prefersReducedMotion
                 ? 0.04
-                : minimumAutonomousSpeed
-                    + Math.random() * (maximumAutonomousSpeed - minimumAutonomousSpeed);
+                : Math.random() * 0.8 + 0.2;
             const angle = Math.random() * Math.PI * 2;
 
             this.vx = Math.cos(angle) * speed;
@@ -103,9 +102,9 @@ export function initialize(canvas, toggle) {
             this.colorType = Math.floor(Math.random() * 3);
         }
 
-        update(movementStep, interactionStep) {
+        update() {
             if (!prefersReducedMotion) {
-                this.pulseSeed += this.pulseSpeed * movementStep;
+                this.pulseSeed += this.pulseSpeed;
                 this.alpha = this.baseAlpha + Math.sin(this.pulseSeed) * 0.12;
             }
 
@@ -121,20 +120,19 @@ export function initialize(canvas, toggle) {
 
                     if (distance < 45) {
                         const repel = (1 - distance / 45) * 1.8;
-                        this.fx -= normalX * repel * interactionStep;
-                        this.fy -= normalY * repel * interactionStep;
+                        this.fx -= normalX * repel;
+                        this.fy -= normalY * repel;
                     } else {
-                        this.fx += (normalX * force * 0.35 + -normalY * force * 0.22) * interactionStep;
-                        this.fy += (normalY * force * 0.35 + normalX * force * 0.22) * interactionStep;
+                        this.fx += normalX * force * 0.35 + -normalY * force * 0.22;
+                        this.fy += normalY * force * 0.35 + normalX * force * 0.22;
                     }
                 }
             }
 
-            const damping = Math.pow(0.91, interactionStep);
-            this.fx *= damping;
-            this.fy *= damping;
-            this.x += this.vx * movementStep + this.fx * interactionStep;
-            this.y += this.vy * movementStep + this.fy * interactionStep;
+            this.fx *= 0.91;
+            this.fy *= 0.91;
+            this.x += this.vx + this.fx;
+            this.y += this.vy + this.fy;
 
             if (this.x < -30) this.x = width + 25;
             if (this.x > width + 30) this.x = -25;
@@ -235,14 +233,13 @@ export function initialize(canvas, toggle) {
         drawScene(false);
     }
 
-    function drawScene(updateParticles, movementStep = 1, interactionStep = 1) {
+    function drawScene(updateParticles) {
         context.clearRect(0, 0, width, height);
         const isDark = currentThemeIsDark();
 
         if (updateParticles && pointer.active) {
-            const pointerEase = 1 - Math.pow(0.82, interactionStep);
-            pointer.x += (pointer.targetX - pointer.x) * pointerEase;
-            pointer.y += (pointer.targetY - pointer.y) * pointerEase;
+            pointer.x += (pointer.targetX - pointer.x) * 0.18;
+            pointer.y += (pointer.targetY - pointer.y) * 0.18;
         }
 
         context.lineWidth = 0.8;
@@ -273,22 +270,15 @@ export function initialize(canvas, toggle) {
         }
 
         for (const particle of particles) {
-            if (updateParticles) particle.update(movementStep, interactionStep);
+            if (updateParticles) particle.update();
             particle.draw(isDark);
         }
     }
 
-    function renderScene(now) {
+    function renderScene() {
         if (disposed || !animate || document.hidden) return;
 
-        const frameStep = lastFrameTime
-            ? Math.min((now - lastFrameTime) / 16.67, 2)
-            : 1;
-        lastFrameTime = now;
-        drawScene(
-            true,
-            frameStep * autonomousSpeedMultiplier,
-            frameStep * pointerInteractionMultiplier);
+        drawScene(true);
         frame = requestAnimationFrame(renderScene);
     }
 
@@ -304,7 +294,6 @@ export function initialize(canvas, toggle) {
     function syncAnimation() {
         cancelAnimationFrame(frame);
         frame = 0;
-        lastFrameTime = 0;
         drawScene(false);
         updateToggle();
 
@@ -345,8 +334,10 @@ export function initialize(canvas, toggle) {
     resizeCanvas();
     syncAnimation();
 
-    return {
+    const handle = {
+        canvas,
         dispose() {
+            if (disposed) return;
             disposed = true;
             cancelAnimationFrame(frame);
             themeObserver.disconnect();
@@ -358,6 +349,10 @@ export function initialize(canvas, toggle) {
             document.removeEventListener("mouseleave", onPointerLeave);
             document.removeEventListener("visibilitychange", syncAnimation);
             toggle?.removeEventListener("click", toggleMotion);
+            if (canvasState === handle) canvasState = null;
         }
     };
+
+    canvasState = handle;
+    return handle;
 }

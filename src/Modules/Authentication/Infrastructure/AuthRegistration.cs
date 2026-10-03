@@ -40,8 +40,17 @@ public static class AuthRegistration
         services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly);
         services.Configure<ApiBehaviorOptions>(options => options.InvalidModelStateResponseFactory = context =>
         {
-            var errors = context.ModelState.Where(x => x.Value?.Errors.Count > 0)
-                .ToDictionary(x => x.Key, _ => new[] { "Thông tin không hợp lệ. Vui lòng kiểm tra định dạng và độ dài." });
+            var invalidEntries = context.ModelState.Where(x => x.Value?.Errors.Count > 0).ToArray();
+            var hasJsonPathError = invalidEntries.Any(x => x.Key.StartsWith("$.", StringComparison.Ordinal));
+            var errors = invalidEntries
+                .Where(x => !hasJsonPathError || !string.Equals(x.Key, "request", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(
+                    x => x.Key,
+                    x => hasJsonPathError
+                        ? new[] { "Thông tin không hợp lệ. Vui lòng kiểm tra định dạng và độ dài." }
+                        : x.Value!.Errors.Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage)
+                            ? "Thông tin không hợp lệ. Vui lòng kiểm tra định dạng và độ dài."
+                            : error.ErrorMessage).Distinct().ToArray());
             var problem = new ValidationProblemDetails(errors) { Status = 400, Title = "Vui lòng kiểm tra thông tin đã nhập." };
             problem.Extensions["code"] = "validation_failed";
             problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;

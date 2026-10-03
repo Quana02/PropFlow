@@ -1,13 +1,42 @@
 using System.ComponentModel.DataAnnotations;
+using System.Net.Mail;
 
 namespace PropFlow.Modules.Authentication.Contracts;
 
 public sealed record RegisterRequest(
     [Required, StringLength(50, MinimumLength = 3), RegularExpression(@"[a-zA-Z0-9_.-]+", ErrorMessage = "Tên đăng nhập chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.")] string Username,
     [Required, StringLength(150)] string DisplayName,
-    [Required, EmailAddress, StringLength(255)] string Email,
+    [Required, StringLength(255)] string Email,
     [Required, StringLength(128, MinimumLength = 12)] string Password,
-    [StringLength(20)] string? PhoneNumber);
+    [Required, StringLength(20)] string? PhoneNumber,
+    [Required] string? IdentityType = null,
+    [Required, StringLength(30)] string? IdentityNumber = null) : IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(IdentityType) || string.IsNullOrWhiteSpace(IdentityNumber)) yield break;
+        var type = IdentityType.Trim().ToUpperInvariant();
+        if (type is not ("CCCD" or "CMND"))
+        {
+            yield return new ValidationResult("Loại giấy tờ chỉ được phép là CCCD hoặc CMND.", [nameof(IdentityType)]);
+            yield break;
+        }
+        if (!MailAddress.TryCreate(Email.Trim(), out _))
+            yield return new ValidationResult("Email không hợp lệ.", [nameof(Email)]);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(PhoneNumber!.Trim(), @"^(?:\+84|0)\d{9,10}$"))
+            yield return new ValidationResult("Số điện thoại không đúng định dạng.", [nameof(PhoneNumber)]);
+        if (!System.Text.RegularExpressions.Regex.IsMatch(IdentityNumber.Trim(), @"^[0-9\s./-]+$"))
+        {
+            yield return new ValidationResult("Số giấy tờ chỉ được gồm chữ số và dấu phân cách.", [nameof(IdentityNumber)]);
+            yield break;
+        }
+        var digits = new string(IdentityNumber.Where(character => character is >= '0' and <= '9').ToArray());
+        if (type == "CCCD" && digits.Length != 12)
+            yield return new ValidationResult("Số CCCD phải gồm đúng 12 chữ số.", [nameof(IdentityNumber)]);
+        if (type == "CMND" && digits.Length is not (9 or 12))
+            yield return new ValidationResult("Số CMND phải gồm 9 hoặc 12 chữ số.", [nameof(IdentityNumber)]);
+    }
+}
 public sealed record LoginRequest([Required, StringLength(50)] string Username, [Required, StringLength(128)] string Password);
 public sealed record ResumeRegistrationRequest([Required, StringLength(50)] string Username, [Required, StringLength(128)] string Password);
 public sealed record VerifyChallengeRequest(Guid ChallengeId, [Required, RegularExpression(@"\d{6}")] string Code);

@@ -103,6 +103,17 @@ public class MaintenanceTask
         UpdatedAt = now;
     }
 
+    public void SetAssetContext(Guid? facilityId, Guid? equipmentId, DateTimeOffset now)
+    {
+        EnsureNotTerminal();
+        if (facilityId is null && equipmentId is null)
+            throw new ArgumentException("Phải chọn cơ sở vật chất hoặc thiết bị.");
+
+        FacilityId = facilityId;
+        EquipmentId = equipmentId;
+        UpdatedAt = now;
+    }
+
     public void MarkAssigned(DateTimeOffset now)
     {
         EnsureNotTerminal();
@@ -149,6 +160,17 @@ public class MaintenanceTask
         Status = MaintenanceTaskStatus.CLOSED;
         ClosedBy = closedBy;
         ClosedAt = now;
+        UpdatedAt = now;
+    }
+
+    public void ReopenForFurtherWork(DateTimeOffset now)
+    {
+        if (Status != MaintenanceTaskStatus.COMPLETED)
+            throw new InvalidOperationException("Only completed maintenance tasks can be reopened for further work.");
+        if (CompletedAt is not null && now < CompletedAt)
+            throw new ArgumentException("Reopen time cannot be before completed time.", nameof(now));
+
+        Status = MaintenanceTaskStatus.ASSIGNED;
         UpdatedAt = now;
     }
 

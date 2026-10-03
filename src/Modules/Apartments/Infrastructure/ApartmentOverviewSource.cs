@@ -14,4 +14,10 @@ public sealed class ApartmentOverviewSource(ApartmentsDbContext db) : IApartment
             .Select(unit => unit.Id)
             .ToArrayAsync(ct);
     }
+
+    public async Task<IReadOnlyList<ActiveApartmentOption>> GetActiveApartmentsAsync(CancellationToken ct)
+    {
+        return await db.ApartmentUnits.AsNoTracking().Where(unit => unit.Status == MasterDataStatus.ACTIVE)
+            .OrderBy(unit => unit.UnitNumber).Select(unit => new ActiveApartmentOption(unit.Id, unit.UnitNumber, unit.FloorNumber)).ToArrayAsync(ct);
+    }
 }
