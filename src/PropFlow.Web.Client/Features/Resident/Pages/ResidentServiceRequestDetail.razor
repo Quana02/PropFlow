@@ -1,0 +1,28 @@
+@page "/resident/service-requests/{Id:guid}"
+@attribute [Authorize(Roles = "RESIDENT")]
+@layout PropFlow.Web.Client.Features.Resident.Components.ResidentPortalLayout
+@using PropFlow.Web.Client.Features.Resident.Components
+
+<PageTitle>Chi tiết yêu cầu dịch vụ - PropFlow</PageTitle>
+
+<div class="page-heading">
+    <a href="/resident/service-requests">← Yêu cầu của tôi</a>
+    <p>FE-05.2 · FE-05.3</p>
+    <h1>Chi tiết yêu cầu</h1>
+    <span>Mã tham chiếu: @Id</span>
+</div>
+
+<section class="detail-card">
+    <ServiceRequestApiUnavailable ShowBackLink="true" />
+    <div class="detail-placeholder" aria-hidden="true">
+        <div><span></span><span></span></div>
+        <div><span></span><span></span></div>
+        <div class="timeline-line"><i></i><span></span></div>
+        <div class="timeline-line"><i></i><span></span></div>
+        <div class="timeline-line"><i></i><span></span></div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

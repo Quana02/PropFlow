@@ -1,10 +1,22 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi" class="light">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    <script>
+        (() => {
+            let theme;
+            try { theme = localStorage.getItem('propflow-theme'); } catch { }
+            if (theme !== 'dark' && theme !== 'light') {
+                theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            document.documentElement.classList.toggle('light', theme !== 'dark');
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
     
     <title>PropFlow - Hệ Thống Quản Lý Vận Hành Chung Cư Đẳng Cấp</title>
     
@@ -144,6 +156,7 @@
 
     <!-- FE-04.1 Custom Stitch UI -->
     <link rel="stylesheet" href="css/fe041.css" />
+    <link rel="stylesheet" href="css/resident-portal.css" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script src="js/fe041-tailwind.js"></script>
 

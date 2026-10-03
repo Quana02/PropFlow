@@ -1,0 +1,30 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JSRuntime
+
+<div class="resident-portal">
+    <ResidentBackground />
+
+    <div class="resident-page-frame">
+        <ResidentHeader />
+
+        <main class="resident-main">
+            @Body
+        </main>
+
+        <footer class="resident-footer">
+            <p>© 2026 PropFlow Resident Portal • Hệ thống quản trị và kết nối căn hộ thông minh chuẩn quốc tế.</p>
+        </footer>
+
+        <ResidentNavigation />
+    </div>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("propFlowResident.init");
+        }
+    }
+}

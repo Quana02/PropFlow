@@ -5,7 +5,7 @@
     <div class="dialog-backdrop" role="presentation">
         <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="building-edit-title">
             <header>
-                <div><span>FE-04.1</span><h2 id="building-edit-title">@(IsCreating ? "Thiết lập hồ sơ chung cư" : "Chỉnh sửa thông tin chung cư")</h2><p>@(IsCreating ? "Nhập thông tin chung cư được PropFlow quản lý." : "Cập nhật hồ sơ của chung cư hiện tại.")</p></div>
+                <div><h2 id="building-edit-title">@(IsCreating ? "Thiết lập hồ sơ chung cư" : "Chỉnh sửa thông tin chung cư")</h2><p>@(IsCreating ? "Nhập thông tin chung cư được PropFlow quản lý." : "Cập nhật hồ sơ của chung cư hiện tại.")</p></div>
                 <button class="close-button" type="button" @onclick="Close" disabled="@IsSaving" aria-label="Đóng">×</button>
             </header>
             <EditForm Model="UpdateModel" OnValidSubmit="SubmitAsync">

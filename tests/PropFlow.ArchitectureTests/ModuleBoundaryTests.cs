@@ -480,7 +480,9 @@ public class ModuleBoundaryTests
 
         foreach (var pr in projectReferences)
         {
-            Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+            Assert.NotNull(pr);
+            Assert.True(pr.Contains(".Contracts", StringComparison.OrdinalIgnoreCase),
+                $"Maintenance may only reference owner-module public Contracts: {pr}");
         }
     }
 
