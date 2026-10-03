@@ -47,6 +47,19 @@ public class ResidentsTests
     }
 
     [Fact]
+    public void Resident_canonicalizes_identity_and_email_but_keeps_phone_as_contact_data()
+    {
+        var resident = new Resident("RES-002", "Canonical resident", new DateOnly(1990, 1, 1), null, "VN",
+            " cccd ", "064 204-010.555", null, null, _now, phoneNumber: " 0363602027 ",
+            email: " Resident@Example.TEST ");
+
+        Assert.Equal("CCCD", resident.IdentityType);
+        Assert.Equal("064204010555", resident.IdentityNumber);
+        Assert.Equal("resident@example.test", resident.Email);
+        Assert.Equal("0363602027", resident.PhoneNumber);
+    }
+
+    [Fact]
     public void ResidentApartment_Constructor_ValidatesForeignKeysAndDates()
     {
         var residentId = Guid.NewGuid();
@@ -54,16 +67,16 @@ public class ResidentsTests
         var startDate = new DateOnly(2026, 1, 1);
         var endDate = new DateOnly(2025, 12, 31); // Invalid: before start
 
-        Assert.Throws<ArgumentException>(() => new ResidentApartment(Guid.Empty, unitId, "OWNER", startDate, _now));
-        Assert.Throws<ArgumentException>(() => new ResidentApartment(residentId, Guid.Empty, "OWNER", startDate, _now));
-        Assert.Throws<ArgumentException>(() => new ResidentApartment(residentId, unitId, "OWNER", startDate, _now, endDate: endDate));
+        Assert.Throws<ArgumentException>(() => new ResidentApartment(Guid.Empty, unitId, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, startDate, _now));
+        Assert.Throws<ArgumentException>(() => new ResidentApartment(residentId, Guid.Empty, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, startDate, _now));
+        Assert.Throws<ArgumentException>(() => new ResidentApartment(residentId, unitId, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, startDate, _now, endDate: endDate));
 
-        var resApartment = new ResidentApartment(residentId, unitId, "TENANT", startDate, _now, isPrimary: true);
+        var resApartment = new ResidentApartment(residentId, unitId, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.TENANT, startDate, _now);
         Assert.NotEqual(Guid.Empty, resApartment.Id);
         Assert.Equal(residentId, resApartment.ResidentId);
         Assert.Equal(unitId, resApartment.ApartmentUnitId);
-        Assert.Equal("TENANT", resApartment.RelationshipTypeCode);
-        Assert.True(resApartment.IsPrimary);
+        Assert.Equal(HouseholdRole.HOUSEHOLD_HEAD, resApartment.HouseholdRole);
+        Assert.Equal(ResidencyType.TENANT, resApartment.ResidencyType);
         Assert.Equal(ResidencyStatus.ACTIVE, resApartment.Status);
         Assert.True(resApartment.IsActiveAt(new DateOnly(2026, 6, 1)));
         Assert.False(resApartment.IsActiveAt(new DateOnly(2025, 12, 31)));
@@ -75,7 +88,7 @@ public class ResidentsTests
         var residentId = Guid.NewGuid();
         var unitId = Guid.NewGuid();
         var startDate = new DateOnly(2026, 1, 1);
-        var resApartment = new ResidentApartment(residentId, unitId, "TENANT", startDate, _now);
+        var resApartment = new ResidentApartment(residentId, unitId, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.TENANT, startDate, _now);
 
         var actor = Guid.NewGuid();
         var endTime = _now.AddDays(30);
@@ -88,5 +101,17 @@ public class ResidentsTests
         Assert.Equal(validEndDate, resApartment.EndDate);
         Assert.Equal(endTime, resApartment.UpdatedAt);
         Assert.False(resApartment.IsActiveAt(new DateOnly(2027, 1, 1)));
+    }
+
+    [Fact]
+    public void ResidentApartment_SeparatesHouseholdRole_FromRelationshipToHead()
+    {
+        var residentId = Guid.NewGuid(); var unitId = Guid.NewGuid(); var headResidencyId = Guid.NewGuid();
+        Assert.Throws<ArgumentException>(() => new ResidentApartment(residentId, unitId, HouseholdRole.HOUSEHOLD_MEMBER, ResidencyType.TENANT, new DateOnly(2026, 1, 1), _now));
+        Assert.Throws<ArgumentException>(() => new ResidentApartment(residentId, unitId, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.TENANT, new DateOnly(2026, 1, 1), _now, headResidencyId, HouseholdRelationship.SPOUSE));
+        var member = new ResidentApartment(residentId, unitId, HouseholdRole.HOUSEHOLD_MEMBER, ResidencyType.TENANT, new DateOnly(2026, 1, 1), _now, headResidencyId, HouseholdRelationship.CHILD);
+        Assert.Equal(HouseholdRole.HOUSEHOLD_MEMBER, member.HouseholdRole);
+        Assert.Equal(headResidencyId, member.HouseholdHeadResidencyId);
+        Assert.Equal(HouseholdRelationship.CHILD, member.RelationshipToHead);
     }
 }

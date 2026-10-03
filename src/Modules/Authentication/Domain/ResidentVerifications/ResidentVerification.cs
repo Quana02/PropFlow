@@ -47,8 +47,51 @@ public class ResidentVerification
         UpdatedAt = now;
     }
 
+    public ResidentVerification(
+        Guid residentId,
+        string registrationUsername,
+        string registrationDisplayName,
+        string registrationEmail,
+        string registrationPasswordHash,
+        string verificationCodeHash,
+        DateTimeOffset expiresAt,
+        DateTimeOffset now,
+        Guid? apartmentUnitId = null)
+    {
+        if (residentId == Guid.Empty)
+            throw new ArgumentException("ResidentId cannot be empty.", nameof(residentId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationUsername);
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationDisplayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationEmail);
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationPasswordHash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(verificationCodeHash);
+        if (expiresAt <= now)
+            throw new ArgumentException("ExpiresAt must be later than now.", nameof(expiresAt));
+
+        Id = Guid.NewGuid();
+        ResidentId = residentId;
+        ApartmentUnitId = apartmentUnitId;
+        RegistrationUsername = registrationUsername.Trim();
+        RegistrationDisplayName = registrationDisplayName.Trim();
+        RegistrationEmail = registrationEmail.Trim().ToUpperInvariant();
+        RegistrationPasswordHash = registrationPasswordHash;
+        Status = VerificationStatus.PENDING;
+        VerificationCodeHash = verificationCodeHash.Trim();
+        ExpiresAt = expiresAt;
+        CreatedAt = now;
+        UpdatedAt = now;
+    }
+
     public Guid Id { get; private set; }
-    public Guid UserId { get; private set; }
+    public Guid? UserId { get; private set; }
+
+    // Registration draft data is kept on the OTP challenge so no UserAccount
+    // exists before successful verification. The password hash is cleared as
+    // soon as the challenge reaches a terminal state.
+    public string? RegistrationUsername { get; private set; }
+    public string? RegistrationDisplayName { get; private set; }
+    public string? RegistrationEmail { get; private set; }
+    public string? RegistrationPasswordHash { get; private set; }
 
     // Cross-module scalar IDs
     public Guid ResidentId { get; private set; }
@@ -92,6 +135,20 @@ public class ResidentVerification
         UpdatedAt = now;
     }
 
+    public void CompleteRegistration(Guid userId, DateTimeOffset now)
+    {
+        if (userId == Guid.Empty)
+            throw new ArgumentException("UserId cannot be empty.", nameof(userId));
+        EnsurePending();
+        if (IsExpiredAt(now))
+            throw new InvalidOperationException("Cannot verify an expired verification challenge.");
+        UserId = userId;
+        RegistrationPasswordHash = null;
+        Status = VerificationStatus.VERIFIED;
+        VerifiedAt = now;
+        UpdatedAt = now;
+    }
+
     public void Expire(DateTimeOffset now)
     {
         EnsurePending();
@@ -101,6 +158,7 @@ public class ResidentVerification
         }
 
         Status = VerificationStatus.EXPIRED;
+        RegistrationPasswordHash = null;
         UpdatedAt = now;
     }
 
@@ -108,6 +166,7 @@ public class ResidentVerification
     {
         EnsurePending();
         Status = VerificationStatus.CANCELLED;
+        RegistrationPasswordHash = null;
         UpdatedAt = now;
     }
 

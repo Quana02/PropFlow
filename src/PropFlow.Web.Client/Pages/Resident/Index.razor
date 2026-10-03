@@ -4,6 +4,9 @@
 @inject NavigationManager Navigation
 @layout PropFlow.Web.Client.Layout.LandingLayout
 @inject IJSRuntime JSRuntime
+@using PropFlow.Web.Client.Features.Resident.Models
+@using PropFlow.Web.Client.Features.Resident.Services
+@inject IResidentApiClient Residents
 
 <style data-purpose="luxury-glassmorphism-theme">
     * {
@@ -221,6 +224,12 @@
 <canvas id="ambientCanvas" width="1440" height="1153"></canvas>
 <!-- BEGIN: MainContainer -->
 <div class="relative z-10 min-h-screen w-full flex flex-col justify-between overflow-x-hidden p-4 sm:p-6 lg:p-8">
+@if (!string.IsNullOrWhiteSpace(profileError))
+{
+<div class="w-full max-w-7xl mx-auto mb-3 px-4 py-3 rounded-2xl bg-rose-50/90 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-800 text-sm text-rose-700 dark:text-rose-200" role="alert">
+  @profileError <button class="font-bold underline ml-2" @onclick="LoadProfileAsync">Thử lại</button>
+</div>
+}
 <!-- BEGIN: TopNavigation -->
 <header class="w-full max-w-7xl mx-auto flex items-center justify-between z-30 mb-4 sm:mb-6" data-purpose="top-navigation">
 <!-- Left: Logo & Apartment Status Badge -->
@@ -234,7 +243,7 @@
 <span class="font-display font-bold tracking-tight text-slate-900 dark:text-white text-base">PropFlow</span>
 <span class="text-[11px] font-semibold uppercase tracking-wider bg-sky-100 dark:bg-sky-950/80 text-sky-700 dark:text-cyan-300 px-2 py-0.5 rounded-full border border-sky-200/50 dark:border-cyan-800/60">Resident</span>
 </div>
-<p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Tháp Landmark • Căn hộ P.1804</p>
+<p class="text-xs text-slate-500 dark:text-slate-400 font-medium">@ApartmentLabel</p>
 </div>
 </div>
 </div>
@@ -347,7 +356,7 @@
 <div class="inline-flex items-center space-x-2 glass-panel px-4 py-1.5 rounded-full shadow-sm mb-4 border border-white/70 dark:border-cyan-500/25 animate-float-subtle">
 <span class="text-sm">👋</span>
 <span class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200">
-        Xin chào buổi sáng, Anh Nam
+        Xin chào, @ResidentName
       </span>
 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
 </div>
@@ -780,7 +789,7 @@
 <span class="text-[11px] font-bold uppercase tracking-wider text-sky-600 dark:text-cyan-400">Tài chính • Phí dịch vụ</span>
 <h4 class="font-bold text-sm text-slate-900 dark:text-white mt-1">Thông báo quyết toán phí quản lý tháng 10/2024</h4>
 <p class="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
-              Hệ thống đã phát hành bảng kê phí dịch vụ căn hộ P.1804 bao gồm phí quản lý, tiền nước sạch và phí gửi 01 ô tô, 02 xe máy. Quý cư dân có thể thanh toán trực tiếp qua ví cổng thông tin.
+              Hệ thống đã phát hành bảng kê phí dịch vụ căn hộ @CurrentUnit. Quý cư dân có thể xem chi tiết và thanh toán trực tiếp qua cổng thông tin.
             </p>
 <div class="mt-4 pt-3 border-t border-slate-200/40 dark:border-slate-700/40 flex justify-between items-center text-[11px] text-slate-400">
 <span class="">Ban Kế toán Tòa nhà</span>
@@ -853,6 +862,11 @@
         Trang Chủ
       </span>
 </button>
+<!-- Nav Item: My Apartments -->
+<button class="nav-tab-btn relative group p-3 rounded-2xl text-slate-500 hover:text-sky-700 dark:text-slate-400 dark:hover:text-cyan-300 hover:bg-white/60 dark:hover:bg-slate-800 transition-all duration-300" @onclick="OpenMyApartments" title="Căn hộ của tôi">
+<span class="material-symbols-outlined">apartment</span>
+<span class="nav-tooltip absolute right-full mr-3 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">Căn hộ của tôi</span>
+</button>
 <!-- Nav Item 2: Processing Service -->
 <button class="nav-tab-btn relative group p-3 rounded-2xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800 transition-all duration-300" id="navProcessing" onclick="window.handleNavTabClick('processing')" title="Xử lý yêu cầu (Processing Service)">
 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -896,7 +910,7 @@
 <h3 class="font-display font-bold text-sm tracking-tight text-white">PropFlow Copilot</h3>
 <span class="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-emerald-400/25 text-emerald-200 border border-emerald-300/40 rounded-full">AI 24/7</span>
 </div>
-<p class="text-[11px] text-sky-100 dark:text-slate-300 font-medium">Trợ lý ảo căn hộ P.1804 • Landmark</p>
+<p class="text-[11px] text-sky-100 dark:text-slate-300 font-medium">Trợ lý ảo căn hộ @CurrentUnit</p>
 </div>
 </div>
 <div class="flex items-center space-x-1 text-white/80">
@@ -934,7 +948,7 @@
 <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-sky-500 to-emerald-500 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0 mt-0.5">AI</div>
 <div class="flex-1 glass-inner p-3 rounded-2xl rounded-tl-none border border-slate-200/60 dark:border-slate-800 shadow-sm">
 <p class="text-slate-800 dark:text-slate-100 leading-relaxed">
-            Xin chào <strong>Anh Nam</strong>! Em là trợ lý AI PropFlow đồng hành riêng cùng căn hộ P.1804. Em có thể hỗ trợ anh tra cứu hóa đơn, đăng ký tiện ích tòa nhà, hoặc tạo phiếu sửa chữa kỹ thuật ngay lập tức. Anh cần hỗ trợ việc gì hôm nay ạ?
+            Xin chào <strong>@ResidentName</strong>! Em là trợ lý AI PropFlow đồng hành cùng căn hộ @CurrentUnit. Em có thể hỗ trợ tra cứu hóa đơn, đăng ký tiện ích hoặc tạo phiếu sửa chữa.
           </p>
 <span class="block text-[10px] text-slate-400 mt-1.5 text-right">11:20 AM</span>
 </div>
@@ -954,7 +968,7 @@
 <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-sky-500 to-emerald-500 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0 mt-0.5">AI</div>
 <div class="flex-1 space-y-2">
 <div class="glass-inner p-3 rounded-2xl rounded-tl-none border border-slate-200/60 dark:border-slate-800 shadow-sm text-slate-800 dark:text-slate-100 leading-relaxed">
-            Dạ vâng, em đã kiểm tra dữ liệu từ phòng Kế toán tòa nhà Landmark: Hóa đơn <strong>T09/2026</strong> của căn hộ P.1804 hiện <span class="text-rose-600 dark:text-rose-400 font-bold">chưa thanh toán</span>.
+            Dạ vâng, em đang hiển thị thông tin dịch vụ của căn hộ <strong>@CurrentUnit</strong>. Vui lòng mở mục hóa đơn để xem trạng thái authoritative mới nhất.
           </div>
 <!-- Interactive Mini-Invoice Card -->
 <div class="bg-gradient-to-br from-white/95 to-sky-50/80 dark:from-slate-800/90 dark:to-slate-900/90 p-3.5 rounded-2xl border border-sky-200 dark:border-cyan-500/30 shadow-card">
@@ -1043,8 +1057,35 @@
 </div>
 
 @code {
+    private ResidentDetailResponse? profile;
+    private string? profileError;
+    private string ResidentName => profile?.FullName ?? Session.User?.DisplayName ?? "Cư dân";
+    private string CurrentUnit => profile?.Residencies.FirstOrDefault(x => x.Status == "ACTIVE" && x.EndDate is null)?.UnitNumber
+        ?? profile?.Ownerships.FirstOrDefault(x => x.EndDate is null)?.UnitNumber
+        ?? "chưa liên kết";
+    private string ApartmentLabel => CurrentUnit == "chưa liên kết" ? "Chưa liên kết căn hộ" : $"Căn hộ {CurrentUnit}";
     private void OpenAccount() => Navigation.NavigateTo("/account");
+    private void OpenMyApartments() => Navigation.NavigateTo("/resident/apartment");
     private async Task LogoutAsync() { await Session.LogoutAsync(); Navigation.NavigateTo("/login"); }
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfileAsync();
+    }
+    private async Task LoadProfileAsync()
+    {
+        profileError = null;
+        try
+        {
+            var result = await Residents.MeAsync();
+            profile = result.IsSuccess ? result.Data : null;
+            if (!result.IsSuccess) profileError = result.Message ?? "Không thể tải hồ sơ cư dân.";
+        }
+        catch
+        {
+            profile = null;
+            profileError = "Không thể kết nối máy chủ để tải hồ sơ cư dân.";
+        }
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)

@@ -68,6 +68,9 @@ public sealed class AdministrationOverviewAccessTests
     {
         public Task<IReadOnlyList<Guid>> GetActiveApartmentIdsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<Guid>>([]);
+
+        public Task<IReadOnlyList<ActiveApartmentOption>> GetActiveApartmentsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ActiveApartmentOption>>([]);
     }
     private sealed class Buildings : ICurrentBuildingTimeZone
     {

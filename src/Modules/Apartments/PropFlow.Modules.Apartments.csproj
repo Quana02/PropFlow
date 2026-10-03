@@ -7,9 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" />
     <ProjectReference Include="../Apartments.Contracts/PropFlow.Modules.Apartments.Contracts.csproj" />
+    <ProjectReference Include="../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj" />
+    <ProjectReference Include="../PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

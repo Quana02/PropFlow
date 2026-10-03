@@ -46,6 +46,14 @@ public sealed class AuthStore(AuthenticationDbContext db) : IAuthStore
     public Task<bool> PhoneInUseAsync(string phone, Guid? except, CancellationToken ct) => db.UserAccounts.AnyAsync(x => x.PhoneNumber == phone && x.Id != except, ct);
     public Task<ResidentVerification?> VerificationAsync(Guid id, CancellationToken ct) => db.ResidentVerifications.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<List<ResidentVerification>> VerificationsAsync(Guid id, CancellationToken ct) => db.ResidentVerifications.Where(x => x.UserId == id).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
+    public Task<ResidentVerification?> PendingRegistrationAsync(string username, CancellationToken ct) => db.ResidentVerifications
+        .Where(x => x.RegistrationUsername == username && x.Status == VerificationStatus.PENDING)
+        .OrderByDescending(x => x.CreatedAt)
+        .FirstOrDefaultAsync(ct);
+    public Task<List<ResidentVerification>> RegistrationAttemptsAsync(string username, string email, CancellationToken ct) => db.ResidentVerifications
+        .Where(x => x.RegistrationUsername == username || x.RegistrationEmail == email)
+        .OrderByDescending(x => x.CreatedAt)
+        .ToListAsync(ct);
     public Task<PasswordResetToken?> RecoveryAsync(Guid id, CancellationToken ct) => db.PasswordResetTokens.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<List<PasswordResetToken>> RecoveriesAsync(Guid id, CancellationToken ct) => db.PasswordResetTokens.Where(x => x.UserId == id).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
     public Task<RefreshToken?> RefreshAsync(string hash, CancellationToken ct) => db.RefreshTokens.SingleOrDefaultAsync(x => x.TokenHash == hash, ct);

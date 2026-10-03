@@ -113,7 +113,12 @@ public class EfCoreMetadataTests
         Assert.Equal("apartment_units", apartmentUnitEntity.GetTableName());
         Assert.Equal("apartments", apartmentUnitEntity.GetSchema());
 
-        Assert.Empty(apartmentUnitEntity.GetNavigations());
+        var apartmentTypeNavigation = Assert.Single(apartmentUnitEntity.GetNavigations());
+        Assert.Equal(nameof(ApartmentUnit.ApartmentUnitType), apartmentTypeNavigation.Name);
+        var apartmentTypeEntity = model.FindEntityType(typeof(ApartmentUnitType));
+        Assert.NotNull(apartmentTypeEntity);
+        Assert.Equal("apartment_unit_types", apartmentTypeEntity.GetTableName());
+        Assert.Equal("apartments", apartmentTypeEntity.GetSchema());
         var unitNumberProp = apartmentUnitEntity.FindProperty("UnitNumber");
         Assert.NotNull(unitNumberProp);
         Assert.Equal("unit_number", unitNumberProp.GetColumnName());
@@ -173,6 +178,14 @@ public class EfCoreMetadataTests
         Assert.NotNull(verificationCodeHashProp);
         Assert.Equal("verification_code_hash", verificationCodeHashProp.GetColumnName());
         Assert.False(verificationCodeHashProp.IsNullable);
+
+        var verificationUserIdProp = residentVerificationEntity.FindProperty("UserId");
+        Assert.NotNull(verificationUserIdProp);
+        Assert.True(verificationUserIdProp.IsNullable);
+
+        Assert.Equal("registration_username", residentVerificationEntity.FindProperty("RegistrationUsername")!.GetColumnName());
+        Assert.Equal("registration_email", residentVerificationEntity.FindProperty("RegistrationEmail")!.GetColumnName());
+        Assert.Equal("registration_password_hash", residentVerificationEntity.FindProperty("RegistrationPasswordHash")!.GetColumnName());
 
         var expiresAtProp = residentVerificationEntity.FindProperty("ExpiresAt");
         Assert.NotNull(expiresAtProp);
@@ -357,7 +370,7 @@ public class EfCoreMetadataTests
     }
 
     [Fact]
-    public void ImplementedModules_ShouldMapExactly45BusinessEntitiesAfterFe13()
+    public void ImplementedModules_ShouldMapExactly45BusinessEntitiesAfterFe03MultiOwner()
     {
         var businessEntities = new[]
         {
@@ -365,6 +378,7 @@ public class EfCoreMetadataTests
             typeof(Facility),
             typeof(EquipmentEntity),
             typeof(ApartmentUnit),
+            typeof(ApartmentOwnership),
             typeof(UserAccount),
             typeof(RefreshToken),
             typeof(PasswordResetToken),
@@ -408,7 +422,7 @@ public class EfCoreMetadataTests
             typeof(AnnouncementAudience)
         };
 
-        Assert.Equal(44, businessEntities.Distinct().Count());
+        Assert.Equal(45, businessEntities.Distinct().Count());
     }
 
     [Fact]
@@ -688,7 +702,7 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("payments", model.GetDefaultSchema());
-        Assert.Equal(2, model.GetEntityTypes().Count());
+        Assert.Equal(3, model.GetEntityTypes().Count());
 
         var paymentEntity = model.FindEntityType(typeof(Payment));
         Assert.NotNull(paymentEntity);
@@ -720,6 +734,12 @@ public class EfCoreMetadataTests
             fk.Properties.Single().Name == nameof(PaymentStatusHistory.PaymentId));
         Assert.Contains(historyEntity.GetIndexes(), index =>
             index.Properties.Single().Name == nameof(PaymentStatusHistory.ChangedAt));
+
+        var operationEntity = model.FindEntityType(typeof(PaymentOperation));
+        Assert.NotNull(operationEntity);
+        Assert.Equal("payment_operations", operationEntity.GetTableName());
+        Assert.Contains(operationEntity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(PaymentOperation.Key));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
             fk.Properties.Any(p => p.Name is "InvoiceId" or "SubmittedBy" or "ConfirmedBy" or "RejectedBy" or "ChangedBy"));

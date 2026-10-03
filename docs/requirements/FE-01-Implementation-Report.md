@@ -1,14 +1,14 @@
 # FE-01 IMPLEMENTATION REPORT
 
-Ngày kiểm tra gần nhất: 2026-09-24. Đã triển khai FE/BE cho FE-01; chưa xác nhận sẵn sàng phát hành vì còn kiểm tra browser, SMTP thật và cấu hình môi trường. Không commit/push trong lượt kiểm tra; không chạy migration trên database ứng dụng.
+Ngày cập nhật tài liệu: 2026-10-03. Đã triển khai FE/BE cho FE-01; chưa xác nhận sẵn sàng phát hành vì còn kiểm tra browser, SMTP thật và cấu hình môi trường. Documentation consistency pass không chạy migration trên database ứng dụng.
 
 ## 1. Implemented Use Cases
 
 | Use case | Kết quả |
 |---|---|
-| FE-01.1 Register Resident Account | Form/DTO/API đăng ký riêng Resident; tài khoản PENDING; không cho chọn role hoặc claim căn hộ |
+| FE-01.1 Register Resident Account | Form/DTO/API yêu cầu email + phone + IdentityType + IdentityNumber khớp cùng Resident; không cho chọn role hoặc claim căn hộ |
 | FE-01.2 Login | Username/password, hash framework, lockout/rate limit, role/permission từ Administration |
-| FE-01.3 Verify Resident Eligibility / Activate Account | Eligibility từ Resident hiện hữu và cư trú hiện hành, email OTP, resend/expiry/attempt; liên kết + role + activation trong transaction |
+| FE-01.3 Verify Resident Eligibility / Activate Account | Resident `ACTIVE`, chưa link, có active residency hoặc current ownership; OTP bind fingerprint và revalidate trước activation; liên kết + role + activation trong transaction |
 | FE-01.4 Forgot / Reset Password | Phản hồi trung tính, OTP riêng, proof ngẫu nhiên một lần, đổi password và revoke refresh sessions |
 | FE-01.5 Change Password | Bearer/current password, đổi hash, revoke tất cả refresh sessions, yêu cầu đăng nhập lại |
 | FE-01.6 View / Update Own Account | GET/PUT me; chỉ sửa tên hiển thị và điện thoại; không đổi username/email/role/status/quan hệ cư trú |
@@ -118,18 +118,20 @@ Global Interactive WebAssembly, prerender=false. Access JWT RS256 chỉ ở memo
 
 Password hashing dùng PasswordHasher. OTP HMAC với salt ngẫu nhiên và secret cấu hình. SMTP thật nằm sau IAuthEmail; chỉ test host thay bằng capture email. Không seed fake account/credential/resident/role trong product code.
 
-## 6. Tests Executed
+## 6. Latest Proven Test Baseline
 
 | Kiểm tra | Kết quả |
 |---|---|
-| PropFlow.UnitTests | 192/192 đạt; bao gồm session restore, concurrent refresh, API error/message mapping, reset-proof expiry/single-use và access-token state validation |
-| PropFlow.ArchitectureTests | 62/62 đạt |
-| AuthenticationFlowTests | 10/10 đạt trên PostgreSQL tạm: registration/activation, field-specific registration conflicts, login, cookie/CSRF, refresh/replay/logout scope, reset/change/profile, lockout, resend/expiry/attempt, stale bearer 401 và CORS credentials chỉ cho origin được cấu hình |
-| WebShellRouteTests | 16/16 đạt: GET trực tiếp các auth/account và application routes trả 200, có shell, không prerender protected UI |
-| Diff whitespace | Không có lỗi whitespace; Git có cảnh báo chuyển LF/CRLF |
-| Browser UI / responsive / real browser cookies | Chưa xác nhận: công cụ browser bị lỗi tải request-header policy và timeout; development certificate hợp lệ, nằm trong CurrentUser Trusted Root |
+| PropFlow.IntegrationTests | 315 passed |
+| PropFlow.UnitTests | 278 passed |
+| PropFlow.ArchitectureTests | 62 passed |
+| AuthenticationFlowTests | 31 passed |
+| SwaggerDocumentTests | 1 passed |
+| FE-02/FE-03 final relationship regression | 21/21 scenarios PASS |
+| Browser UI / responsive / real browser cookies | Chưa thay thế bằng baseline .NET; vẫn cần kiểm tra trên deployment đích |
 | SMTP delivery thật | Chưa chạy: chưa có cấu hình SMTP môi trường |
-| DatabaseVerificationTests cũ | Không chạy trong lượt FE-01; bộ này phụ thuộc full schema riêng của propflow_test |
+
+Các subset ở trên được báo riêng, không cộng thành một tổng giả.
 
 PostgreSQL tests tự tạo database riêng có tên GUID, xác minh kết nối trước migration rồi xóa đúng database đó. Không sửa database ứng dụng. Test email capture và test fixtures không chạy trong production.
 
@@ -137,7 +139,7 @@ Các lỗi được tìm và sửa trong quá trình kiểm chứng: cấu hình
 
 ## 7. Build Result
 
-Build toàn solution bằng .NET 8. Kết quả kiểm tra ngày 2026-09-24: 0 warnings, 0 errors. Vì API development đang chạy và giữ DLL output mặc định, lượt kiểm tra dùng `--artifacts-path` tách biệt để build cùng solution mà không phải dừng phiên phát triển hiện tại.
+Latest proven solution build: 0 warnings, 0 errors.
 
 ## 8. Remaining Blockers
 

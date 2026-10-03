@@ -8,6 +8,7 @@ using PropFlow.Web.Client.Features.Authentication.State;
 using PropFlow.Web.Client.Features.Facility.Services;
 using PropFlow.Web.Client.Features.Administration.Services;
 using PropFlow.Web.Client.Features.Finance.Services;
+using PropFlow.Web.Client.Features.Resident.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -33,4 +34,6 @@ builder.Services.AddScoped<IFacilityApiClient, FacilityApiClient>();
 builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
 builder.Services.AddScoped<IFinanceApiClient, FinanceApiClient>();
+builder.Services.AddScoped<IResidentApiClient, ResidentApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Apartment.Services.IApartmentApiClient, PropFlow.Web.Client.Features.Apartment.Services.ApartmentApiClient>();
 await builder.Build().RunAsync();

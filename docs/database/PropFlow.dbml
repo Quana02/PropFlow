@@ -254,7 +254,7 @@ Table auth.users {
   id uuid [pk, default: `gen_random_uuid()`]
   username varchar(50) [not null, unique]
   email varchar(255) [unique]
-  phone_number varchar(20) [unique]
+  phone_number varchar(20) [unique, note: 'Authentication account-profile constraint only. FE-01 Resident matching does not treat phone as a globally unique Resident key.']
   password_hash text [not null]
   display_name varchar(150) [not null]
   status account_status [not null, default: 'PENDING']
@@ -368,7 +368,7 @@ Table auth.resident_verifications {
     status
   }
 
-  Note: 'Email OTP verification challenge for resident self-registration. Resident eligibility lookup and linking are orchestrated in Application across module boundaries; phone number is contact information only.'
+  Note: 'Email OTP verification challenge for resident self-registration. Authentication matches email + phone + identity type + identity number on one Resident through Residents.Contracts, then binds the OTP to that Resident fingerprint and revalidates before activation. No direct Residents/Apartments DbContext access.'
 }
 
 Table administration.user_access_history {
@@ -436,6 +436,13 @@ Table residents.residents {
   user_id uuid [unique, ref: > auth.users.id]
   resident_code varchar(30) [not null, unique]
   full_name varchar(150) [not null]
+  date_of_birth date
+  gender varchar(30)
+  nationality varchar(80)
+  identity_type varchar(40)
+  identity_number varchar(80)
+  identity_issued_date date
+  identity_expiry_date date
   phone_number varchar(20)
   email varchar(255)
   status resident_status [not null, default: 'ACTIVE']
@@ -451,7 +458,7 @@ Table residents.residents {
     status
   }
 
-  Note: 'Business resident profile. May exist before a login account is linked.'
+  Note: 'Business resident profile. New FE-02 Create requires full_name, date_of_birth, nationality, phone_number, identity_type and identity_number. IdentityType is CCCD or CMND; numbers are digits-only (CCCD 12 digits; CMND 9 or 12). PostgreSQL expression indexes enforce canonical IdentityType+IdentityNumber uniqueness and normalized non-null email uniqueness. Resident phone is required for new onboarding but is not unique.'
 }
 
 // CURRENT-BUILDING DEPLOYMENT BASELINE:
@@ -477,16 +484,32 @@ Table property_assets.buildings {
   }
 }
 
+Table apartments.apartment_unit_types {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(80) [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    name [unique]
+  }
+
+  Note: 'FE-03 master data. Name is additionally unique by normalized lower/trim semantics in PostgreSQL.'
+}
+
 Table apartments.apartment_units {
   id uuid [pk, default: `gen_random_uuid()`]
   unit_number varchar(30) [not null]
   floor_number int [not null]
-  area_m2 numeric(10,2)
+  apartment_unit_type_id uuid [not null, ref: > apartments.apartment_unit_types.id]
+  usable_area_m2 numeric(10,2) [not null]
   bedroom_count int
+  bathroom_count int
+  handover_date date
   description text
   status master_data_status [not null, default: 'ACTIVE']
-  created_by uuid [ref: > auth.users.id]
-  updated_by uuid [ref: > auth.users.id]
+  created_by uuid [note: 'Logical actor reference to auth.users.id; no cross-module physical FK.']
+  updated_by uuid [note: 'Logical actor reference to auth.users.id; no cross-module physical FK.']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
@@ -496,15 +519,36 @@ Table apartments.apartment_units {
     status
   }
 
-  Note: 'Occupancy is derived from active resident_apartments; do not duplicate occupancy state here.'
+  Note: 'Apartment type is normalized FE-03 master data. Occupancy is derived from active resident_apartments; do not duplicate occupancy state here.'
+}
+
+Table apartments.apartment_ownerships {
+  id uuid [pk, default: `gen_random_uuid()`]
+  apartment_unit_id uuid [not null, ref: > apartments.apartment_units.id]
+  owner_resident_id uuid [not null, note: 'Logical scalar reference to residents.residents.id; validated through Residents public contract.']
+  start_date date [not null]
+  end_date date
+  created_by uuid [note: 'Logical actor reference to auth.users.id; no cross-module physical FK.']
+  updated_by uuid [note: 'Logical actor reference to auth.users.id; no cross-module physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (apartment_unit_id, start_date)
+    owner_resident_id
+  }
+
+  Note: 'FE-03 ownership history. An apartment may have zero, one, or multiple current owners. PostgreSQL enforces end_date >= start_date and prevents duplicate current rows for the same apartment and resident through a partial unique index.'
 }
 
 Table residents.resident_apartments {
   id uuid [pk, default: `gen_random_uuid()`]
   resident_id uuid [not null, ref: > residents.residents.id]
-  apartment_unit_id uuid [not null, ref: > apartments.apartment_units.id]
-  relationship_type_code varchar(50) [not null, note: 'Approved residency relationship code; not hard-coded as a PostgreSQL enum by the 56-UC baseline.']
-  is_primary boolean [not null, default: false]
+  apartment_unit_id uuid [not null, note: 'Logical scalar reference to apartments.apartment_units.id; validated through Apartments/Residents public contracts; no cross-module physical FK.']
+  household_role varchar(30) [not null, note: 'HOUSEHOLD_HEAD or HOUSEHOLD_MEMBER.']
+  residency_type varchar(30) [not null, note: 'OWNER_OCCUPIED, TENANT, or AUTHORIZED_OCCUPANT. Independent of household_role.']
+  household_head_residency_id uuid [ref: > residents.resident_apartments.id, note: 'Self-reference only for a HOUSEHOLD_MEMBER; binds the relationship to this residency context and preserves history.']
+  relationship_to_head varchar(30) [note: 'SPOUSE, CHILD, PARENT, SIBLING, or OTHER_RELATIVE; required only for HOUSEHOLD_MEMBER.']
   start_date date [not null]
   end_date date
   status residency_status [not null, default: 'ACTIVE']
@@ -517,11 +561,13 @@ Table residents.resident_apartments {
   Indexes {
     resident_id
     apartment_unit_id
+    household_head_residency_id
+    (apartment_unit_id, household_role, status)
     (resident_id, apartment_unit_id, start_date) [unique]
     status
   }
 
-  Note: 'Historical Resident <-> Apartment relationship. Migration must reject invalid date ranges and overlapping active duplicate residency intervals; historical rows are preserved.'
+  Note: 'Historical Resident <-> Apartment relationship and household context. A Resident may have 0..N active rows in different apartments; PostgreSQL prevents overlapping active periods only for the same Resident+Apartment. Re-entry creates a new row. PostgreSQL also enforces one active household head per apartment and role-field consistency. Application validates same-apartment active head, no self-reference/cycle, and blocks ending a head residency while active members remain. HouseholdRole and ResidencyType are independent; member type need not equal head type.'
 }
 
 Table property_assets.facilities {
@@ -1328,7 +1374,16 @@ Table communication.announcement_audiences {
 // DBML/dbdiagram cannot fully express every invariant below.
 // =========================================================
 // 1) [DATABASE + APPLICATION]
-// resident_apartments: CHECK end_date IS NULL OR end_date >= start_date; prevent invalid overlapping active residency intervals according to the approved relationship rule.
+// resident_apartments: CHECK end_date IS NULL OR end_date >= start_date. Exclusion constraint prevents overlapping date ranges for the same resident_id + apartment_unit_id, while allowing the Resident to be active in other Apartments. A HOUSEHOLD_MEMBER requires household_head_residency_id + relationship_to_head; a HOUSEHOLD_HEAD requires both NULL. HouseholdRole and ResidencyType are independent; TENANT is a residency_type, never a household_role. One active HOUSEHOLD_HEAD per apartment.
+
+// 1a) [DATABASE + APPLICATION + TEST]
+// residents: UNIQUE expression index on upper(btrim(identity_type)) + digits-only identity_number when both canonical values are non-empty; UNIQUE expression index on lower(btrim(email)) when email is non-empty. phone_number is intentionally non-unique in the Resident domain.
+
+// 1b) [DATABASE + APPLICATION + TEST]
+// apartment_ownerships: an Apartment has 0..N current owners. Partial UNIQUE(apartment_unit_id, owner_resident_id) WHERE end_date IS NULL blocks only duplicate current ownership for the same pair; another co-owner is allowed. EndOwnership preserves history and does not end residency.
+
+// 1c) [APPLICATION + CROSS-MODULE CONTRACT]
+// Apartment ACTIVE -> INACTIVE is allowed only when current owner count and active ResidentApartment count are both zero. INACTIVE blocks AddOwner. EndOwnership is blocked when that same Resident still has OWNER_OCCUPIED residency for the Apartment; no automatic residency mutation occurs.
 //
 // 2) [DATABASE + APPLICATION]
 // Current-building deployment: no user_building_accesses table and no selectable per-building authorization scope.
