@@ -1,0 +1,63 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime JSRuntime
+@inject PropFlow.Web.Client.Features.Resident.Shared.Services.IResidentApiClient Residents
+@using PropFlow.Web.Client.Features.Resident.Portal.Models
+
+<div class="resident-portal">
+    <ResidentBackground />
+
+    <CascadingValue Value="_profileContext">
+        <div class="resident-page-frame">
+            <ResidentHeader />
+
+            @if (!string.IsNullOrWhiteSpace(_profileContext.Error))
+            {
+                <div class="resident-profile-alert" role="alert">
+                    <span>@_profileContext.Error</span>
+                    <button type="button" @onclick="LoadProfileAsync">Thử lại</button>
+                </div>
+            }
+
+            <main class="resident-main">
+                @Body
+            </main>
+
+            <footer class="resident-footer">
+                <p>© 2026 PropFlow Resident Portal • Hệ thống quản trị và kết nối căn hộ thông minh chuẩn quốc tế.</p>
+            </footer>
+
+            <ResidentNavigation />
+        </div>
+    </CascadingValue>
+</div>
+
+@code {
+    private ResidentPortalProfileContext _profileContext = ResidentPortalProfileContext.Loading;
+
+    protected override Task OnInitializedAsync() => LoadProfileAsync();
+
+    private async Task LoadProfileAsync()
+    {
+        _profileContext = ResidentPortalProfileContext.Loading;
+
+        try
+        {
+            var result = await Residents.MeAsync();
+            _profileContext = result.IsSuccess && result.Data is not null
+                ? new ResidentPortalProfileContext(result.Data, false, null)
+                : new ResidentPortalProfileContext(null, false, result.Message ?? "Không thể tải hồ sơ cư dân.");
+        }
+        catch
+        {
+            _profileContext = new ResidentPortalProfileContext(null, false, "Không thể kết nối máy chủ để tải hồ sơ cư dân.");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("propFlowResident.init");
+        }
+    }
+}

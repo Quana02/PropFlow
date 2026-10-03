@@ -3,6 +3,8 @@ namespace PropFlow.UnitTests;
 public sealed class DropdownUiTests
 {
     private static readonly string SolutionDirectory = FindSolutionDirectory();
+    private static string ResidentManagementFile(string fileName) =>
+        Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Management", "Pages", fileName);
 
     [Fact]
     public void WebClient_UsesSharedSelectInsteadOfNativeSelectFields()
@@ -40,8 +42,8 @@ public sealed class DropdownUiTests
     [Fact]
     public void ResidentCreateModal_UsesScrollableBodyAndCustomDatePickers()
     {
-        var source = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
-        var styles = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor.css"));
+        var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
+        var styles = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor.css"));
 
         Assert.Contains("class=\"resident-modal-body\"", source);
         Assert.Contains("class=\"resident-modal-form-shell\"", source);
@@ -63,7 +65,7 @@ public sealed class DropdownUiTests
     [Fact]
     public void ResidentCreateModal_StylesBlazorInputChildrenAcrossCssIsolation()
     {
-        var styles = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor.css"));
+        var styles = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor.css"));
 
         Assert.Contains(".resident-form-grid ::deep input,.resident-form-grid ::deep textarea", styles, StringComparison.Ordinal);
         Assert.Contains(".resident-form-grid ::deep textarea{width:100%", styles, StringComparison.Ordinal);
@@ -73,7 +75,7 @@ public sealed class DropdownUiTests
     [Fact]
     public void ResidentManagement_UsesFieldValidationAndFilterPopover()
     {
-        var source = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
+        var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
         Assert.Contains("Bộ lọc cư dân", source, StringComparison.Ordinal);
         Assert.Contains("ActiveFilterCount", source, StringComparison.Ordinal);
@@ -88,7 +90,7 @@ public sealed class DropdownUiTests
     [Fact]
     public void SelectingIdentityType_DoesNotValidateAnUntouchedEmptyIdentityNumber()
     {
-        var source = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
+        var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
         Assert.Contains("ShouldRevalidateIdentityNumber", source, StringComparison.Ordinal);
         Assert.Contains("IsModified(identityNumberField)", source, StringComparison.Ordinal);
@@ -98,7 +100,7 @@ public sealed class DropdownUiTests
     [Fact]
     public void ResidentRoleSelector_DisablesHouseholdHeadWhenApartmentAlreadyHasOne()
     {
-        var source = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
+        var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
         Assert.Contains("HasActiveHouseholdHead", source, StringComparison.Ordinal);
         Assert.Contains("new(\"HOUSEHOLD_HEAD\",HasActiveHouseholdHead?\"Chủ hộ (căn hộ đã có chủ hộ)\":\"Chủ hộ\",HasActiveHouseholdHead)", source, StringComparison.Ordinal);
@@ -166,7 +168,7 @@ public sealed class DropdownUiTests
     [Fact]
     public void ResidentAndApartmentForms_BlockSavingInvalidTypedDates()
     {
-        var resident = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
+        var resident = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
         var apartments = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Apartment", "Pages", "ApartmentManagement.razor"));
         var apartmentDetail = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Apartment", "Pages", "ApartmentDetail.razor"));
 
@@ -181,7 +183,7 @@ public sealed class DropdownUiTests
     [Fact]
     public void ResidentGender_UsesSharedDropdownWithMaleAndFemaleOptions()
     {
-        var source = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
+        var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
         Assert.Contains("GenderOptions", source, StringComparison.Ordinal);
         Assert.Contains("new(\"Nam\",\"Nam\")", source, StringComparison.Ordinal);
@@ -193,8 +195,8 @@ public sealed class DropdownUiTests
     [Fact]
     public void OwnerAndResident_DoesNotValidateTheHiddenResidencyTypeState()
     {
-        var source = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
-        var rules = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Models", "ResidentRelationshipFormRules.cs"));
+        var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
+        var rules = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Management", "Models", "ResidentRelationshipFormRules.cs"));
 
         Assert.Contains("ResidentRelationshipFormRules.Build", source, StringComparison.Ordinal);
         Assert.Contains("var residencyType = ownerAndResident ? \"OWNER_OCCUPIED\" : state.ResidencyType", rules, StringComparison.Ordinal);
@@ -209,7 +211,7 @@ public sealed class DropdownUiTests
     [Fact]
     public void SuccessfulResidentCreation_ReturnsToResidentDirectory()
     {
-        var source = File.ReadAllText(Path.Combine(SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Pages", "ResidentManagement.razor"));
+        var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
         Assert.Contains(
             "if(r.IsSuccess&&r.Data is not null){Close();await LoadAsync();return;}",

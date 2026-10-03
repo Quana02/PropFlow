@@ -13,7 +13,7 @@
     </div>
     <AuthorizeView Roles="ADMIN"><AdminNavMenu /></AuthorizeView>
     <AuthorizeView Roles="ACCOUNTANT"><AccountantNavMenu /></AuthorizeView>
-    <AuthorizeView Roles="MANAGER,STAFF"><OperationsNavMenu /></AuthorizeView>
+    <AuthorizeView Policy="@PropFlow.Web.Client.Features.Facility.Services.AssetPermissions.ViewPolicy"><OperationsNavMenu /></AuthorizeView>
 </div>
 
 @code {

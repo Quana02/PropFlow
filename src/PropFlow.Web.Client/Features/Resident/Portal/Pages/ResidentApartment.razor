@@ -1,6 +1,6 @@
 @page "/resident/apartment"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "RESIDENT")]
-@layout PropFlow.Web.Client.Layout.LandingLayout
+@layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
 @using PropFlow.Web.Client.Features.Apartment.Models
 @using PropFlow.Web.Client.Features.Apartment.Services
 @inject IApartmentApiClient Apartments

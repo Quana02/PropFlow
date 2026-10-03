@@ -1,0 +1,9 @@
+.api-state { display: flex; align-items: flex-start; gap: 1rem; padding: 1.25rem; border: 1px solid rgba(251, 191, 36, .3); border-radius: 1.25rem; color: #78350f; background: rgba(255, 251, 235, .72); }
+.api-state-icon { display: grid; width: 2.75rem; height: 2.75rem; flex: 0 0 auto; place-items: center; border-radius: .9rem; color: #d97706; background: rgba(251, 191, 36, .16); }
+.api-state svg { width: 1.4rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.api-state-label { margin: 0 0 .25rem; color: #d97706; font-size: .65rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.api-state h2 { margin: 0; font: 700 1rem "Space Grotesk", sans-serif; }
+.api-state p:not(.api-state-label) { max-width: 52rem; margin: .35rem 0 0; color: #92400e; font-size: .78rem; line-height: 1.65; }
+.api-state a { display: inline-flex; margin-top: .75rem; color: #0369a1; font-size: .75rem; font-weight: 700; }
+html.dark .api-state, html[data-theme="dark"] .api-state { color: #fde68a; border-color: rgba(251, 191, 36, .22); background: rgba(69, 26, 3, .32); }
+html.dark .api-state p:not(.api-state-label), html[data-theme="dark"] .api-state p:not(.api-state-label) { color: #fcd34d; }

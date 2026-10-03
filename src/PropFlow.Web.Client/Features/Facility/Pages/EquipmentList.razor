@@ -1,6 +1,6 @@
 @page "/equipment"
 @layout PropFlow.Web.Client.Layout.MainLayout
-@attribute [Authorize(Roles = "MANAGER,STAFF")]
+@attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.AspNetCore.Authorization
@@ -13,8 +13,14 @@
 @inject IAuthorizationService AuthorizationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using PropFlow.Web.Client.Shared.Forms
+@implements IDisposable
 
 <PageTitle>Quản Lý Thiết Bị - PropFlow</PageTitle>
+@if (!IsManager)
+{
+    <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
+}
+
 
 <div class="fe04-page font-sans text-slate-800 antialiased">
 
@@ -217,7 +223,7 @@
                     <tbody class="divide-y divide-slate-100 text-xs sm:text-sm text-slate-700">
                         @foreach (var item in PagedResult.Items)
                         {
-                            <tr class="hover:bg-sky-50/40 transition-colors group">
+                            <tr class="hover:bg-sky-50/40 transition-colors group @(OpenStatusDropdownId == item.Id ? "status-dropdown-row-open" : null)">
                                 <td class="py-4 px-5">
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold font-mono bg-sky-50 text-sky-700 border border-sky-200/70">
                                         @item.Code
@@ -282,8 +288,6 @@
                                 </td>
                                 <td class="py-4 px-5 text-right">
                                     <div class="inline-flex items-center gap-1.5 justify-end">
-                                        @if (IsManager)
-                                        {
                                         <button type="button"
                                                 class="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-all"
                                                 title="Xem chi tiết thiết bị"
@@ -291,6 +295,8 @@
                                             <span class="material-symbols-outlined text-lg">visibility</span>
                                         </button>
 
+                                        @if (IsManager)
+                                        {
                                         <button type="button"
                                                 class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                                                 title="Chỉnh sửa hồ sơ"
@@ -298,7 +304,7 @@
                                             <span class="material-symbols-outlined text-lg">edit</span>
                                         </button>
 
-                                        <div class="relative inline-block text-left status-dropdown-container">
+                                        <div class="relative inline-block text-left status-dropdown-container @(OpenStatusDropdownId == item.Id ? "is-open" : null)">
                                             <button type="button"
                                                     class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-slate-700 hover:text-sky-700 bg-slate-100 hover:bg-sky-50 rounded-lg border border-slate-200 hover:border-sky-200 transition-all shadow-2xs"
                                                     title="Đổi trạng thái vận hành"
@@ -592,7 +598,7 @@
     </div>
 }
 
-@if (IsFormOpen)
+@if (IsManager && IsFormOpen)
 {
     <div class="fe04-modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
         <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
@@ -619,12 +625,12 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                            Mã Thiết Bị <span class="text-rose-500">*</span>
+                            MÃ THIẾT BỊ <span class="text-rose-500">*</span>
                         </label>
-                        <input @bind="FormModel.Code" type="text" placeholder="VD: EQP-PUMP-01"
+                        <input @bind="FormModel.Code" type="text" placeholder="VD: TB-MAYBOM-HIYORI-01"
                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-mono focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all uppercase"
                                disabled="@(SelectedEquipmentToEdit != null)" />
-                        <p class="text-[11px] text-slate-400">Mã định danh duy nhất (in mã vạch/QR)</p>
+                        <p class="text-[11px] text-slate-400">Quy ước: TB-[LOAI]-[TENTHIETBI]-[STT]</p>
                     </div>
 
                     <div class="space-y-1.5">
@@ -784,7 +790,7 @@
     ];
 
     private IReadOnlyList<PropFlowSelectOption> FacilityOptions =>
-        new[] { new PropFlowSelectOption("", "Tất cả CSVT") }
+        new[] { new PropFlowSelectOption("", "Tất cả CSVT"), new PropFlowSelectOption("building-level", "Thiết bị cấp chung cư") }
         .Concat(FacilityList.Select(f => new PropFlowSelectOption(f.Id.ToString(), f.Name)))
         .ToList();
 
@@ -809,6 +815,18 @@
     private List<FacilityModel> FacilityList { get; set; } = new();
 
     private bool IsManager { get; set; }
+    [SupplyParameterFromQuery(Name = "equipmentId")] public Guid? EquipmentId { get; set; }
+    private Guid? LoadedEquipmentId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EquipmentId.HasValue && EquipmentId != LoadedEquipmentId)
+        {
+            LoadedEquipmentId = EquipmentId;
+            await OpenDetailDialog(new EquipmentModel { Id = EquipmentId.Value });
+        }
+    }
+    private readonly CancellationTokenSource StatusRefreshCancellation = new();
 
     private string StatusFilterString
     {
@@ -821,9 +839,10 @@
 
     private string FilterFacilityIdString
     {
-        get => Filter.FacilityId?.ToString() ?? "";
+        get => Filter.BuildingLevelOnly ? "building-level" : Filter.FacilityId?.ToString() ?? "";
         set
         {
+            Filter.BuildingLevelOnly = value == "building-level";
             Filter.FacilityId = Guid.TryParse(value, out var g) ? g : null;
         }
     }
@@ -837,16 +856,38 @@
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
-        IsManager = user.IsInRole("MANAGER");
+        IsManager = AssetPermissions.CanManage(user);
 
         await LoadFacilitiesAsync();
         await Task.WhenAll(LoadData(), LoadSummaryAsync());
+        _ = RefreshStatusAsync(StatusRefreshCancellation.Token);
     }
+
+    private async Task RefreshStatusAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (IsFormOpen || IsDetailOpen || IsSaving) continue;
+                await InvokeAsync(async () =>
+                {
+                    await Task.WhenAll(LoadData(), LoadSummaryAsync());
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    public void Dispose() => StatusRefreshCancellation.Cancel();
 
     private async Task LoadData()
     {
         IsLoading = true;
         ErrorMessage = null;
+        PagedResult = new();
         try
         {
             var result = await EquipmentApiClient.GetEquipmentsAsync(Filter);
@@ -906,9 +947,17 @@
         IsFormOpen = true;
     }
 
-    private void OpenDetailDialog(EquipmentModel item)
+    private async Task OpenDetailDialog(EquipmentModel item)
     {
-        SelectedEquipmentToEdit = item;
+        IsDetailOpen = false;
+        SelectedEquipmentToEdit = null;
+        var result = await EquipmentApiClient.GetEquipmentByIdAsync(item.Id);
+        if (!result.IsSuccess || result.Data is null)
+        {
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+            return;
+        }
+        SelectedEquipmentToEdit = result.Data;
         IsDetailOpen = true;
     }
 

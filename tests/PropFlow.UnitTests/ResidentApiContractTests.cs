@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using ApiResidents = PropFlow.Modules.Residents.Presentation;
-using PropFlow.Web.Client.Features.Resident.Services;
+using PropFlow.Web.Client.Features.Resident.Shared.Services;
 using PropFlow.Web.Client.Services.Api;
 
 namespace PropFlow.UnitTests;

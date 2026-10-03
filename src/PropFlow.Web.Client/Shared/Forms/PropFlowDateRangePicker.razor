@@ -1,0 +1,112 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div @ref="root" class="pf-date-range @(open ? "is-open" : null)">
+    <button type="button" class="pf-date-range__trigger" aria-label="@AriaLabel" aria-haspopup="dialog" aria-expanded="@open" @onclick="ToggleAsync">
+        <span class="material-symbols-outlined pf-date-range__calendar-icon" aria-hidden="true">calendar_month</span>
+        <span class="pf-date-range__value @(Start is null && End is null ? "is-placeholder" : null)">@RangeLabel</span>
+        <span class="material-symbols-outlined pf-date-range__chevron" aria-hidden="true">expand_more</span>
+    </button>
+    @if (open)
+    {
+        <section class="pf-date-range__calendar" role="dialog" aria-label="@AriaLabel" popover="manual">
+            <header>
+                <button type="button" aria-label="Tháng trước" @onclick="PreviousMonth"><span class="material-symbols-outlined">chevron_left</span></button>
+                <strong>@MonthLabel</strong>
+                <button type="button" aria-label="Tháng sau" @onclick="NextMonth"><span class="material-symbols-outlined">chevron_right</span></button>
+            </header>
+            <p class="pf-date-range__hint">@(Start is null || End is not null ? "Chọn ngày bắt đầu" : "Chọn ngày kết thúc")</p>
+            <div class="pf-date-range__weekdays" aria-hidden="true">@foreach (var label in Weekdays) { <span>@label</span> }</div>
+            <div class="pf-date-range__days">
+                @foreach (var day in CalendarDays)
+                {
+                    <button type="button" class="@DayClass(day)" aria-label="@day.ToString("dd/MM/yyyy")" @onclick="() => SelectAsync(day)">@day.Day</button>
+                }
+            </div>
+            <footer><button type="button" @onclick="ClearAsync">Xóa</button><button type="button" @onclick="SelectTodayAsync">Hôm nay</button></footer>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public DateOnly? Start { get; set; }
+    [Parameter] public EventCallback<DateOnly?> StartChanged { get; set; }
+    [Parameter] public DateOnly? End { get; set; }
+    [Parameter] public EventCallback<DateOnly?> EndChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Từ ngày – Đến ngày";
+    [Parameter] public string AriaLabel { get; set; } = "Chọn khoảng ngày";
+
+    private static readonly string[] Weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+    private static readonly string[] Months = ["Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu", "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một", "Tháng Mười Hai"];
+    private ElementReference root;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<PropFlowDateRangePicker>? reference;
+    private DateOnly visibleMonth;
+    private bool open;
+    private bool positionAfterRender;
+    private string MonthLabel => $"{Months[visibleMonth.Month - 1]} {visibleMonth.Year}";
+    private string RangeLabel => Start is { } start && End is { } end ? $"{start:dd/MM/yyyy} – {end:dd/MM/yyyy}" : Start is { } from ? $"Từ {from:dd/MM/yyyy}" : Placeholder;
+    private IEnumerable<DateOnly> CalendarDays
+    {
+        get
+        {
+            var first = new DateOnly(visibleMonth.Year, visibleMonth.Month, 1);
+            var mondayOffset = ((int)first.DayOfWeek + 6) % 7;
+            return Enumerable.Range(0, 42).Select(first.AddDays(-mondayOffset).AddDays);
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        var initial = Start ?? End ?? DateOnly.FromDateTime(DateTime.Today);
+        visibleMonth = new DateOnly(initial.Year, initial.Month, 1);
+    }
+
+    private async Task ToggleAsync()
+    {
+        open = !open;
+        if (open) positionAfterRender = true;
+        else if (module is not null) await module.InvokeVoidAsync("close", root);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!positionAfterRender) return;
+        positionAfterRender = false;
+        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowDateRangePicker.razor.js?v=20260929.1");
+        reference ??= DotNetObjectReference.Create(this);
+        await module.InvokeVoidAsync("open", root, reference);
+    }
+
+    private void PreviousMonth() => visibleMonth = visibleMonth.AddMonths(-1);
+    private void NextMonth() => visibleMonth = visibleMonth.AddMonths(1);
+    private string DayClass(DateOnly day) => $"{(day.Month != visibleMonth.Month ? "is-outside" : string.Empty)} {(Start == day ? "is-start" : string.Empty)} {(End == day ? "is-end" : string.Empty)} {(Start is { } start && End is { } end && day > start && day < end ? "is-between" : string.Empty)} {(DateOnly.FromDateTime(DateTime.Today) == day ? "is-today" : string.Empty)}";
+    private async Task SelectAsync(DateOnly day)
+    {
+        if (Start is null || End is not null || day < Start)
+        {
+            Start = day;
+            End = null;
+            await StartChanged.InvokeAsync(Start);
+            await EndChanged.InvokeAsync(End);
+            return;
+        }
+
+        End = day;
+        await EndChanged.InvokeAsync(End);
+        open = false;
+        if (module is not null) await module.InvokeVoidAsync("close", root);
+    }
+    private Task SelectTodayAsync() => SelectAsync(DateOnly.FromDateTime(DateTime.Today));
+    private async Task ClearAsync()
+    {
+        Start = null;
+        End = null;
+        await StartChanged.InvokeAsync(Start);
+        await EndChanged.InvokeAsync(End);
+        open = false;
+        if (module is not null) await module.InvokeVoidAsync("close", root);
+    }
+    [JSInvokable] public Task CloseFromOutside() { open = false; return InvokeAsync(StateHasChanged); }
+    public async ValueTask DisposeAsync() { if (module is not null) { await module.InvokeVoidAsync("close", root); await module.DisposeAsync(); } reference?.Dispose(); }
+}

@@ -1,5 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using PropFlow.Web.Client.Features.Resident.Models;
+using PropFlow.Web.Client.Features.Resident.Shared.Models;
 
 namespace PropFlow.UnitTests;
 

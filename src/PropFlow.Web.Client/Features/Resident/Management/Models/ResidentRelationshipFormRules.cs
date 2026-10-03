@@ -1,4 +1,6 @@
-namespace PropFlow.Web.Client.Features.Resident.Models;
+using PropFlow.Web.Client.Features.Resident.Shared.Models;
+
+namespace PropFlow.Web.Client.Features.Resident.Management.Models;
 
 public sealed record ResidentRelationshipFormState(
     string RelationshipKind,

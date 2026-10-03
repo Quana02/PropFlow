@@ -1,0 +1,9 @@
+.request-status { display: inline-flex; align-items: center; padding: .35rem .75rem; border: 1px solid transparent; border-radius: 9999px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.status-blue { color: #075985; border-color: #bae6fd; background: #e0f2fe; }
+.status-violet { color: #6d28d9; border-color: #ddd6fe; background: #ede9fe; }
+.status-indigo { color: #3730a3; border-color: #c7d2fe; background: #e0e7ff; }
+.status-amber { color: #92400e; border-color: #fde68a; background: #fef3c7; }
+.status-emerald { color: #065f46; border-color: #a7f3d0; background: #d1fae5; }
+.status-slate { color: #334155; border-color: #cbd5e1; background: #f1f5f9; }
+.status-rose { color: #9f1239; border-color: #fecdd3; background: #ffe4e6; }
+html.dark .request-status, html[data-theme="dark"] .request-status { background: rgba(15, 23, 42, .72); }

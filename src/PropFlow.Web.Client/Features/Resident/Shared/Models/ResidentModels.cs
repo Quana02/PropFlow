@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace PropFlow.Web.Client.Features.Resident.Models;
+namespace PropFlow.Web.Client.Features.Resident.Shared.Models;
 
 public sealed record PagedResidentsResponse(IReadOnlyList<ResidentListItem> Items, int TotalCount, int PageIndex, int PageSize);
 public sealed record ResidentListItem(Guid Id, string ResidentCode, string FullName, string? PhoneNumber, string? Email, string Status, bool HasAccount, IReadOnlyList<ResidentApartmentRelationshipSummary> ApartmentRelationships);

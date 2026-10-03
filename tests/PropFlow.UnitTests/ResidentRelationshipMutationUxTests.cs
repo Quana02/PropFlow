@@ -5,7 +5,7 @@ public sealed class ResidentRelationshipMutationUxTests
     [Fact]
     public void Detail_supports_multiple_current_residencies_and_atomic_move()
     {
-        var source = File.ReadAllText(Source("Features", "Resident", "Pages", "ResidentDetail.razor"));
+        var source = File.ReadAllText(Source("Features", "Resident", "Management", "Pages", "ResidentDetail.razor"));
 
         Assert.Contains("@foreach(var item in ActiveResidencies)", source, StringComparison.Ordinal);
         Assert.Contains("ResidencyCandidatesAsync(Id)", source, StringComparison.Ordinal);
@@ -17,7 +17,7 @@ public sealed class ResidentRelationshipMutationUxTests
     [Fact]
     public void All_relationship_mutations_require_shared_confirmation()
     {
-        var source = File.ReadAllText(Source("Features", "Resident", "Pages", "ResidentDetail.razor"));
+        var source = File.ReadAllText(Source("Features", "Resident", "Management", "Pages", "ResidentDetail.razor"));
 
         Assert.True(source.Split("<PropFlowConfirmationDialog", StringSplitOptions.None).Length - 1 >= 5);
         Assert.Contains("ConfirmResidencyMutation", source, StringComparison.Ordinal);
@@ -30,7 +30,7 @@ public sealed class ResidentRelationshipMutationUxTests
     [Fact]
     public void Current_ownership_apartment_icon_aligns_with_the_title()
     {
-        var styles = File.ReadAllText(Source("Features", "Resident", "Pages", "ResidentDetail.razor.css"));
+        var styles = File.ReadAllText(Source("Features", "Resident", "Management", "Pages", "ResidentDetail.razor.css"));
 
         Assert.Contains(".ownership-card .compact-item>.item-icon{align-self:start", styles, StringComparison.Ordinal);
     }
@@ -38,7 +38,7 @@ public sealed class ResidentRelationshipMutationUxTests
     [Fact]
     public void Resident_status_feedback_uses_auto_dismissing_toast_instead_of_inline_banner()
     {
-        var source = File.ReadAllText(Source("Features", "Resident", "Pages", "ResidentDetail.razor"));
+        var source = File.ReadAllText(Source("Features", "Resident", "Management", "Pages", "ResidentDetail.razor"));
 
         Assert.DoesNotContain("resident-notice @(actionError?\"error\":\"success\")", source, StringComparison.Ordinal);
         Assert.Contains("ShowToast(\"Đã cập nhật trạng thái cư dân.\")", source, StringComparison.Ordinal);

@@ -18,6 +18,9 @@ using PropFlow.Modules.Billing.Infrastructure.Persistence;
 using PropFlow.Modules.Complaints.Infrastructure.Persistence;
 using PropFlow.Modules.Communication.Infrastructure.Persistence;
 using PropFlow.Modules.Maintenance.Infrastructure.Persistence;
+using PropFlow.Modules.Maintenance.Application;
+using PropFlow.Modules.Maintenance.Contracts;
+using PropFlow.Modules.Maintenance.Presentation;
 using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Contracts;
 using PropFlow.Modules.Payments.Application.Finance;
@@ -147,11 +150,21 @@ builder.Services.AddDbContext<CommunicationDbContext>((services, options) =>
             "__EFMigrationsHistory",
             "communication")));
 
+// Read scope uses the existing FE-05/FE-07 assignment data.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAssignedAssetSource, PropFlow.Modules.Maintenance.Infrastructure.MaintenanceAssignedAssetSource>();
+builder.Services.AddScoped<IAssignedAssetSource, ServiceRequestAssignedAssetSource>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess, AssignedAssetReadAccess>();
+
 // Register Module Services
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings.Services.IBuildingService, PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IPropertyAssetsStore, PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Facilities.Services.IFacilityService, PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment.Services.IEquipmentService, PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
+builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
+builder.Services.AddScoped<MaintenanceService>();
+builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
 // Add services to the container.
@@ -161,6 +174,7 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Apartments.Presentation.ApartmentsController).Assembly)
     .AddApplicationPart(typeof(ResidentsController).Assembly)
+    .AddApplicationPart(typeof(MaintenanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly);
 builder.Services.AddScoped<IInvoiceFinancialSource, InvoiceFinancialSource>();
@@ -192,6 +206,10 @@ builder.Services.AddAuthorization(options =>
             (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
             (context.User.IsInRole(SystemRoleCodes.Staff) && context.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations))));
     options.AddPolicy(PropertyAssetsAuthorizationPolicies.Manage,
+        policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy(MaintenanceAuthorizationPolicies.Manage,
+        policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy(MaintenanceAuthorizationPolicies.View,
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
     options.AddPolicy(ResidentsAuthorizationPolicies.Manage,
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));

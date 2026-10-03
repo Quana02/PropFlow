@@ -1,7 +1,7 @@
-using PropFlow.Web.Client.Features.Resident.Models;
+using PropFlow.Web.Client.Features.Resident.Shared.Models;
 using PropFlow.Web.Client.Services.Api;
 
-namespace PropFlow.Web.Client.Features.Resident.Services;
+namespace PropFlow.Web.Client.Features.Resident.Shared.Services;
 public interface IResidentApiClient
 {
     Task<ApiResult<PagedResidentsResponse>> ListAsync(string? search, string? status, Guid? apartmentUnitId = null,

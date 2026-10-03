@@ -12,7 +12,7 @@ using EquipmentPage = PropFlow.Modules.PropertyAssets.Application.Equipment.Dtos
 
 namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 
-public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropertyAssetsStore
+public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetReadAccess access) : IPropertyAssetsStore
 {
     public Task<Building?> BuildingAsync(Guid id, bool tracking, CancellationToken ct)
     {
@@ -22,6 +22,10 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
 
     public async Task<CurrentBuildingPropertyOverviewDto?> CurrentBuildingOverviewAsync(CancellationToken ct)
     {
+        var scope = await access.GetScopeAsync(ct);
+        if (!scope.Unrestricted && !scope.HasAssignedWork) return null;
+        var facilities = VisibleFacilities(scope);
+        var equipment = VisibleEquipment(scope);
         var building = await db.Buildings.AsNoTracking()
             .OrderByDescending(b => b.Status == MasterDataStatus.ACTIVE)
             .ThenByDescending(b => b.UpdatedAt)
@@ -32,7 +36,7 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
             return null;
 
         // Facility statistics by status
-        var facilityStatsRaw = await db.Facilities
+        var facilityStatsRaw = await facilities
             .GroupBy(f => f.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(ct);
@@ -40,7 +44,7 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
         var facilityStats = facilityStatsRaw.ToDictionary(g => g.Status, g => g.Count);
 
         var facilitySummary = new FacilitySummaryDto(
-            Total: await db.Facilities.CountAsync(ct),
+            Total: await facilities.CountAsync(ct),
             Active: facilityStats.GetValueOrDefault(MasterDataStatus.ACTIVE, 0),
             UnderMaintenance: facilityStats.GetValueOrDefault(MasterDataStatus.UNDER_MAINTENANCE, 0),
             Inactive: facilityStats.GetValueOrDefault(MasterDataStatus.INACTIVE, 0),
@@ -49,7 +53,7 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
         );
 
         // Equipment statistics by status
-        var equipmentStatsRaw = await db.Equipment
+        var equipmentStatsRaw = await equipment
             .GroupBy(e => e.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync(ct);
@@ -57,7 +61,7 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
         var equipmentStats = equipmentStatsRaw.ToDictionary(g => g.Status, g => g.Count);
 
         var equipmentSummary = new EquipmentSummaryDto(
-            Total: await db.Equipment.CountAsync(ct),
+            Total: await equipment.CountAsync(ct),
             Active: equipmentStats.GetValueOrDefault(EquipmentStatus.ACTIVE, 0),
             UnderMaintenance: equipmentStats.GetValueOrDefault(EquipmentStatus.UNDER_MAINTENANCE, 0),
             Inactive: equipmentStats.GetValueOrDefault(EquipmentStatus.INACTIVE, 0),
@@ -86,7 +90,7 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
     {
         var pageIndex = Math.Max(1, query.PageIndex);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
-        var source = db.Facilities.AsNoTracking();
+        var source = VisibleFacilities(await access.GetScopeAsync(ct));
         if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
         {
             var keyword = query.SearchKeyword.Trim().ToLower();
@@ -96,17 +100,21 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
         if (query.Status.HasValue) source = source.Where(f => f.Status == query.Status.Value);
         if (!string.IsNullOrWhiteSpace(query.FacilityType)) source = source.Where(f => f.FacilityType == query.FacilityType);
         var count = await source.CountAsync(ct);
-        var items = await source.OrderByDescending(f => f.CreatedAt)
+        var items = await source.OrderByDescending(f => f.CreatedAt).ThenBy(f => f.Code)
             .Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return new FacilityPage(items, count, pageIndex, pageSize);
     }
 
-    public Task<Facility?> FacilityAsync(Guid id, bool tracking, bool includeEquipment, CancellationToken ct)
+    public async Task<Facility?> FacilityAsync(Guid id, bool tracking, bool includeEquipment, CancellationToken ct)
     {
-        IQueryable<Facility> source = db.Facilities;
-        if (includeEquipment) source = source.Include(f => f.Equipment);
+        var scope = await access.GetScopeAsync(ct);
+        IQueryable<Facility> source = VisibleFacilities(scope);
+        if (tracking) source = source.AsTracking();
+        if (includeEquipment)
+            source = scope.Unrestricted ? source.Include(f => f.Equipment)
+                : source.Include(f => f.Equipment.Where(e => scope.EquipmentIds.Contains(e.Id)));
         if (!tracking) source = source.AsNoTracking();
-        return source.FirstOrDefaultAsync(f => f.Id == id, ct);
+        return await source.FirstOrDefaultAsync(f => f.Id == id, ct);
     }
 
     public Task<bool> FacilityCodeExistsAsync(string code, CancellationToken ct) =>
@@ -116,7 +124,7 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
 
     public async Task<EquipmentPage> EquipmentAsync(EquipmentFilterQuery query, CancellationToken ct)
     {
-        var source = db.Equipment.Include(e => e.Facility).AsNoTracking();
+        IQueryable<EquipmentEntity> source = VisibleEquipment(await access.GetScopeAsync(ct)).Include(e => e.Facility);
         if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
         {
             var keyword = query.SearchKeyword.Trim().ToLower();
@@ -124,28 +132,44 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db) : IPropert
                 (e.Manufacturer != null && e.Manufacturer.ToLower().Contains(keyword)) ||
                 (e.Model != null && e.Model.ToLower().Contains(keyword)));
         }
+        if (query.BuildingLevelOnly) source = source.Where(e => e.FacilityId == null);
         if (query.FacilityId.HasValue) source = source.Where(e => e.FacilityId == query.FacilityId.Value);
         if (query.Status.HasValue) source = source.Where(e => e.Status == query.Status.Value);
         if (!string.IsNullOrWhiteSpace(query.EquipmentType)) source = source.Where(e => e.EquipmentType == query.EquipmentType);
         var count = await source.CountAsync(ct);
         var pageIndex = Math.Max(1, query.PageIndex);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
-        var items = await source.OrderByDescending(e => e.CreatedAt).Skip((pageIndex - 1) * pageSize)
+        var items = await source.OrderByDescending(e => e.CreatedAt).ThenBy(e => e.Code).Skip((pageIndex - 1) * pageSize)
             .Take(pageSize).ToListAsync(ct);
         return new EquipmentPage(items, count, pageIndex, pageSize);
     }
 
-    public Task<EquipmentEntity?> EquipmentAsync(Guid id, bool tracking, CancellationToken ct)
+    public async Task<EquipmentEntity?> EquipmentAsync(Guid id, bool tracking, CancellationToken ct)
     {
-        IQueryable<EquipmentEntity> source = db.Equipment.Include(e => e.Facility);
+        IQueryable<EquipmentEntity> source = VisibleEquipment(await access.GetScopeAsync(ct)).Include(e => e.Facility);
+        if (tracking) source = source.AsTracking();
         if (!tracking) source = source.AsNoTracking();
-        return source.FirstOrDefaultAsync(e => e.Id == id, ct);
+        return await source.FirstOrDefaultAsync(e => e.Id == id, ct);
     }
 
     public Task<bool> EquipmentCodeExistsAsync(string code, CancellationToken ct) =>
         db.Equipment.AnyAsync(e => e.Code.ToLower() == code.ToLower(), ct);
 
     public void Add(EquipmentEntity equipment) => db.Equipment.Add(equipment);
+
+    private IQueryable<Facility> VisibleFacilities(AssetReadScope scope)
+    {
+        var source = db.Facilities.AsNoTracking();
+        return scope.Unrestricted ? source : source.Where(f => scope.FacilityIds.Contains(f.Id) ||
+            db.Equipment.Any(e => e.FacilityId == f.Id && scope.EquipmentIds.Contains(e.Id)));
+    }
+
+    private IQueryable<EquipmentEntity> VisibleEquipment(AssetReadScope scope)
+    {
+        var source = db.Equipment.AsNoTracking();
+        // A facility assignment does not implicitly grant access to every child asset.
+        return scope.Unrestricted ? source : source.Where(e => scope.EquipmentIds.Contains(e.Id));
+    }
 
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }
