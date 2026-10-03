@@ -1,0 +1,52 @@
+.finance-page-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.finance-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+    color: var(--muted, #64748b);
+    font-size: 11px;
+}
+
+.finance-breadcrumb ::deep a {
+    color: var(--muted, #64748b);
+    text-decoration: none;
+}
+
+.finance-breadcrumb ::deep a:hover,
+.finance-breadcrumb ::deep a:focus-visible {
+    color: var(--accent, #07966a);
+    text-decoration: underline;
+}
+
+.finance-breadcrumb [aria-current] {
+    color: var(--accent, #07966a);
+    font-weight: 700;
+}
+
+.finance-eyebrow {
+    margin: 0 0 7px;
+    color: var(--accent, #07966a);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .08em;
+}
+
+.finance-page-header h1 {
+    margin: 0 0 5px;
+    color: var(--text, #17243a);
+    font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif;
+    letter-spacing: -.025em;
+}
+
+.finance-description {
+    margin: 0;
+    color: var(--muted, #64748b);
+    font-size: 12px;
+}

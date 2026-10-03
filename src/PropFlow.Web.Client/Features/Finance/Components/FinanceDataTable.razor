@@ -1,0 +1,46 @@
+<div class="finance-table-scroll">
+    <table>
+        <thead><tr>@foreach (var column in Columns) { <th scope="col">@column</th> }</tr></thead>
+        <tbody>
+            @if (Loading)
+            {
+                <tr><td colspan="@Columns.Count"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr>
+            }
+            else if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <tr><td colspan="@Columns.Count"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@Error" Icon="error" /><button class="finance-retry" @onclick="Retry">Thử lại</button></td></tr>
+            }
+            else if (Total == 0)
+            {
+                <tr><td colspan="@Columns.Count"><FinanceUnavailableState Title="Không có dữ liệu" Message="Không tìm thấy bản ghi phù hợp." Icon="inbox" /></td></tr>
+            }
+            else
+            {
+                @Rows
+            }
+        </tbody>
+    </table>
+</div>
+@if (!Loading && string.IsNullOrWhiteSpace(Error) && Total > 0)
+{
+    <div class="finance-pagination">
+        <span>Hiển thị @ItemCount / @Total bản ghi</span>
+        <div><button disabled="@(Page <= 1)" @onclick="Previous">← Trước</button><span>Trang @Page / @TotalPages</span><button disabled="@(Page >= TotalPages)" @onclick="Next">Sau →</button></div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Columns { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment? Rows { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public int Total { get; set; }
+    [Parameter] public int ItemCount { get; set; }
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int PageSize { get; set; } = 20;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+    [Parameter] public EventCallback Retry { get; set; }
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+    private Task Previous() => PageChanged.InvokeAsync(Page - 1);
+    private Task Next() => PageChanged.InvokeAsync(Page + 1);
+}

@@ -1,0 +1,25 @@
+<header class="finance-page-header">
+    <div>
+        @if (!string.IsNullOrWhiteSpace(CurrentPage))
+        {
+            <nav class="finance-breadcrumb" aria-label="Đường dẫn trang">
+                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
+                <span aria-hidden="true">›</span>
+                <span aria-current="page">@CurrentPage</span>
+            </nav>
+        }
+        else if (!string.IsNullOrWhiteSpace(Eyebrow))
+        {
+            <p class="finance-eyebrow">@Eyebrow</p>
+        }
+        <h1>@Title</h1>
+        <p class="finance-description">@Description</p>
+    </div>
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Description { get; set; } = string.Empty;
+    [Parameter] public string? CurrentPage { get; set; }
+    [Parameter] public string? Eyebrow { get; set; }
+}

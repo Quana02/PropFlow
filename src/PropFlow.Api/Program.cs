@@ -22,6 +22,12 @@ using PropFlow.Modules.Maintenance.Application;
 using PropFlow.Modules.Maintenance.Contracts;
 using PropFlow.Modules.Maintenance.Presentation;
 using PropFlow.Modules.Payments.Infrastructure.Persistence;
+using PropFlow.Modules.Payments.Contracts;
+using PropFlow.Modules.Payments.Application.Finance;
+using PropFlow.Modules.Payments.Infrastructure.Finance;
+using PropFlow.Modules.Billing.Contracts;
+using PropFlow.Modules.Billing.Application.Finance;
+using PropFlow.Modules.Billing.Infrastructure.Finance;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Residents.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -157,12 +163,20 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly)
     .AddApplicationPart(typeof(MaintenanceController).Assembly);
+    .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly);
+builder.Services.AddScoped<IInvoiceFinancialSource, InvoiceFinancialSource>();
+builder.Services.AddScoped<IConfirmedPaymentSource, ConfirmedPaymentSource>();
+builder.Services.AddScoped<BillingFinanceQueries>();
+builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceStore>();
+builder.Services.AddScoped<PaymentFinanceUseCases>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
 builder.Services.AddScoped<IAccountAccess, AccountAccessService>();
 builder.Services.AddScoped<IAdministrationTransaction, AdministrationTransaction>();
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy("finance.manage", policy => policy.RequireRole(SystemRoleCodes.Accountant).RequireClaim("permission", SystemPermissionCodes.ManageFinance));
     options.AddPolicy(AdministrationAuthorizationPolicies.ManageInternalAccounts,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageInternalAccounts));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewAdministrationActivity,

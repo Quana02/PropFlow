@@ -1,123 +1,97 @@
 @page "/finance/dashboard"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
-@using Microsoft.AspNetCore.Authorization
 @using PropFlow.Web.Client.Services.Authentication
+@using PropFlow.Web.Client.Features.Finance.Models
+@using PropFlow.Web.Client.Features.Finance.Services
 @attribute [Authorize(Roles = "ACCOUNTANT")]
 @inject AuthSession Session
+@inject IFinanceApiClient Finance
 
 <PageTitle>Cổng điều hành kế toán — PropFlow</PageTitle>
 
 <div class="finance-dashboard">
     <header class="finance-heading">
-        <div>
-            <p class="finance-eyebrow">TỔNG QUAN TÀI CHÍNH</p>
-            <h1>Xin chào, <strong>@(Session.User?.DisplayName ?? "bạn")</strong></h1>
-            <p>Theo dõi hóa đơn, thanh toán và công nợ trong phạm vi được cấp quyền.</p>
-        </div>
-        <div class="finance-period" aria-label="Kỳ báo cáo chưa sẵn sàng">
-            <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
-            <span>Chưa có kỳ báo cáo</span>
-        </div>
+        <div><p class="finance-eyebrow">TỔNG QUAN TÀI CHÍNH</p><h1>Xin chào, <strong>@(Session.User?.DisplayName ?? "bạn")</strong></h1><p>Theo dõi hóa đơn, thanh toán và công nợ trong phạm vi được cấp quyền.</p></div>
+        <div class="finance-period"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span><span>Cập nhật @DateTime.Now.ToString("dd/MM/yyyy")</span></div>
     </header>
 
-    <section class="finance-metrics" aria-label="Chỉ số tài chính">
+    <section class="finance-metrics" aria-label="Chức năng tài chính">
         <article class="finance-metric pending">
-            <div class="metric-top">
-                <span class="metric-icon material-symbols-outlined" aria-hidden="true">schedule</span>
-                <span class="metric-tag"><span aria-hidden="true">•</span> Chờ đối soát</span>
-            </div>
+            <div class="metric-top"><span class="metric-icon material-symbols-outlined" aria-hidden="true">schedule</span><span class="metric-tag">• Chờ đối soát</span></div>
             <h2>Các khoản thanh toán chờ xác minh</h2>
             <p>Khoản thanh toán cần kiểm tra và ghi nhận</p>
-            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
-            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <div class="metric-value">@(loading ? "…" : Money(PendingAmount))</div>
+            <span class="metric-note">@pending giao dịch đang chờ xử lý</span>
             <NavLink class="metric-link" href="/finance/payments/pending">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
         </article>
-
         <article class="finance-metric invoices">
-            <div class="metric-top">
-                <span class="metric-icon material-symbols-outlined" aria-hidden="true">receipt_long</span>
-                <span class="metric-tag">Hóa đơn</span>
-            </div>
+            <div class="metric-top"><span class="metric-icon material-symbols-outlined" aria-hidden="true">receipt_long</span><span class="metric-tag">@unpaid hóa đơn</span></div>
             <h2>Hóa đơn chưa thanh toán</h2>
-            <p>Hóa đơn cần theo dõi nghĩa vụ tài chính</p>
-            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
-            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <p>Phí quản lý, nước và các khoản dịch vụ</p>
+            <div class="metric-value">@(loading ? "…" : Money(UnpaidAmount))</div>
+            <span class="metric-note">Còn phải thu từ @unpaid hóa đơn</span>
             <NavLink class="metric-link" href="/finance/invoices/unpaid">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
         </article>
-
         <article class="finance-metric overdue">
-            <div class="metric-top">
-                <span class="metric-icon material-symbols-outlined" aria-hidden="true">warning</span>
-                <span class="metric-tag">Quá hạn</span>
-            </div>
+            <div class="metric-top"><span class="metric-icon material-symbols-outlined" aria-hidden="true">warning</span><span class="metric-tag">Quá hạn</span></div>
             <h2>Nợ quá hạn</h2>
-            <p>Nghĩa vụ quá hạn trong phạm vi được phép</p>
-            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
-            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <p>Các khoản phí cần theo dõi và xử lý</p>
+            <div class="metric-value">@(loading ? "…" : Money(OverdueAmount))</div>
+            <span class="metric-note">@overdue hóa đơn đã quá hạn</span>
             <NavLink class="metric-link" href="/finance/payments/overdue">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
         </article>
-
         <article class="finance-metric confirmed">
-            <div class="metric-top">
-                <span class="metric-icon material-symbols-outlined" aria-hidden="true">check_circle</span>
-                <span class="metric-tag">Đã xác nhận</span>
-            </div>
+            <div class="metric-top"><span class="metric-icon material-symbols-outlined" aria-hidden="true">check_circle</span><span class="metric-tag">Đã xác nhận</span></div>
             <h2>Các khoản thu đã xác nhận</h2>
-            <p>Thanh toán được hệ thống xác nhận</p>
-            <div class="metric-value" aria-label="Chưa có số liệu">—</div>
-            <span class="metric-empty">Dữ liệu chưa sẵn sàng</span>
+            <p>Các khoản thu đã được ghi nhận vào hệ thống</p>
+            <div class="metric-value">@(loading ? "…" : Money(ConfirmedAmount))</div>
+            <span class="metric-note">@confirmed giao dịch thành công</span>
             <NavLink class="metric-link" href="/finance/payments/confirmed">Xem chi tiết <span aria-hidden="true">→</span></NavLink>
         </article>
     </section>
 
-    <div class="finance-details">
-        <section class="finance-panel finance-transactions" aria-labelledby="transactions-title">
-            <div class="panel-heading">
-                <div>
-                    <h2 id="transactions-title">Lịch sử giao dịch thu phí mới nhất</h2>
-                    <p>Giao dịch trong phạm vi tòa nhà được cấp quyền</p>
-                </div>
-                <span class="panel-mark material-symbols-outlined" aria-hidden="true">north_east</span>
-            </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th scope="col">Căn hộ / Cư dân</th>
-                            <th scope="col">Ngày ghi nhận</th>
-                            <th scope="col">Trạng thái</th>
-                            <th scope="col">Số tiền</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="4">
-                                <div class="finance-empty" role="status">
-                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
-                                    <strong>Lịch sử giao dịch chưa sẵn sàng</strong>
-                                    <span>Thông tin sẽ hiển thị khi dữ liệu tài chính được kết nối.</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="finance-panel finance-debt" aria-labelledby="debt-title">
-            <div class="panel-heading">
-                <div>
-                    <h2 id="debt-title">Công nợ tồn đọng quá hạn</h2>
-                    <p>Tổng hợp khoản quá hạn cần theo dõi</p>
-                </div>
-                <span class="panel-mark material-symbols-outlined" aria-hidden="true">north_east</span>
-            </div>
-            <div class="debt-value" aria-label="Chưa có số liệu công nợ">—</div>
-            <p class="debt-caption">Dữ liệu công nợ chưa sẵn sàng.</p>
-            <div class="debt-empty" role="status">
-                <span class="material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
-                <span>Thông tin công nợ sẽ hiển thị tại đây.</span>
-            </div>
-        </section>
-    </div>
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <section class="finance-panel" aria-label="Lỗi tải dữ liệu"><FinanceUnavailableState Title="Không thể tải tổng quan tài chính" Message="@error" Icon="error" /><button class="dashboard-retry" @onclick="LoadAsync">Thử lại</button></section>
+    }
+    else
+    {
+        <div class="finance-details">
+            <section class="finance-panel finance-transactions" aria-labelledby="transactions-title">
+                <div class="panel-heading"><div><h2 id="transactions-title">Lịch sử giao dịch thu phí mới nhất</h2><p>Giao dịch tự động khớp lệnh qua cổng thanh toán và đối soát thủ công</p></div><NavLink href="/finance/payments/confirmed" class="panel-mark" aria-label="Xem tất cả giao dịch"><span class="material-symbols-outlined">north_east</span></NavLink></div>
+                <div class="table-wrap"><table><thead><tr><th>MÃ GIAO DỊCH</th><th>NGÀY THU</th><th>TRẠNG THÁI</th><th>SỐ TIỀN</th></tr></thead><tbody>
+                    @if (RecentPayments.Count == 0) { <tr><td colspan="4"><div class="finance-empty">Chưa có giao dịch để hiển thị.</div></td></tr> }
+                    else { @foreach (var item in RecentPayments) { <tr><td><div class="transaction-name"><span class="transaction-avatar">@Initial(item.PaymentNumber)</span><div><strong>@item.PaymentNumber</strong><small>@Method(item.PaymentMethodCode) · @(item.ReferenceNumber ?? "Không có mã tham chiếu")</small></div></div></td><td>@item.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy")<small>@item.PaymentDate.ToLocalTime().ToString("HH:mm")</small></td><td><span class="status-pill @(item.Status == "CONFIRMED" ? "success" : "waiting")">• @(item.Status == "CONFIRMED" ? "Thành công" : "Chờ đối soát")</span></td><td class="amount">@Money(item.Amount)</td></tr> } }
+                </tbody></table></div>
+                <div class="panel-footer"><span>Hiển thị @RecentPayments.Count giao dịch gần nhất</span><NavLink href="/finance/payments/confirmed">Xem tất cả sổ quỹ →</NavLink></div>
+            </section>
+            <section class="finance-panel finance-debt" aria-labelledby="debt-title">
+                <div class="panel-heading"><div><h2 id="debt-title">Công nợ tồn đọng quá hạn</h2><p>Đã kích hoạt quy trình theo dõi công nợ</p></div><span class="panel-mark material-symbols-outlined">north_east</span></div>
+                <div class="debt-value">@Money(OverdueAmount)</div>
+                <p class="debt-caption">Tổng @overdue hóa đơn chưa hoàn tất nghĩa vụ.</p>
+                <div class="debt-breakdown"><span><i></i> Dư nợ cần xử lý</span><strong>@Money(OverdueAmount)</strong></div>
+                <NavLink class="debt-link" href="/finance/payments/overdue">Xem chi tiết <span>→</span></NavLink>
+            </section>
+        </div>
+    }
 </div>
+
+@code {
+    private int pending, unpaid, overdue, confirmed; private bool loading; private string? error;
+    private PagedFinanceResult<PaymentRow>? pendingData, confirmedData;
+    private PagedFinanceResult<InvoiceBalance>? unpaidData, overdueData;
+    private decimal PendingAmount => pendingData?.Items.Sum(x => x.Amount) ?? 0;
+    private decimal UnpaidAmount => unpaidData?.Items.Sum(x => x.OutstandingAmount) ?? 0;
+    private decimal OverdueAmount => overdueData?.Items.Sum(x => x.OutstandingAmount) ?? 0;
+    private decimal ConfirmedAmount => confirmedData?.Items.Sum(x => x.Amount) ?? 0;
+    private IReadOnlyList<PaymentRow> RecentPayments => (confirmedData?.Items ?? []).Concat(pendingData?.Items ?? []).OrderByDescending(x => x.PaymentDate).Take(4).ToArray();
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync() { loading = true; error = null; var results = await Task.WhenAll(LoadPending(), LoadUnpaid(), LoadOverdue(), LoadConfirmed()); error = results.FirstOrDefault(x => x is not null); loading = false; }
+    private async Task<string?> LoadPending() { var r = await Finance.GetPendingPaymentsAsync(1); pendingData = r.Data; pending = r.Data?.Total ?? 0; return r.IsSuccess ? null : r.Message; }
+    private async Task<string?> LoadUnpaid() { var r = await Finance.GetUnpaidInvoicesAsync(1); unpaidData = r.Data; unpaid = r.Data?.Total ?? 0; return r.IsSuccess ? null : r.Message; }
+    private async Task<string?> LoadOverdue() { var r = await Finance.GetOverdueDebtsAsync(1); overdueData = r.Data; overdue = r.Data?.Total ?? 0; return r.IsSuccess ? null : r.Message; }
+    private async Task<string?> LoadConfirmed() { var r = await Finance.GetConfirmedPaymentsAsync(1); confirmedData = r.Data; confirmed = r.Data?.Total ?? 0; return r.IsSuccess ? null : r.Message; }
+    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Method(string value) => value switch { "BANK_TRANSFER" => "Chuyển khoản", "CASH" => "Tiền mặt", _ => value };
+    private static string Initial(string value) => value.Length >= 2 ? value[^2..].ToUpperInvariant() : value.ToUpperInvariant();
+}

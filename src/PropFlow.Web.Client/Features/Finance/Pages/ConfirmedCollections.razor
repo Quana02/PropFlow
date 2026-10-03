@@ -1,109 +1,79 @@
 @page "/finance/payments/confirmed"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
-@using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "ACCOUNTANT")]
+@using PropFlow.Web.Client.Features.Finance.Models
+@using PropFlow.Web.Client.Features.Finance.Services
+@inject IFinanceApiClient Finance
 
 <PageTitle>Các khoản thu đã xác nhận — PropFlow</PageTitle>
 
 <div class="collections-page">
     <header class="collections-heading">
         <div>
-            <nav class="collections-breadcrumb" aria-label="Đường dẫn trang">
-                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
-                <span aria-hidden="true">›</span>
-                <span aria-current="page">Thu phí đã xác nhận</span>
-            </nav>
-            <h1>Các khoản thu đã xác nhận</h1>
-            <p>Theo dõi giao dịch thu tiền đã được xác nhận trong phạm vi được cấp quyền.</p>
+            <nav class="collections-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Thu phí hạch toán sổ cái</span></nav>
+            <div class="title-row"><h1>Các khoản thu đã xác nhận</h1><span class="ledger-badge"><span aria-hidden="true">●</span> Đã hạch toán vào sổ cái</span></div>
+            <p>Theo dõi dòng tiền thực thu, tự động đối soát và đồng bộ chứng từ kế toán điện tử.</p>
         </div>
         <div class="collections-actions">
-            <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ cái"><button type="button" disabled>Xuất sổ cái thu tiền (Excel)</button></span>
-            <span title="Chưa khả dụng: chưa có tích hợp ERP kế toán"><button type="button" disabled>Đồng bộ ERP kế toán</button></span>
+            <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ cái"><button type="button" disabled><span class="material-symbols-outlined">download</span> Xuất sổ cái thu tiền (Excel)</button></span>
+            <span title="Chưa khả dụng: chưa có tích hợp ERP kế toán"><button type="button" disabled><span class="material-symbols-outlined">sync</span> Đồng bộ ERP kế toán</button></span>
         </div>
     </header>
 
     <section class="collections-summary" aria-label="Tổng quan khoản thu đã xác nhận">
-        <article class="summary-card">
-            <div class="summary-label"><span>TỔNG CĂN ĐÃ HOÀN THÀNH</span><span class="material-symbols-outlined" aria-hidden="true">apartment</span></div>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Dữ liệu chưa sẵn sàng</small>
-        </article>
-        <article class="summary-card revenue">
-            <div class="summary-label"><span>TỔNG DOANH THU THỰC THU</span><span class="material-symbols-outlined" aria-hidden="true">payments</span></div>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Dữ liệu chưa sẵn sàng</small>
-        </article>
-        <article class="summary-card matching">
-            <div class="summary-label"><span>TỶ LỆ KHỚP VIETQR &amp; POS</span><span class="material-symbols-outlined" aria-hidden="true">bolt</span></div>
-            <strong aria-label="Chưa có số liệu">—</strong>
-            <small>Dữ liệu chưa sẵn sàng</small>
-        </article>
+        <article class="summary-card"><div class="summary-label"><span>TỔNG PHIẾU ĐÃ HẠCH TOÁN</span><span class="material-symbols-outlined">receipt_long</span></div><strong>@Value(data?.Total)</strong><small>Giao dịch đã xác nhận trong hệ thống</small></article>
+        <article class="summary-card revenue"><div class="summary-label"><span>DOANH THU TRANG HIỆN TẠI</span><span class="material-symbols-outlined">payments</span></div><strong>@Money(Revenue)</strong><small>Tổng tiền của các bản ghi đang hiển thị</small></article>
+        <article class="summary-card matching"><div class="summary-label"><span>TỶ LỆ ĐÃ HẠCH TOÁN</span><span class="material-symbols-outlined">bolt</span></div><strong>@ConfirmedRate</strong><small>Giao dịch trong danh sách đã được xác nhận</small></article>
+        <article class="summary-card invoice-export"><div class="summary-label"><span>HÓA ĐƠN ĐÃ XUẤT VAT</span><span class="material-symbols-outlined">description</span></div><strong class="unavailable-value">—</strong><small>Chưa tích hợp dịch vụ hóa đơn điện tử</small></article>
     </section>
 
-    <section class="collections-content" aria-labelledby="collections-list-title">
-        <div class="collections-toolbar">
-            <div class="collections-filters">
-                <label class="search-field">
-                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
-                    <span class="visually-hidden">Tìm khoản thu đã xác nhận</span>
-                    <input type="search" disabled placeholder="Tìm theo mã phiếu thu, căn hộ..." title="Chưa khả dụng: chưa có API tìm kiếm thanh toán" />
-                </label>
-                <label class="filter-field">
-                    <span>Từ ngày</span>
-                    <input type="date" disabled title="Chưa khả dụng: chưa có API lọc theo kỳ hạch toán" />
-                </label>
-                <label class="filter-field">
-                    <span>Đến ngày</span>
-                    <input type="date" disabled title="Chưa khả dụng: chưa có API lọc theo kỳ hạch toán" />
-                </label>
-                <label class="filter-field building-field">
-                    <span>Tòa nhà</span>
-                    <PropFlowSelect Value="@string.Empty" Options="PropFlowSelectOptions.UnavailableBuilding" Variant="Filter" AriaLabel="Chọn tòa nhà" Disabled="true" title="Chưa khả dụng: chưa có API danh sách tòa nhà được cấp quyền" />
-                </label>
-            </div>
-            <div class="method-filters" aria-label="Lọc theo phương thức thanh toán" title="Chưa khả dụng: chưa có API lọc thanh toán">
-                <button type="button" disabled title="Chưa khả dụng">Tất cả</button>
-                <button type="button" disabled title="Chưa khả dụng">VietQR</button>
-                <button type="button" disabled title="Chưa khả dụng">POS</button>
-                <button type="button" disabled title="Chưa khả dụng">Chuyển khoản</button>
-                <button type="button" disabled title="Chưa khả dụng">Tiền mặt</button>
-            </div>
+    <section class="collections-toolbar" aria-label="Bộ lọc khoản thu">
+        <div class="collections-filters">
+            <label class="search-field"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm khoản thu</span><input type="search" placeholder="Tìm theo mã phiếu thu hoặc số tham chiếu..." @bind="search" @bind:event="oninput" @onkeyup="HandleSearchKey" /></label>
+            <button class="period-filter" type="button" disabled title="Chưa có API lọc kỳ hạch toán"><span class="material-symbols-outlined">calendar_month</span>Kỳ hạch toán hiện tại<span class="material-symbols-outlined">expand_more</span></button>
+            <button class="scope-filter" type="button" disabled title="Dữ liệu thuộc tòa nhà hiện tại">Tất cả phạm vi<span class="material-symbols-outlined">expand_more</span></button>
         </div>
+        <div class="method-filters" aria-label="Lọc theo phương thức thanh toán">
+            <button class="@(method == "ALL" ? "active" : null)" type="button" @onclick='() => SetMethod("ALL")'>Tất cả phiếu thu (@(data?.Total ?? 0))</button>
+            <button class="@(method == "BANK_TRANSFER" ? "active" : null)" type="button" @onclick='() => SetMethod("BANK_TRANSFER")'>Chuyển khoản (@CountMethod("BANK_TRANSFER"))</button>
+            <button class="@(method == "CASH" ? "active" : null)" type="button" @onclick='() => SetMethod("CASH")'>Tiền mặt (@CountMethod("CASH"))</button>
+        </div>
+    </section>
 
-        <div class="collections-table-card">
-            <div class="table-heading">
-                <div>
-                    <h2 id="collections-list-title">Danh sách khoản thu đã xác nhận</h2>
-                    <p>Chỉ các giao dịch được hệ thống xác nhận mới xuất hiện trong danh sách.</p>
-                </div>
-                <NavLink href="/finance/dashboard">← Quay lại tổng quan</NavLink>
-            </div>
-            <div class="table-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th scope="col">Mã phiếu thu &amp; thời gian</th>
-                            <th scope="col">Căn hộ &amp; người nộp</th>
-                            <th scope="col">Khoản phí hạch toán</th>
-                            <th scope="col">Phương thức</th>
-                            <th scope="col">Số tiền đã thu</th>
-                            <th scope="col">Trạng thái sổ cái</th>
-                            <th scope="col">Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="7">
-                                <div class="collections-unavailable" role="status">
-                                    <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
-                                    <strong>Danh sách khoản thu chưa sẵn sàng</strong>
-                                    <span>Dữ liệu và quyền truy cập sẽ được kết nối khi dịch vụ thanh toán hỗ trợ màn hình này.</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <section class="collections-table-card" aria-labelledby="collections-list-title">
+        <h2 class="visually-hidden" id="collections-list-title">Danh sách khoản thu đã xác nhận</h2>
+        <div class="table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ PHIẾU THU &amp;<br />THỜI GIAN</th><th>MÃ HÓA ĐƠN</th><th>KHOẢN PHÍ HẠCH TOÁN</th><th>PHƯƠNG THỨC</th><th>SỐ TIỀN ĐÃ THU</th><th>TRẠNG THÁI SỔ CÁI</th><th>THAO TÁC</th></tr></thead><tbody>
+            @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
+            else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
+            else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có khoản thu phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc phương thức." Icon="inbox" /></td></tr> }
+            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" checked disabled aria-label="Đã chọn @item.PaymentNumber" /></td><td><strong>@item.PaymentNumber</strong><small>@item.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy · HH:mm")</small></td><td><strong>@ShortId(item.InvoiceId)</strong><small>Hóa đơn liên kết</small></td><td><strong>@(item.Note ?? "Khoản thu hóa đơn")</strong><small>Tham chiếu: @(item.ReferenceNumber ?? "—")</small></td><td><span class="method-pill"><i></i>@MethodName(item.PaymentMethodCode)</span></td><td class="money-cell"><strong>+@Money(item.Amount)</strong><small>Mã GD: @(item.ReferenceNumber ?? ShortId(item.Id))</small></td><td><span class="ledger-status"><i></i>Đã vào sổ cái</span></td><td><button class="print-button" type="button" disabled title="Chưa có dịch vụ tạo phiếu thu">In phiếu</button><span class="more-action" aria-hidden="true">⋮</span></td></tr> } }
+        </tbody></table></div>
+        @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="collections-pagination"><span>Hiển thị @FilteredItems.Count bản ghi trên tổng số @data.Total phiếu thu đã hạch toán</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
 </div>
+
+@code {
+    private PagedFinanceResult<PaymentRow>? data;
+    private bool loading;
+    private string? error;
+    private string search = string.Empty;
+    private string method = "ALL";
+    private int page = 1;
+    private const int PageSize = 20;
+    private IReadOnlyList<PaymentRow> FilteredItems => (data?.Items ?? []).Where(x => method == "ALL" || x.PaymentMethodCode == method).ToArray();
+    private decimal Revenue => data?.Items.Sum(x => x.Amount) ?? 0;
+    private string ConfirmedRate => data is { Items.Length: > 0 } ? $"{data.Items.Count(x => x.Status == "CONFIRMED") * 100m / data.Items.Length:N0}%" : "—";
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((data?.Total ?? 0) / (double)PageSize));
+    protected override Task OnInitializedAsync() => LoadAsync(1);
+    private async Task LoadAsync(int target) { page = target; loading = true; error = null; var result = await Finance.GetConfirmedPaymentsAsync(page, search); data = result.Data; if (!result.IsSuccess) error = result.Message; loading = false; }
+    private Task ReloadAsync() => LoadAsync(page);
+    private Task PreviousPage() => LoadAsync(page - 1);
+    private Task NextPage() => LoadAsync(page + 1);
+    private async Task HandleSearchKey(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(1); }
+    private void SetMethod(string value) => method = value;
+    private int CountMethod(string value) => data?.Items.Count(x => x.PaymentMethodCode == value) ?? 0;
+    private static string Value(int? value) => value?.ToString("N0") ?? "…";
+    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
+    private static string MethodName(string value) => value switch { "BANK_TRANSFER" => "Chuyển khoản", "CASH" => "Tiền mặt", "VIETQR" => "VietQR", "POS" => "POS", _ => value };
+}

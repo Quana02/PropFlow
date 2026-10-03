@@ -26,7 +26,9 @@
     <ProjectReference Include="..\Modules\Complaints\PropFlow.Modules.Complaints.csproj" />
     <ProjectReference Include="..\Modules\Maintenance\PropFlow.Modules.Maintenance.csproj" />
     <ProjectReference Include="..\Modules\Billing\PropFlow.Modules.Billing.csproj" />
+    <ProjectReference Include="..\Modules\Billing.Contracts\PropFlow.Modules.Billing.Contracts.csproj" />
     <ProjectReference Include="..\Modules\Payments\PropFlow.Modules.Payments.csproj" />
+    <ProjectReference Include="..\Modules\Payments.Contracts\PropFlow.Modules.Payments.Contracts.csproj" />
     <ProjectReference Include="..\Modules\AiClassification\PropFlow.Modules.AiClassification.csproj" />
     <ProjectReference Include="..\Modules\AiRecommendation\PropFlow.Modules.AiRecommendation.csproj" />
     <ProjectReference Include="..\Modules\Communication\PropFlow.Modules.Communication.csproj" />
