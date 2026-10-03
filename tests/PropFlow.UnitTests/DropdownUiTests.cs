@@ -73,6 +73,36 @@ public sealed class DropdownUiTests
     }
 
     [Fact]
+    public void ResidentPortalAndManagerModals_UseSeparateCssClasses()
+    {
+        var styles = File.ReadAllText(Path.Combine(
+            SolutionDirectory,
+            "src",
+            "PropFlow.Web.Client",
+            "wwwroot",
+            "css",
+            "resident-portal.css"));
+
+        var portalHeader = File.ReadAllText(Path.Combine(
+            SolutionDirectory,
+            "src",
+            "PropFlow.Web.Client",
+            "Features",
+            "Resident",
+            "Portal",
+            "Components",
+            "ResidentHeader.razor"));
+        var manager = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
+
+        Assert.Contains(".resident-portal-modal {", styles, StringComparison.Ordinal);
+        Assert.Contains(".resident-portal-modal-backdrop {", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n.resident-modal {", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n.resident-modal-backdrop {", styles, StringComparison.Ordinal);
+        Assert.Contains("class=\"resident-portal-modal\"", portalHeader, StringComparison.Ordinal);
+        Assert.Contains("class=\"resident-modal\"", manager, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ResidentManagement_UsesFieldValidationAndFilterPopover()
     {
         var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
