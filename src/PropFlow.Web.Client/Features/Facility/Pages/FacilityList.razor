@@ -1,6 +1,6 @@
 @page "/facilities"
 @layout PropFlow.Web.Client.Layout.MainLayout
-@attribute [Authorize(Roles = "MANAGER,STAFF")]
+@attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.AspNetCore.Authorization
@@ -15,6 +15,11 @@
 @implements IDisposable
 
 <PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
+@if (!IsManager)
+{
+    <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
+}
+
 
 <div class="fe04-page font-sans text-slate-800 antialiased">
 
@@ -394,7 +399,7 @@
     </div>
 </div>
 
-@if (IsFormOpen)
+@if (IsManager && IsFormOpen)
 {
     <div class="fe04-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm transition-opacity">
         <div class="fe04-modal relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden font-sans text-[#0f172a] animate-in fade-in zoom-in duration-200">
@@ -604,7 +609,7 @@
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
-        IsManager = user.IsInRole("MANAGER");
+        IsManager = AssetPermissions.CanManage(user);
         await Task.WhenAll(LoadData(), LoadSummaryAsync());
         _ = RefreshStatusAsync(StatusRefreshCancellation.Token);
     }
@@ -633,6 +638,7 @@
     {
         IsLoading = true;
         ErrorMessage = null;
+        PagedResult = new();
         try
         {
             var result = await FacilityApiClient.GetFacilitiesAsync(Filter);
@@ -670,9 +676,17 @@
         IsFormOpen = true;
     }
 
-    private void OpenDetailDialog(FacilityModel item)
+    private async Task OpenDetailDialog(FacilityModel item)
     {
-        SelectedFacilityToView = item;
+        IsDetailOpen = false;
+        SelectedFacilityToView = null;
+        var result = await FacilityApiClient.GetFacilityByIdAsync(item.Id);
+        if (!result.IsSuccess || result.Data is null)
+        {
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+            return;
+        }
+        SelectedFacilityToView = result.Data;
         IsDetailOpen = true;
     }
 

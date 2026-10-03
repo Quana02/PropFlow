@@ -107,6 +107,7 @@ public class SetEquipmentStatusModel
 
 public class EquipmentFilterModel
 {
+    public bool BuildingLevelOnly { get; set; }
     public Guid? FacilityId { get; set; }
     public string? SearchKeyword { get; set; }
     public EquipmentStatus? Status { get; set; }

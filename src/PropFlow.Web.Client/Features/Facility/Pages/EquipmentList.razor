@@ -1,6 +1,6 @@
 @page "/equipment"
 @layout PropFlow.Web.Client.Layout.MainLayout
-@attribute [Authorize(Roles = "MANAGER,STAFF")]
+@attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.AspNetCore.Authorization
@@ -16,6 +16,11 @@
 @implements IDisposable
 
 <PageTitle>Quản Lý Thiết Bị - PropFlow</PageTitle>
+@if (!IsManager)
+{
+    <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
+}
+
 
 <div class="fe04-page font-sans text-slate-800 antialiased">
 
@@ -283,8 +288,6 @@
                                 </td>
                                 <td class="py-4 px-5 text-right">
                                     <div class="inline-flex items-center gap-1.5 justify-end">
-                                        @if (IsManager)
-                                        {
                                         <button type="button"
                                                 class="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-all"
                                                 title="Xem chi tiết thiết bị"
@@ -292,6 +295,8 @@
                                             <span class="material-symbols-outlined text-lg">visibility</span>
                                         </button>
 
+                                        @if (IsManager)
+                                        {
                                         <button type="button"
                                                 class="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                                                 title="Chỉnh sửa hồ sơ"
@@ -593,7 +598,7 @@
     </div>
 }
 
-@if (IsFormOpen)
+@if (IsManager && IsFormOpen)
 {
     <div class="fe04-modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
         <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
@@ -785,7 +790,7 @@
     ];
 
     private IReadOnlyList<PropFlowSelectOption> FacilityOptions =>
-        new[] { new PropFlowSelectOption("", "Tất cả CSVT") }
+        new[] { new PropFlowSelectOption("", "Tất cả CSVT"), new PropFlowSelectOption("building-level", "Thiết bị cấp chung cư") }
         .Concat(FacilityList.Select(f => new PropFlowSelectOption(f.Id.ToString(), f.Name)))
         .ToList();
 
@@ -810,6 +815,17 @@
     private List<FacilityModel> FacilityList { get; set; } = new();
 
     private bool IsManager { get; set; }
+    [SupplyParameterFromQuery(Name = "equipmentId")] public Guid? EquipmentId { get; set; }
+    private Guid? LoadedEquipmentId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EquipmentId.HasValue && EquipmentId != LoadedEquipmentId)
+        {
+            LoadedEquipmentId = EquipmentId;
+            await OpenDetailDialog(new EquipmentModel { Id = EquipmentId.Value });
+        }
+    }
     private readonly CancellationTokenSource StatusRefreshCancellation = new();
 
     private string StatusFilterString
@@ -823,9 +839,10 @@
 
     private string FilterFacilityIdString
     {
-        get => Filter.FacilityId?.ToString() ?? "";
+        get => Filter.BuildingLevelOnly ? "building-level" : Filter.FacilityId?.ToString() ?? "";
         set
         {
+            Filter.BuildingLevelOnly = value == "building-level";
             Filter.FacilityId = Guid.TryParse(value, out var g) ? g : null;
         }
     }
@@ -839,7 +856,7 @@
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
-        IsManager = user.IsInRole("MANAGER");
+        IsManager = AssetPermissions.CanManage(user);
 
         await LoadFacilitiesAsync();
         await Task.WhenAll(LoadData(), LoadSummaryAsync());
@@ -870,6 +887,7 @@
     {
         IsLoading = true;
         ErrorMessage = null;
+        PagedResult = new();
         try
         {
             var result = await EquipmentApiClient.GetEquipmentsAsync(Filter);
@@ -929,9 +947,17 @@
         IsFormOpen = true;
     }
 
-    private void OpenDetailDialog(EquipmentModel item)
+    private async Task OpenDetailDialog(EquipmentModel item)
     {
-        SelectedEquipmentToEdit = item;
+        IsDetailOpen = false;
+        SelectedEquipmentToEdit = null;
+        var result = await EquipmentApiClient.GetEquipmentByIdAsync(item.Id);
+        if (!result.IsSuccess || result.Data is null)
+        {
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+            return;
+        }
+        SelectedEquipmentToEdit = result.Data;
         IsDetailOpen = true;
     }
 

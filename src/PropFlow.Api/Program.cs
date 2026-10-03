@@ -146,6 +146,12 @@ builder.Services.AddDbContext<CommunicationDbContext>((services, options) =>
             "__EFMigrationsHistory",
             "communication")));
 
+// Read scope uses the existing FE-05/FE-07 assignment data.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAssignedAssetSource, PropFlow.Modules.Maintenance.Infrastructure.MaintenanceAssignedAssetSource>();
+builder.Services.AddScoped<IAssignedAssetSource, ServiceRequestAssignedAssetSource>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess, AssignedAssetReadAccess>();
+
 // Register Module Services
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings.Services.IBuildingService, PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IPropertyAssetsStore, PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore>();

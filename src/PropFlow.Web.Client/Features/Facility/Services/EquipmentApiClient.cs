@@ -8,6 +8,7 @@ public sealed class EquipmentApiClient(AuthenticatedApiClient api) : IEquipmentA
     public Task<ApiResult<PagedResult<EquipmentModel>>> GetEquipmentsAsync(EquipmentFilterModel filter, CancellationToken cancellationToken = default)
     {
         var query = new List<string>();
+        if (filter.BuildingLevelOnly) query.Add("buildingLevelOnly=true");
         if (filter.FacilityId.HasValue) query.Add($"facilityId={filter.FacilityId}");
         if (!string.IsNullOrWhiteSpace(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
         if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
