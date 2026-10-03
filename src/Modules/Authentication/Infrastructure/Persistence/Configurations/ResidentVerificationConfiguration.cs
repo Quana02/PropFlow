@@ -15,8 +15,19 @@ public class ResidentVerificationConfiguration : IEntityTypeConfiguration<Reside
             .HasColumnName("id");
 
         builder.Property(rv => rv.UserId)
-            .HasColumnName("user_id")
-            .IsRequired();
+            .HasColumnName("user_id");
+
+        builder.Property(rv => rv.RegistrationUsername)
+            .HasColumnName("registration_username")
+            .HasMaxLength(50);
+        builder.Property(rv => rv.RegistrationDisplayName)
+            .HasColumnName("registration_display_name")
+            .HasMaxLength(150);
+        builder.Property(rv => rv.RegistrationEmail)
+            .HasColumnName("registration_email")
+            .HasMaxLength(255);
+        builder.Property(rv => rv.RegistrationPasswordHash)
+            .HasColumnName("registration_password_hash");
 
         // Cross-module scalar IDs: no cross-module navigation property
         builder.Property(rv => rv.ResidentId)
@@ -64,6 +75,8 @@ public class ResidentVerificationConfiguration : IEntityTypeConfiguration<Reside
         builder.HasIndex(rv => rv.ResidentId);
         builder.HasIndex(rv => rv.ApartmentUnitId);
         builder.HasIndex(rv => rv.Status);
+        builder.HasIndex(rv => rv.RegistrationUsername);
+        builder.HasIndex(rv => rv.RegistrationEmail);
 
         // Within-module relationships
         builder.HasOne(rv => rv.User)

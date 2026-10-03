@@ -34,6 +34,8 @@ public sealed class AdministrationOverviewTests
     {
         public Task<IReadOnlyList<Guid>> GetActiveApartmentIdsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<Guid>>(ids);
+        public Task<IReadOnlyList<ActiveApartmentOption>> GetActiveApartmentsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ActiveApartmentOption>>(ids.Select((id, index) => new ActiveApartmentOption(id, $"A{index + 1:000}", index + 1)).ToArray());
     }
 
     private sealed class FixedBuildings : ICurrentBuildingTimeZone
@@ -132,8 +134,9 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new ApartmentsDbContext(new DbContextOptionsBuilder<ApartmentsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var active = new ApartmentUnit("101", 1, Now);
-        var inactive = new ApartmentUnit("102", 1, Now);
+        var typeId = Guid.NewGuid();
+        var active = new ApartmentUnit("101", 1, Now, typeId);
+        var inactive = new ApartmentUnit("102", 1, Now, typeId);
         inactive.Deactivate(null, Now);
         db.ApartmentUnits.AddRange(active, inactive);
         await db.SaveChangesAsync();
@@ -161,9 +164,9 @@ public sealed class AdministrationOverviewTests
         var futureApartment = Guid.NewGuid();
         var date = new DateOnly(2026, 9, 22);
         db.ResidentApartments.AddRange(
-            new ResidentApartment(current.Id, occupiedApartment, "OWNER", date, Now),
-            new ResidentApartment(current.Id, expiredApartment, "OWNER", date.AddDays(-10), Now, endDate: date.AddDays(-1)),
-            new ResidentApartment(current.Id, futureApartment, "OWNER", date.AddDays(1), Now));
+            new ResidentApartment(current.Id, occupiedApartment, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, date, Now),
+            new ResidentApartment(current.Id, expiredApartment, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, date.AddDays(-10), Now, endDate: date.AddDays(-1)),
+            new ResidentApartment(current.Id, futureApartment, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, date.AddDays(1), Now));
         await db.SaveChangesAsync();
 
         var counts = await new ResidentOverviewSource(db).GetCountsAsync(

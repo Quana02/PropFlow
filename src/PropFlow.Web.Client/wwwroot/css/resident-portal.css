@@ -368,3 +368,8 @@ html.dark .service-modal-card .service-cancel-button,html[data-theme="dark"] .se
   .service-modal-actions { align-items: stretch; flex-direction: column; }
   .service-modal-actions > span,.service-modal-actions button { flex: 1; }
 }
+/* Authoritative FE-02/FE-03 profile loading feedback shared by the resident portal. */
+.resident-profile-alert { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:.75rem 0 0; padding:.8rem 1rem; border:1px solid rgba(248,113,113,.45); border-radius:1rem; color:#b91c1c; background:rgba(254,242,242,.92); font-size:.76rem; font-weight:650; box-shadow:0 8px 24px rgba(127,29,29,.08); }
+.resident-profile-alert button { flex:0 0 auto; padding:.35rem .7rem; border:1px solid rgba(239,68,68,.35); border-radius:.65rem; color:#b91c1c; background:#fff; font:800 .68rem var(--resident-font); cursor:pointer; }
+html.dark .resident-profile-alert,html[data-theme="dark"] .resident-profile-alert { border-color:rgba(248,113,113,.35); color:#fecaca; background:rgba(69,10,10,.78); }
+html.dark .resident-profile-alert button,html[data-theme="dark"] .resident-profile-alert button { border-color:rgba(248,113,113,.35); color:#fecaca; background:#450a0a; }

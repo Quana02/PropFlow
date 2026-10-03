@@ -25,12 +25,23 @@ public class ApartmentUnitConfiguration : IEntityTypeConfiguration<ApartmentUnit
             .HasColumnName("floor_number")
             .IsRequired();
 
-        builder.Property(a => a.AreaM2)
-            .HasColumnName("area_m2")
-            .HasPrecision(10, 2);
+        builder.Property(a => a.ApartmentUnitTypeId).HasColumnName("apartment_unit_type_id").IsRequired();
+        builder.HasOne(a => a.ApartmentUnitType).WithMany().HasForeignKey(a => a.ApartmentUnitTypeId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(a => a.UsableAreaM2)
+            .HasColumnName("usable_area_m2")
+            .HasPrecision(10, 2)
+            .IsRequired();
 
         builder.Property(a => a.BedroomCount)
             .HasColumnName("bedroom_count");
+
+        builder.Property(a => a.BathroomCount)
+            .HasColumnName("bathroom_count");
+
+        builder.Property(a => a.HandoverDate)
+            .HasColumnName("handover_date")
+            .HasColumnType("date");
 
         builder.Property(a => a.Description)
             .HasColumnName("description");

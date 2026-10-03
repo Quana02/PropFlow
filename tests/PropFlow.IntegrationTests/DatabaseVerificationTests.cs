@@ -30,6 +30,32 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     }
 
     [Fact]
+    public async Task ApartmentOwnership_MultiOwnerMigration_ShouldUseCurrentOwnerPartialUniqueIndex()
+    {
+        var options = new DbContextOptionsBuilder<ApartmentsDbContext>()
+            .UseNpgsql(_connectionString, postgres => postgres.MigrationsHistoryTable("__EFMigrationsHistory", "apartments"))
+            .Options;
+        await using (var context = new ApartmentsDbContext(options))
+        {
+            await context.Database.MigrateAsync();
+        }
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(@"
+            SELECT indexdef FROM pg_indexes
+            WHERE schemaname = 'apartments'
+              AND indexname = 'ux_apartment_ownership_current_owner';", connection);
+
+        var definition = (string?)await command.ExecuteScalarAsync();
+
+        Assert.NotNull(definition);
+        Assert.Contains("UNIQUE INDEX", definition!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("apartment_unit_id, owner_resident_id", definition!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("WHERE (end_date IS NULL)", definition!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Database_ShouldUsePropFlowTestDatabase()
     {
         // Bắt buộc: Integration test PHẢI kết nối chính xác vào database 'propflow_test'.
@@ -90,7 +116,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     }
 
     [Fact]
-    public async Task Database_ShouldContainExactly44BusinessTables_CurrentBaseline()
+    public async Task Database_ShouldContainExactly47BusinessTables_CurrentBaseline()
     {
         var options = new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseNpgsql(_connectionString)
@@ -116,15 +142,17 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add((reader.GetString(0), reader.GetString(1)));
         }
 
-        Assert.Equal(44, tables.Count);
+        Assert.Equal(47, tables.Count);
 
         // PropertyAssets: 3
         Assert.Contains(("property_assets", "buildings"), tables);
         Assert.Contains(("property_assets", "facilities"), tables);
         Assert.Contains(("property_assets", "equipment"), tables);
 
-        // Apartments: 1
+        // Apartments: 3
+        Assert.Contains(("apartments", "apartment_unit_types"), tables);
         Assert.Contains(("apartments", "apartment_units"), tables);
+        Assert.Contains(("apartments", "apartment_ownerships"), tables);
 
         // Authentication: 4
         Assert.Contains(("auth", "users"), tables);
@@ -171,9 +199,10 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Contains(("billing", "invoice_items"), tables);
         Assert.Contains(("billing", "invoice_status_history"), tables);
 
-        // Payments: 2
+        // Payments: 3
         Assert.Contains(("payments", "payments"), tables);
         Assert.Contains(("payments", "payment_status_history"), tables);
+        Assert.Contains(("payments", "payment_operations"), tables);
 
         // AiClassification: 2
         Assert.Contains(("ai_classification", "ai_request_classifications"), tables);
@@ -633,7 +662,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     }
 
     [Fact]
-    public async Task Payments_ShouldContainExpectedTwoTables()
+    public async Task Payments_ShouldContainExpectedThreeTables()
     {
         var options = new DbContextOptionsBuilder<PaymentsDbContext>()
             .UseNpgsql(_connectionString)
@@ -659,9 +688,10 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add(reader.GetString(0));
         }
 
-        Assert.Equal(2, tables.Count);
+        Assert.Equal(3, tables.Count);
         Assert.Contains("payments", tables);
         Assert.Contains("payment_status_history", tables);
+        Assert.Contains("payment_operations", tables);
     }
 
     [Fact]

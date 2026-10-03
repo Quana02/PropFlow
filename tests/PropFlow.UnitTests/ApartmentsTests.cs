@@ -10,13 +10,15 @@ public class ApartmentsTests
     [Fact]
     public void ApartmentUnit_Constructor_GeneratesId_AndSetsDefaults()
     {
-        var unit = new ApartmentUnit("U-101", 1, _now, 75.5m, 2, "Luxury suite");
+        var typeId = Guid.NewGuid();
+        var unit = new ApartmentUnit("U-101", 1, _now, typeId, 75.5m, 2, 2, null, "Luxury suite");
 
         Assert.NotEqual(Guid.Empty, unit.Id);
         
         Assert.Equal("U-101", unit.UnitNumber);
         Assert.Equal(1, unit.FloorNumber);
-        Assert.Equal(75.5m, unit.AreaM2);
+        Assert.Equal(typeId, unit.ApartmentUnitTypeId);
+        Assert.Equal(75.5m, unit.UsableAreaM2);
         Assert.Equal(2, unit.BedroomCount);
         Assert.Equal("Luxury suite", unit.Description);
         Assert.Equal(MasterDataStatus.ACTIVE, unit.Status);
@@ -27,14 +29,14 @@ public class ApartmentsTests
     [Fact]
     public void ApartmentUnit_Constructor_ThrowsOnInvalidArgs()
     {
-        Assert.Throws<ArgumentException>(() => new ApartmentUnit("", 1, _now));
-        Assert.Throws<ArgumentException>(() => new ApartmentUnit("   ", 1, _now));
+        Assert.Throws<ArgumentException>(() => new ApartmentUnit("", 1, _now, Guid.NewGuid()));
+        Assert.Throws<ArgumentException>(() => new ApartmentUnit("   ", 1, _now, Guid.NewGuid()));
     }
 
     [Fact]
     public void ApartmentUnit_ActivateAndDeactivate_TransitionsProperly()
     {
-        var unit = new ApartmentUnit("U-101", 1, _now);
+        var unit = new ApartmentUnit("U-101", 1, _now, Guid.NewGuid());
         var actor = Guid.NewGuid();
         var later = _now.AddDays(1);
 

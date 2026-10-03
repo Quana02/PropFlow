@@ -48,21 +48,20 @@ namespace PropFlow.Modules.Residents.Infrastructure.Persistence.Migrations
                         .HasColumnType("date")
                         .HasColumnName("end_date");
 
-                    b.Property<bool>("IsPrimary")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_primary");
+                    b.Property<Guid?>("HouseholdHeadResidencyId").HasColumnType("uuid").HasColumnName("household_head_residency_id");
 
                     b.Property<string>("Note")
                         .HasColumnType("text")
                         .HasColumnName("note");
 
-                    b.Property<string>("RelationshipTypeCode")
+                    b.Property<string>("RelationshipToHead")
+                        .HasMaxLength(30).HasColumnType("character varying(30)").HasColumnName("relationship_to_head");
+
+                    b.Property<string>("ResidencyRole")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("relationship_type_code");
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("residency_role");
 
                     b.Property<Guid>("ResidentId")
                         .HasColumnType("uuid")
@@ -93,6 +92,8 @@ namespace PropFlow.Modules.Residents.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ApartmentUnitId");
+                    b.HasIndex("ApartmentUnitId", "ResidencyRole", "Status");
+                    b.HasIndex("HouseholdHeadResidencyId");
 
                     b.HasIndex("ResidentId");
 
@@ -194,7 +195,11 @@ namespace PropFlow.Modules.Residents.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PropFlow.Modules.Residents.Domain.ResidentApartments.ResidentApartment", "HouseholdHeadResidency")
+                        .WithMany().HasForeignKey("HouseholdHeadResidencyId").OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Resident");
+                    b.Navigation("HouseholdHeadResidency");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Residents.Domain.Residents.Resident", b =>

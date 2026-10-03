@@ -28,6 +28,14 @@ public class ResidentConfiguration : IEntityTypeConfiguration<Resident>
             .HasMaxLength(150)
             .IsRequired();
 
+        builder.Property(r => r.DateOfBirth).HasColumnName("date_of_birth").HasColumnType("date");
+        builder.Property(r => r.Gender).HasColumnName("gender").HasMaxLength(30);
+        builder.Property(r => r.Nationality).HasColumnName("nationality").HasMaxLength(80);
+        builder.Property(r => r.IdentityType).HasColumnName("identity_type").HasMaxLength(40);
+        builder.Property(r => r.IdentityNumber).HasColumnName("identity_number").HasMaxLength(80);
+        builder.Property(r => r.IdentityIssuedDate).HasColumnName("identity_issued_date").HasColumnType("date");
+        builder.Property(r => r.IdentityExpiryDate).HasColumnName("identity_expiry_date").HasColumnType("date");
+
         builder.Property(r => r.PhoneNumber)
             .HasColumnName("phone_number")
             .HasMaxLength(20);

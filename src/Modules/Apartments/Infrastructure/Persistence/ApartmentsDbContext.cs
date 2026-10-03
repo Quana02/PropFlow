@@ -11,6 +11,8 @@ public class ApartmentsDbContext : DbContext
     }
 
     public DbSet<ApartmentUnit> ApartmentUnits => Set<ApartmentUnit>();
+    public DbSet<ApartmentUnitType> ApartmentUnitTypes => Set<ApartmentUnitType>();
+    public DbSet<ApartmentOwnership> ApartmentOwnerships => Set<ApartmentOwnership>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

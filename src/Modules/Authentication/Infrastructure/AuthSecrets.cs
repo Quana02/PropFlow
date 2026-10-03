@@ -39,6 +39,19 @@ public sealed class AuthSecrets : IAuthSecrets, IDisposable
             user.ChangePasswordHash(hasher.HashPassword(user, password), user.Id, DateTimeOffset.UtcNow);
         return user != null && result != PasswordVerificationResult.Failed;
     }
+    public string HashRegistrationPassword(string username, string password)
+    {
+        var registration = new UserAccount(username, "pending", "Pending resident registration", DateTimeOffset.UnixEpoch);
+        return hasher.HashPassword(registration, password);
+    }
+    public bool VerifyRegistrationPassword(string username, string? passwordHash, string password)
+    {
+        var registration = string.IsNullOrWhiteSpace(passwordHash)
+            ? dummy
+            : new UserAccount(username, passwordHash, "Pending resident registration", DateTimeOffset.UnixEpoch);
+        var result = hasher.VerifyHashedPassword(registration, registration.PasswordHash, password);
+        return !string.IsNullOrWhiteSpace(passwordHash) && result != PasswordVerificationResult.Failed;
+    }
     public string NewToken() => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
     public string NewOtp() => RandomNumberGenerator.GetInt32(1_000_000).ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
     public string HashToken(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
@@ -54,6 +67,22 @@ public sealed class AuthSecrets : IAuthSecrets, IDisposable
         var actual = HMACSHA256.HashData(otpKey, Encoding.UTF8.GetBytes(parts[0] + ":" + code));
         try { return CryptographicOperations.FixedTimeEquals(actual, Convert.FromHexString(parts[1])); }
         catch (FormatException) { return false; }
+    }
+    public string BindOtp(string code, string binding) => HashToken(binding) + ":" + HashOtp(code);
+    public bool IsOtpBoundTo(string hash, string binding)
+    {
+        var separator = hash.IndexOf(':');
+        if (separator <= 0) return false;
+        var expectedBinding = Encoding.ASCII.GetBytes(HashToken(binding));
+        var actualBinding = Encoding.ASCII.GetBytes(hash[..separator]);
+        return expectedBinding.Length == actualBinding.Length
+            && CryptographicOperations.FixedTimeEquals(expectedBinding, actualBinding);
+    }
+    public bool MatchesBoundOtp(string code, string hash, string binding)
+    {
+        var separator = hash.IndexOf(':');
+        if (separator <= 0) return false;
+        return IsOtpBoundTo(hash, binding) && MatchesOtp(code, hash[(separator + 1)..]);
     }
     public SessionResponse Issue(AccountResponse user, DateTimeOffset now)
     {

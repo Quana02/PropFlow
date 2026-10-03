@@ -1,30 +1,55 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<div @ref="root" class="pf-date @(open ? "is-open" : null)">
-    <button type="button" class="pf-date__trigger" aria-label="@AriaLabel" aria-haspopup="dialog" aria-expanded="@open" @onclick="ToggleAsync">
-        <span class="@(Value is null ? "is-placeholder" : null)">@(Value?.ToString("dd/MM/yyyy") ?? Placeholder)</span>
-        <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
-    </button>
+<div @ref="root" class="pf-date @(open ? "is-open" : null) @(showParseError ? "is-invalid" : null)">
+    <div class="pf-date__control">
+        <input type="text" class="pf-date__input" value="@textValue" placeholder="@Placeholder" aria-label="@AriaLabel"
+               aria-invalid="@showParseError" aria-describedby="@(showParseError ? errorId : null)" inputmode="numeric"
+               maxlength="10" autocomplete="off" disabled="@Disabled"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();}"
+               @oninput="HandleInputAsync" @onblur="HandleBlurAsync" />
+        <button type="button" class="pf-date__calendar-trigger" aria-label="Mở lịch: @AriaLabel" aria-haspopup="dialog"
+                aria-expanded="@open" disabled="@Disabled" @onclick="ToggleAsync">
+            <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+        </button>
+    </div>
+    @if (showParseError)
+    {
+        <small id="@errorId" class="pf-date__error" role="alert">@PropFlowDateText.InvalidMessage</small>
+    }
     @if (open)
     {
         <section class="pf-date__calendar" role="dialog" aria-label="@AriaLabel" popover="manual">
             <header>
                 <button type="button" aria-label="Tháng trước" title="Tháng trước" @onclick="PreviousMonth"><span class="material-symbols-outlined">chevron_left</span></button>
-                <strong>@MonthLabel</strong>
+                <div class="pf-date__heading">
+                    <strong>@MonthName</strong>
+                    <button type="button" class="pf-date__year-trigger" aria-label="Chọn năm" aria-haspopup="listbox" aria-expanded="@showYearPicker" @onclick="ToggleYearPicker">
+                        <span>@visibleMonth.Year</span><span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                    </button>
+                </div>
                 <button type="button" aria-label="Tháng sau" title="Tháng sau" @onclick="NextMonth"><span class="material-symbols-outlined">chevron_right</span></button>
             </header>
-            <div class="pf-date__weekdays" aria-hidden="true">@foreach (var label in Weekdays) { <span>@label</span> }</div>
-            <div class="pf-date__days">
-                @foreach (var day in CalendarDays)
-                {
-                    <button type="button" class="@(day.Month != visibleMonth.Month ? "is-outside" : null) @(Value == day ? "is-selected" : null) @(DateOnly.FromDateTime(DateTime.Today) == day ? "is-today" : null)" aria-label="@day.ToString("dd/MM/yyyy")" aria-pressed="@(Value == day)" @onclick="() => SelectDateAsync(day)">@day.Day</button>
-                }
-            </div>
-            <footer>
-                <button type="button" @onclick="ClearAsync">Xóa</button>
-                <button type="button" @onclick="SelectTodayAsync">Hôm nay</button>
-            </footer>
+            @if (showYearPicker)
+            {
+                <div class="pf-date__years" role="listbox" aria-label="Danh sách năm">
+                    @foreach (var year in Years)
+                    {
+                        <button type="button" role="option" class="@(year == visibleMonth.Year ? "is-selected" : null)" aria-selected="@(year == visibleMonth.Year)" @onclick="() => SelectYear(year)">@year</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="pf-date__weekdays" aria-hidden="true">@foreach (var label in Weekdays) { <span>@label</span> }</div>
+                <div class="pf-date__days">
+                    @foreach (var day in CalendarDays)
+                    {
+                        <button type="button" class="@(day.Month != visibleMonth.Month ? "is-outside" : null) @(Value == day ? "is-selected" : null) @(DateOnly.FromDateTime(DateTime.Today) == day ? "is-today" : null)" aria-label="@day.ToString("dd/MM/yyyy")" aria-pressed="@(Value == day)" @onclick="() => SelectDateAsync(day)">@day.Day</button>
+                    }
+                </div>
+            }
+            <footer><button type="button" @onclick="ClearAsync">Xóa</button><button type="button" @onclick="SelectTodayAsync">Hôm nay</button></footer>
         </section>
     }
 </div>
@@ -32,56 +57,74 @@
 @code {
     [Parameter] public DateOnly? Value { get; set; }
     [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
-    [Parameter] public string Placeholder { get; set; } = "dd/mm/yyyy";
+    [Parameter] public EventCallback<bool> ValidityChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = PropFlowDateText.FormatPattern;
     [Parameter] public string AriaLabel { get; set; } = "Chọn ngày";
+    [Parameter] public bool Disabled { get; set; }
 
     private static readonly string[] Weekdays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
     private static readonly string[] Months = ["Tháng Một", "Tháng Hai", "Tháng Ba", "Tháng Tư", "Tháng Năm", "Tháng Sáu", "Tháng Bảy", "Tháng Tám", "Tháng Chín", "Tháng Mười", "Tháng Mười Một", "Tháng Mười Hai"];
+    private readonly string errorId = $"pf-date-error-{Guid.NewGuid():N}";
     private ElementReference root;
     private IJSObjectReference? module;
     private DotNetObjectReference<PropFlowDatePicker>? reference;
-    private bool open;
-    private bool positionAfterRender;
+    private bool open, positionAfterRender, showYearPicker, scrollYearAfterRender, showParseError, editingText;
+    private string textValue = string.Empty;
+    private DateOnly? lastRenderedValue;
     private DateOnly visibleMonth;
-    private string MonthLabel => $"{Months[visibleMonth.Month - 1]} {visibleMonth.Year}";
-    private IEnumerable<DateOnly> CalendarDays
-    {
-        get
-        {
-            var first = new DateOnly(visibleMonth.Year, visibleMonth.Month, 1);
-            var mondayOffset = ((int)first.DayOfWeek + 6) % 7;
-            var start = first.AddDays(-mondayOffset);
-            return Enumerable.Range(0, 42).Select(start.AddDays);
-        }
-    }
+    private string MonthName => Months[visibleMonth.Month - 1];
+    private IEnumerable<int> Years { get { var first=Math.Min(1900,visibleMonth.Year-10);var last=Math.Max(DateTime.Today.Year+50,visibleMonth.Year+10);return Enumerable.Range(first,last-first+1); } }
+    private IEnumerable<DateOnly> CalendarDays { get { var first=new DateOnly(visibleMonth.Year,visibleMonth.Month,1);var offset=((int)first.DayOfWeek+6)%7;var start=first.AddDays(-offset);return Enumerable.Range(0,42).Select(start.AddDays); } }
 
     protected override void OnInitialized()
     {
-        var initial = Value ?? DateOnly.FromDateTime(DateTime.Today);
-        visibleMonth = new DateOnly(initial.Year, initial.Month, 1);
+        SyncFromValue();
+        var initial=Value??DateOnly.FromDateTime(DateTime.Today);
+        visibleMonth=new(initial.Year,initial.Month,1);
     }
+    protected override async Task OnInitializedAsync() => await ValidityChanged.InvokeAsync(true);
+    protected override void OnParametersSet() { if(!editingText&&Value!=lastRenderedValue) SyncFromValue(); }
+    private void SyncFromValue() { textValue=PropFlowDateText.Format(Value);lastRenderedValue=Value;showParseError=false; }
 
+    private async Task HandleInputAsync(ChangeEventArgs args)
+    {
+        editingText=true;textValue=PropFlowDateText.NormalizeTyping(args.Value?.ToString(),textValue);
+        if(string.IsNullOrWhiteSpace(textValue)){showParseError=false;await SetValueAsync(null);await ValidityChanged.InvokeAsync(true);return;}
+        if(PropFlowDateText.TryParse(textValue,out var parsed)){showParseError=false;await SetValueAsync(parsed);await ValidityChanged.InvokeAsync(true);return;}
+        showParseError=textValue.Length>=PropFlowDateText.FormatPattern.Length;
+        await ValidityChanged.InvokeAsync(false);
+    }
+    private async Task HandleBlurAsync()
+    {
+        editingText=false;
+        if(string.IsNullOrWhiteSpace(textValue)){showParseError=false;await ValidityChanged.InvokeAsync(true);return;}
+        if(PropFlowDateText.TryParse(textValue,out var parsed)){textValue=PropFlowDateText.Format(parsed);showParseError=false;await SetValueAsync(parsed);await ValidityChanged.InvokeAsync(true);return;}
+        showParseError=true;await ValidityChanged.InvokeAsync(false);
+    }
     private async Task ToggleAsync()
     {
-        open = !open;
-        if (open) positionAfterRender = true;
-        else if (module is not null) await module.InvokeVoidAsync("close", root);
+        if(Disabled)return;
+        if(PropFlowDateText.TryParse(textValue,out var typed))visibleMonth=new(typed.Year,typed.Month,1);
+        else if(Value is{} current)visibleMonth=new(current.Year,current.Month,1);
+        open=!open;showYearPicker=false;
+        if(open)positionAfterRender=true;else if(module is not null)await module.InvokeVoidAsync("close",root,true);
     }
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!positionAfterRender) return;
-        positionAfterRender = false;
-        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowDatePicker.razor.js?v=20260924.2");
-        reference ??= DotNetObjectReference.Create(this);
-        await module.InvokeVoidAsync("open", root, reference);
+        if(!positionAfterRender&&!scrollYearAfterRender)return;
+        module??=await JS.InvokeAsync<IJSObjectReference>("import","./Shared/Forms/PropFlowDatePicker.razor.js?v=20261003.1");
+        reference??=DotNetObjectReference.Create(this);
+        if(positionAfterRender){positionAfterRender=false;await module.InvokeVoidAsync("open",root,reference);}
+        if(scrollYearAfterRender){scrollYearAfterRender=false;await module.InvokeVoidAsync("scrollSelectedYear",root);}
     }
-
-    private void PreviousMonth() => visibleMonth = visibleMonth.AddMonths(-1);
-    private void NextMonth() => visibleMonth = visibleMonth.AddMonths(1);
-    private Task SelectTodayAsync() => SelectDateAsync(DateOnly.FromDateTime(DateTime.Today));
-    private async Task SelectDateAsync(DateOnly day) { Value = day; await ValueChanged.InvokeAsync(Value); open = false; if (module is not null) await module.InvokeVoidAsync("close", root); }
-    private async Task ClearAsync() { Value = null; await ValueChanged.InvokeAsync(Value); open = false; if (module is not null) await module.InvokeVoidAsync("close", root); }
-    [JSInvokable] public Task CloseFromOutside() { open = false; return InvokeAsync(StateHasChanged); }
-    public async ValueTask DisposeAsync() { if (module is not null) { await module.InvokeVoidAsync("close", root); await module.DisposeAsync(); } reference?.Dispose(); }
+    private void PreviousMonth(){showYearPicker=false;visibleMonth=visibleMonth.AddMonths(-1);}
+    private void NextMonth(){showYearPicker=false;visibleMonth=visibleMonth.AddMonths(1);}
+    private void ToggleYearPicker(){showYearPicker=!showYearPicker;scrollYearAfterRender=showYearPicker;}
+    private void SelectYear(int year){visibleMonth=new(year,visibleMonth.Month,1);showYearPicker=false;}
+    private Task SelectTodayAsync()=>SelectDateAsync(DateOnly.FromDateTime(DateTime.Today));
+    private async Task SelectDateAsync(DateOnly day){editingText=false;textValue=PropFlowDateText.Format(day);showParseError=false;await SetValueAsync(day);await ValidityChanged.InvokeAsync(true);open=showYearPicker=false;if(module is not null)await module.InvokeVoidAsync("close",root,true);}
+    private async Task ClearAsync(){editingText=false;textValue=string.Empty;showParseError=false;await SetValueAsync(null);await ValidityChanged.InvokeAsync(true);open=showYearPicker=false;if(module is not null)await module.InvokeVoidAsync("close",root,true);}
+    private async Task SetValueAsync(DateOnly? value){Value=lastRenderedValue=value;await ValueChanged.InvokeAsync(value);}
+    [JSInvokable] public Task CloseFromOutside(){open=showYearPicker=false;return InvokeAsync(StateHasChanged);}
+    public async ValueTask DisposeAsync(){if(module is not null){await module.InvokeVoidAsync("close",root);await module.DisposeAsync();}reference?.Dispose();}
 }
