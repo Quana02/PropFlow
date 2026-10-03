@@ -92,4 +92,5 @@ public record EquipmentFilterQuery(
     EquipmentStatus? Status = null,
     string? EquipmentType = null,
     int PageIndex = 1,
-    int PageSize = 10);
+    int PageSize = 10,
+    bool BuildingLevelOnly = false);
