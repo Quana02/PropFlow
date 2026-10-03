@@ -219,10 +219,10 @@ html.dark .resident-nav-button, html[data-theme="dark"] .resident-nav-button { c
 html.dark .resident-nav-button.active, html[data-theme="dark"] .resident-nav-button.active { color: #082f49; background: #22d3ee; }
 html.dark .nav-drag-handle i, html[data-theme="dark"] .nav-drag-handle i { background: #22d3ee; }
 
-.resident-modal { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 1rem; }
-body:has(.resident-modal) { overflow: hidden; }
-.resident-modal[hidden] { display: none; }
-.resident-modal-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(8px); cursor: pointer; }
+.resident-portal-modal { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+body:has(.resident-portal-modal) { overflow: hidden; }
+.resident-portal-modal[hidden] { display: none; }
+.resident-portal-modal-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(15,23,42,.55); backdrop-filter: blur(8px); cursor: pointer; }
 .profile-modal-card, .service-modal-card { position: relative; z-index: 1; width: min(100%,32rem); max-height: calc(100vh - 2rem); overflow-y: auto; padding: 1.5rem 2rem; border-radius: 1.5rem; }
 .profile-modal-card > header, .service-modal-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(203,213,225,.55); }
 .profile-modal-card h3, .service-modal-card h2 { margin: 0; color: #0f172a; font: 700 1.1rem var(--resident-display); }
