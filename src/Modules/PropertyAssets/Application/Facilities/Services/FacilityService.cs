@@ -62,6 +62,7 @@ public class FacilityService : IFacilityService
 
     public async Task<FacilityDto> CreateFacilityAsync(CreateFacilityCommand command, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(command.Code) || !System.Text.RegularExpressions.Regex.IsMatch(command.Code.Trim(), "^CSVC-[A-Z0-9]+-[A-Z0-9]+$")) throw new ArgumentException("Mã cơ sở vật chất không đúng định dạng. Quy ước: CSVC-[TÊN]-[VỊ TRÍ].");
         var codeExists = await _store.FacilityCodeExistsAsync(command.Code.Trim(), cancellationToken);
         if (codeExists)
         {

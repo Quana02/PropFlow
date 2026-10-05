@@ -26,6 +26,7 @@ public class FacilityDetailModel : FacilityModel
 public class CreateFacilityModel
 {
     [Required(ErrorMessage = "Mã cơ sở vật chất là bắt buộc.")]
+    [RegularExpression("^CSVC-[A-Z0-9]+-[A-Z0-9]+$", ErrorMessage = "Mã cơ sở vật chất không đúng định dạng. Quy ước: CSVC-[TÊN]-[VỊ TRÍ].")]
     [StringLength(30, ErrorMessage = "Mã cơ sở vật chất không được vượt quá 30 ký tự.")]
     public string Code { get; set; } = string.Empty;
 

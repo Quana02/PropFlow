@@ -3,6 +3,7 @@ using PropFlow.Modules.Administration.Contracts;
 using PropFlow.Modules.Maintenance.Application;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceAssignments;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceResults;
+using PropFlow.Modules.Maintenance.Domain.MaintenanceSchedules;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceTaskActivities;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceTasks;
 using PropFlow.Modules.Maintenance.Infrastructure.Persistence;
@@ -30,6 +31,26 @@ public sealed class MaintenanceResultReviewTests
         Assert.Equal(manager, persistedResult.ReviewedBy);
         Assert.Equal("Đạt yêu cầu", persistedResult.ReviewNote);
         Assert.Contains(await db.MaintenanceTaskActivities.ToListAsync(), activity => activity.ActivityType == MaintenanceActivityType.CLOSED && activity.PerformedBy == manager);
+    }
+
+    [Fact]
+    public async Task ReviewResultAsync_Approve_CompletesSourceSchedule()
+    {
+        await using var db = CreateDb();
+        var staff = Staff("Nhân viên A");
+        var manager = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var schedule = new MaintenanceSchedule("LBT-TEST-051026", "Bảo trì", now, manager, now, facilityId: Guid.NewGuid(), description: "Mô tả");
+        var task = new MaintenanceTask("MT-SCHEDULE", "Bảo trì", manager, now, schedule.Id);
+        task.MarkAssigned(now.AddMinutes(1)); task.Start(now.AddMinutes(2)); task.Complete(now.AddMinutes(4));
+        var assignment = new MaintenanceAssignment(task.Id, staff.UserId, manager, now.AddMinutes(1)); assignment.Start(now.AddMinutes(2)); assignment.Complete(now.AddMinutes(4));
+        var result = new MaintenanceResult(task.Id, 1, staff.UserId, "Đã xong", now.AddMinutes(5));
+        db.AddRange(schedule, task, assignment, result);
+        await db.SaveChangesAsync();
+
+        await Service(db, staff).ReviewResultAsync(task.Id, result.Id, new("approve"), manager, default);
+
+        Assert.Equal(MaintenanceScheduleStatus.COMPLETED, (await db.MaintenanceSchedules.SingleAsync()).Status);
     }
 
     [Fact]

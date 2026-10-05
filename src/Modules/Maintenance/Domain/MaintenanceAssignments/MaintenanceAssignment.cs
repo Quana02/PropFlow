@@ -74,6 +74,17 @@ public class MaintenanceAssignment
         EndedAt = now;
     }
 
+    public void ReopenForFurtherWork(DateTimeOffset now)
+    {
+        if (Status != AssignmentStatus.COMPLETED)
+            throw new InvalidOperationException("Only completed maintenance assignments can be reopened.");
+        if (CompletedAt is not null && now < CompletedAt)
+            throw new ArgumentException("Reopen time cannot be before completed time.", nameof(now));
+
+        Status = AssignmentStatus.ASSIGNED;
+        EndedAt = null;
+    }
+
     public void Cancel(DateTimeOffset now)
     {
         EnsureActive();
