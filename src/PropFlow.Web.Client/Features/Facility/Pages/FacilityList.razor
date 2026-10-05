@@ -621,11 +621,15 @@
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                if (IsFormOpen || IsDetailOpen || IsSaving) continue;
+                if (IsFormOpen || IsSaving || IsLoading) continue;
                 await InvokeAsync(async () =>
                 {
-                    await Task.WhenAll(LoadData(), LoadSummaryAsync());
-                    StateHasChanged();
+                    if (ct.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
+                    if (IsDetailOpen)
+                        await RefreshDetailAsync(ct);
+                    else
+                        await Task.WhenAll(LoadData(), LoadSummaryAsync());
+                    if (!ct.IsCancellationRequested) StateHasChanged();
                 });
             }
         }
@@ -633,6 +637,27 @@
     }
 
     public void Dispose() => StatusRefreshCancellation.Cancel();
+
+    private async Task RefreshDetailAsync(CancellationToken ct)
+    {
+        if (SelectedFacilityToView is null) return;
+        var id = SelectedFacilityToView.Id;
+        var result = await FacilityApiClient.GetFacilityByIdAsync(id, ct);
+        // A response for a closed/replaced dialog must not reopen it or overwrite an edit.
+        if (ct.IsCancellationRequested || !IsDetailOpen || IsFormOpen || SelectedFacilityToView?.Id != id) return;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            SelectedFacilityToView = result.Data;
+        }
+        else
+        {
+            IsDetailOpen = false;
+            SelectedFacilityToView = null;
+            // Refresh the underlying list too, so revoked assignments disappear there.
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+        }
+    }
 
     private async Task LoadData()
     {
@@ -651,10 +676,7 @@
     private async Task LoadSummaryAsync()
     {
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
-        if (result.IsSuccess && result.Data is not null)
-        {
-            FacilitySummary = result.Data.Facilities;
-        }
+        FacilitySummary = result.IsSuccess ? result.Data?.Facilities : null;
     }
 
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
