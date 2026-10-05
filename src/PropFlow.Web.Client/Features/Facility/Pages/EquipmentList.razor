@@ -468,7 +468,7 @@
                     </div>
                     <div>
                         <h3 class="text-lg font-bold font-display text-slate-900">Chi Tiết Thiết Bị</h3>
-                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">Mã: @SelectedEquipmentToEdit.Code</p>
+                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">@SelectedEquipmentToEdit.Name · Mã: @SelectedEquipmentToEdit.Code</p>
                     </div>
                 </div>
                 <button @onclick="() => IsDetailOpen = false" class="text-slate-400 hover:text-slate-700 p-2 rounded-xl transition-all">
@@ -870,11 +870,15 @@
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                if (IsFormOpen || IsDetailOpen || IsSaving) continue;
+                if (IsFormOpen || IsSaving || IsLoading) continue;
                 await InvokeAsync(async () =>
                 {
-                    await Task.WhenAll(LoadData(), LoadSummaryAsync());
-                    StateHasChanged();
+                    if (ct.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
+                    if (IsDetailOpen)
+                        await RefreshDetailAsync(ct);
+                    else
+                        await Task.WhenAll(LoadData(), LoadSummaryAsync(), LoadFacilitiesAsync());
+                    if (!ct.IsCancellationRequested) StateHasChanged();
                 });
             }
         }
@@ -882,6 +886,27 @@
     }
 
     public void Dispose() => StatusRefreshCancellation.Cancel();
+
+    private async Task RefreshDetailAsync(CancellationToken ct)
+    {
+        if (SelectedEquipmentToEdit is null) return;
+        var id = SelectedEquipmentToEdit.Id;
+        var result = await EquipmentApiClient.GetEquipmentByIdAsync(id, ct);
+        // A response for a closed/replaced dialog must not reopen it or overwrite an edit.
+        if (ct.IsCancellationRequested || !IsDetailOpen || IsFormOpen || SelectedEquipmentToEdit?.Id != id) return;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            SelectedEquipmentToEdit = result.Data;
+        }
+        else
+        {
+            IsDetailOpen = false;
+            SelectedEquipmentToEdit = null;
+            // Refresh the underlying list too, so revoked assignments disappear there.
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+        }
+    }
 
     private async Task LoadData()
     {
@@ -900,10 +925,7 @@
     private async Task LoadSummaryAsync()
     {
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
-        if (result.IsSuccess && result.Data is not null)
-        {
-            EquipmentSummary = result.Data.Equipment;
-        }
+        EquipmentSummary = result.IsSuccess ? result.Data?.Equipment : null;
     }
 
     private async Task LoadFacilitiesAsync()
@@ -916,6 +938,7 @@
             var result = await FacilityApiClient.GetFacilitiesAsync(new FacilityFilterModel { PageIndex = pageIndex, PageSize = pageSize });
             if (!result.IsSuccess || result.Data is null)
             {
+                FacilityList = [];
                 ErrorMessage = result.Message ?? "Không thể tải danh sách cơ sở vật chất.";
                 return;
             }

@@ -7,6 +7,7 @@
 @using PropFlow.Web.Client.Services.Authentication
 @inject IBuildingApiClient BuildingApiClient
 @inject AuthSession Session
+@implements IDisposable
 
 <PageTitle>Chi tiết chung cư - PropFlow</PageTitle>
 @if (!CanEdit)
@@ -143,22 +144,53 @@
     private string? ErrorMessage;
     private bool CanEdit => Session.User?.Role == "MANAGER" && Session.User.Permissions.Contains("MANAGE_OPERATIONS");
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private readonly CancellationTokenSource RefreshCancellation = new();
 
-    private async Task LoadAsync()
+    protected override async Task OnInitializedAsync()
     {
-        IsLoading = true;
-        ErrorMessage = null;
-        Building = null;
+        await LoadAsync();
+        _ = RefreshAsync(RefreshCancellation.Token);
+    }
+
+    private async Task RefreshAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
         try
         {
-            var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (ct.IsCancellationRequested || IsEditDialogOpen || IsSaving || IsLoading) return;
+                    await ReloadAsync(false, ct);
+                    if (!ct.IsCancellationRequested) StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    public void Dispose() => RefreshCancellation.Cancel();
+
+    private Task LoadAsync() => ReloadAsync(true, RefreshCancellation.Token);
+
+    private async Task ReloadAsync(bool showLoading, CancellationToken ct)
+    {
+        IsLoading = showLoading;
+        ErrorMessage = null;
+        try
+        {
+            var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync(ct);
+            if (ct.IsCancellationRequested) return;
+            if (!showLoading && (IsEditDialogOpen || IsSaving)) return;
             if (result.IsSuccess && result.Data is not null) Building = result.Data;
             else if (result.StatusCode == 404) Building = null;
-            else ErrorMessage = result.Message ?? "Không thể tải thông tin chung cư. Vui lòng thử lại.";
+            else { Building = null; ErrorMessage = result.Message ?? "Không thể tải thông tin chung cư. Vui lòng thử lại."; }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch
         {
+            Building = null;
             ErrorMessage = "Không thể kết nối để tải thông tin chung cư. Vui lòng thử lại.";
         }
         finally { IsLoading = false; }
