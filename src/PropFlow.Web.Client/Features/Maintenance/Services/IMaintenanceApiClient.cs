@@ -11,7 +11,15 @@ public interface IMaintenanceApiClient
     Task<ApiResult<ScheduleModel>> ExtendScheduleAsync(Guid id, ExtendScheduleModel model, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> CreateTaskAsync(CreateMaintenanceTaskModel model, CancellationToken ct = default);
     Task<ApiResult<Page<MaintenanceTaskModel>>> TasksAsync(TaskFilterModel filter, CancellationToken ct = default);
+    Task<ApiResult<Page<MaintenanceTaskModel>>> MyTasksAsync(MyMaintenanceTaskFilterModel filter, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceTaskModel>> MyTaskAsync(Guid taskId, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceTaskModel>> StartMyTaskAsync(Guid taskId, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceTaskModel>> UpdateMyTaskProgressAsync(Guid taskId, UpdateMaintenanceProgressModel model, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceTaskModel>> SubmitMyTaskResultAsync(Guid taskId, SubmitMaintenanceResultModel model, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<MaintenanceTaskActivityModel>>> MyTaskActivitiesAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<MaintenanceHistoryListModel>> HistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceHistoryListModel>> MyHistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceHistoryDetailModel>> MyHistoryDetailAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<MaintenanceHistoryDetailModel>> HistoryDetailAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<AssignableMaintenanceStaffModel>>> HistoryStaffAsync(CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> TaskAsync(Guid taskId, CancellationToken ct = default);

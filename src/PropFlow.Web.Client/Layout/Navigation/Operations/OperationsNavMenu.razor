@@ -1,3 +1,5 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
 <nav class="operations-nav" aria-label="Điều hướng vận hành">
     <a class="operations-brand" href="/">PropFlow</a>
     <p class="operations-heading">Phân hệ vận hành</p>
@@ -22,8 +24,16 @@
         <span class="material-symbols-outlined operations-icon" aria-hidden="true">precision_manufacturing</span>
         <span class="operations-label">Hồ sơ thiết bị</span>
     </NavLink>
-    <NavLink href="/maintenance" Match="NavLinkMatch.All" class="operations-link" title="Bảo trì" aria-label="Bảo trì">
-        <span class="material-symbols-outlined operations-icon" aria-hidden="true">build</span>
-        <span class="operations-label">Bảo trì</span>
-    </NavLink>
+    <AuthorizeView Roles="MANAGER">
+        <NavLink href="/maintenance" Match="NavLinkMatch.All" class="operations-link" title="Bảo trì" aria-label="Bảo trì">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">build</span>
+            <span class="operations-label">Bảo trì</span>
+        </NavLink>
+    </AuthorizeView>
+    <AuthorizeView Roles="STAFF">
+        <NavLink href="/my-maintenance" Match="NavLinkMatch.All" class="operations-link" title="Công việc của tôi" aria-label="Công việc của tôi">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">assignment</span>
+            <span class="operations-label">Công việc của tôi</span>
+        </NavLink>
+    </AuthorizeView>
 </nav>

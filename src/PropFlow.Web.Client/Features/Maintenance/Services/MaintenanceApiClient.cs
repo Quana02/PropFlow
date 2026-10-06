@@ -32,6 +32,21 @@ public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintena
         if (filter.To.HasValue) query.Add($"to={Uri.EscapeDataString(filter.To.Value.ToString("O"))}");
         return api.SendAsync<Page<MaintenanceTaskModel>>(HttpMethod.Get, $"api/v1/maintenance/tasks?{string.Join("&", query)}", ct: ct);
     }
+    public Task<ApiResult<Page<MaintenanceTaskModel>>> MyTasksAsync(MyMaintenanceTaskFilterModel filter, CancellationToken ct = default)
+    {
+        var query = new List<string> { $"pageIndex={filter.PageIndex}", $"pageSize={filter.PageSize}" };
+        if (!string.IsNullOrWhiteSpace(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
+        if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
+        if (!string.IsNullOrWhiteSpace(filter.PriorityCode)) query.Add($"priorityCode={Uri.EscapeDataString(filter.PriorityCode)}");
+        if (filter.CompletedOnly) query.Add("completedOnly=true");
+        return api.SendAsync<Page<MaintenanceTaskModel>>(HttpMethod.Get, $"api/v1/maintenance/my-tasks?{string.Join("&", query)}", ct: ct);
+    }
+    public Task<ApiResult<MaintenanceTaskModel>> MyTaskAsync(Guid taskId, CancellationToken ct = default) =>
+        api.SendAsync<MaintenanceTaskModel>(HttpMethod.Get, $"api/v1/maintenance/my-tasks/{taskId}", ct: ct);
+    public Task<ApiResult<MaintenanceTaskModel>> StartMyTaskAsync(Guid taskId, CancellationToken ct = default) => api.SendAsync<MaintenanceTaskModel>(HttpMethod.Post, $"api/v1/maintenance/my-tasks/{taskId}/start", ct: ct);
+    public Task<ApiResult<MaintenanceTaskModel>> UpdateMyTaskProgressAsync(Guid taskId, UpdateMaintenanceProgressModel model, CancellationToken ct = default) => api.SendAsync<MaintenanceTaskModel>(HttpMethod.Post, $"api/v1/maintenance/my-tasks/{taskId}/progress", model, ct: ct);
+    public Task<ApiResult<MaintenanceTaskModel>> SubmitMyTaskResultAsync(Guid taskId, SubmitMaintenanceResultModel model, CancellationToken ct = default) => api.SendAsync<MaintenanceTaskModel>(HttpMethod.Post, $"api/v1/maintenance/my-tasks/{taskId}/result", model, ct: ct);
+    public Task<ApiResult<IReadOnlyList<MaintenanceTaskActivityModel>>> MyTaskActivitiesAsync(Guid taskId, CancellationToken ct = default) => api.SendAsync<IReadOnlyList<MaintenanceTaskActivityModel>>(HttpMethod.Get, $"api/v1/maintenance/my-tasks/{taskId}/activities", ct: ct);
     public Task<ApiResult<MaintenanceHistoryListModel>> HistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default)
     {
         var query = new List<string> { $"pageIndex={filter.PageIndex}", $"pageSize={filter.PageSize}", $"sort={filter.Sort}" };
@@ -44,6 +59,18 @@ public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintena
         if (filter.To.HasValue) query.Add($"to={Uri.EscapeDataString(filter.To.Value.ToString("O"))}");
         return api.SendAsync<MaintenanceHistoryListModel>(HttpMethod.Get, $"api/v1/maintenance/history?{string.Join("&", query)}", ct: ct);
     }
+    public Task<ApiResult<MaintenanceHistoryListModel>> MyHistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default)
+    {
+        var query = new List<string> { $"pageIndex={filter.PageIndex}", $"pageSize={filter.PageSize}", $"sort={filter.Sort}" };
+        if (!string.IsNullOrWhiteSpace(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
+        if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
+        if (filter.FacilityId.HasValue) query.Add($"facilityId={filter.FacilityId}");
+        if (filter.EquipmentId.HasValue) query.Add($"equipmentId={filter.EquipmentId}");
+        if (filter.From.HasValue) query.Add($"from={Uri.EscapeDataString(filter.From.Value.ToString("O"))}");
+        if (filter.To.HasValue) query.Add($"to={Uri.EscapeDataString(filter.To.Value.ToString("O"))}");
+        return api.SendAsync<MaintenanceHistoryListModel>(HttpMethod.Get, $"api/v1/maintenance/my-history?{string.Join("&", query)}", ct: ct);
+    }
+    public Task<ApiResult<MaintenanceHistoryDetailModel>> MyHistoryDetailAsync(Guid taskId, CancellationToken ct = default) => api.SendAsync<MaintenanceHistoryDetailModel>(HttpMethod.Get, $"api/v1/maintenance/my-history/{taskId}", ct: ct);
     public Task<ApiResult<MaintenanceHistoryDetailModel>> HistoryDetailAsync(Guid taskId, CancellationToken ct = default) => api.SendAsync<MaintenanceHistoryDetailModel>(HttpMethod.Get, $"api/v1/maintenance/history/{taskId}", ct: ct);
     public Task<ApiResult<IReadOnlyList<AssignableMaintenanceStaffModel>>> HistoryStaffAsync(CancellationToken ct = default) => api.SendAsync<IReadOnlyList<AssignableMaintenanceStaffModel>>(HttpMethod.Get, "api/v1/maintenance/history/staff", ct: ct);
     public Task<ApiResult<MaintenanceTaskModel>> TaskAsync(Guid taskId, CancellationToken ct = default) => api.SendAsync<MaintenanceTaskModel>(HttpMethod.Get, $"api/v1/maintenance/tasks/{taskId}", ct: ct);

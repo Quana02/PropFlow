@@ -70,7 +70,6 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetRead
 
         return new CurrentBuildingPropertyOverviewDto(
             building.Id,
-            building.Code,
             building.Name,
             building.Address,
             building.TimeZoneId,

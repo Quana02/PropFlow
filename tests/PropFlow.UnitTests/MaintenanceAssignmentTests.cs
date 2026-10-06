@@ -85,6 +85,54 @@ public sealed class MaintenanceAssignmentTests
         Assert.Equal(staffB.DisplayName, item.AssignedStaffDisplayName);
     }
 
+    [Fact]
+    public async Task AssignTaskAsync_StoresActiveTeamAndReassignsOnlyRemovedMembers()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var staffC = Staff("Nhân viên C");
+        var task = AddTask(db);
+        var service = Service(db, staffA, staffB, staffC);
+
+        var assigned = await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffA.UserId, staffB.UserId]), Guid.NewGuid(), default);
+        Assert.Equal(2, assigned.CurrentAssignees!.Count);
+        Assert.Contains(assigned.CurrentAssignees, staff => staff.UserId == staffA.UserId);
+        Assert.Contains(assigned.CurrentAssignees, staff => staff.UserId == staffB.UserId);
+
+        var reassigned = await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffB.UserId, staffC.UserId]), Guid.NewGuid(), default);
+        Assert.Equal(2, reassigned.CurrentAssignees!.Count);
+        Assert.DoesNotContain(reassigned.CurrentAssignees, staff => staff.UserId == staffA.UserId);
+        Assert.Contains(reassigned.CurrentAssignees, staff => staff.UserId == staffB.UserId);
+        Assert.Contains(reassigned.CurrentAssignees, staff => staff.UserId == staffC.UserId);
+
+        var assignments = await db.MaintenanceAssignments.ToListAsync();
+        Assert.Equal(3, assignments.Count);
+        Assert.Equal(AssignmentStatus.REASSIGNED, assignments.Single(item => item.StaffUserId == staffA.UserId).Status);
+        Assert.Equal(AssignmentStatus.ASSIGNED, assignments.Single(item => item.StaffUserId == staffB.UserId).Status);
+        Assert.Equal(AssignmentStatus.ASSIGNED, assignments.Single(item => item.StaffUserId == staffC.UserId).Status);
+    }
+
+    [Fact]
+    public async Task TeamMemberCanStartAndAnotherMemberCanProgressAndCompleteSharedTask()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var task = AddTask(db);
+        var service = Service(db, staffA, staffB);
+
+        await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffA.UserId, staffB.UserId]), Guid.NewGuid(), default);
+        await service.StartMyTaskAsync(task.Id, staffA.UserId, default);
+        await service.UpdateMyTaskProgressAsync(task.Id, new("Đã kiểm tra hiện trường"), staffB.UserId, default);
+        var completed = await service.SubmitMyTaskResultAsync(task.Id, new("Đã hoàn tất"), staffB.UserId, default);
+
+        Assert.Equal(MaintenanceTaskStatus.COMPLETED, completed.Status);
+        Assert.Equal(2, completed.CurrentAssignees!.Count);
+        Assert.All(await db.MaintenanceAssignments.ToListAsync(), assignment => Assert.Equal(AssignmentStatus.COMPLETED, assignment.Status));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.UpdateMyTaskProgressAsync(task.Id, new("Không được ghi"), staffA.UserId, default));
+    }
+
     private static MaintenanceService Service(MaintenanceDbContext db, params MaintenanceStaffRecord[] staff) =>
         new(db, new AssetSource(), new StaffDirectory(staff));
 

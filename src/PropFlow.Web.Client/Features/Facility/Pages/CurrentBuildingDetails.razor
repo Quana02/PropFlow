@@ -76,10 +76,8 @@
                 <header class="section-header">
                     <span class="section-icon" aria-hidden="true">⌂</span>
                     <div><h2 id="basic-heading">Thông tin cơ bản</h2><p>Hồ sơ nhận diện của chung cư hiện tại</p></div>
-                    <span class="status-badge @StatusClass(Building.Status)">@StatusText(Building.Status)</span>
                 </header>
                 <dl class="field-grid">
-                    <div><dt>Mã chung cư</dt><dd>@Building.Code</dd></div>
                     <div><dt>Tên chung cư</dt><dd>@Building.Name</dd></div>
                     <div class="wide"><dt>Địa chỉ</dt><dd>@Building.Address</dd></div>
                     <div><dt>Số tầng</dt><dd>@Building.NumberOfFloors tầng</dd></div>
@@ -224,14 +222,4 @@
     }
 
     private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
-    private static string StatusClass(MasterDataStatus status) => status == MasterDataStatus.ACTIVE ? "active" : "inactive";
-    private static string StatusText(MasterDataStatus status) => status switch
-    {
-        MasterDataStatus.ACTIVE => "Đang hoạt động",
-        MasterDataStatus.INACTIVE => "Ngưng hoạt động",
-        MasterDataStatus.UNDER_MAINTENANCE => "Đang bảo trì",
-        MasterDataStatus.UNAVAILABLE => "Không khả dụng",
-        MasterDataStatus.OUT_OF_SERVICE => "Hết phục vụ",
-        _ => status.ToString()
-    };
 }
