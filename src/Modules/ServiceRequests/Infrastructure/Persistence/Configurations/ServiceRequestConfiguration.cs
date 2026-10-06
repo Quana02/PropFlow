@@ -48,6 +48,18 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
             .HasColumnName("final_priority_code")
             .HasMaxLength(30);
 
+        builder.Property(request => request.ServiceAreaCode)
+            .HasColumnName("service_area_code")
+            .HasMaxLength(50);
+
+        builder.Property(request => request.PreferredDate)
+            .HasColumnName("preferred_date")
+            .HasColumnType("date");
+
+        builder.Property(request => request.PreferredTimeCode)
+            .HasColumnName("preferred_time_code")
+            .HasMaxLength(30);
+
         builder.Property(request => request.Status)
             .HasColumnName("status")
             .HasConversion<string>()

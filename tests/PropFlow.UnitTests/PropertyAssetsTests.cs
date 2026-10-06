@@ -1014,6 +1014,16 @@ public class PropertyAssetsTests
             .Options;
         return new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
     }
+
+    private static PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore CreateStore(
+        PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext context) =>
+        new(context, new UnrestrictedAssetReadAccess());
+
+    private sealed class UnrestrictedAssetReadAccess : PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess
+    {
+        public Task<PropFlow.Modules.PropertyAssets.Application.AssetReadScope> GetScopeAsync(CancellationToken ct) =>
+            Task.FromResult(PropFlow.Modules.PropertyAssets.Application.AssetReadScope.Manager);
+    }
     private static PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore CreateStore(PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext context) => new(context, new TestAssetReadAccess());
     private sealed class TestAssetReadAccess : IAssetReadAccess { public Task<AssetReadScope> GetScopeAsync(CancellationToken ct) => Task.FromResult(AssetReadScope.Manager); }
 }

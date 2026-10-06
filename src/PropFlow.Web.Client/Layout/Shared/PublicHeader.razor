@@ -1,0 +1,110 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
+@inject NavigationManager Navigation
+
+<header class="public-header @(ShowMarketingNavigation ? "public-header-marketing" : "public-header-simple") @(Fixed ? "public-header-fixed" : null)">
+    <a href="/" class="public-brand" aria-label="Trang chủ PropFlow">
+        <strong>PropFlow</strong>
+        <small>HỆ THỐNG ĐIỀU HÀNH TÒA NHÀ</small>
+    </a>
+
+    @if (ShowMarketingNavigation)
+    {
+        <nav class="public-navigation" aria-label="Điều hướng trang chủ">
+            <a class="is-active" data-path="home" href="#home">TRANG CHỦ</a>
+            <a data-path="features" href="#features">TÍNH NĂNG</a>
+            <a data-path="pricing" href="#pricing">BẢNG GIÁ</a>
+        </nav>
+    }
+
+    <div class="public-actions">
+        <button type="button" class="public-theme-toggle" onclick="toggleTheme()" aria-label="Đổi chế độ sáng tối" title="Chuyển chế độ sáng / tối">
+            <span id="theme-icon" aria-hidden="true">🌙</span>
+            <span id="theme-label">CHẾ ĐỘ TỐI</span>
+        </button>
+
+        @if (!ShowMarketingNavigation)
+        {
+            <a href="/" class="public-home-icon" aria-label="Trang chủ" title="Trang chủ">
+                <span class="material-symbols-outlined" aria-hidden="true">apartment</span>
+            </a>
+        }
+        else
+        {
+            <AuthorizeView>
+                <Authorized>
+                    @if (IsResident)
+                    {
+                        <a class="resident-portal-link" href="/resident">CỔNG CƯ DÂN</a>
+                    }
+                    <div class="public-profile">
+                        <button type="button" class="public-avatar" aria-expanded="@profileOpen" aria-label="Mở menu tài khoản của @DisplayName" title="@DisplayName" @onclick="ToggleProfile">
+                            @Initials
+                        </button>
+                        @if (profileOpen)
+                        {
+                            <div class="public-profile-menu">
+                                <div class="public-profile-summary">
+                                    <span class="public-avatar public-avatar-large">@Initials</span>
+                                    <span><strong>@DisplayName</strong><small>@RoleLabel</small></span>
+                                </div>
+                                <button type="button" class="public-logout" disabled="@loggingOut" @onclick="LogoutAsync">
+                                    <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+                                    @(loggingOut ? "ĐANG ĐĂNG XUẤT…" : "ĐĂNG XUẤT")
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="public-login-link" href="/login">
+                        <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+                        ĐĂNG NHẬP
+                    </a>
+                </NotAuthorized>
+            </AuthorizeView>
+        }
+    </div>
+</header>
+
+@code {
+    [Parameter] public bool ShowMarketingNavigation { get; set; }
+    [Parameter] public bool Fixed { get; set; }
+
+    private bool profileOpen;
+    private bool loggingOut;
+    private bool IsResident => string.Equals(Session.User?.Role, "RESIDENT", StringComparison.OrdinalIgnoreCase);
+    private string DisplayName => Session.User?.DisplayName ?? "Cư dân";
+    private string RoleLabel => IsResident ? "Cư dân PropFlow" : Session.User?.Role ?? "Tài khoản PropFlow";
+    private string Initials
+    {
+        get
+        {
+            var words = DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return words.Length switch
+            {
+                0 => "PF",
+                1 => words[0][..1].ToUpperInvariant(),
+                _ => string.Concat(words[^2][0], words[^1][0]).ToUpperInvariant()
+            };
+        }
+    }
+
+    private void ToggleProfile() => profileOpen = !profileOpen;
+
+    private async Task LogoutAsync()
+    {
+        if (loggingOut) return;
+        loggingOut = true;
+        profileOpen = false;
+        try
+        {
+            await Session.LogoutAsync();
+            Navigation.NavigateTo("/");
+        }
+        finally
+        {
+            loggingOut = false;
+        }
+    }
+}
