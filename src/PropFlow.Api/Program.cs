@@ -164,10 +164,12 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
+builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceNotifier, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceNotifier>();
 builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
 // Add services to the container.
+builder.Services.AddSignalR();
 builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly)
@@ -209,8 +211,11 @@ builder.Services.AddAuthorization(options =>
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
     options.AddPolicy(MaintenanceAuthorizationPolicies.Manage,
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
-    options.AddPolicy(MaintenanceAuthorizationPolicies.View,
-        policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy(MaintenanceAuthorizationPolicies.View, policy => policy.RequireAssertion(context =>
+        (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
+        (context.User.IsInRole(SystemRoleCodes.Staff) && context.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations))));
+    options.AddPolicy(MaintenanceAuthorizationPolicies.Work,
+        policy => policy.RequireRole(SystemRoleCodes.Staff).RequireClaim("permission", SystemPermissionCodes.PerformAssignedOperations));
     options.AddPolicy(ResidentsAuthorizationPolicies.Manage,
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
     options.AddPolicy(PropFlow.Modules.Apartments.Presentation.ApartmentsAuthorizationPolicies.Manage, policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
@@ -292,6 +297,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
 
 app.Run();
 

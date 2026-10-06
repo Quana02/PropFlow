@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(PropertyAssetsDbContext))]
-    partial class PropertyAssetsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005160053_RemoveBuildingCode")]
+    partial class RemoveBuildingCode
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

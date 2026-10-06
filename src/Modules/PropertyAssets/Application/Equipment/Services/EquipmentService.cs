@@ -57,6 +57,7 @@ public class EquipmentService : IEquipmentService
     public async Task<EquipmentDto> CreateEquipmentAsync(CreateEquipmentCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+        if (string.IsNullOrWhiteSpace(command.Code) || !System.Text.RegularExpressions.Regex.IsMatch(command.Code.Trim(), "^TB-[A-Z0-9]+-[A-Z0-9]+-[0-9]{2}$")) throw new ArgumentException("Mã thiết bị không đúng định dạng. Quy ước: TB-[LOẠI]-[TÊN THIẾT BỊ]-[STT].");
 
         // Validate Facility exists if FacilityId is provided
         if (command.FacilityId.HasValue)

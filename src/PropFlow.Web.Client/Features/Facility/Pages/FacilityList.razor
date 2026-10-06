@@ -12,6 +12,7 @@
 @inject IAuthorizationService AuthorizationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using PropFlow.Web.Client.Shared.Forms
+@using PropFlow.Web.Client.Shared.Feedback
 @implements IDisposable
 
 <PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
@@ -436,7 +437,8 @@
                             <div class="relative">
                                 <input @bind="CreateFormModel.Code" type="text" placeholder="VD: CSVC-HOBOI-T05" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all font-mono" />
                             </div>
-                            <p class="text-[11px] text-slate-400">Quy ước: CSVC-[TEN]-[VITRI]</p>
+                            <p class="text-[11px] text-slate-400">Quy ước: CSVC-[TÊN]-[VỊ TRÍ]</p>
+                            @if (!string.IsNullOrWhiteSpace(FacilityCodeError)) { <p class="text-xs text-rose-600" role="alert">@FacilityCodeError</p> }
                         </div>
 
                         <!-- Field 2: Tên CSVT (Required) -->
@@ -541,6 +543,10 @@
 }
 
 <PropFlow.Web.Client.Features.Facility.Components.FacilityDetailDialog IsOpen="IsDetailOpen" Facility="SelectedFacilityToView" OnClose="() => IsDetailOpen = false" />
+@if (IsSaveConfirmationOpen)
+{
+    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedFacilityToEdit is null ? "Bạn có muốn tạo cơ sở vật chất này không?" : "Bạn có muốn cập nhật cơ sở vật chất này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveFacility" OnCancel="CloseSaveConfirmation" />
+}
 
 @code {
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
@@ -584,6 +590,8 @@
     private bool IsLoading { get; set; } = true;
     private bool IsFormOpen { get; set; }
     private bool IsSaving { get; set; }
+    private bool IsSaveConfirmationOpen { get; set; }
+    private string? FacilityCodeError { get; set; }
     private string? SuccessMessage { get; set; }
     private string? ErrorMessage { get; set; }
     private FacilityModel? SelectedFacilityToEdit { get; set; }
@@ -730,16 +738,31 @@
 
     private void CloseDialog() { IsFormOpen = false; IsSaving = false; }
 
-    private async Task SaveFacility()
+    private void SaveFacility()
     {
         if (!IsManager) return;
         ErrorMessage = null;
+        FacilityCodeError = null;
         var formModel = SelectedFacilityToEdit == null ? (object)CreateFormModel : UpdateFormModel;
         if (!TryValidate(formModel, out var validationMessage))
         {
-            ErrorMessage = validationMessage;
+            if (SelectedFacilityToEdit is null && validationMessage?.Contains("Mã cơ sở vật chất", StringComparison.Ordinal) == true)
+                FacilityCodeError = validationMessage;
+            else
+                ErrorMessage = validationMessage;
             return;
         }
+        IsSaveConfirmationOpen = true;
+    }
+
+    private void CloseSaveConfirmation()
+    {
+        if (!IsSaving) IsSaveConfirmationOpen = false;
+    }
+
+    private async Task ConfirmSaveFacility()
+    {
+        if (!IsManager || !IsSaveConfirmationOpen) return;
         IsSaving = true;
         ErrorMessage = null;
         try
@@ -749,6 +772,7 @@
                 : await FacilityApiClient.UpdateFacilityAsync(SelectedFacilityToEdit.Id, UpdateFormModel);
             if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu cơ sở vật chất."; return; }
             var name = SelectedFacilityToEdit == null ? CreateFormModel.Name : UpdateFormModel.Name;
+            IsSaveConfirmationOpen = false;
             CloseDialog();
             await Task.WhenAll(LoadData(), LoadSummaryAsync());
             if (ErrorMessage == null) SuccessMessage = $"Đã lưu cơ sở vật chất '{name}' thành công!";

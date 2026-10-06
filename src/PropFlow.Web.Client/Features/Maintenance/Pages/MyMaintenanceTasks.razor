@@ -1,0 +1,696 @@
+@page "/my-maintenance"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles="STAFF")]
+@using PropFlow.Web.Client.Features.Maintenance.Models
+@using PropFlow.Web.Client.Features.Maintenance.Services
+@using PropFlow.Web.Client.Shared.Feedback
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
+@inject IMaintenanceApiClient Api
+@implements IAsyncDisposable
+<main class="smt-page">
+
+    @* ── HEADER ── *@
+    <div class="smt-header glass-panel">
+        <div class="smt-header-left">
+            <div class="smt-breadcrumb">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                BQL Chung Cư <span class="smt-sep">/</span> Phân hệ kỹ thuật <span class="smt-sep">/</span> <strong>Quản lý bảo trì</strong>
+            </div>
+            <h1 class="smt-title">Quản lý bảo trì</h1>
+            <p class="smt-subtitle">Danh sách công việc bảo trì được phân công cho nhân viên kỹ thuật.</p>
+        </div>
+        <div class="smt-mode-badge">
+            <span class="smt-mode-dot"></span>
+            <span>Chế độ: <strong>Đang phân công</strong> &bull; Ca trực kỹ thuật</span>
+        </div>
+    </div>
+
+    @* ── STAT CARDS ── *@
+    <div class="smt-stats">
+        <div class="smt-stat-card glass-panel">
+            <div class="smt-stat-body">
+                <div class="smt-stat-label-row">
+                    <span class="smt-stat-label">Được phân công</span>
+                </div>
+                <div class="smt-stat-value">@Assigned <span class="smt-stat-unit">nhiệm vụ</span></div>
+                <p class="smt-stat-desc">Cần tiếp nhận và khảo sát hiện trường</p>
+            </div>
+            <div class="smt-stat-icon smt-icon-sky">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+            </div>
+        </div>
+        <div class="smt-stat-card glass-panel">
+            <div class="smt-stat-body">
+                <div class="smt-stat-label-row">
+                    <span class="smt-stat-label">Đang xử lý</span>
+                </div>
+                <div class="smt-stat-value smt-value-amber">@Progress <span class="smt-stat-unit">nhiệm vụ</span></div>
+                <p class="smt-stat-desc">Đang thực hiện</p>
+            </div>
+            <div class="smt-stat-icon smt-icon-amber">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+            </div>
+        </div>
+        <div class="smt-stat-card glass-panel">
+            <div class="smt-stat-body">
+                <div class="smt-stat-label-row">
+                    <span class="smt-stat-label">Đã hoàn thành</span>
+                </div>
+                <div class="smt-stat-value smt-value-emerald">@Done <span class="smt-stat-unit">nhiệm vụ</span></div>
+                <p class="smt-stat-desc">Đã gửi kết quả hoặc đã được đóng</p>
+            </div>
+            <div class="smt-stat-icon smt-icon-emerald">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+        </div>
+    </div>
+
+    @* ── ALERT ── *@
+    @if (Error is not null)
+    {
+        <div class="smt-alert">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            @Error
+            <button type="button" @onclick="() => Error = null" aria-label="Đóng">x</button>
+        </div>
+    }
+
+    @* ── TASK PANEL ── *@
+    <div class="smt-panel glass-panel">
+        <div class="smt-panel-topbar">
+            <div class="smt-tabs">
+                <button type="button" class="@(!HistoryMode && !Completed ? "smt-tab is-active" : "smt-tab")" @onclick="() => Switch(false)">
+                    Nhiệm vụ của tôi
+                </button>
+                <button type="button" class="@(!HistoryMode && Completed ? "smt-tab is-active" : "smt-tab")" @onclick="() => Switch(true)">
+                    Đã hoàn thành
+                </button>
+                <button type="button" class="@(HistoryMode ? "smt-tab is-active" : "smt-tab")" @onclick="OpenHistory">
+                    Lịch sử bảo trì
+                </button>
+            </div>
+            <div class="smt-count-label">
+                <span class="smt-count-dot"></span>
+                <span>Hiển thị <strong>@Tasks.Items.Count</strong> / <strong>@Tasks.TotalCount</strong> nhiệm vụ</span>
+            </div>
+        </div>
+
+        @if (!HistoryMode)
+        {
+        <div class="smt-filterbar">
+            <div class="smt-search-wrap">
+                <svg class="smt-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" class="smt-search" @bind="Filter.SearchKeyword" @bind:event="oninput" placeholder="Tìm kiếm theo mã hoặc tiêu đề công việc..." />
+            </div>
+            <select class="smt-select" @bind="Filter.Status">
+                <option value="">Tất cả trạng thái</option>
+                <option value="ASSIGNED">Đã phân công</option>
+                <option value="IN_PROGRESS">Đang thực hiện</option>
+            </select>
+            <input class="smt-select" @bind="Filter.PriorityCode" placeholder="Tất cả ưu tiên" />
+            <button type="button" class="smt-filter-btn" @onclick="Load">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                Lọc
+            </button>
+        </div>
+        }
+
+        @if (HistoryMode)
+        {
+            <div class="smt-filterbar smt-history-filterbar">
+                <div class="smt-search-wrap"><input class="smt-search" @bind="HistoryFilter.SearchKeyword" placeholder="Tìm theo mã hoặc tên công việc..." /></div>
+                <select class="smt-select" @bind="HistoryFilter.Status"><option value="">Tất cả trạng thái</option><option value="COMPLETED">Chờ nghiệm thu</option><option value="CLOSED">Đã đóng</option><option value="ASSIGNED">Đã phân công</option><option value="IN_PROGRESS">Đang thực hiện</option></select>
+                <select class="smt-select" @bind="HistoryFilter.FacilityId"><option value="">Tất cả cơ sở vật chất</option>@foreach (var asset in Assets.Where(a => a.AssetType == "FACILITY")) { <option value="@asset.Id">@asset.Code · @asset.Name</option> }</select>
+                <select class="smt-select" @bind="HistoryFilter.EquipmentId"><option value="">Tất cả thiết bị</option>@foreach (var asset in Assets.Where(a => a.AssetType == "EQUIPMENT")) { <option value="@asset.Id">@asset.Code · @asset.Name</option> }</select>
+                <select class="smt-select" @bind="HistoryFilter.Sort"><option value="NEWEST">Mới nhất</option><option value="OLDEST">Cũ nhất</option></select>
+                <button type="button" class="smt-filter-btn" @onclick="ApplyHistoryFilters">Lọc</button>
+            </div>
+        }
+
+        @if (!HistoryMode) { <div class="smt-table-wrap">
+            <table class="smt-table">
+                <thead>
+                    <tr>
+                        <th>CÔNG VIỆC</th>
+                        <th>TÀI SẢN / VỊ TRÍ</th>
+                        <th>NGUON</th>
+                        <th class="text-center">ƯU TIÊN</th>
+                        <th class="text-center">TRẠNG THÁI</th>
+                        <th>HẠN HOÀN THÀNH</th>
+                        <th class="text-right">THAO TÁC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Loading)
+                    {
+                        <tr><td colspan="7" class="smt-empty-cell"><span class="smt-spinner"></span> Đang tải...</td></tr>
+                    }
+                    else if (!Tasks.Items.Any())
+                    {
+                        <tr><td colspan="7" class="smt-empty-cell">Chưa có công việc phù hợp với bộ lọc hiện tại.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var x in Tasks.Items)
+                        {
+                            <tr class="smt-row">
+                                <td class="smt-cell-task">
+                                    <div class="smt-task-code">@x.TaskNumber</div>
+                                    <div class="smt-task-title">@x.Title</div>
+                                </td>
+                                <td class="smt-cell-loc">@Asset(x)</td>
+                                <td class="smt-cell-src">@(x.SourceScheduleCode is null ? "Công việc trực tiếp" : "Theo lịch · " + x.SourceScheduleCode)</td>
+                                <td class="text-center">
+                                    <span class="smt-badge @PriorityClass(x.PriorityCode)">@(x.PriorityCode ?? "—")</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="smt-badge @StatusClass(x.Status)">@Status(x.Status)</span>
+                                </td>
+                                <td>
+                                    <div class="smt-due @(x.IsOverdue ? "smt-due-overdue" : null)">@Date(x.DueAt)</div>
+                                    @if (x.IsOverdue) { <small class="smt-overdue-tag">Quá hạn</small> }
+                                </td>
+                                <td class="text-right">
+                                    <button type="button" class="smt-detail-btn" @onclick="() => Open(x.Id)">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        Xem chi tiết
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        }
+        else { <div class="smt-table-wrap"><table class="smt-table"><thead><tr><th>CÔNG VIỆC</th><th>TÀI SẢN / VỊ TRÍ</th><th>NGUỒN</th><th>ƯU TIÊN</th><th>TRẠNG THÁI</th><th>THỜI GIAN THỰC HIỆN</th><th>KẾT QUẢ</th><th>THAO TÁC</th></tr></thead><tbody>@if (HistoryLoading) { <tr><td colspan="8" class="smt-empty-cell">Đang tải...</td></tr> } else if (!History.Page.Items.Any()) { <tr><td colspan="8" class="smt-empty-cell">Chưa có lịch sử bảo trì.</td></tr> } else { @foreach (var item in History.Page.Items) { <tr><td><div class="smt-task-code">@item.TaskNumber</div><div class="smt-task-title">@item.Title</div></td><td>@Asset(item.FacilityId, item.EquipmentId)</td><td>@(item.SourceScheduleCode is null ? "Tạo thủ công" : $"Theo lịch · {item.SourceScheduleCode}")</td><td>@(item.PriorityCode ?? "—")</td><td><span class="smt-badge @StatusClass(item.Status)">@Status(item.Status)</span></td><td>@HistoryDates(item)</td><td>@(item.ResultSummary ?? "—")</td><td><button class="smt-detail-btn" @onclick="() => OpenHistoryDetail(item.TaskId)">Xem chi tiết</button></td></tr> } }</tbody></table></div>@if (History.Page.TotalCount > History.Page.PageSize) { <div class="smt-history-pagination"><span>Hiển thị @HistoryStart–@HistoryEnd / @History.Page.TotalCount bản ghi · Trang @History.Page.PageIndex / @HistoryTotalPages</span><div><button disabled="@(History.Page.PageIndex <= 1)" @onclick="() => ChangeHistoryPage(History.Page.PageIndex - 1)">Trước</button><button disabled="@(History.Page.PageIndex >= HistoryTotalPages)" @onclick="() => ChangeHistoryPage(History.Page.PageIndex + 1)">Sau</button></div></div>} }
+    </div>
+</main>
+
+@if (PendingConfirmation is not null)
+{
+    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@ConfirmationMessage" ConfirmText="Có" CancelText="Không" Busy="@Submitting" BusyText="Đang xử lý…" OnConfirm="ConfirmPendingAction" OnCancel="CancelPendingAction" />
+}
+
+@* ── DETAIL MODAL ── *@
+@if (Detail is not null)
+{
+    <div class="smt-backdrop" @onclick="Close" role="presentation">
+        <div class="smt-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-label="Chi tiết công việc bảo trì">
+
+            <div class="smt-modal-header">
+                <div>
+                    <div class="smt-modal-code">@Detail.TaskNumber</div>
+                    <h2 class="smt-modal-title">@Detail.Title</h2>
+                    <div class="smt-modal-status-row">
+                        <span class="smt-badge @StatusClass(Detail.Status)">@Status(Detail.Status)</span>
+                    </div>
+                </div>
+                <button type="button" class="smt-close-btn" @onclick="Close" aria-label="Đóng">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="smt-tracker-wrap">
+                <ol class="smt-tracker">
+                    <li class="smt-step @StepClass(1)">
+                        <div class="smt-step-circle">
+                            @if (IsStepCompleted(1)) {
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+                            } else {
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            }
+                        </div>
+                        <strong>Đã phân công</strong>
+                    </li>
+                    <li class="smt-step @StepClass(2)">
+                        <div class="smt-step-circle">
+                            @if (IsStepCompleted(2)) {
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+                            } else { <span>2</span> }
+                        </div>
+                        <strong>Bắt đầu xử lý</strong>
+                    </li>
+                    <li class="smt-step @StepClass(3)">
+                        <div class="smt-step-circle">
+                            @if (IsStepCompleted(3)) {
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+                            } else {
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+                            }
+                        </div>
+                        <strong>Đang thực hiện</strong>
+                    </li>
+                    <li class="smt-step @StepClass(4)">
+                        <div class="smt-step-circle">
+                            @if (IsStepCompleted(4)) {
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+                            } else { <span>4</span> }
+                        </div>
+                        <strong>Chờ nghiệm thu</strong>
+                    </li>
+                    <li class="smt-step @StepClass(5)">
+                        <div class="smt-step-circle">
+                            @if (IsStepCompleted(5)) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg> }
+                            else { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg> }
+                        </div>
+                        <strong>Đóng công việc</strong>
+                        <small>Chỉ quản lý có quyền</small>
+                    </li>
+                </ol>
+            </div>
+
+            <div class="smt-time-cards">
+                <div class="smt-time-card">
+                    <span class="smt-time-label">BẮT ĐẦU DỰ KIẾN</span>
+                    <strong class="smt-time-value">@Date(Detail.PlannedStartAt)</strong>
+                    <small>Thời điểm theo kế hoạch</small>
+                </div>
+                <div class="smt-time-card">
+                    <span class="smt-time-label">BẮT ĐẦU THỰC TẾ</span>
+                    <strong class="smt-time-value">@Date(ActualStartAt)</strong>
+                    <small>Đã ghi nhận khi bắt đầu</small>
+                </div>
+                <div class="smt-time-card">
+                    <span class="smt-time-label">TIẾN ĐỘ GẦN NHẤT</span>
+                    <strong class="smt-time-value">@Date(LatestProgressAt)</strong>
+                    <small>Cập nhật tiến độ mới nhất</small>
+                </div>
+                <div class="smt-time-card">
+                    <span class="smt-time-label">HẠN HOÀN THÀNH</span>
+                    <strong class="smt-time-value smt-due-red">@Date(Detail.DueAt)</strong>
+                    <small>Hạn theo công việc</small>
+                </div>
+            </div>
+
+            <div class="smt-modal-actions">
+                @if (Detail.Status == MaintenanceTaskStatus.ASSIGNED)
+                {
+                    <button type="button" class="smt-action-btn smt-btn-secondary" disabled="@Submitting" @onclick="Start">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        @(Submitting ? "Đang bắt đầu..." : "Bắt đầu công việc")
+                    </button>
+                }
+                else if (Detail.Status == MaintenanceTaskStatus.IN_PROGRESS)
+                {
+                    <button type="button" class="smt-action-btn smt-btn-outline" @onclick="() => ProgressModal = true">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        Cập nhật tiến độ
+                    </button>
+                    <button type="button" class="smt-action-btn smt-btn-primary" @onclick="OpenResultModal">
+                        Hoàn thành công việc
+                    </button>
+                }
+                else if (Detail.Status == MaintenanceTaskStatus.COMPLETED)
+                {
+                    <span class="smt-review-pending">Chờ Manager nghiệm thu</span>
+                }
+            </div>
+
+            @if (Detail.LatestResult is not null)
+            {
+                <section class="smt-result-card" aria-label="Kết quả thực hiện">
+                    <h3 class="smt-section-title">Kết quả thực hiện</h3>
+                    <p class="smt-result-summary">@Detail.LatestResult.Summary</p>
+                    <dl class="smt-result-details">
+                        @if (!string.IsNullOrWhiteSpace(Detail.LatestResult.WorkPerformed)) { <div><dt>Công việc đã thực hiện</dt><dd>@Detail.LatestResult.WorkPerformed</dd></div> }
+                        @if (!string.IsNullOrWhiteSpace(Detail.LatestResult.IssueFound)) { <div><dt>Vấn đề ghi nhận</dt><dd>@Detail.LatestResult.IssueFound</dd></div> }
+                        @if (!string.IsNullOrWhiteSpace(Detail.LatestResult.PartsOrResourcesUsed)) { <div><dt>Vật tư / nguồn lực</dt><dd>@Detail.LatestResult.PartsOrResourcesUsed</dd></div> }
+                        @if (!string.IsNullOrWhiteSpace(Detail.LatestResult.Recommendation)) { <div><dt>Khuyến nghị</dt><dd>@Detail.LatestResult.Recommendation</dd></div> }
+                    </dl>
+                </section>
+            }
+
+            <div class="smt-workspace">
+                <div class="smt-timeline-card">
+                    <h3 class="smt-section-title">Nhật ký thực hiện</h3>
+                    @if (!Activities.Any())
+                    {
+                        <p class="smt-empty-msg">Chưa có hoạt động được ghi nhận.</p>
+                    }
+                    else
+                    {
+                        <div class="smt-activity-list">
+                            @foreach (var activity in Activities)
+                            {
+                                <div class="smt-activity-item">
+                                    <div class="smt-activity-rail">
+                                        <span class="smt-activity-dot"></span>
+                                        <span class="smt-activity-line"></span>
+                                    </div>
+                                    <div class="smt-activity-content">
+                                        <time class="smt-activity-time">@Date(activity.CreatedAt)</time>
+                                        <strong class="smt-activity-title">@Activity(activity)</strong>
+                                        @if (!string.IsNullOrWhiteSpace(activity.Detail))
+                                        {
+                                            <p class="smt-activity-detail">@activity.Detail</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <aside class="smt-summary-card">
+                    <h3 class="smt-section-title">Tóm tắt nhiệm vụ</h3>
+                    <dl class="smt-summary-dl">
+                        <div><dt>Mã công việc</dt><dd>@Detail.TaskNumber</dd></div>
+                        <div><dt>Tiêu đề</dt><dd>@Detail.Title</dd></div>
+                        <div><dt>Mô tả</dt><dd>@(string.IsNullOrWhiteSpace(Detail.Description) ? "—" : Detail.Description)</dd></div>
+                        <div><dt>Ưu tiên</dt><dd>@(Detail.PriorityCode ?? "—")</dd></div>
+                        <div><dt>Nguồn</dt><dd>@(Detail.SourceScheduleCode is null ? "Công việc trực tiếp" : $"Theo lịch · {Detail.SourceScheduleCode}")</dd></div>
+                        <div><dt>Cơ sở vật chất</dt><dd>@AssetName(Detail.FacilityId)</dd></div>
+                        <div><dt>Thiết bị</dt><dd>@AssetName(Detail.EquipmentId)</dd></div>
+                        <div><dt>Hạn hoàn thành</dt><dd>@Date(Detail.DueAt)</dd></div>
+                    </dl>
+                </aside>
+            </div>
+        </div>
+    </div>
+}
+
+@if (HistoryDetail is not null)
+{
+    <div class="smt-backdrop" @onclick="() => HistoryDetail = null"><section class="smt-modal smt-history-detail" @onclick:stopPropagation="true"><header class="smt-modal-header"><div><div class="smt-modal-code">@HistoryDetail.Task.TaskNumber</div><h2 class="smt-modal-title">@HistoryDetail.Task.Title</h2><span class="smt-badge @StatusClass(HistoryDetail.Task.Status)">@Status(HistoryDetail.Task.Status)</span></div><button class="smt-close-btn" @onclick="() => HistoryDetail = null">×</button></header><div class="smt-workspace"><section class="smt-timeline-card"><h3 class="smt-section-title">Nhật ký bảo trì</h3><div class="smt-activity-list">@foreach(var e in HistoryDetail.Timeline){<div class="smt-activity-item"><div class="smt-activity-rail"><span class="smt-activity-dot"></span><span class="smt-activity-line"></span></div><div class="smt-activity-content"><time>@Date(e.OccurredAt)</time><strong>@HistoryEvent(e)</strong>@if(!string.IsNullOrWhiteSpace(e.Detail)){<p>@e.Detail</p>}</div></div>}</div></section><aside class="smt-summary-card"><h3 class="smt-section-title">Quá trình phân công</h3>@foreach(var a in HistoryDetail.Assignments){<p>@Date(a.AssignedAt) · @a.StaffDisplayName</p>}<h3 class="smt-section-title">Kết quả thực hiện</h3>@foreach(var r in HistoryDetail.Results){<article class="smt-result-card"><strong>Lần thực hiện @r.AttemptNo</strong><p>@r.Summary</p>@if(r.ReviewedAt is not null){<small>Nghiệm thu: @ResultStatus(r.ResultStatus) · @Date(r.ReviewedAt)</small>}@if(!string.IsNullOrWhiteSpace(r.ReviewNote)){<p>@r.ReviewNote</p>}</article>}</aside></div></section></div>
+}
+
+@* ── PROGRESS MODAL ── *@
+@if (ProgressModal)
+{
+    <div class="smt-backdrop" @onclick="() => ProgressModal = false" role="presentation">
+        <div class="smt-progress-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true">
+            <div class="smt-progress-header">
+                <h2>Cập nhật tiến độ</h2>
+                <button type="button" class="smt-close-btn" @onclick="() => ProgressModal = false" aria-label="Đóng">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <label class="smt-progress-label">Nội dung cập nhật <b>*</b></label>
+            <textarea class="smt-progress-textarea" @bind="Content" placeholder="Mô tả công việc đã thực hiện hoặc tình trạng hiện tại..."></textarea>
+            @if (Validation is not null) { <small class="smt-validation-msg">@Validation</small> }
+            <div class="smt-progress-footer">
+                <button type="button" class="smt-action-btn smt-btn-ghost" @onclick="() => ProgressModal = false">Hủy</button>
+                <button type="button" class="smt-action-btn smt-btn-primary" disabled="@Submitting" @onclick="SaveProgress">
+                    @(Submitting ? "Đang lưu..." : "Lưu cập nhật")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ResultModal)
+{
+    <div class="smt-backdrop" @onclick="CloseResultModal" role="presentation">
+        <div class="smt-progress-modal smt-result-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-label="Kết quả thực hiện">
+            <div class="smt-progress-header">
+                <div><h2>Hoàn thành công việc</h2><p>Hoàn thành công việc và gửi kết quả để Manager nghiệm thu.</p></div>
+                <button type="button" class="smt-close-btn" @onclick="CloseResultModal" aria-label="Đóng">×</button>
+            </div>
+            <label class="smt-progress-label">Kết quả thực hiện <b>*</b></label>
+            <textarea class="smt-progress-textarea" @bind="ResultEditor.Summary" placeholder="Tóm tắt kết quả công việc đã thực hiện..."></textarea>
+            <div class="smt-result-field-grid">
+                <div><label class="smt-progress-label">Công việc đã thực hiện</label><textarea class="smt-progress-textarea smt-result-optional" @bind="ResultEditor.WorkPerformed"></textarea></div>
+                <div><label class="smt-progress-label">Vấn đề ghi nhận</label><textarea class="smt-progress-textarea smt-result-optional" @bind="ResultEditor.IssueFound"></textarea></div>
+                <div><label class="smt-progress-label">Vật tư / nguồn lực sử dụng</label><textarea class="smt-progress-textarea smt-result-optional" @bind="ResultEditor.PartsOrResourcesUsed"></textarea></div>
+                <div><label class="smt-progress-label">Khuyến nghị</label><textarea class="smt-progress-textarea smt-result-optional" @bind="ResultEditor.Recommendation"></textarea></div>
+            </div>
+            @if (ResultValidation is not null) { <small class="smt-validation-msg">@ResultValidation</small> }
+            <div class="smt-progress-footer">
+                <button type="button" class="smt-action-btn smt-btn-ghost" disabled="@Submitting" @onclick="CloseResultModal">Hủy</button>
+                <button type="button" class="smt-action-btn smt-btn-primary" disabled="@Submitting" @onclick="SubmitResult">@(Submitting ? "Đang gửi..." : "Hoàn thành công việc")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    Page<MaintenanceTaskModel> Tasks = new([], 0, 1, 50);
+    MyMaintenanceTaskFilterModel Filter = new() { PageSize = 50 };
+    List<MaintenanceTaskActivityModel> Activities = [];
+    IReadOnlyList<AssetModel> Assets = [];
+    MaintenanceTaskModel? Detail;
+    bool Loading = true, Completed, HistoryMode, HistoryLoading, ProgressModal, ResultModal, Submitting;
+    MaintenanceHistoryListModel History = new(new([], 0, 1, 20), new(0, 0, 0, 0, 0, 0, 0));
+    MaintenanceHistoryFilterModel HistoryFilter = new(); MaintenanceHistoryDetailModel? HistoryDetail;
+    string Content = "";
+    SubmitMaintenanceResultModel ResultEditor = new();
+    string? Error, Validation, ResultValidation;
+    int Assigned, Progress, Done;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var assets = await Api.AssetsAsync();
+        Assets = assets.Data ?? [];
+        await Refresh();
+        _ = ConnectMaintenanceHubAsync();
+    }
+
+    private async Task ConnectMaintenanceHubAsync()
+    {
+        try
+        {
+            var hub = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/maintenance"))
+                .WithAutomaticReconnect()
+                .Build();
+            hub.On<Guid>("TaskUpdated", async taskId =>
+            {
+                if (!HistoryMode)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await Load();
+                        if (Detail?.Id == taskId)
+                        {
+                            var result = await Api.MyTaskAsync(taskId);
+                            if (result.IsSuccess && result.Data is not null)
+                            {
+                                Detail = result.Data;
+                                await LoadActivities();
+                            }
+                        }
+                        StateHasChanged();
+                    });
+                }
+            });
+            await hub.StartAsync();
+            _hubConnection = hub;
+        }
+        catch
+        {
+            // The normal API workflow remains usable if SignalR is unavailable.
+        }
+    }
+
+    async Task Refresh() { await Task.WhenAll(Counts(), Load()); }
+
+    async Task Counts()
+    {
+        var a = Api.MyTasksAsync(new() { Status = MaintenanceTaskStatus.ASSIGNED, PageSize = 1 });
+        var p = Api.MyTasksAsync(new() { Status = MaintenanceTaskStatus.IN_PROGRESS, PageSize = 1 });
+        var d = Api.MyTasksAsync(new() { CompletedOnly = true, PageSize = 1 });
+        await Task.WhenAll(a, p, d);
+        Assigned = a.Result.Data?.TotalCount ?? 0;
+        Progress = p.Result.Data?.TotalCount ?? 0;
+        Done = d.Result.Data?.TotalCount ?? 0;
+    }
+
+    async Task Load()
+    {
+        Loading = true;
+        Filter.CompletedOnly = Completed;
+        var r = await Api.MyTasksAsync(Filter);
+        Loading = false;
+        if (r.Data is not null) Tasks = r.Data;
+        else Error = r.Message ?? "Không thể tải công việc.";
+    }
+
+    async Task Switch(bool completed) { HistoryMode = false; Completed = completed; Filter.Status = null; await Load(); }
+    async Task OpenHistory() { HistoryMode = true; await LoadHistory(); }
+    async Task ApplyHistoryFilters() { HistoryFilter.PageIndex = 1; await LoadHistory(); }
+    async Task ChangeHistoryPage(int page) { HistoryFilter.PageIndex = Math.Clamp(page, 1, HistoryTotalPages); await LoadHistory(); }
+    async Task LoadHistory()
+    {
+        HistoryLoading = true; HistoryFilter.PageIndex = Math.Max(1, HistoryFilter.PageIndex);
+        var response = await Api.MyHistoryAsync(HistoryFilter); HistoryLoading = false;
+        if (response.Data is not null) History = response.Data; else Error = response.Message ?? "Không thể tải lịch sử bảo trì.";
+    }
+    int HistoryTotalPages => Math.Max(1, (int)Math.Ceiling(History.Page.TotalCount / (double)History.Page.PageSize));
+    int HistoryStart => History.Page.TotalCount == 0 ? 0 : (History.Page.PageIndex - 1) * History.Page.PageSize + 1;
+    int HistoryEnd => Math.Min(History.Page.TotalCount, History.Page.PageIndex * History.Page.PageSize);
+    async Task OpenHistoryDetail(Guid id)
+    {
+        var response = await Api.MyHistoryDetailAsync(id);
+        if (response.Data is null) { Error = response.Message ?? "Không thể tải chi tiết lịch sử bảo trì."; return; }
+        HistoryDetail = response.Data;
+    }
+
+    async Task Open(Guid id)
+    {
+        var r = await Api.MyTaskAsync(id);
+        if (r.Data is null) { Error = r.Message ?? "Không thể tải chi tiết."; return; }
+        Detail = r.Data;
+        await LoadActivities();
+    }
+
+    async Task LoadActivities()
+    {
+        if (Detail is null) return;
+        var r = await Api.MyTaskActivitiesAsync(Detail.Id);
+        Activities = r.Data?.ToList() ?? [];
+    }
+
+    void Start()
+        => RequestConfirmation("Bạn có muốn bắt đầu công việc này không?", ConfirmStart);
+
+    async Task ConfirmStart()
+    {
+        if (Detail is null) return;
+        Submitting = true;
+        var r = await Api.StartMyTaskAsync(Detail.Id);
+        Submitting = false;
+        if (r.Data is null) { Error = r.Message ?? "Không thể thực hiện thao tác ở trạng thái hiện tại."; await Refresh(); return; }
+        Detail = r.Data;
+        Error = "Đã bắt đầu công việc.";
+        await Refresh();
+        await LoadActivities();
+    }
+
+    void SaveProgress()
+    {
+        if (string.IsNullOrWhiteSpace(Content)) { Validation = "Vui lòng nhập nội dung cập nhật tiến độ."; return; }
+        RequestConfirmation("Bạn có muốn lưu cập nhật tiến độ này không?", ConfirmSaveProgress);
+    }
+
+    async Task ConfirmSaveProgress()
+    {
+        Submitting = true;
+        var r = await Api.UpdateMyTaskProgressAsync(Detail!.Id, new() { Content = Content.Trim() });
+        Submitting = false;
+        if (r.Data is null) { Validation = r.Message ?? "Không thể cập nhật tiến độ công việc."; return; }
+        Detail = r.Data;
+        Content = "";
+        Validation = null;
+        ProgressModal = false;
+        Error = "Đã cập nhật tiến độ.";
+        await Refresh();
+        await LoadActivities();
+    }
+
+    void OpenResultModal()
+    {
+        ResultEditor = new();
+        ResultValidation = null;
+        ResultModal = true;
+    }
+
+    void CloseResultModal()
+    {
+        ResultModal = false;
+        ResultValidation = null;
+    }
+
+    void SubmitResult()
+    {
+        if (Detail is null) return;
+        if (string.IsNullOrWhiteSpace(ResultEditor.Summary))
+        {
+            ResultValidation = "Vui lòng nhập kết quả thực hiện.";
+            return;
+        }
+        RequestConfirmation("Bạn có muốn hoàn thành công việc và gửi kết quả này không?", ConfirmSubmitResult);
+    }
+
+    async Task ConfirmSubmitResult()
+    {
+        if (Detail is null) return;
+        Submitting = true;
+        var result = await Api.SubmitMyTaskResultAsync(Detail.Id, ResultEditor);
+        Submitting = false;
+        if (result.Data is null)
+        {
+            ResultValidation = result.Message ?? "Không thể hoàn thành công việc ở trạng thái hiện tại.";
+            return;
+        }
+
+        Detail = result.Data;
+        CloseResultModal();
+        Error = "Đã gửi kết quả để Manager nghiệm thu.";
+        await Refresh();
+        await LoadActivities();
+    }
+
+    Func<Task>? PendingConfirmation;
+    string ConfirmationMessage = string.Empty;
+    void RequestConfirmation(string message, Func<Task> action)
+    {
+        if (Submitting) return;
+        ConfirmationMessage = message;
+        PendingConfirmation = action;
+    }
+    void CancelPendingAction()
+    {
+        if (!Submitting) PendingConfirmation = null;
+    }
+    async Task ConfirmPendingAction()
+    {
+        var action = PendingConfirmation;
+        if (action is null || Submitting) return;
+        await action();
+        if (!Submitting) PendingConfirmation = null;
+    }
+
+    DateTimeOffset? ActualStartAt => Activities.FirstOrDefault(a => a.ActivityType == MaintenanceActivityType.STATUS_CHANGED && a.Detail == "Bắt đầu công việc")?.CreatedAt;
+    DateTimeOffset? LatestProgressAt => Activities.Where(a => a.ActivityType == MaintenanceActivityType.PROGRESS_UPDATED).OrderByDescending(a => a.CreatedAt).FirstOrDefault()?.CreatedAt;
+
+    MaintenanceProgressLifecycle Lifecycle => Detail is null
+        ? new MaintenanceProgressLifecycle(1, 0, false)
+        : MaintenanceProgressLifecycleMapper.Map(Detail);
+    bool IsStepCompleted(int step) => Lifecycle.IsStepCompleted(step);
+    string StepClass(int step) => Lifecycle.IsStepCompleted(step) ? "is-complete" : Lifecycle.IsStepCurrent(step) ? "is-current" : "is-future";
+    void Close() { Detail = null; Activities = []; }
+
+    string Asset(MaintenanceTaskModel x) => string.Join(" / ", Assets.Where(a => a.Id == x.FacilityId || a.Id == x.EquipmentId).Select(a => $"{a.Code} · {a.Name}")) is { Length: > 0 } v ? v : "Chưa gắn tài sản";
+    string Asset(Guid? facilityId, Guid? equipmentId) => string.Join(" / ", Assets.Where(a => a.Id == facilityId || a.Id == equipmentId).Select(a => $"{a.Code} · {a.Name}")) is { Length: > 0 } v ? v : "Chưa gắn tài sản";
+    static string HistoryDates(MaintenanceHistoryItemModel item) => item.StartedAt is { } started && item.CompletedAt is { } completed ? $"{Date(started)} – {Date(completed)}" : Date(item.StartedAt ?? item.CompletedAt ?? item.ClosedAt);
+    string AssetName(Guid? assetId) => assetId is null ? "—" : Assets.FirstOrDefault(a => a.Id == assetId) is { } asset ? $"{asset.Code} · {asset.Name}" : "—";
+
+    static string Date(DateTimeOffset? x) => x?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—";
+
+    static string Status(MaintenanceTaskStatus s) => s switch
+    {
+        MaintenanceTaskStatus.ASSIGNED => "Đã phân công",
+        MaintenanceTaskStatus.IN_PROGRESS => "Đang thực hiện",
+        MaintenanceTaskStatus.COMPLETED => "Chờ nghiệm thu",
+        MaintenanceTaskStatus.CLOSED => "Đã đóng",
+        MaintenanceTaskStatus.CANCELLED => "Đã hủy",
+        _ => "Mở"
+    };
+
+    static string StatusClass(MaintenanceTaskStatus s) => s == MaintenanceTaskStatus.IN_PROGRESS ? "smt-badge-amber" :
+        s is MaintenanceTaskStatus.COMPLETED or MaintenanceTaskStatus.CLOSED ? "smt-badge-emerald" : "smt-badge-sky";
+
+    static string PriorityClass(string? p) => (p ?? "").ToUpperInvariant() switch
+    {
+        "HIGH" or "CAO" => "smt-badge-rose",
+        "MEDIUM" or "TRUNG BINH" => "smt-badge-amber",
+        _ => "smt-badge-slate"
+    };
+
+    static string Activity(MaintenanceTaskActivityModel a) => a.ActivityType == MaintenanceActivityType.RESULT_SUBMITTED ? "Hoàn thành công việc" :
+        a.ActivityType == MaintenanceActivityType.PROGRESS_UPDATED ? "Cập nhật tiến độ" :
+        a.ActivityType == MaintenanceActivityType.STATUS_CHANGED && a.Detail == "Bắt đầu công việc" ? "Bắt đầu công việc" :
+        a.ActivityType == MaintenanceActivityType.ASSIGNED ? "Đã phân công" : "Cập nhật công việc";
+    static string ResultStatus(MaintenanceResultStatus status) => status == MaintenanceResultStatus.APPROVED ? "Đã chấp nhận" : status == MaintenanceResultStatus.REVISION_REQUIRED ? "Yêu cầu xử lý thêm" : "Chờ nghiệm thu";
+    static string HistoryEvent(MaintenanceHistoryTimelineEventModel item) => item.ActivityType switch { MaintenanceActivityType.PROGRESS_UPDATED => "Cập nhật tiến độ", MaintenanceActivityType.RESULT_SUBMITTED => "Hoàn thành công việc", MaintenanceActivityType.MANAGER_REVIEWED => "Manager nghiệm thu", MaintenanceActivityType.CLOSED => "Đóng công việc", MaintenanceActivityType.ASSIGNED => "Đã phân công", _ => "Cập nhật công việc" };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}
