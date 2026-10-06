@@ -18,7 +18,7 @@ public class PropertyAssetsTests
     public async Task CurrentBuildingOverview_ReturnsNull_WhenBuildingIsMissing()
     {
         await using var context = CreateContext();
-        var store = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(context);
+        var store = CreateStore(context);
 
         Assert.Null(await store.CurrentBuildingOverviewAsync(default));
     }
@@ -35,7 +35,7 @@ public class PropertyAssetsTests
         context.Equipment.Add(new Equipment("EQ-01", "Thang máy", _now));
         await context.SaveChangesAsync();
 
-        var overview = await new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(context)
+        var overview = await CreateStore(context)
             .CurrentBuildingOverviewAsync(default);
 
         Assert.NotNull(overview);
@@ -58,7 +58,7 @@ public class PropertyAssetsTests
         var current = new Building("TWR-B", "Tower B", "Address B", _now.AddMinutes(2));
         context.Buildings.AddRange(historical, current);
         await context.SaveChangesAsync();
-        var store = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(context);
+        var store = CreateStore(context);
 
         var overview = await store.CurrentBuildingOverviewAsync(default);
 
@@ -168,7 +168,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(CreateStore(dbContext));
 
         // 1. No Building - returns null
         var noBuilding = await service.GetCurrentBuildingOverviewAsync();
@@ -212,7 +212,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         var nonExistentFacilityId = Guid.NewGuid();
         var command = new CreateEquipmentCommand(
@@ -233,7 +233,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create a facility
         var facility = new Facility("FAC-01", "Gym", _now);
@@ -260,7 +260,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create first equipment
         var command1 = new CreateEquipmentCommand(
@@ -287,7 +287,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create two facilities
         var facility1 = new Facility("FAC-01", "Gym", _now);
@@ -321,7 +321,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create a facility
         var facility = new Facility("FAC-01", "Gym", _now);
@@ -349,7 +349,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create a facility
         var facility = new Facility("FAC-01", "Gym", _now);
@@ -377,7 +377,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create equipment without facility (building-level equipment)
         var command = new CreateEquipmentCommand(
@@ -400,7 +400,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Try to create equipment with non-existent facility
         var command = new CreateEquipmentCommand(
@@ -420,7 +420,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create equipment
         var equipment = new Equipment("EQ-01", "Treadmill", _now);
@@ -449,7 +449,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create equipment with ACTIVE status
         var equipment = new Equipment("EQ-01", "Treadmill", _now);
@@ -475,7 +475,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create equipment with ACTIVE status
         var equipment = new Equipment("EQ-01", "Treadmill", _now);
@@ -504,7 +504,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Try to set status on non-existent equipment
         var nonexistentId = Guid.NewGuid();
@@ -521,7 +521,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create a facility
         var facility = new Facility("FAC-01", "Gym", _now);
@@ -544,7 +544,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Try to get non-existent facility
         var result = await service.GetFacilityByIdAsync(Guid.NewGuid());
@@ -560,7 +560,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create equipment
         var equipment = new Equipment("EQ-01", "Treadmill", _now);
@@ -583,7 +583,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Try to get non-existent equipment
         var result = await service.GetEquipmentDetailByIdAsync(Guid.NewGuid());
@@ -599,7 +599,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create a facility
         var facility = new Facility("FAC-01", "Gym", _now);
@@ -627,7 +627,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create equipment without facility (building-level equipment)
         var equipment = new Equipment("EQ-01", "Main Transformer", _now);
@@ -650,7 +650,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create facilities
         var facility1 = new Facility("FAC-01", "Gym", _now, facilityType: "Phòng GYM / Fitness");
@@ -674,7 +674,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create facilities
         var facility1 = new Facility("FAC-01", "Gym", _now, facilityType: "Phòng GYM / Fitness");
@@ -698,7 +698,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create equipment
         var equipment1 = new Equipment("EQ-01", "Pump", _now, equipmentType: "Hệ Thống Cơ Điện (MEP)");
@@ -722,7 +722,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create facilities with different combinations
         var facility1 = new Facility("FAC-01", "Gym Pool", _now, facilityType: "Hồ Bơi", initialStatus: MasterDataStatus.ACTIVE);
@@ -750,7 +750,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create 5 facilities, 3 with same FacilityType
         for (int i = 1; i <= 5; i++)
@@ -779,7 +779,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create a facility
         var facility = new Facility("FAC-01", "Gym", _now, facilityType: "Phòng GYM / Fitness");
@@ -813,7 +813,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create 5 equipment, 3 with same EquipmentType
         for (int i = 1; i <= 5; i++)
@@ -842,7 +842,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create a facility with ACTIVE status
         var facility = new Facility("FAC-01", "Gym", _now);
@@ -868,7 +868,7 @@ public class PropertyAssetsTests
             .Options;
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
-        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+        var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create a facility
         var facility = new Facility("FAC-01", "Gym", _now);
@@ -895,7 +895,7 @@ public class PropertyAssetsTests
         dbContext.Facilities.Add(new Facility("FAC-01", "Gym", _now));
         await dbContext.SaveChangesAsync();
         var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(
-            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+            CreateStore(dbContext));
 
         var result = await service.GetFacilitiesAsync(new FacilityFilterQuery(PageIndex: 0, PageSize: 0));
 
@@ -912,7 +912,7 @@ public class PropertyAssetsTests
             .Options;
         await using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(
-            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+            CreateStore(dbContext));
         var actor = Guid.NewGuid();
         var command = new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.UpdateCurrentBuildingCommand(
             "Sunshore", "123 Nguyễn Huệ", "Asia/Ho_Chi_Minh", 28, "Chung cư trung tâm", actor, "TWR-A");
@@ -933,7 +933,7 @@ public class PropertyAssetsTests
             .Options;
         await using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService(
-            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+            CreateStore(dbContext));
         var command = new PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.UpdateCurrentBuildingCommand(
             "Sunshore", "123 Nguyễn Huệ", "Asia/Ho_Chi_Minh", 28);
 
@@ -981,7 +981,7 @@ public class PropertyAssetsTests
     {
         await using var dbContext = CreateContext();
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(
-            new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore(dbContext));
+            CreateStore(dbContext));
 
         var result = await service.GetEquipmentsAsync(new EquipmentFilterQuery(PageIndex: 1, PageSize: 1000));
 
@@ -1018,5 +1018,15 @@ public class PropertyAssetsTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
+    }
+
+    private static PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore CreateStore(
+        PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext context) =>
+        new(context, new UnrestrictedAssetReadAccess());
+
+    private sealed class UnrestrictedAssetReadAccess : PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess
+    {
+        public Task<PropFlow.Modules.PropertyAssets.Application.AssetReadScope> GetScopeAsync(CancellationToken ct) =>
+            Task.FromResult(PropFlow.Modules.PropertyAssets.Application.AssetReadScope.Manager);
     }
 }

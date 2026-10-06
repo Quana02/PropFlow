@@ -37,7 +37,10 @@ using PropFlow.Modules.Apartments.Infrastructure;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.PropertyAssets.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
+using PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
+using PropFlow.Modules.ServiceRequests.Presentation;
 using PropFlow.Api.Serialization;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 using Npgsql;
@@ -174,6 +177,7 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Apartments.Presentation.ApartmentsController).Assembly)
     .AddApplicationPart(typeof(ResidentsController).Assembly)
+    .AddApplicationPart(typeof(ResidentServiceRequestsController).Assembly)
     .AddApplicationPart(typeof(MaintenanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly);
@@ -184,6 +188,9 @@ builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceStore>();
 builder.Services.AddScoped<PaymentFinanceUseCases>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
+builder.Services.AddScoped<IResidentResidenceSource, ResidentResidenceSource>();
+builder.Services.AddScoped<IServiceRequestSubmissionStore, ServiceRequestSubmissionStore>();
+builder.Services.AddScoped<SubmitServiceRequestHandler>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentOnboardingService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentCodeGenerator>();
@@ -222,6 +229,8 @@ builder.Services.AddAuthorization(options =>
         (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
         (context.User.IsInRole(SystemRoleCodes.Staff) && context.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations)) ||
         (context.User.IsInRole(SystemRoleCodes.Accountant) && context.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
+    options.AddPolicy(ServiceRequestsAuthorizationPolicies.SubmitAsResident,
+        policy => policy.RequireRole(SystemRoleCodes.Resident));
 });
 builder.Services.AddScoped<IApartmentOverviewSource, ApartmentOverviewSource>();
 builder.Services.AddScoped<IApartmentResidentRelationshipSource, ApartmentResidentRelationshipSource>();
@@ -251,6 +260,17 @@ builder.Services.AddRateLimiter(options =>
         options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
     }
+    var residentSubmitLimit = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:PermitLimit", 5);
+    var residentSubmitWindow = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:WindowMinutes", 1);
+    options.AddPolicy("resident-service-request-submit", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = residentSubmitLimit,
+                Window = TimeSpan.FromMinutes(residentSubmitWindow),
+                QueueLimit = 0
+            }));
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();

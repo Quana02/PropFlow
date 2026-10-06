@@ -20,6 +20,22 @@
       margin-bottom: 0 !important;
     }
   }
+  html:has(#threejs-canvas-container) {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  body:has(#threejs-canvas-container) {
+    /* `hidden` on the x-axis computes the y-axis to `auto`, which turns the
+       document body into a non-scrolling wheel trap above the root scroller. */
+    overflow-x: clip !important;
+    overflow-y: visible !important;
+    overscroll-behavior-y: auto !important;
+  }
+  #threejs-canvas-container,
+  #threejs-canvas-container canvas {
+    pointer-events: none !important;
+    touch-action: pan-y !important;
+  }
   ::-webkit-scrollbar {
     width: 6px;
   }
@@ -57,34 +73,9 @@
 </style>
 
 <!-- 3D Ghost Building Scene Layer -->
-<div class="fixed inset-0 w-full h-full pointer-events-none z-0" id="threejs-canvas-container"></div>
-<header class="fixed top-0 w-full z-50 bg-white/80 dark:bg-[#0b0f17]/80 backdrop-blur-md h-20 border-b border-slate-200/80 dark:border-slate-800/80 shadow-sm transition-colors duration-300">
-<div class="w-full h-full px-margin-edge flex items-center justify-between">
-<div class="flex items-center gap-3">
-<a class="flex items-center gap-2 cursor-pointer" href="#home">
-<img alt="PropFlow Logo" class="h-9 w-auto object-contain brightness-100 dark:brightness-110 dark:drop-shadow-[0_0_8px_rgba(56,189,248,0.4)]" src="https://lh3.googleusercontent.com/aida/AEtjO1UiU3-Iz9DCQs6CXI5F_f3pFrTRxpJLYMUA68UWghQHRfQdSRgGrQ4MxOVO6qPyDliwqeLBJwU873lVIPJpEr_Y2NP-zpyjZQqU6k0BVDlAKiAZOeaeTQ6OZwSfyZ-qxjLHRiOVTBkZxE93VxRfmUL-dlzxulDSAk6JFYCQ6t7-x-xs3PXPYy4_jv6JcYgVmt1aLMuGGg9Fsluht9DUTvajgmkY8_7E2GlfLL4wZUFF3wDpVPY6r2f-Kw">
-</a>
-</div>
-<nav class="hidden lg:flex items-center gap-8" data-active-classes="text-sky-600 dark:text-cyan-400 font-bold">
-<a aria-current="page" class="transition-all duration-300 text-sky-600 dark:text-cyan-400 font-bold hover:text-sky-600 dark:hover:text-cyan-300 tracking-wide cursor-pointer font-label-caps" data-path="home" href="#home">TRANG CHỦ</a>
-<a class="font-label-caps text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 transition-all duration-300 tracking-wide cursor-pointer" data-path="features" href="#features">TÍNH NĂNG</a>
-<a class="font-label-caps text-slate-600 dark:text-slate-400 hover:text-sky-600 dark:hover:text-cyan-400 transition-all duration-300 tracking-wide cursor-pointer" data-path="pricing" href="#pricing">BẢNG GIÁ</a>
-</nav>
-<div class="flex items-center gap-3 md:gap-4">
-<!-- Unified Modern Theme Switcher -->
-<button aria-label="Đổi chế độ sáng tối" class="relative flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 dark:border-slate-700/80 bg-white/90 dark:bg-slate-800/80 text-slate-700 dark:text-cyan-400 shadow-sm hover:border-sky-500 dark:hover:border-cyan-400 transition-all duration-300 group" id="theme-toggle" title="Chuyển chế độ Sáng / Tối" type="button">
-<span class="material-symbols-outlined text-[20px] transition-transform duration-300 rotate-0 dark:rotate-90 hidden dark:block text-cyan-300">dark_mode</span>
-<span class="material-symbols-outlined text-[20px] transition-transform duration-300 text-amber-500 block dark:hidden">light_mode</span>
-</button>
-<a class="hidden md:flex items-center px-4 md:px-5 py-2.5 rounded-full border border-sky-600/30 dark:border-cyan-500/30 bg-sky-50/80 dark:bg-cyan-950/40 hover:bg-sky-100 dark:hover:bg-cyan-900/60 text-sky-700 dark:text-cyan-300 font-label-caps transition-all duration-300 shadow-sm text-xs md:text-sm tracking-wide" data-path="portal" href="/login">CỔNG CƯ DÂN</a>
-<a class="flex items-center gap-2 px-4 md:px-5 py-2.5 rounded-full bg-sky-600 dark:bg-cyan-500 hover:bg-sky-700 dark:hover:bg-cyan-400 text-white dark:text-slate-950 font-label-caps transition-all duration-300 shadow-md shadow-sky-600/20 dark:shadow-cyan-500/30 text-xs md:text-sm font-semibold tracking-wide" href="/login">
-<span class="material-symbols-outlined text-[18px]">lock</span>
-<span>ĐĂNG NHẬP</span>
-</a>
-</div>
-</div>
-</header>
-<main class="w-full pt-20 relative z-10 bg-transparent">
+<div class="fixed inset-0 w-full h-full pointer-events-none z-0" id="threejs-canvas-container" aria-hidden="true"></div>
+<PropFlow.Web.Client.Layout.Shared.PublicHeader ShowMarketingNavigation="true" Fixed="true" />
+<main class="w-full pt-[50px] relative z-10 bg-transparent">
 <div class="flex flex-col w-full relative min-h-screen">
 <!-- Main Content Canvas (Interactive Layer) -->
 <div class="relative flex flex-col w-full">
