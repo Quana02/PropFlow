@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using PropFlow.Modules.ServiceRequests.Application.ListResidentServiceRequests;
+using PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Contracts;
 
@@ -10,12 +12,30 @@ namespace PropFlow.Modules.ServiceRequests.Presentation;
 
 [ApiController]
 [Authorize(Policy = ServiceRequestsAuthorizationPolicies.SubmitAsResident)]
-[EnableRateLimiting("resident-service-request-submit")]
 [Route("api/v1/resident/service-requests")]
 [Produces("application/json")]
-public sealed class ResidentServiceRequestsController(SubmitServiceRequestHandler handler) : ControllerBase
+public sealed class ResidentServiceRequestsController(
+    SubmitServiceRequestHandler submitHandler,
+    ListResidentServiceRequestsHandler listHandler,
+    RateResidentServiceRequestHandler rateHandler) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<ResidentServiceRequestListItem>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<ResidentServiceRequestListItem>>> List(CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var userId))
+            return Problem(StatusCodes.Status401Unauthorized, "invalid_session", "Phiên đăng nhập không hợp lệ.");
+
+        var result = await listHandler.HandleAsync(userId, ct);
+        return result.Outcome == ListResidentServiceRequestsOutcome.Success
+            ? Ok(result.Items)
+            : Problem(StatusCodes.Status403Forbidden, result.ErrorCode!, result.Message!);
+    }
+
     [HttpPost]
+    [EnableRateLimiting("resident-service-request-submit")]
     [ProducesResponseType(typeof(ResidentServiceRequestCreatedResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -29,7 +49,7 @@ public sealed class ResidentServiceRequestsController(SubmitServiceRequestHandle
         if (!Guid.TryParse(User.FindFirstValue("sub"), out var userId))
             return Problem(StatusCodes.Status401Unauthorized, "invalid_session", "Phiên đăng nhập không hợp lệ.");
 
-        var result = await handler.HandleAsync(userId, request, ct);
+        var result = await submitHandler.HandleAsync(userId, request, ct);
         return result.Outcome switch
         {
             SubmitServiceRequestOutcome.Created => StatusCode(StatusCodes.Status201Created, result.Response),
@@ -37,6 +57,31 @@ public sealed class ResidentServiceRequestsController(SubmitServiceRequestHandle
                 Problem(StatusCodes.Status400BadRequest, result.ErrorCode!, result.Message!),
             SubmitServiceRequestOutcome.ResidentResidenceNotFound =>
                 Problem(StatusCodes.Status403Forbidden, result.ErrorCode!, result.Message!),
+            _ => Problem(StatusCodes.Status409Conflict, result.ErrorCode!, result.Message!)
+        };
+    }
+
+    [HttpPut("{id:guid}/feedback")]
+    [ProducesResponseType(typeof(ResidentServiceRequestFeedbackResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ResidentServiceRequestFeedbackResponse>> Rate(
+        Guid id,
+        [FromBody] RateResidentServiceRequestRequest request,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var userId))
+            return Problem(StatusCodes.Status401Unauthorized, "invalid_session", "Phiên đăng nhập không hợp lệ.");
+
+        var result = await rateHandler.HandleAsync(userId, id, request, ct);
+        return result.Outcome switch
+        {
+            RateResidentServiceRequestOutcome.Saved => Ok(result.Response),
+            RateResidentServiceRequestOutcome.InvalidInput => Problem(StatusCodes.Status400BadRequest, result.ErrorCode!, result.Message!),
+            RateResidentServiceRequestOutcome.ResidentResidenceNotFound => Problem(StatusCodes.Status403Forbidden, result.ErrorCode!, result.Message!),
+            RateResidentServiceRequestOutcome.RequestNotFound => Problem(StatusCodes.Status404NotFound, result.ErrorCode!, result.Message!),
             _ => Problem(StatusCodes.Status409Conflict, result.ErrorCode!, result.Message!)
         };
     }

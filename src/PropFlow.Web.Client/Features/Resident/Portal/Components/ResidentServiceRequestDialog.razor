@@ -170,6 +170,9 @@
     [CascadingParameter]
     private ResidentPortalProfileContext ProfileContext { get; set; } = ResidentPortalProfileContext.Loading;
 
+    [Parameter]
+    public EventCallback<ResidentServiceRequestCreatedResponse> RequestCreated { get; set; }
+
     private const string PrivateScope = "PRIVATE";
     private const string PublicScope = "PUBLIC";
     private const string NormalPriority = "NORMAL";
@@ -322,7 +325,11 @@
         {
             _result = await Api.CreateAsync(new CreateResidentServiceRequestRequest(
                 _form.CategoryCode, _form.Title, description, _form.ServiceAreaCode, _form.PriorityCode, _form.PreferredDate, _form.PreferredTimeCode));
-            if (_result.IsSuccess) _created = _result.Data;
+            if (_result.IsSuccess && _result.Data is not null)
+            {
+                _created = _result.Data;
+                await RequestCreated.InvokeAsync(_created);
+            }
         }
         finally
         {

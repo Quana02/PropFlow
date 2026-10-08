@@ -1652,6 +1652,15 @@
                 "hidden",
                 !willOpen
             );
+
+            document.querySelectorAll(
+                '[aria-controls="aiChatWindow"]'
+            ).forEach(button =>
+                button.setAttribute(
+                    "aria-expanded",
+                    String(willOpen)
+                )
+            );
         },
 
         destroy() {
