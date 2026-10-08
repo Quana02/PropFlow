@@ -5,7 +5,6 @@ namespace PropFlow.Api.Controllers;
 
 public record CurrentBuildingOverviewResponse(
     Guid Id,
-    string Code,
     string Name,
     string Address,
     string TimeZoneId,

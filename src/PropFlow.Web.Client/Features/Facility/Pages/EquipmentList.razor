@@ -13,6 +13,7 @@
 @inject IAuthorizationService AuthorizationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using PropFlow.Web.Client.Shared.Forms
+@using PropFlow.Web.Client.Shared.Feedback
 @implements IDisposable
 
 <PageTitle>Quản Lý Thiết Bị - PropFlow</PageTitle>
@@ -468,7 +469,7 @@
                     </div>
                     <div>
                         <h3 class="text-lg font-bold font-display text-slate-900">Chi Tiết Thiết Bị</h3>
-                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">Mã: @SelectedEquipmentToEdit.Code</p>
+                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">@SelectedEquipmentToEdit.Name · Mã: @SelectedEquipmentToEdit.Code</p>
                     </div>
                 </div>
                 <button @onclick="() => IsDetailOpen = false" class="text-slate-400 hover:text-slate-700 p-2 rounded-xl transition-all">
@@ -630,7 +631,8 @@
                         <input @bind="FormModel.Code" type="text" placeholder="VD: TB-MAYBOM-HIYORI-01"
                                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-mono focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all uppercase"
                                disabled="@(SelectedEquipmentToEdit != null)" />
-                        <p class="text-[11px] text-slate-400">Quy ước: TB-[LOAI]-[TENTHIETBI]-[STT]</p>
+                        <p class="text-[11px] text-slate-400">Quy ước: TB-[LOẠI]-[TÊN THIẾT BỊ]-[STT]</p>
+                        @if (!string.IsNullOrWhiteSpace(EquipmentCodeError)) { <p class="text-xs text-rose-600" role="alert">@EquipmentCodeError</p> }
                     </div>
 
                     <div class="space-y-1.5">
@@ -760,6 +762,11 @@
     </div>
 }
 
+@if (IsSaveConfirmationOpen)
+{
+    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedEquipmentToEdit is null ? "Bạn có muốn tạo thiết bị này không?" : "Bạn có muốn cập nhật thiết bị này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveEquipment" OnCancel="CloseSaveConfirmation" />
+}
+
 @code {
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
         new("", "Tất cả trạng thái"),
@@ -806,6 +813,8 @@
     private bool IsFormOpen { get; set; }
     private bool IsDetailOpen { get; set; }
     private bool IsSaving { get; set; }
+    private bool IsSaveConfirmationOpen { get; set; }
+    private string? EquipmentCodeError { get; set; }
     private string? SuccessMessage { get; set; }
     private string? ErrorMessage { get; set; }
     private EquipmentModel? SelectedEquipmentToEdit { get; set; }
@@ -870,11 +879,15 @@
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                if (IsFormOpen || IsDetailOpen || IsSaving) continue;
+                if (IsFormOpen || IsSaving || IsLoading) continue;
                 await InvokeAsync(async () =>
                 {
-                    await Task.WhenAll(LoadData(), LoadSummaryAsync());
-                    StateHasChanged();
+                    if (ct.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
+                    if (IsDetailOpen)
+                        await RefreshDetailAsync(ct);
+                    else
+                        await Task.WhenAll(LoadData(), LoadSummaryAsync(), LoadFacilitiesAsync());
+                    if (!ct.IsCancellationRequested) StateHasChanged();
                 });
             }
         }
@@ -882,6 +895,27 @@
     }
 
     public void Dispose() => StatusRefreshCancellation.Cancel();
+
+    private async Task RefreshDetailAsync(CancellationToken ct)
+    {
+        if (SelectedEquipmentToEdit is null) return;
+        var id = SelectedEquipmentToEdit.Id;
+        var result = await EquipmentApiClient.GetEquipmentByIdAsync(id, ct);
+        // A response for a closed/replaced dialog must not reopen it or overwrite an edit.
+        if (ct.IsCancellationRequested || !IsDetailOpen || IsFormOpen || SelectedEquipmentToEdit?.Id != id) return;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            SelectedEquipmentToEdit = result.Data;
+        }
+        else
+        {
+            IsDetailOpen = false;
+            SelectedEquipmentToEdit = null;
+            // Refresh the underlying list too, so revoked assignments disappear there.
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+        }
+    }
 
     private async Task LoadData()
     {
@@ -900,10 +934,7 @@
     private async Task LoadSummaryAsync()
     {
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
-        if (result.IsSuccess && result.Data is not null)
-        {
-            EquipmentSummary = result.Data.Equipment;
-        }
+        EquipmentSummary = result.IsSuccess ? result.Data?.Equipment : null;
     }
 
     private async Task LoadFacilitiesAsync()
@@ -916,6 +947,7 @@
             var result = await FacilityApiClient.GetFacilitiesAsync(new FacilityFilterModel { PageIndex = pageIndex, PageSize = pageSize });
             if (!result.IsSuccess || result.Data is null)
             {
+                FacilityList = [];
                 ErrorMessage = result.Message ?? "Không thể tải danh sách cơ sở vật chất.";
                 return;
             }
@@ -986,10 +1018,11 @@
 
     private void CloseDialog() { IsFormOpen = false; IsSaving = false; }
 
-    private async Task SaveEquipment()
+    private void SaveEquipment()
     {
         if (!IsManager) return;
         ErrorMessage = null;
+        EquipmentCodeError = null;
         var validationModel = SelectedEquipmentToEdit == null
             ? (object)FormModel
             : new UpdateEquipmentModel
@@ -1007,9 +1040,23 @@
             };
         if (!TryValidate(validationModel, out var validationMessage))
         {
-            ErrorMessage = validationMessage;
+            if (SelectedEquipmentToEdit is null && validationMessage?.Contains("Mã thiết bị", StringComparison.Ordinal) == true)
+                EquipmentCodeError = validationMessage;
+            else
+                ErrorMessage = validationMessage;
             return;
         }
+        IsSaveConfirmationOpen = true;
+    }
+
+    private void CloseSaveConfirmation()
+    {
+        if (!IsSaving) IsSaveConfirmationOpen = false;
+    }
+
+    private async Task ConfirmSaveEquipment()
+    {
+        if (!IsManager || !IsSaveConfirmationOpen) return;
         IsSaving = true;
         ErrorMessage = null;
         try
@@ -1039,6 +1086,7 @@
                 if (!updateResult.IsSuccess) { ErrorMessage = updateResult.Message; return; }
                 SuccessMessage = $"Đã cập nhật '{FormModel.Name}' thành công!";
             }
+            IsSaveConfirmationOpen = false;
             CloseDialog();
             await Task.WhenAll(LoadData(), LoadSummaryAsync());
         }

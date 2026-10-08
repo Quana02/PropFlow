@@ -2,8 +2,10 @@
 @attribute [Authorize(Roles = "RESIDENT")]
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
 @inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
+@inject PropFlow.Web.Client.Features.Resident.Portal.Services.IResidentServiceRequestApiClient ServiceRequests
 @using PropFlow.Web.Client.Features.Resident.Portal.Components
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
+@using PropFlow.Modules.ServiceRequests.Contracts
 
 <PageTitle>PropFlow Resident Portal - Cổng Dịch Vụ Cư Dân</PageTitle>
 
@@ -26,15 +28,31 @@
         <div class="resident-card-grid">
             <article class="resident-dashboard-card glass-panel" data-purpose="request-status-card">
                 <div>
-                    <header class="card-heading"><span><h2>Tiến độ xử lý yêu cầu</h2><small>Cập nhật thời gian thực</small></span><em class="badge badge-sky">Đã xong 2 / 5</em></header>
-                    <div class="request-progress"><span></span></div>
+                    <header class="card-heading"><span><h2>Tiến độ xử lý yêu cầu</h2><small>Cập nhật từ dữ liệu của bạn</small></span><em class="badge badge-sky">Đã xong @CompletedRequestCount / @_requests.Count</em></header>
+                    <div class="request-progress"><span style="@ProgressStyle"></span></div>
                     <div class="resident-card-list">
-                        <button class="glass-inner request-list-item" type="button"><span><strong>Sửa cấp nước phòng tắm Master</strong><small>KTV: Lê Minh Tuấn</small></span><span><em class="badge badge-amber">Đang xử lý</em><small>10:30 Hôm nay</small></span></button>
-                        <button class="glass-inner request-list-item" type="button"><span><strong>Kiểm tra aptomat &amp; nguồn phòng khách</strong><small>Mã phiếu: #YC-8942</small></span><span><em class="badge badge-blue">Chờ tiếp nhận</em><small>08:15 Sáng nay</small></span></button>
-                        <button class="glass-inner request-list-item" type="button"><span><strong>Hỗ trợ vệ sinh công nghiệp căn hộ</strong><small>Đội Vệ Sinh Tầng 18</small></span><span><em class="badge badge-green">Đã xong ★ 5.0</em><small>Hôm qua</small></span></button>
+                        @if (_loadingRequests)
+                        {
+                            <div class="resident-request-state">Đang tải yêu cầu…</div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(_requestError))
+                        {
+                            <div class="resident-request-state error" role="alert">@_requestError</div>
+                        }
+                        else if (_requests.Count == 0)
+                        {
+                            <div class="resident-request-state">Bạn chưa gửi yêu cầu nào.</div>
+                        }
+                        else
+                        {
+                            @foreach (var request in _requests.Take(3))
+                            {
+                                <button class="glass-inner request-list-item" type="button" @onclick="() => OpenRequest(request)"><span><strong>@request.Title</strong><small>Mã phiếu: #@request.RequestNumber</small></span><span><em class="badge @StatusBadgeClass(request.Status)">@StatusLabel(request.Status)</em><small>@FormatSubmittedAt(request.SubmittedAt)</small></span></button>
+                            }
+                        }
                     </div>
                 </div>
-                <footer class="card-actions"><button class="resident-text-action" type="button" onclick="window.propFlowResident.switchTab('processing')">Xem tất cả 5 yêu cầu <span>›</span></button><button class="resident-primary-action" type="button" @onclick='() => OpenService("OTHER", "Yêu cầu hỗ trợ mới")'>+ Tạo yêu cầu mới</button></footer>
+                <footer class="card-actions"><button class="resident-text-action" type="button" onclick="window.propFlowResident.switchTab('processing')">Xem tất cả @_requests.Count yêu cầu <span>›</span></button><button class="resident-primary-action" type="button" @onclick='() => OpenService("OTHER", "Yêu cầu hỗ trợ mới")'>+ Tạo yêu cầu mới</button></footer>
             </article>
 
             <article class="resident-dashboard-card glass-panel" data-purpose="services-catalog-card">
@@ -71,11 +89,19 @@
     <div class="resident-tab-panel" id="tabProcessingContent" hidden>
         <article class="resident-detail-panel glass-panel">
             <header class="detail-heading"><span><h2>📋 Chi tiết yêu cầu dịch vụ kỹ thuật &amp; tiện ích</h2><p>Theo dõi tiến độ, phân công nhân sự và phản hồi đánh giá trực tiếp</p></span><button class="resident-primary-action" type="button" @onclick='() => OpenService("OTHER", "Đăng ký hỗ trợ mới")'>+ Đăng ký hỗ trợ mới</button></header>
-            <div class="filter-chips"><button class="active" type="button">Tất cả (5)</button><button type="button">Chờ xử lý (1)</button><button type="button">Đang thi công (2)</button><button type="button">Đã hoàn tất (2)</button></div>
+            <div class="filter-chips"><button class="active" type="button">Tất cả (@_requests.Count)</button><button type="button">Chờ xử lý (@WaitingRequestCount)</button><button type="button">Đang thi công (@InProgressRequestCount)</button><button type="button">Đã hoàn tất (@CompletedRequestCount)</button></div>
             <div class="detail-list">
-                <div class="glass-inner detail-row"><span class="detail-symbol amber">🔧</span><span class="detail-copy"><span><em>#YC-8945</em><strong>Sửa chữa hệ thống cấp nước phòng tắm Master</strong></span><p>Hiện tượng rò rỉ van nước cấp tự động bồn tắm, cần thay gioăng cao su chịu nhiệt.</p><small>Kỹ thuật viên: <b>Lê Minh Tuấn (0988.xxx.112)</b> • Hẹn: 10:30 Hôm nay</small></span><em class="badge badge-amber">Đang xử lý</em></div>
-                <div class="glass-inner detail-row"><span class="detail-symbol blue">⚡</span><span class="detail-copy"><span><em>#YC-8942</em><strong>Kiểm tra hệ thống điện &amp; aptomat phòng khách</strong></span><p>Aptomat tầng lạnh tự ngắt khi bật hệ thống đèn chùm công suất lớn.</p><small>Trạng thái: <b>Đang điều phối kỹ thuật điện</b> • Tiếp nhận lúc: 08:15</small></span><em class="badge badge-blue">Chờ tiếp nhận</em></div>
-                <div class="glass-inner detail-row"><span class="detail-symbol green">✨</span><span class="detail-copy"><span><em>#YC-8910</em><strong>Hỗ trợ vệ sinh công nghiệp sau tân gia</strong></span><p>Dịch vụ hút bụi sàn gỗ, lau kính ban công tràn viền và khử mùi ozone.</p><small>Đánh giá cư dân: <b class="stars">★★★★★ (5/5)</b> • Hoàn tất: 23/10/2024</small></span><em class="badge badge-green">Đã hoàn thành</em></div>
+                @if (_requests.Count == 0)
+                {
+                    <div class="resident-request-state">Chưa có yêu cầu để theo dõi.</div>
+                }
+                else
+                {
+                    @foreach (var request in _requests)
+                    {
+                        <button class="glass-inner detail-row resident-request-detail-button" type="button" @onclick="() => OpenRequest(request)"><span class="detail-symbol @StatusSymbolClass(request.Status)">@CategoryIcon(request.CategoryCode)</span><span class="detail-copy"><span><em>#@request.RequestNumber</em><strong>@request.Title</strong></span><p>@RequestContext(request)</p><small>Gửi lúc: <b>@FormatSubmittedAt(request.SubmittedAt)</b>@PreferredSchedule(request)</small></span><em class="badge @StatusBadgeClass(request.Status)">@StatusLabel(request.Status)</em></button>
+                    }
+                }
             </div>
         </article>
     </div>
@@ -93,16 +119,17 @@
     </div>
 </section>
 
-<ResidentServiceRequestDialog @ref="_serviceRequestModal" />
+<ResidentServiceRequestDialog @ref="_serviceRequestModal" RequestCreated="HandleRequestCreatedAsync" />
+<ResidentServiceRequestDetailDialog @ref="_requestDetailModal" FeedbackSaved="LoadRequestsAsync" />
 
 <div class="resident-ai-widget" id="aiWidget">
-    <section class="ai-chat-window glass-panel" id="aiChatWindow">
-        <header><span class="ai-logo">⚡</span><span><strong>PropFlow Copilot <em>AI 24/7</em></strong><small>Trợ lý ảo • @ProfileContext.ApartmentLabel</small></span><button type="button" aria-label="Thu nhỏ" onclick="window.propFlowResident.toggleAssistant()">⌄</button></header>
+    <section class="ai-chat-window glass-panel" id="aiChatWindow" hidden>
+        <header><span class="ai-logo">⚡</span><span><strong>PropFlow Copilot <em>AI 24/7</em></strong><small>Trợ lý ảo • @ProfileContext.ApartmentLabel</small></span><button type="button" aria-label="Thu nhỏ" aria-controls="aiChatWindow" aria-expanded="false" onclick="window.propFlowResident.toggleAssistant()">⌄</button></header>
         <div class="ai-quick-actions"><button type="button">🔧 Báo hỏng điện nước</button><button type="button">🧾 Tra cứu hóa đơn T09</button><button type="button">🚗 Thẻ xe cư dân</button></div>
         <div class="ai-thread"><div class="ai-message"><span>AI</span><p>Xin chào <strong>@DisplayName</strong>! Em là trợ lý AI PropFlow đồng hành cùng hồ sơ <strong>@ProfileContext.ApartmentLabel</strong>. Anh/chị cần hỗ trợ việc gì hôm nay?</p></div><div class="ai-message user"><p>Kiểm tra giúp tôi hóa đơn tháng 9 đã thanh toán chưa?</p><span>@Initials</span></div><div class="ai-message"><span>AI</span><p>Vui lòng mở mục hóa đơn để xem trạng thái authoritative mới nhất.</p></div></div>
         <footer><input id="chatInputBox" type="text" placeholder="Hỏi bất kỳ điều gì hoặc gửi yêu cầu cho BQL..." /><button type="button">➤</button></footer>
     </section>
-    <button class="ai-toggle" type="button" aria-label="Mở trợ lý ảo PropFlow Copilot" title="PropFlow AI Copilot 24/7" onclick="window.propFlowResident.toggleAssistant()"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-5l-5 5v-5Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><i></i></button>
+    <button class="ai-toggle" type="button" aria-label="Mở trợ lý ảo PropFlow Copilot" aria-controls="aiChatWindow" aria-expanded="false" title="PropFlow AI Copilot 24/7" onclick="window.propFlowResident.toggleAssistant()"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-5l-5 5v-5Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><i></i></button>
 </div>
 
 @code {
@@ -110,8 +137,75 @@
     private ResidentPortalProfileContext ProfileContext { get; set; } = ResidentPortalProfileContext.Loading;
 
     private ResidentServiceRequestDialog? _serviceRequestModal;
+    private ResidentServiceRequestDetailDialog? _requestDetailModal;
+    private IReadOnlyList<ResidentServiceRequestListItem> _requests = [];
+    private string? _requestError;
+    private bool _loadingRequests = true;
+
+    protected override async Task OnInitializedAsync() => await LoadRequestsAsync();
+
+    private async Task LoadRequestsAsync()
+    {
+        _loadingRequests = true;
+        _requestError = null;
+        var result = await ServiceRequests.ListAsync();
+        if (result.IsSuccess)
+            _requests = result.Data ?? [];
+        else
+            _requestError = result.Message ?? "Không thể tải danh sách yêu cầu.";
+        _loadingRequests = false;
+    }
+
+    private async Task HandleRequestCreatedAsync(ResidentServiceRequestCreatedResponse _) => await LoadRequestsAsync();
+
     private void OpenService(string categoryCode, string title) =>
         _serviceRequestModal?.Open(categoryCode, title);
+    private void OpenRequest(ResidentServiceRequestListItem request) => _requestDetailModal?.Open(request);
     private string DisplayName => ProfileContext.Profile?.FullName ?? Session.User?.DisplayName ?? "Cư dân";
     private string Initials => string.Concat(DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => x[0])).ToUpperInvariant();
+    private int CompletedRequestCount => _requests.Count(request => request.Status is "RESOLVED" or "CLOSED");
+    private int WaitingRequestCount => _requests.Count(request => request.Status is "SUBMITTED" or "UNDER_REVIEW");
+    private int InProgressRequestCount => _requests.Count(request => request.Status is "ASSIGNED" or "IN_PROGRESS");
+    private string ProgressStyle => $"width: {(_requests.Count == 0 ? 0 : CompletedRequestCount * 100 / _requests.Count)}%";
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "SUBMITTED" => "Chờ tiếp nhận",
+        "UNDER_REVIEW" => "Đang xem xét",
+        "ASSIGNED" => "Đã phân công",
+        "IN_PROGRESS" => "Đang xử lý",
+        "RESOLVED" => "Đã xử lý",
+        "CLOSED" => "Đã hoàn tất",
+        "CANCELLED" => "Đã hủy",
+        _ => status
+    };
+
+    private static string StatusBadgeClass(string status) => status switch
+    {
+        "IN_PROGRESS" or "ASSIGNED" => "badge-amber",
+        "RESOLVED" or "CLOSED" => "badge-green",
+        "CANCELLED" => "badge-rose",
+        _ => "badge-blue"
+    };
+
+    private static string StatusSymbolClass(string status) => status switch
+    {
+        "IN_PROGRESS" or "ASSIGNED" => "amber",
+        "RESOLVED" or "CLOSED" => "green",
+        _ => "blue"
+    };
+
+    private static string CategoryIcon(string? categoryCode) => categoryCode switch
+    {
+        "REPAIR" => "🔧", "CLEANING" => "✨", "VISITOR" => "🛡️", "VEHICLE" => "🚗",
+        "MOVING" => "📦", "CONSTRUCTION" => "🔨", "BILLING" => "💳", _ => "📋"
+    };
+
+    private static string RequestContext(ResidentServiceRequestListItem request) =>
+        $"Khu vực: {request.ServiceAreaCode ?? "Chưa xác định"} • Mức ưu tiên: {(request.PriorityCode == "URGENT" ? "Khẩn cấp" : "Bình thường")}";
+
+    private static string PreferredSchedule(ResidentServiceRequestListItem request) => request.PreferredDate is { } date
+        ? $" • Hẹn: {date:dd/MM/yyyy}{(string.IsNullOrWhiteSpace(request.PreferredTimeCode) ? string.Empty : $" ({request.PreferredTimeCode})")}" : string.Empty;
+
+    private static string FormatSubmittedAt(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
 }

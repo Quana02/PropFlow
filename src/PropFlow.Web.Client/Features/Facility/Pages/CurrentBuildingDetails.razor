@@ -7,6 +7,7 @@
 @using PropFlow.Web.Client.Services.Authentication
 @inject IBuildingApiClient BuildingApiClient
 @inject AuthSession Session
+@implements IDisposable
 
 <PageTitle>Chi tiết chung cư - PropFlow</PageTitle>
 @if (!CanEdit)
@@ -75,10 +76,8 @@
                 <header class="section-header">
                     <span class="section-icon" aria-hidden="true">⌂</span>
                     <div><h2 id="basic-heading">Thông tin cơ bản</h2><p>Hồ sơ nhận diện của chung cư hiện tại</p></div>
-                    <span class="status-badge @StatusClass(Building.Status)">@StatusText(Building.Status)</span>
                 </header>
                 <dl class="field-grid">
-                    <div><dt>Mã chung cư</dt><dd>@Building.Code</dd></div>
                     <div><dt>Tên chung cư</dt><dd>@Building.Name</dd></div>
                     <div class="wide"><dt>Địa chỉ</dt><dd>@Building.Address</dd></div>
                     <div><dt>Số tầng</dt><dd>@Building.NumberOfFloors tầng</dd></div>
@@ -143,22 +142,53 @@
     private string? ErrorMessage;
     private bool CanEdit => Session.User?.Role == "MANAGER" && Session.User.Permissions.Contains("MANAGE_OPERATIONS");
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private readonly CancellationTokenSource RefreshCancellation = new();
 
-    private async Task LoadAsync()
+    protected override async Task OnInitializedAsync()
     {
-        IsLoading = true;
-        ErrorMessage = null;
-        Building = null;
+        await LoadAsync();
+        _ = RefreshAsync(RefreshCancellation.Token);
+    }
+
+    private async Task RefreshAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
         try
         {
-            var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (ct.IsCancellationRequested || IsEditDialogOpen || IsSaving || IsLoading) return;
+                    await ReloadAsync(false, ct);
+                    if (!ct.IsCancellationRequested) StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    public void Dispose() => RefreshCancellation.Cancel();
+
+    private Task LoadAsync() => ReloadAsync(true, RefreshCancellation.Token);
+
+    private async Task ReloadAsync(bool showLoading, CancellationToken ct)
+    {
+        IsLoading = showLoading;
+        ErrorMessage = null;
+        try
+        {
+            var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync(ct);
+            if (ct.IsCancellationRequested) return;
+            if (!showLoading && (IsEditDialogOpen || IsSaving)) return;
             if (result.IsSuccess && result.Data is not null) Building = result.Data;
             else if (result.StatusCode == 404) Building = null;
-            else ErrorMessage = result.Message ?? "Không thể tải thông tin chung cư. Vui lòng thử lại.";
+            else { Building = null; ErrorMessage = result.Message ?? "Không thể tải thông tin chung cư. Vui lòng thử lại."; }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch
         {
+            Building = null;
             ErrorMessage = "Không thể kết nối để tải thông tin chung cư. Vui lòng thử lại.";
         }
         finally { IsLoading = false; }
@@ -192,14 +222,4 @@
     }
 
     private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
-    private static string StatusClass(MasterDataStatus status) => status == MasterDataStatus.ACTIVE ? "active" : "inactive";
-    private static string StatusText(MasterDataStatus status) => status switch
-    {
-        MasterDataStatus.ACTIVE => "Đang hoạt động",
-        MasterDataStatus.INACTIVE => "Ngưng hoạt động",
-        MasterDataStatus.UNDER_MAINTENANCE => "Đang bảo trì",
-        MasterDataStatus.UNAVAILABLE => "Không khả dụng",
-        MasterDataStatus.OUT_OF_SERVICE => "Hết phục vụ",
-        _ => status.ToString()
-    };
 }
