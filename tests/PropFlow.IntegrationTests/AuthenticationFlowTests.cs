@@ -44,8 +44,12 @@ public sealed record RegistrationResidentSeed(
 public sealed class AuthTestMail : IAuthEmail
 {
     public ConcurrentDictionary<string, string> Codes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool FailNext { get; set; }
     public Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct)
-    { Codes[email] = code; return Task.CompletedTask; }
+    {
+        if (FailNext) { FailNext = false; throw new InvalidOperationException("Test delivery failure"); }
+        Codes[email] = code; return Task.CompletedTask;
+    }
 }
 public sealed class AuthTestClock : TimeProvider
 {
@@ -786,6 +790,56 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         using var failedScope = database.Factory.Services.CreateScope();
         Assert.False(await failedScope.ServiceProvider.GetRequiredService<AuthenticationDbContext>().UserAccounts
             .AnyAsync(x => x.Username == username || x.Email == email.ToUpperInvariant()));
+    }
+
+    [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
+    public async Task Failed_email_delivery_releases_registration_email_for_retry()
+    {
+        using var client = Client();
+        var token = Guid.NewGuid().ToString("N")[..10];
+        var username = "mail_retry_" + token;
+        var email = $"mail-retry-{token}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var request = await RegistrationRequestAsync(username, "Thử lại gửi mail", email);
+        database.Factory.Mail.FailNext = true;
+        using var failed = await Post(client, "register", request);
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+        try
+        {
+            database.Factory.Clock.Offset = TimeSpan.FromSeconds(61);
+            using var retry = await Post(client, "register", request);
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+            var next = (await retry.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+            Assert.NotEqual(Guid.Empty, next.ChallengeId);
+            using var activation = await Post(client, "registration/verify", new VerifyChallengeRequest(next.ChallengeId, database.Factory.Mail.Codes[email]));
+            Assert.Equal(HttpStatusCode.NoContent, activation.StatusCode);
+        }
+        finally { database.Factory.Mail.FailNext = false; database.Factory.Clock.Offset = TimeSpan.Zero; }
+    }
+
+    [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
+    public async Task Failed_eligibility_verification_releases_registration_email_for_corrected_retry()
+    {
+        using var client = Client();
+        var token = Guid.NewGuid().ToString("N")[..10];
+        var username = "elig_retry_" + token;
+        var email = $"elig-retry-{token}@example.invalid";
+        var seed = await database.SeedResidentAsync(email);
+        using var registration = await Post(client, "register", await RegistrationRequestAsync(username, "Thử lại hồ sơ", email));
+        var challenge = (await registration.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+        await database.ChangeRegistrationMatchFieldAsync(seed, "phone");
+        using var failed = await Post(client, "registration/verify", new VerifyChallengeRequest(challenge.ChallengeId, database.Factory.Mail.Codes[email]));
+        Assert.Equal(HttpStatusCode.Conflict, failed.StatusCode);
+        try
+        {
+            database.Factory.Clock.Offset = TimeSpan.FromSeconds(61);
+            using var retry = await Post(client, "register", await RegistrationRequestAsync(username, "Thử lại hồ sơ", email));
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+            var next = (await retry.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+            using var activation = await Post(client, "registration/verify", new VerifyChallengeRequest(next.ChallengeId, database.Factory.Mail.Codes[email]));
+            Assert.Equal(HttpStatusCode.NoContent, activation.StatusCode);
+        }
+        finally { database.Factory.Clock.Offset = TimeSpan.Zero; }
     }
 
     [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
