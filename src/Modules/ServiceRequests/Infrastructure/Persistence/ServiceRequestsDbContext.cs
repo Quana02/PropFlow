@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestCategories;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 
 namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -17,6 +18,7 @@ public class ServiceRequestsDbContext : DbContext
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
     public DbSet<ServiceRequestAssignment> ServiceRequestAssignments => Set<ServiceRequestAssignment>();
     public DbSet<ServiceRequestActivity> ServiceRequestActivities => Set<ServiceRequestActivity>();
+    public DbSet<ServiceRequestFeedback> ServiceRequestFeedbacks => Set<ServiceRequestFeedback>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
