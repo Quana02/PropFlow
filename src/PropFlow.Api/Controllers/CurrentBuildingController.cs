@@ -13,11 +13,13 @@ namespace PropFlow.Api.Controllers;
 [Produces("application/json")]
 public class CurrentBuildingController : ControllerBase
 {
+    private readonly PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess _access;
     private readonly IBuildingService _buildingService;
     private readonly IApartmentStatisticsReader _apartmentStatisticsReader;
 
-    public CurrentBuildingController(IBuildingService buildingService, IApartmentStatisticsReader apartmentStatisticsReader)
+    public CurrentBuildingController(IBuildingService buildingService, IApartmentStatisticsReader apartmentStatisticsReader, PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess access)
     {
+        _access = access;
         _buildingService = buildingService ?? throw new ArgumentNullException(nameof(buildingService));
         _apartmentStatisticsReader = apartmentStatisticsReader ?? throw new ArgumentNullException(nameof(apartmentStatisticsReader));
     }
@@ -30,16 +32,27 @@ public class CurrentBuildingController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get(CancellationToken cancellationToken = default)
     {
+        var scope = await _access.GetScopeAsync(cancellationToken);
+        if (!scope.Unrestricted && !scope.HasAssignedWork)
+            return StatusCode(StatusCodes.Status403Forbidden, Problem(StatusCodes.Status403Forbidden,
+                "assigned_work_required", "Chưa có quyền xem", "Bạn chưa có công việc đang được phân công để xem thông tin chung cư."));
         var overview = await _buildingService.GetCurrentBuildingOverviewAsync(cancellationToken);
         if (overview is null)
         {
             return NotFound(Problem(StatusCodes.Status404NotFound, "building_not_configured", "Không tìm thấy dữ liệu", "Không tìm thấy thông tin chung cư. Vui lòng thiết lập dữ liệu khởi tạo."));
         }
 
+        if (!scope.Unrestricted)
+        {
+            // Operational property identity and scoped asset totals only; no apartment or audit data.
+            return Ok(new { overview.Id, overview.Name, overview.Address,
+                overview.TimeZoneId, overview.NumberOfFloors, overview.Status,
+                overview.Facilities, overview.Equipment });
+        }
+
         var totalApartments = await _apartmentStatisticsReader.GetTotalApartmentsAsync(cancellationToken);
         var response = new CurrentBuildingOverviewResponse(
             overview.Id,
-            overview.Code,
             overview.Name,
             overview.Address,
             overview.TimeZoneId,

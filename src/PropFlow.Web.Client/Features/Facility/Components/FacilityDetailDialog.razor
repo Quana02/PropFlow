@@ -13,7 +13,7 @@
                     </div>
                     <div>
                         <h3 class="text-lg font-bold font-display text-slate-900">Chi Tiết Cơ Sở Vật Chất</h3>
-                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">Mã: @Facility.Code</p>
+                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">@Facility.Name · Mã: @Facility.Code</p>
                     </div>
                 </div>
                 <button @onclick="Close" class="text-slate-400 hover:text-slate-700 p-2 rounded-xl transition-all">
@@ -101,7 +101,7 @@
                     {
                         <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
                             <span class="material-symbols-outlined text-4xl text-slate-300">devices_other</span>
-                            <p class="text-sm text-slate-600 mt-2">Chưa có thiết bị nào thuộc cơ sở vật chất này.</p>
+                            <p class="text-sm text-slate-600 mt-2">Không có thiết bị được phép xem thuộc cơ sở vật chất này.</p>
                         </div>
                     }
                     else
@@ -118,7 +118,7 @@
                                             <div class="flex-1 min-w-0">
                                                 <div class="flex items-center gap-2">
                                                     <span class="text-xs font-mono font-bold text-sky-600">@equipment.Code</span>
-                                                    <span class="text-sm font-semibold text-slate-800 truncate">@equipment.Name</span>
+                                                    <a href="@($"/equipment?equipmentId={equipment.Id}")" class="text-sm font-semibold text-sky-700 underline">@equipment.Name</a>
                                                 </div>
                                                 <div class="flex items-center gap-2 mt-1">
                                                     <span class="text-xs text-slate-500">@equipment.EquipmentType</span>
@@ -180,7 +180,7 @@
             </div>
 
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
+                <div class="text-[11px] text-slate-400">Dữ liệu được cập nhật định kỳ khi đang mở</div>
             </div>
         </div>
     </div>
@@ -196,12 +196,19 @@
     private PagedResult<EquipmentModel>? EquipmentPagedResult { get; set; }
     private int EquipmentPageIndex { get; set; } = 1;
     private const int EquipmentPageSize = 10;
+    private FacilityModel? LoadedFacility;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && Facility != null)
+        if (!IsOpen || Facility is null)
         {
-            EquipmentPageIndex = 1; // Reset to first page when opening
+            LoadedFacility = null;
+            return;
+        }
+        if (!ReferenceEquals(Facility, LoadedFacility))
+        {
+            if (LoadedFacility?.Id != Facility.Id) EquipmentPageIndex = 1;
+            LoadedFacility = Facility;
             await LoadEquipmentForFacility();
         }
     }
@@ -212,6 +219,7 @@
 
         IsLoadingEquipment = true;
         EquipmentLoadError = null;
+        EquipmentPagedResult = null;
         try
         {
             var filter = new EquipmentFilterModel
@@ -224,6 +232,12 @@
             if (result.IsSuccess && result.Data != null)
             {
                 EquipmentPagedResult = result.Data;
+                var lastPage = Math.Max(1, result.Data.TotalPages);
+                if (EquipmentPageIndex > lastPage)
+                {
+                    EquipmentPageIndex = lastPage;
+                    await LoadEquipmentForFacility();
+                }
             }
             else
             {

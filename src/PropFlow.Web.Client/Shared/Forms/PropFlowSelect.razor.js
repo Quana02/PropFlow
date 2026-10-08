@@ -22,7 +22,11 @@ export function open(root, dotnet) {
         root.style.setProperty('--pf-select-space', `${available}px`);
     };
     position();
-    const outside = event => { if (!root.contains(event.target)) dotnet.invokeMethodAsync('CloseFromOutside'); };
+    const outside = event => {
+        if (root.contains(event.target)) return;
+        close(root);
+        setTimeout(() => dotnet.invokeMethodAsync('CloseFromOutside'), 0);
+    };
     const state = { outside, reposition: null, trigger, selectActive: null, stopWheel: null, protectPopover: null, frame: 0, closing: false };
     const reposition = event => {
         if (event?.target && menu.contains(event.target)) return;
@@ -39,7 +43,7 @@ export function open(root, dotnet) {
     const protectPopover = event => {
         if (event.newState === 'closed' && !state.closing) event.preventDefault();
     };
-    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('click', outside, true);
     trigger.addEventListener('keydown', selectActive);
     menu.addEventListener('wheel', stopWheel, { passive: true });
     menu.addEventListener('beforetoggle', protectPopover);
@@ -58,7 +62,7 @@ export function close(root) {
     if (state) state.closing = true;
     if (menu && typeof menu.hidePopover === 'function' && menu.matches(':popover-open')) menu.hidePopover();
     if (!state) return;
-    document.removeEventListener('pointerdown', state.outside, true);
+    document.removeEventListener('click', state.outside, true);
     state.trigger.removeEventListener('keydown', state.selectActive);
     if (menu) {
         menu.removeEventListener('wheel', state.stopWheel);

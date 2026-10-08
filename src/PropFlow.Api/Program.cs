@@ -30,18 +30,27 @@ using PropFlow.Modules.Billing.Application.Finance;
 using PropFlow.Modules.Billing.Infrastructure.Finance;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Residents.Infrastructure.Persistence;
+using PropFlow.Modules.Residents.Presentation;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.Apartments.Infrastructure;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.PropertyAssets.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
+using PropFlow.Modules.ServiceRequests.Application.ListResidentServiceRequests;
+using PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
+using PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
+using PropFlow.Modules.ServiceRequests.Presentation;
+using PropFlow.Api.Serialization;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 using Npgsql;
 using PropFlow.Api.Composition;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
+    options.JsonSerializerOptions.Converters.Insert(0, new FlexibleEnumJsonConverterFactory()));
 
 builder.Services.AddOptions<DatabaseConnectionOptions>()
     .BindConfiguration("ConnectionStrings")
@@ -64,7 +73,7 @@ builder.Services.AddDbContext<PropertyAssetsDbContext>((services, options) =>
 
 builder.Services.AddDbContext<ApartmentsDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "apartments")));
@@ -78,7 +87,7 @@ builder.Services.AddDbContext<AuthenticationDbContext>((services, options) =>
 
 builder.Services.AddDbContext<ResidentsDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "residents")));
@@ -146,6 +155,12 @@ builder.Services.AddDbContext<CommunicationDbContext>((services, options) =>
             "__EFMigrationsHistory",
             "communication")));
 
+// Read scope uses the existing FE-05/FE-07 assignment data.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAssignedAssetSource, PropFlow.Modules.Maintenance.Infrastructure.MaintenanceAssignedAssetSource>();
+builder.Services.AddScoped<IAssignedAssetSource, ServiceRequestAssignedAssetSource>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess, AssignedAssetReadAccess>();
+
 // Register Module Services
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings.Services.IBuildingService, PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IPropertyAssetsStore, PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore>();
@@ -154,15 +169,20 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
+builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceNotifier, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceNotifier>();
 builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
 // Add services to the container.
+builder.Services.AddSignalR();
 builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly)
-    .AddApplicationPart(typeof(MaintenanceController).Assembly);
+    .AddApplicationPart(typeof(PropFlow.Modules.Apartments.Presentation.ApartmentsController).Assembly)
+    .AddApplicationPart(typeof(ResidentsController).Assembly)
+    .AddApplicationPart(typeof(ResidentServiceRequestsController).Assembly)
+    .AddApplicationPart(typeof(MaintenanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly);
 builder.Services.AddScoped<IInvoiceFinancialSource, InvoiceFinancialSource>();
@@ -172,8 +192,21 @@ builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceStore>();
 builder.Services.AddScoped<PaymentFinanceUseCases>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
+builder.Services.AddScoped<IResidentResidenceSource, ResidentResidenceSource>();
+builder.Services.AddScoped<IServiceRequestSubmissionStore, ServiceRequestSubmissionStore>();
+builder.Services.AddScoped<SubmitServiceRequestHandler>();
+builder.Services.AddScoped<IResidentServiceRequestReadStore, ResidentServiceRequestReadStore>();
+builder.Services.AddScoped<ListResidentServiceRequestsHandler>();
+builder.Services.AddScoped<IResidentServiceRequestFeedbackStore, ResidentServiceRequestFeedbackStore>();
+builder.Services.AddScoped<RateResidentServiceRequestHandler>();
+builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
+builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentOnboardingService>();
+builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentCodeGenerator>();
+builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentDuplicatePolicy>();
+builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentProfileService>();
 builder.Services.AddScoped<IAccountAccess, AccountAccessService>();
 builder.Services.AddScoped<IAdministrationTransaction, AdministrationTransaction>();
+builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoordinator>();
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("finance.manage", policy => policy.RequireRole(SystemRoleCodes.Accountant).RequireClaim("permission", SystemPermissionCodes.ManageFinance));
@@ -191,10 +224,30 @@ builder.Services.AddAuthorization(options =>
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
     options.AddPolicy(MaintenanceAuthorizationPolicies.Manage,
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
-    options.AddPolicy(MaintenanceAuthorizationPolicies.View,
+    options.AddPolicy(MaintenanceAuthorizationPolicies.View, policy => policy.RequireAssertion(context =>
+        (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
+        (context.User.IsInRole(SystemRoleCodes.Staff) && context.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations))));
+    options.AddPolicy(MaintenanceAuthorizationPolicies.Work,
+        policy => policy.RequireRole(SystemRoleCodes.Staff).RequireClaim("permission", SystemPermissionCodes.PerformAssignedOperations));
+    options.AddPolicy(ResidentsAuthorizationPolicies.Manage,
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy(PropFlow.Modules.Apartments.Presentation.ApartmentsAuthorizationPolicies.Manage, policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy(PropFlow.Modules.Apartments.Presentation.ApartmentsAuthorizationPolicies.Read, policy => policy.RequireAssertion(context =>
+        (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
+        (context.User.IsInRole(SystemRoleCodes.Staff) && context.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations)) ||
+        (context.User.IsInRole(SystemRoleCodes.Accountant) && context.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
+    options.AddPolicy(ResidentsAuthorizationPolicies.Read, policy => policy.RequireAssertion(context =>
+        (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
+        (context.User.IsInRole(SystemRoleCodes.Staff) && context.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations)) ||
+        (context.User.IsInRole(SystemRoleCodes.Accountant) && context.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
+    options.AddPolicy(ServiceRequestsAuthorizationPolicies.SubmitAsResident,
+        policy => policy.RequireRole(SystemRoleCodes.Resident));
 });
 builder.Services.AddScoped<IApartmentOverviewSource, ApartmentOverviewSource>();
+builder.Services.AddScoped<IApartmentResidentRelationshipSource, ApartmentResidentRelationshipSource>();
+builder.Services.AddScoped<IApartmentOwnershipCommand, PropFlow.Modules.Apartments.Application.ApartmentOwnershipCommand>();
+builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatusCommand, PropFlow.Modules.Apartments.Application.ApartmentStatusCommand>();
+builder.Services.AddScoped<IResidentApartmentReadSource, ResidentApartmentReadSource>();
 builder.Services.AddScoped<ICurrentBuildingTimeZone, CurrentBuildingTimeZone>();
 builder.Services.AddScoped<IResidentOverviewSource, ResidentOverviewSource>();
 builder.Services.AddScoped<IServiceRequestOverviewSource, ServiceRequestOverviewSource>();
@@ -218,10 +271,21 @@ builder.Services.AddRateLimiter(options =>
         options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
     }
+    var residentSubmitLimit = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:PermitLimit", 5);
+    var residentSubmitWindow = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:WindowMinutes", 1);
+    options.AddPolicy("resident-service-request-submit", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = residentSubmitLimit,
+                Window = TimeSpan.FromMinutes(residentSubmitWindow),
+                QueueLimit = 0
+            }));
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options => options.CustomSchemaIds(type => type.FullName?.Replace('+', '.') ?? type.Name));
 
 // Configure CORS for PropFlow Web host origins
 builder.Services.AddCors(options =>
@@ -242,7 +306,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -259,6 +323,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
 
 app.Run();
 

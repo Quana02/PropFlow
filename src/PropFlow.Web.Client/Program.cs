@@ -8,7 +8,8 @@ using PropFlow.Web.Client.Features.Authentication.State;
 using PropFlow.Web.Client.Features.Facility.Services;
 using PropFlow.Web.Client.Features.Administration.Services;
 using PropFlow.Web.Client.Features.Maintenance.Services;
-using PropFlow.Web.Client.Features.Resident.Services;
+using PropFlow.Web.Client.Features.Resident.Portal.Services;
+using PropFlow.Web.Client.Features.Resident.Shared.Services;
 using PropFlow.Web.Client.Features.Finance.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -20,7 +21,8 @@ if (apiBase.Scheme != Uri.UriSchemeHttps) throw new InvalidOperationException("A
 builder.Services.AddScoped(sp => new ApiClient(new HttpClient { BaseAddress = apiBase }, sp.GetRequiredService<ILogger<ApiClient>>()));
 builder.Services.AddScoped<AuthSession>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<AuthSession>());
-builder.Services.AddAuthorizationCore();
+builder.Services.AddAuthorizationCore(options => options.AddPolicy(AssetPermissions.ViewPolicy,
+    policy => policy.RequireAssertion(context => AssetPermissions.CanView(context.User))));
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped(sp =>
 {
@@ -37,4 +39,6 @@ builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
 builder.Services.AddScoped<IMaintenanceApiClient, MaintenanceApiClient>();
 builder.Services.AddScoped<IResidentServiceRequestApiClient, ResidentServiceRequestApiClient>();
 builder.Services.AddScoped<IFinanceApiClient, FinanceApiClient>();
+builder.Services.AddScoped<IResidentApiClient, ResidentApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Apartment.Services.IApartmentApiClient, PropFlow.Web.Client.Features.Apartment.Services.ApartmentApiClient>();
 await builder.Build().RunAsync();

@@ -34,6 +34,8 @@ public sealed class AdministrationOverviewTests
     {
         public Task<IReadOnlyList<Guid>> GetActiveApartmentIdsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<Guid>>(ids);
+        public Task<IReadOnlyList<ActiveApartmentOption>> GetActiveApartmentsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ActiveApartmentOption>>(ids.Select((id, index) => new ActiveApartmentOption(id, $"A{index + 1:000}", index + 1)).ToArray());
     }
 
     private sealed class FixedBuildings : ICurrentBuildingTimeZone
@@ -103,7 +105,7 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        db.Buildings.Add(new Building("B1", "Building 1", "Address 1", Now, "Asia/Ho_Chi_Minh"));
+        db.Buildings.Add(new Building("Building 1", "Address 1", Now, "Asia/Ho_Chi_Minh"));
         await db.SaveChangesAsync();
 
         var tz = await new CurrentBuildingTimeZone(db).GetAsync(default);
@@ -116,9 +118,9 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var historical = new Building("B1", "Building 1", "Address 1", Now, "UTC");
+        var historical = new Building("Building 1", "Address 1", Now, "UTC");
         historical.Deactivate(null, Now.AddMinutes(1));
-        var current = new Building("B2", "Building 2", "Address 2", Now.AddMinutes(2), "Asia/Ho_Chi_Minh");
+        var current = new Building("Building 2", "Address 2", Now.AddMinutes(2), "Asia/Ho_Chi_Minh");
         db.Buildings.AddRange(historical, current);
         await db.SaveChangesAsync();
 
@@ -132,8 +134,9 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new ApartmentsDbContext(new DbContextOptionsBuilder<ApartmentsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var active = new ApartmentUnit("101", 1, Now);
-        var inactive = new ApartmentUnit("102", 1, Now);
+        var typeId = Guid.NewGuid();
+        var active = new ApartmentUnit("101", 1, Now, typeId);
+        var inactive = new ApartmentUnit("102", 1, Now, typeId);
         inactive.Deactivate(null, Now);
         db.ApartmentUnits.AddRange(active, inactive);
         await db.SaveChangesAsync();
@@ -161,9 +164,9 @@ public sealed class AdministrationOverviewTests
         var futureApartment = Guid.NewGuid();
         var date = new DateOnly(2026, 9, 22);
         db.ResidentApartments.AddRange(
-            new ResidentApartment(current.Id, occupiedApartment, "OWNER", date, Now),
-            new ResidentApartment(current.Id, expiredApartment, "OWNER", date.AddDays(-10), Now, endDate: date.AddDays(-1)),
-            new ResidentApartment(current.Id, futureApartment, "OWNER", date.AddDays(1), Now));
+            new ResidentApartment(current.Id, occupiedApartment, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, date, Now),
+            new ResidentApartment(current.Id, expiredApartment, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, date.AddDays(-10), Now, endDate: date.AddDays(-1)),
+            new ResidentApartment(current.Id, futureApartment, HouseholdRole.HOUSEHOLD_HEAD, ResidencyType.OWNER_OCCUPIED, date.AddDays(1), Now));
         await db.SaveChangesAsync();
 
         var counts = await new ResidentOverviewSource(db).GetCountsAsync(

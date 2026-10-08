@@ -1,0 +1,348 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using PropFlow.Modules.ServiceRequests.Contracts
+@using PropFlow.Web.Client.Features.Resident.Portal.Models
+@using PropFlow.Web.Client.Features.Resident.Portal.Services
+@using PropFlow.Web.Client.Services.Api
+@inject IResidentServiceRequestApiClient Api
+
+@if (_open)
+{
+    <div class="resident-portal-modal service-modal" id="serviceModal">
+        <button class="resident-portal-modal-backdrop" type="button" aria-label="Đóng popup" @onclick="Close"></button>
+        <section class="service-modal-card glass-panel" role="dialog" aria-modal="true" aria-labelledby="serviceModalTitle">
+            <header class="service-modal-header">
+                <div>
+                    <div class="service-modal-title-row">
+                        <span class="service-modal-icon" aria-hidden="true">@CurrentService.Icon</span>
+                        <h2 id="serviceModalTitle">@CurrentService.Title</h2>
+                    </div>
+                    <div class="service-modal-meta">
+                        <span>@ProfileContext.ApartmentLabel.ToUpperInvariant()</span>
+                        <small>@CurrentService.ResponseNote</small>
+                    </div>
+                </div>
+                <button class="service-modal-close" type="button" aria-label="Đóng popup" @onclick="Close">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18 18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" /></svg>
+                </button>
+            </header>
+
+            @if (_created is not null)
+            {
+                <div class="service-submit-success" role="status">
+                    <span aria-hidden="true">✓</span>
+                    <h3>Yêu cầu đã được ghi nhận</h3>
+                    <p>Mã yêu cầu <strong>#@_created.RequestNumber</strong> đang chờ tiếp nhận.</p>
+                    <button class="service-submit-button" type="button" @onclick="Close">Hoàn tất</button>
+                </div>
+            }
+            else
+            {
+                <EditForm Model="_form" OnValidSubmit="SubmitAsync" class="service-registration-form">
+                    <DataAnnotationsValidator />
+
+                    @if (_result is { IsSuccess: false })
+                    {
+                        <div class="service-submit-error" role="alert">@_result.Message</div>
+                    }
+
+                    <div class="service-form-section">
+                        <div class="service-label-row">
+                            <label>Phạm vi tiếp nhận <b>*</b></label>
+                            <small>Chọn đúng phân vùng để điều phối nhanh</small>
+                        </div>
+                        <div class="service-scope-switch" role="group" aria-label="Phạm vi tiếp nhận">
+                            <button class="@ScopeButtonClass(PrivateScope)" type="button" @onclick="() => SelectScope(PrivateScope)"><span aria-hidden="true">⌂</span> Căn hộ của tôi</button>
+                            <button class="@ScopeButtonClass(PublicScope)" type="button" @onclick="() => SelectScope(PublicScope)"><span aria-hidden="true">▦</span> Khu vực chung / Tiện ích</button>
+                        </div>
+
+                        @if (_form.ScopeCode == PrivateScope)
+                        {
+                            <div class="service-scope-card">
+                                <span class="service-scope-icon" aria-hidden="true">⌂</span>
+                                <span><small>Căn hộ tiếp nhận cố định</small><strong>@ProfileContext.ApartmentLabel</strong></span>
+                                <em>🔒 Đã xác thực</em>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="service-scope-card is-public">
+                                <span class="service-scope-icon" aria-hidden="true">▦</span>
+                                <span><small>Cơ sở vật chất tòa nhà</small><strong>Khu vực chung / Tiện ích</strong></span>
+                                <em>Tiện ích công cộng</em>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="service-form-section">
+                        <label class="service-field-label">@CurrentService.TypeLabel <b>*</b></label>
+                        <div class="service-request-types">
+                            @foreach (var option in CurrentService.RequestTypes)
+                            {
+                                <button class="@(_form.RequestTypeCode == option.Code ? "active" : null)" type="button" @onclick="() => SelectRequestType(option)"><span aria-hidden="true">@option.Icon</span> @option.Label</button>
+                            }
+                        </div>
+                        <ValidationMessage For="@(() => _form.RequestTypeCode)" />
+                    </div>
+
+                    <div class="service-form-section">
+                        <label class="service-field-label" for="service-title">Tiêu đề yêu cầu <b>*</b></label>
+                        <InputText id="service-title" @bind-Value="_form.Title" placeholder="Tóm tắt ngắn gọn nhu cầu cần hỗ trợ..." />
+                        <ValidationMessage For="@(() => _form.Title)" />
+                    </div>
+
+                    <div class="service-form-grid">
+                        <div class="service-form-section">
+                            <label class="service-field-label">@LocationLabel <b>*</b></label>
+                            <PropFlowSelect @bind-Value="_form.ServiceAreaCode" Options="CurrentAreaOptions" AriaLabel="@LocationLabel" Disabled="_submitting" />
+                            <ValidationMessage For="@(() => _form.ServiceAreaCode)" />
+                        </div>
+                        <div class="service-form-section">
+                            <label class="service-field-label">Mức độ ảnh hưởng / Khẩn cấp <b>*</b></label>
+                            <PropFlowSelect @bind-Value="_form.ImpactCode" Options="ImpactOptions" AriaLabel="Mức độ ảnh hưởng" Disabled="_submitting" />
+                            <ValidationMessage For="@(() => _form.ImpactCode)" />
+                        </div>
+                    </div>
+
+                    @if (_form.ScopeCode == PublicScope)
+                    {
+                        <div class="service-form-section">
+                            <label class="service-field-label" for="service-location-detail">Vị trí cụ thể / Điểm mốc <small>(tùy chọn)</small></label>
+                            <InputText id="service-location-detail" @bind-Value="_form.LocationDetail" placeholder="Ví dụ: Cạnh chòi nghỉ số 2, cabin thang máy số 3..." />
+                            <ValidationMessage For="@(() => _form.LocationDetail)" />
+                        </div>
+                    }
+
+                    <div class="service-form-section">
+                        <label class="service-field-label" for="service-description">@CurrentService.DescriptionLabel <b>*</b></label>
+                        <InputTextArea id="service-description" @bind-Value="_form.Description" rows="4" placeholder="@CurrentService.DescriptionPlaceholder" />
+                        <ValidationMessage For="@(() => _form.Description)" />
+                    </div>
+
+                    <div class="service-form-section">
+                        <label class="service-field-label">Hình ảnh / Video tham khảo</label>
+                        <label class="service-file-drop">
+                            <InputFile OnChange="SelectAttachments" multiple accept="image/png,image/jpeg,video/mp4" />
+                            <span class="service-upload-icon" aria-hidden="true">⇧</span>
+                            <strong>Kéo thả hoặc chọn tệp đính kèm</strong>
+                            <small>PNG, JPG, MP4 • tối đa 5 tệp, 25MB/tệp</small>
+                        </label>
+                        @if (_selectedFiles.Count > 0)
+                        {
+                            <div class="service-selected-files">
+                                @foreach (var file in _selectedFiles)
+                                {
+                                    <span title="@file.Name">📎 @file.Name</span>
+                                }
+                                <small>Tệp đang được xem trước; API lưu tệp sẽ được kết nối sau.</small>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_attachmentError))
+                        {
+                            <div class="service-attachment-error" role="alert">@_attachmentError</div>
+                        }
+                    </div>
+
+                    <div class="service-form-grid">
+                        <div class="service-form-section">
+                            <label class="service-field-label" for="service-date">Ngày hẹn mong muốn</label>
+                            <InputDate id="service-date" @bind-Value="_form.PreferredDate" min="@MinimumDate" />
+                        </div>
+                        <div class="service-form-section">
+                            <label class="service-field-label">Khung giờ thuận tiện</label>
+                            <PropFlowSelect @bind-Value="_form.PreferredTimeCode" Options="ServiceTimeOptions" AriaLabel="Khung giờ thuận tiện" Disabled="_submitting" />
+                        </div>
+                    </div>
+
+                    <footer class="service-modal-actions">
+                        <small><i></i>@CurrentService.ResponseCommitment</small>
+                        <span>
+                            <button class="service-cancel-button" type="button" disabled="@_submitting" @onclick="Close">Hủy bỏ</button>
+                            <button class="service-submit-button" type="submit" disabled="@_submitting"><span aria-hidden="true">➤</span> @(_submitting ? "Đang gửi..." : "Gửi yêu cầu")</button>
+                        </span>
+                    </footer>
+                </EditForm>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private ResidentPortalProfileContext ProfileContext { get; set; } = ResidentPortalProfileContext.Loading;
+
+    [Parameter]
+    public EventCallback<ResidentServiceRequestCreatedResponse> RequestCreated { get; set; }
+
+    private const string PrivateScope = "PRIVATE";
+    private const string PublicScope = "PUBLIC";
+    private const string NormalPriority = "NORMAL";
+    private const string UrgentPriority = "URGENT";
+    private readonly SubmitServiceRequestForm _form = new();
+    private ApiResult<ResidentServiceRequestCreatedResponse>? _result;
+    private ResidentServiceRequestCreatedResponse? _created;
+    private IReadOnlyList<IBrowserFile> _selectedFiles = [];
+    private string? _attachmentError;
+    private ServiceDefinition CurrentService = ServiceDefinitions[0];
+    private bool _open;
+    private bool _submitting;
+    private string MinimumDate => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+    private string LocationLabel => _form.ScopeCode == PrivateScope ? "Vị trí trong căn hộ" : "Khu vực chung / Tiện ích";
+    private IReadOnlyList<PropFlowSelectOption> CurrentAreaOptions => _form.ScopeCode == PrivateScope ? PrivateAreaOptions : PublicAreaOptions;
+
+    private sealed record RequestType(string Code, string Icon, string Label, string SuggestedTitle);
+    private sealed record ServiceDefinition(string Code, string Icon, string Title, string TypeLabel, string DescriptionLabel, string DescriptionPlaceholder, string ResponseNote, string ResponseCommitment, IReadOnlyList<RequestType> RequestTypes);
+
+    private static readonly IReadOnlyList<ServiceDefinition> ServiceDefinitions =
+    [
+        Service("REPAIR", "🛠️", "Yêu cầu sửa chữa kỹ thuật", "Loại sự cố kỹ thuật", "Mô tả chi tiết sự cố", "Mô tả hiện tượng, thời điểm phát sinh và yêu cầu kỹ thuật...", "Tiếp nhận & xử lý kỹ thuật 24/7", "BQL cam kết phản hồi kỹ thuật ≤ 15 phút",
+            Type("PLUMBING", "💧", "Nước", "Kiểm tra sự cố cấp thoát nước"), Type("ELECTRICAL", "⚡", "Điện", "Kiểm tra sự cố điện"), Type("AIR_CONDITIONING", "❄️", "Điều hòa", "Kiểm tra hệ thống điều hòa"), Type("EQUIPMENT", "🔌", "Thiết bị", "Sửa chữa thiết bị căn hộ"), Type("OTHER", "🔧", "Khác", "Yêu cầu sửa chữa khác")),
+        Service("CLEANING", "🧹", "Yêu cầu dịch vụ vệ sinh", "Hạng mục vệ sinh", "Mô tả nhu cầu vệ sinh", "Nêu diện tích, hiện trạng và yêu cầu làm sạch...", "Tiếp nhận & điều phối đội vệ sinh", "BQL xác nhận lịch dịch vụ ≤ 30 phút",
+            Type("PERIODIC", "🗓️", "Định kỳ", "Đăng ký vệ sinh định kỳ"), Type("DEEP_CLEAN", "✨", "Tổng vệ sinh", "Yêu cầu tổng vệ sinh"), Type("GLASS", "🪟", "Kính / Ban công", "Vệ sinh kính và ban công"), Type("SANITIZE", "🧴", "Khử khuẩn", "Yêu cầu khử khuẩn căn hộ"), Type("OTHER", "🧽", "Khác", "Yêu cầu vệ sinh khác")),
+        Service("VISITOR", "🛡️", "Đăng ký khách thăm căn hộ", "Hình thức khách thăm", "Thông tin khách thăm", "Nhập họ tên, số lượng khách, biển số xe và ghi chú cho an ninh...", "Chuyển thông tin tới lễ tân & an ninh", "Lễ tân xác nhận đăng ký ≤ 15 phút",
+            Type("INDIVIDUAL", "👤", "Khách lẻ", "Đăng ký khách thăm"), Type("GROUP", "👥", "Nhóm khách", "Đăng ký nhóm khách"), Type("DELIVERY", "📦", "Giao hàng", "Đăng ký giao hàng tận căn hộ"), Type("OVERNIGHT", "🌙", "Lưu trú", "Đăng ký khách lưu trú"), Type("OTHER", "📋", "Khác", "Đăng ký khách khác")),
+        Service("VEHICLE", "🚗", "Đăng ký thẻ xe cư dân", "Loại phương tiện", "Thông tin phương tiện", "Nhập biển số, hãng xe, màu xe và nhu cầu đăng ký...", "Tiếp nhận bởi Ban An ninh & Bãi xe", "Bộ phận bãi xe phản hồi ≤ 1 giờ",
+            Type("CAR", "🚙", "Ô tô", "Đăng ký thẻ xe ô tô"), Type("MOTORBIKE", "🏍️", "Xe máy", "Đăng ký thẻ xe máy"), Type("ELECTRIC", "🔋", "Xe điện", "Đăng ký xe điện"), Type("CHANGE", "🔄", "Thay đổi xe", "Thay đổi thông tin phương tiện"), Type("OTHER", "📄", "Khác", "Yêu cầu thẻ xe khác")),
+        Service("MOVING", "📦", "Đăng ký chuyển đồ / Chuyển nhà", "Hình thức vận chuyển", "Mô tả kế hoạch vận chuyển", "Nêu khối lượng, đơn vị vận chuyển và yêu cầu thang hàng...", "Điều phối thang hàng & lối vận chuyển", "BQL xác nhận khung giờ ≤ 1 giờ",
+            Type("MOVE_IN", "🏠", "Chuyển vào", "Đăng ký chuyển đồ vào căn hộ"), Type("MOVE_OUT", "🚚", "Chuyển ra", "Đăng ký chuyển đồ ra khỏi căn hộ"), Type("FURNITURE", "🛋️", "Giao nội thất", "Đăng ký giao nội thất"), Type("BULKY", "📦", "Hàng cồng kềnh", "Đăng ký vận chuyển hàng cồng kềnh"), Type("OTHER", "📋", "Khác", "Yêu cầu vận chuyển khác")),
+        Service("CONSTRUCTION", "🔨", "Đăng ký thi công nội thất", "Hạng mục thi công", "Mô tả phạm vi thi công", "Nêu hạng mục, nhà thầu, số nhân sự và thời gian dự kiến...", "Kiểm tra hồ sơ & quy định thi công", "Ban Kỹ thuật phản hồi ≤ 4 giờ",
+            Type("INTERIOR", "🛋️", "Nội thất", "Đăng ký thi công nội thất"), Type("MEP", "🔌", "Điện nước", "Đăng ký thi công điện nước"), Type("DRILLING", "🛠️", "Khoan cắt", "Đăng ký khoan cắt"), Type("PAINTING", "🎨", "Sơn sửa", "Đăng ký sơn sửa căn hộ"), Type("OTHER", "📋", "Khác", "Đăng ký thi công khác")),
+        Service("BILLING", "💳", "Yêu cầu hỗ trợ hóa đơn", "Loại hóa đơn / Giao dịch", "Nội dung cần đối soát", "Nêu kỳ hóa đơn, số tiền, mã giao dịch và vấn đề cần hỗ trợ...", "Chuyển trực tiếp tới Ban Kế toán", "Ban Kế toán phản hồi trong ngày",
+            Type("MANAGEMENT_FEE", "🏢", "Phí quản lý", "Đối soát phí quản lý"), Type("UTILITIES", "💡", "Điện / Nước", "Đối soát phí điện nước"), Type("PARKING_FEE", "🚗", "Phí gửi xe", "Đối soát phí gửi xe"), Type("PAYMENT", "🧾", "Thanh toán", "Tra soát giao dịch thanh toán"), Type("OTHER", "📄", "Khác", "Yêu cầu hóa đơn khác")),
+        Service("OTHER", "💬", "Yêu cầu hỗ trợ Ban Quản Lý", "Nhóm yêu cầu", "Nội dung cần hỗ trợ", "Mô tả chi tiết nhu cầu hoặc phản ánh của bạn...", "Tổng đài cư dân trực tuyến 24/7", "BQL cam kết phản hồi ≤ 15 phút",
+            Type("FEEDBACK", "📣", "Phản ánh", "Phản ánh tới Ban Quản Lý"), Type("SECURITY", "🛡️", "An ninh", "Yêu cầu hỗ trợ an ninh"), Type("AMENITY", "🏊", "Tiện ích", "Yêu cầu hỗ trợ tiện ích"), Type("CONSULTATION", "ℹ️", "Tư vấn", "Yêu cầu tư vấn"), Type("OTHER", "💬", "Khác", "Yêu cầu hỗ trợ khác"))
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> PrivateAreaOptions =
+    [
+        new("MASTER_BATHROOM", "Phòng tắm Master"), new("LIVING_ROOM", "Phòng khách & Ban công"), new("MASTER_BEDROOM", "Phòng ngủ chính"),
+        new("SECONDARY_BEDROOM", "Phòng ngủ phụ"), new("KITCHEN", "Bếp & Logia giặt phơi"), new("OTHER_PRIVATE", "Khu vực khác trong căn hộ")
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> PublicAreaOptions =
+    [
+        new("POOL", "🏊 Hồ bơi vô cực"), new("GYM", "🏋️ Phòng Gym & Yoga"), new("KIDS_ZONE", "🛝 Khu vui chơi trẻ em"), new("ELEVATOR", "🛗 Thang máy cư dân"),
+        new("LOBBY", "🛋️ Sảnh đón tiếp & Lounge"), new("PARKING", "🚗 Hầm để xe B1 / B2"), new("BBQ", "🍖 Vườn nướng BBQ"), new("SPORT", "🎾 Sân thể thao ngoài trời")
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> ImpactOptions =
+    [
+        new("STANDARD", "Tiêu chuẩn (Trong ngày / 4h)"), new("SERIOUS", "Nghiêm trọng (Ảnh hưởng sinh hoạt chính)"), new("EMERGENCY", "🔥 Khẩn cấp (Nguy cơ an toàn - ≤15p)")
+    ];
+
+    private static readonly IReadOnlyList<PropFlowSelectOption> ServiceTimeOptions =
+    [
+        new("MORNING", "Sáng: 08:30 - 11:30"), new("AFTERNOON", "Chiều: 13:30 - 17:00"), new("EVENING", "Tối: 18:00 - 20:30"), new("ANYTIME", "Bất kỳ lúc nào (Gọi trước 15p)")
+    ];
+
+    private static RequestType Type(string code, string icon, string label, string suggestedTitle) => new(code, icon, label, suggestedTitle);
+    private static ServiceDefinition Service(string code, string icon, string title, string typeLabel, string descriptionLabel, string placeholder, string responseNote, string commitment, params RequestType[] requestTypes) =>
+        new(code, icon, title, typeLabel, descriptionLabel, placeholder, responseNote, commitment, requestTypes);
+
+    public void Open(string categoryCode, string title)
+    {
+        CurrentService = ServiceDefinitions.FirstOrDefault(service => service.Code == categoryCode) ?? ServiceDefinitions[^1];
+        var requestType = CurrentService.RequestTypes[0];
+        _result = null;
+        _created = null;
+        _selectedFiles = [];
+        _attachmentError = null;
+        _form.CategoryCode = CurrentService.Code;
+        _form.ScopeCode = PrivateScope;
+        _form.RequestTypeCode = requestType.Code;
+        _form.Title = requestType.SuggestedTitle;
+        _form.Description = string.Empty;
+        _form.ServiceAreaCode = PrivateAreaOptions[0].Value;
+        _form.LocationDetail = null;
+        _form.ImpactCode = "STANDARD";
+        _form.PriorityCode = NormalPriority;
+        _form.PreferredDate = DateOnly.FromDateTime(DateTime.Today.AddDays(1));
+        _form.PreferredTimeCode = "MORNING";
+        _open = true;
+        StateHasChanged();
+    }
+
+    private string? ScopeButtonClass(string scope) => _form.ScopeCode == scope ? "active" : null;
+
+    private void SelectScope(string scope)
+    {
+        _form.ScopeCode = scope;
+        _form.ServiceAreaCode = (scope == PrivateScope ? PrivateAreaOptions : PublicAreaOptions)[0].Value;
+        if (scope == PrivateScope) _form.LocationDetail = null;
+    }
+
+    private void SelectRequestType(RequestType type)
+    {
+        var previousTitle = CurrentService.RequestTypes.FirstOrDefault(option => option.Code == _form.RequestTypeCode)?.SuggestedTitle;
+        _form.RequestTypeCode = type.Code;
+        if (string.IsNullOrWhiteSpace(_form.Title) || _form.Title == previousTitle || _form.Title == CurrentService.Title) _form.Title = type.SuggestedTitle;
+    }
+
+    private void SelectAttachments(InputFileChangeEventArgs args)
+    {
+        _attachmentError = null;
+        if (args.FileCount > 5)
+        {
+            _selectedFiles = [];
+            _attachmentError = "Chỉ được chọn tối đa 5 tệp.";
+            return;
+        }
+
+        var files = args.GetMultipleFiles(5);
+        if (files.Any(file => file.Size > 25 * 1024 * 1024))
+        {
+            _selectedFiles = [];
+            _attachmentError = "Mỗi tệp phải có dung lượng không quá 25MB.";
+            return;
+        }
+
+        _selectedFiles = files;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_form.PreferredDate is { } date && date < DateOnly.FromDateTime(DateTime.Today))
+        {
+            _result = new(false, Message: "Ngày hẹn không thể nằm trong quá khứ.");
+            return;
+        }
+
+        var requestType = CurrentService.RequestTypes.First(option => option.Code == _form.RequestTypeCode);
+        var area = CurrentAreaOptions.First(option => option.Value == _form.ServiceAreaCode);
+        var context = new List<string>
+        {
+            $"Loại yêu cầu: {requestType.Label}",
+            $"Phạm vi: {(_form.ScopeCode == PrivateScope ? ProfileContext.ApartmentLabel : "Khu vực chung / Tiện ích")}",
+            $"Khu vực: {area.Label}",
+            $"Mức độ: {ImpactOptions.First(option => option.Value == _form.ImpactCode).Label}"
+        };
+        if (!string.IsNullOrWhiteSpace(_form.LocationDetail)) context.Add($"Vị trí cụ thể: {_form.LocationDetail.Trim()}");
+        var description = $"{string.Join(Environment.NewLine, context)}{Environment.NewLine}{Environment.NewLine}{_form.Description.Trim()}";
+        _form.PriorityCode = _form.ImpactCode == "EMERGENCY" ? UrgentPriority : NormalPriority;
+
+        _submitting = true;
+        _result = null;
+        try
+        {
+            _result = await Api.CreateAsync(new CreateResidentServiceRequestRequest(
+                _form.CategoryCode, _form.Title, description, _form.ServiceAreaCode, _form.PriorityCode, _form.PreferredDate, _form.PreferredTimeCode));
+            if (_result.IsSuccess && _result.Data is not null)
+            {
+                _created = _result.Data;
+                await RequestCreated.InvokeAsync(_created);
+            }
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void Close()
+    {
+        if (_submitting) return;
+        _open = false;
+        _result = null;
+        _created = null;
+        _attachmentError = null;
+    }
+}

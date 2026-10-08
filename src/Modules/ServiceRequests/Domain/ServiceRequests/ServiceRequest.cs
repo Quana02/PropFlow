@@ -25,7 +25,10 @@ public class ServiceRequest
         Guid? categoryId = null,
         Guid? facilityId = null,
         Guid? equipmentId = null,
-        string? finalPriorityCode = null)
+        string? finalPriorityCode = null,
+        string? serviceAreaCode = null,
+        DateOnly? preferredDate = null,
+        string? preferredTimeCode = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestNumber);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -46,6 +49,9 @@ public class ServiceRequest
         Title = title.Trim();
         Description = description.Trim();
         FinalPriorityCode = string.IsNullOrWhiteSpace(finalPriorityCode) ? null : finalPriorityCode.Trim().ToUpperInvariant();
+        ServiceAreaCode = string.IsNullOrWhiteSpace(serviceAreaCode) ? null : serviceAreaCode.Trim().ToUpperInvariant();
+        PreferredDate = preferredDate;
+        PreferredTimeCode = string.IsNullOrWhiteSpace(preferredTimeCode) ? null : preferredTimeCode.Trim().ToUpperInvariant();
         Status = ServiceRequestStatus.SUBMITTED;
         SubmittedAt = now;
         CreatedAt = now;
@@ -64,6 +70,9 @@ public class ServiceRequest
     public string Title { get; private set; } = null!;
     public string Description { get; private set; } = null!;
     public string? FinalPriorityCode { get; private set; }
+    public string? ServiceAreaCode { get; private set; }
+    public DateOnly? PreferredDate { get; private set; }
+    public string? PreferredTimeCode { get; private set; }
     public ServiceRequestStatus Status { get; private set; }
     public DateTimeOffset SubmittedAt { get; private set; }
     public DateTimeOffset? ResolvedAt { get; private set; }

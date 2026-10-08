@@ -140,6 +140,15 @@ html.dark .auth-content ::deep .auth-links{border-color:#334155}
     .auth-panel>.auth-content{background:transparent;border-left:0}
     .auth-panel-right>.auth-login-form{justify-content:center;padding-top:0;padding-bottom:0}
     .auth-login-inner{width:100%;flex:none}
+    .auth-panel-left>.auth-register-form ::deep .pf-toast{top:10px;right:10px;width:calc(100% - 20px);min-height:40px;padding:.55rem .7rem;font-size:.72rem}
     html.dark .auth-panel>.auth-content{background:transparent}
     html.dark .auth-card::before{background:#00f2ff33}
 }
+
+/* Match the registration select to the compact text fields in every state. */
+::deep .auth-register-grid .pf-select__trigger{box-sizing:border-box;height:32px;min-height:32px;margin:0;padding:.25rem .55rem;border-radius:.55rem;background:#ffffffb3;color:#0f172a;font-size:.73rem;font-weight:400;text-transform:none;letter-spacing:normal;box-shadow:none}
+::deep .auth-register-grid .pf-select__value.is-placeholder{color:#94a3b8}
+::deep .auth-register-grid .pf-select.modified.invalid .pf-select__trigger{border-color:#e11d48;background:#ffffffb3;box-shadow:none}
+html.dark .auth-content ::deep .auth-register-grid .pf-select__trigger{background:#0f172acc!important;color:#fff!important;border-color:#475569;box-shadow:none!important}
+html.dark .auth-content ::deep .auth-register-grid .pf-select__value.is-placeholder{color:#94a3b8}
+html.dark .auth-content ::deep .auth-register-grid .pf-select.modified.invalid .pf-select__trigger{background:#0f172acc!important;border-color:#ef4444!important;color:#fff!important;box-shadow:none!important}

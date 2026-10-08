@@ -1,14 +1,20 @@
 @page "/buildings"
 @layout PropFlow.Web.Client.Layout.MainLayout
-@attribute [Authorize(Roles = "MANAGER,STAFF")]
+@attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @using PropFlow.Web.Client.Features.Facility.Components
 @using PropFlow.Web.Client.Services.Authentication
 @inject IBuildingApiClient BuildingApiClient
 @inject AuthSession Session
+@implements IDisposable
 
 <PageTitle>Chi tiết chung cư - PropFlow</PageTitle>
+@if (!CanEdit)
+{
+    <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
+}
+
 
 <main class="building-details" aria-labelledby="building-page-title">
     <header class="page-header">
@@ -57,7 +63,10 @@
     else if (Building is not null)
     {
         <section class="metrics-grid" aria-label="Tổng quan vận hành">
+            @if (CanEdit)
+            {
             <article class="metric-card"><span>Căn hộ</span><strong>@Building.TotalApartments</strong><small>Tổng số căn hộ</small></article>
+            }
             <article class="metric-card"><span>Cơ sở vật chất</span><strong>@Building.Facilities.Total</strong><small>@Building.Facilities.Active đang hoạt động</small></article>
             <article class="metric-card"><span>Thiết bị</span><strong>@Building.Equipment.Total</strong><small>@Building.Equipment.Active đang hoạt động</small></article>
         </section>
@@ -67,10 +76,8 @@
                 <header class="section-header">
                     <span class="section-icon" aria-hidden="true">⌂</span>
                     <div><h2 id="basic-heading">Thông tin cơ bản</h2><p>Hồ sơ nhận diện của chung cư hiện tại</p></div>
-                    <span class="status-badge @StatusClass(Building.Status)">@StatusText(Building.Status)</span>
                 </header>
                 <dl class="field-grid">
-                    <div><dt>Mã chung cư</dt><dd>@Building.Code</dd></div>
                     <div><dt>Tên chung cư</dt><dd>@Building.Name</dd></div>
                     <div class="wide"><dt>Địa chỉ</dt><dd>@Building.Address</dd></div>
                     <div><dt>Số tầng</dt><dd>@Building.NumberOfFloors tầng</dd></div>
@@ -78,6 +85,8 @@
                 </dl>
             </section>
 
+            @if (CanEdit)
+            {
             <section class="detail-panel" aria-labelledby="description-heading">
                 <header class="section-header">
                     <span class="section-icon secondary" aria-hidden="true">≡</span>
@@ -86,6 +95,7 @@
                 <p class="description">@(string.IsNullOrWhiteSpace(Building.Description) ? "Chưa có mô tả." : Building.Description)</p>
             </section>
 
+            }
             <section class="detail-panel wide-panel" aria-labelledby="operation-heading">
                 <header class="section-header">
                     <span class="section-icon operation" aria-hidden="true">◇</span>
@@ -101,6 +111,8 @@
                 </div>
             </section>
 
+            @if (CanEdit)
+            {
             <section class="detail-panel wide-panel" aria-labelledby="system-heading">
                 <header class="section-header">
                     <span class="section-icon system" aria-hidden="true">◷</span>
@@ -111,6 +123,7 @@
                     <div><dt>Cập nhật gần nhất</dt><dd>@FormatDateTime(Building.UpdatedAt)</dd></div>
                 </dl>
             </section>
+            }
         </div>
     }
 
@@ -127,23 +140,55 @@
     private bool IsSaving;
     private string? SuccessMessage;
     private string? ErrorMessage;
-    private bool CanEdit => string.Equals(Session.User?.Role, "MANAGER", StringComparison.OrdinalIgnoreCase);
+    private bool CanEdit => Session.User?.Role == "MANAGER" && Session.User.Permissions.Contains("MANAGE_OPERATIONS");
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private readonly CancellationTokenSource RefreshCancellation = new();
 
-    private async Task LoadAsync()
+    protected override async Task OnInitializedAsync()
     {
-        IsLoading = true;
+        await LoadAsync();
+        _ = RefreshAsync(RefreshCancellation.Token);
+    }
+
+    private async Task RefreshAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (ct.IsCancellationRequested || IsEditDialogOpen || IsSaving || IsLoading) return;
+                    await ReloadAsync(false, ct);
+                    if (!ct.IsCancellationRequested) StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    public void Dispose() => RefreshCancellation.Cancel();
+
+    private Task LoadAsync() => ReloadAsync(true, RefreshCancellation.Token);
+
+    private async Task ReloadAsync(bool showLoading, CancellationToken ct)
+    {
+        IsLoading = showLoading;
         ErrorMessage = null;
         try
         {
-            var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
+            var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync(ct);
+            if (ct.IsCancellationRequested) return;
+            if (!showLoading && (IsEditDialogOpen || IsSaving)) return;
             if (result.IsSuccess && result.Data is not null) Building = result.Data;
             else if (result.StatusCode == 404) Building = null;
-            else ErrorMessage = result.Message ?? "Không thể tải thông tin chung cư. Vui lòng thử lại.";
+            else { Building = null; ErrorMessage = result.Message ?? "Không thể tải thông tin chung cư. Vui lòng thử lại."; }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch
         {
+            Building = null;
             ErrorMessage = "Không thể kết nối để tải thông tin chung cư. Vui lòng thử lại.";
         }
         finally { IsLoading = false; }
@@ -177,14 +222,4 @@
     }
 
     private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
-    private static string StatusClass(MasterDataStatus status) => status == MasterDataStatus.ACTIVE ? "active" : "inactive";
-    private static string StatusText(MasterDataStatus status) => status switch
-    {
-        MasterDataStatus.ACTIVE => "Đang hoạt động",
-        MasterDataStatus.INACTIVE => "Ngưng hoạt động",
-        MasterDataStatus.UNDER_MAINTENANCE => "Đang bảo trì",
-        MasterDataStatus.UNAVAILABLE => "Không khả dụng",
-        MasterDataStatus.OUT_OF_SERVICE => "Hết phục vụ",
-        _ => status.ToString()
-    };
 }

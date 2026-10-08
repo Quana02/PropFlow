@@ -15,6 +15,12 @@ public sealed partial class AuthUseCases(IAuthStore store, IAuthSecrets secrets,
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);
     private static string NormalizeEmail(string value) => value.Trim().ToUpperInvariant();
     private static string? Phone(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string CandidateBinding(RegistrationResidentCandidate candidate) => string.Join('|',
+        candidate.Id,
+        candidate.NormalizedEmail,
+        candidate.NormalizedPhone,
+        candidate.IdentityType,
+        candidate.NormalizedIdentityNumber);
     private static AuthFailure InvalidCredentials() => new(401, "invalid_credentials", "Không thể đăng nhập bằng thông tin đã cung cấp. Vui lòng thử lại sau hoặc liên hệ hỗ trợ.");
     private static AuthFailure InvalidChallenge() => new(400, "invalid_challenge", "Mã xác minh không hợp lệ, đã hết hạn hoặc đã được sử dụng.");
     private static void Password(string value)

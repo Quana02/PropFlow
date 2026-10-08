@@ -15,14 +15,6 @@
                     <div class="dialog-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span>@ErrorMessage</span></div>
                 }
                 <div class="form-grid">
-                    @if (IsCreating)
-                    {
-                        <div class="field"><label for="building-code">Mã chung cư <b>*</b></label><InputText id="building-code" @bind-Value="UpdateModel.Code" /><ValidationMessage For="() => UpdateModel.Code" /><small>Mã định danh không thể thay đổi sau khi thiết lập.</small></div>
-                    }
-                    else
-                    {
-                        <div class="field"><label>Mã chung cư</label><input value="@Building!.Code" disabled /><small>Mã định danh không thể thay đổi.</small></div>
-                    }
                     <div class="field"><label for="building-name">Tên chung cư <b>*</b></label><InputText id="building-name" @bind-Value="UpdateModel.Name" /><ValidationMessage For="() => UpdateModel.Name" /></div>
                     <div class="field wide"><label for="building-address">Địa chỉ <b>*</b></label><InputText id="building-address" @bind-Value="UpdateModel.Address" /><ValidationMessage For="() => UpdateModel.Address" /></div>
                     <div class="field"><label for="building-floors">Số tầng <b>*</b></label><InputNumber id="building-floors" @bind-Value="UpdateModel.NumberOfFloors" /><ValidationMessage For="() => UpdateModel.NumberOfFloors" /></div>
@@ -63,7 +55,7 @@
         if (!WasCreating && LoadedProfileKey == Building.Id) return;
         WasCreating = false;
         LoadedProfileKey = Building.Id;
-        UpdateModel = new() { Code = Building.Code, Name = Building.Name, Address = Building.Address, TimeZoneId = Building.TimeZoneId, NumberOfFloors = Building.NumberOfFloors, Description = Building.Description };
+        UpdateModel = new() { Name = Building.Name, Address = Building.Address, TimeZoneId = Building.TimeZoneId, NumberOfFloors = Building.NumberOfFloors, Description = Building.Description };
     }
 
     private Task Close() => IsSaving ? Task.CompletedTask : OnClose.InvokeAsync();

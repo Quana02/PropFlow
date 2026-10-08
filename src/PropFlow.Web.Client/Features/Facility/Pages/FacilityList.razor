@@ -1,6 +1,6 @@
 @page "/facilities"
 @layout PropFlow.Web.Client.Layout.MainLayout
-@attribute [Authorize(Roles = "MANAGER,STAFF")]
+@attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
 @using PropFlow.Web.Client.Features.Facility.Models
 @using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.AspNetCore.Authorization
@@ -12,9 +12,15 @@
 @inject IAuthorizationService AuthorizationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using PropFlow.Web.Client.Shared.Forms
+@using PropFlow.Web.Client.Shared.Feedback
 @implements IDisposable
 
 <PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
+@if (!IsManager)
+{
+    <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
+}
+
 
 <div class="fe04-page font-sans text-slate-800 antialiased">
 
@@ -394,7 +400,7 @@
     </div>
 </div>
 
-@if (IsFormOpen)
+@if (IsManager && IsFormOpen)
 {
     <div class="fe04-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm transition-opacity">
         <div class="fe04-modal relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden font-sans text-[#0f172a] animate-in fade-in zoom-in duration-200">
@@ -431,7 +437,8 @@
                             <div class="relative">
                                 <input @bind="CreateFormModel.Code" type="text" placeholder="VD: CSVC-HOBOI-T05" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all font-mono" />
                             </div>
-                            <p class="text-[11px] text-slate-400">Quy ước: CSVC-[TEN]-[VITRI]</p>
+                            <p class="text-[11px] text-slate-400">Quy ước: CSVC-[TÊN]-[VỊ TRÍ]</p>
+                            @if (!string.IsNullOrWhiteSpace(FacilityCodeError)) { <p class="text-xs text-rose-600" role="alert">@FacilityCodeError</p> }
                         </div>
 
                         <!-- Field 2: Tên CSVT (Required) -->
@@ -536,6 +543,10 @@
 }
 
 <PropFlow.Web.Client.Features.Facility.Components.FacilityDetailDialog IsOpen="IsDetailOpen" Facility="SelectedFacilityToView" OnClose="() => IsDetailOpen = false" />
+@if (IsSaveConfirmationOpen)
+{
+    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedFacilityToEdit is null ? "Bạn có muốn tạo cơ sở vật chất này không?" : "Bạn có muốn cập nhật cơ sở vật chất này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveFacility" OnCancel="CloseSaveConfirmation" />
+}
 
 @code {
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
@@ -579,6 +590,8 @@
     private bool IsLoading { get; set; } = true;
     private bool IsFormOpen { get; set; }
     private bool IsSaving { get; set; }
+    private bool IsSaveConfirmationOpen { get; set; }
+    private string? FacilityCodeError { get; set; }
     private string? SuccessMessage { get; set; }
     private string? ErrorMessage { get; set; }
     private FacilityModel? SelectedFacilityToEdit { get; set; }
@@ -604,7 +617,7 @@
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
-        IsManager = user.IsInRole("MANAGER");
+        IsManager = AssetPermissions.CanManage(user);
         await Task.WhenAll(LoadData(), LoadSummaryAsync());
         _ = RefreshStatusAsync(StatusRefreshCancellation.Token);
     }
@@ -616,11 +629,15 @@
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
-                if (IsFormOpen || IsDetailOpen || IsSaving) continue;
+                if (IsFormOpen || IsSaving || IsLoading) continue;
                 await InvokeAsync(async () =>
                 {
-                    await Task.WhenAll(LoadData(), LoadSummaryAsync());
-                    StateHasChanged();
+                    if (ct.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
+                    if (IsDetailOpen)
+                        await RefreshDetailAsync(ct);
+                    else
+                        await Task.WhenAll(LoadData(), LoadSummaryAsync());
+                    if (!ct.IsCancellationRequested) StateHasChanged();
                 });
             }
         }
@@ -629,10 +646,32 @@
 
     public void Dispose() => StatusRefreshCancellation.Cancel();
 
+    private async Task RefreshDetailAsync(CancellationToken ct)
+    {
+        if (SelectedFacilityToView is null) return;
+        var id = SelectedFacilityToView.Id;
+        var result = await FacilityApiClient.GetFacilityByIdAsync(id, ct);
+        // A response for a closed/replaced dialog must not reopen it or overwrite an edit.
+        if (ct.IsCancellationRequested || !IsDetailOpen || IsFormOpen || SelectedFacilityToView?.Id != id) return;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            SelectedFacilityToView = result.Data;
+        }
+        else
+        {
+            IsDetailOpen = false;
+            SelectedFacilityToView = null;
+            // Refresh the underlying list too, so revoked assignments disappear there.
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+        }
+    }
+
     private async Task LoadData()
     {
         IsLoading = true;
         ErrorMessage = null;
+        PagedResult = new();
         try
         {
             var result = await FacilityApiClient.GetFacilitiesAsync(Filter);
@@ -645,10 +684,7 @@
     private async Task LoadSummaryAsync()
     {
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
-        if (result.IsSuccess && result.Data is not null)
-        {
-            FacilitySummary = result.Data.Facilities;
-        }
+        FacilitySummary = result.IsSuccess ? result.Data?.Facilities : null;
     }
 
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
@@ -670,9 +706,17 @@
         IsFormOpen = true;
     }
 
-    private void OpenDetailDialog(FacilityModel item)
+    private async Task OpenDetailDialog(FacilityModel item)
     {
-        SelectedFacilityToView = item;
+        IsDetailOpen = false;
+        SelectedFacilityToView = null;
+        var result = await FacilityApiClient.GetFacilityByIdAsync(item.Id);
+        if (!result.IsSuccess || result.Data is null)
+        {
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+            return;
+        }
+        SelectedFacilityToView = result.Data;
         IsDetailOpen = true;
     }
 
@@ -694,16 +738,31 @@
 
     private void CloseDialog() { IsFormOpen = false; IsSaving = false; }
 
-    private async Task SaveFacility()
+    private void SaveFacility()
     {
         if (!IsManager) return;
         ErrorMessage = null;
+        FacilityCodeError = null;
         var formModel = SelectedFacilityToEdit == null ? (object)CreateFormModel : UpdateFormModel;
         if (!TryValidate(formModel, out var validationMessage))
         {
-            ErrorMessage = validationMessage;
+            if (SelectedFacilityToEdit is null && validationMessage?.Contains("Mã cơ sở vật chất", StringComparison.Ordinal) == true)
+                FacilityCodeError = validationMessage;
+            else
+                ErrorMessage = validationMessage;
             return;
         }
+        IsSaveConfirmationOpen = true;
+    }
+
+    private void CloseSaveConfirmation()
+    {
+        if (!IsSaving) IsSaveConfirmationOpen = false;
+    }
+
+    private async Task ConfirmSaveFacility()
+    {
+        if (!IsManager || !IsSaveConfirmationOpen) return;
         IsSaving = true;
         ErrorMessage = null;
         try
@@ -713,6 +772,7 @@
                 : await FacilityApiClient.UpdateFacilityAsync(SelectedFacilityToEdit.Id, UpdateFormModel);
             if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu cơ sở vật chất."; return; }
             var name = SelectedFacilityToEdit == null ? CreateFormModel.Name : UpdateFormModel.Name;
+            IsSaveConfirmationOpen = false;
             CloseDialog();
             await Task.WhenAll(LoadData(), LoadSummaryAsync());
             if (ErrorMessage == null) SuccessMessage = $"Đã lưu cơ sở vật chất '{name}' thành công!";

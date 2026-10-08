@@ -17,9 +17,9 @@ Tài liệu này ánh xạ schema hiện hành trong `docs/database/PropFlow.dbm
 |---|---|---|
 | `auth` | `users`, `refresh_tokens`, `password_reset_tokens`, `resident_verifications` | Authentication |
 | `administration` | `roles`, `permissions`, `role_permissions`, `user_role_assignments`, `user_access_history`, `system_configurations`, `audit_logs` | Administration |
-| `residents` | `residents`, `resident_apartments` | Residents |
+| `residents` | `residents`, `resident_apartments` (residency type, household role, household-head residency và relationship-to-head) | Residents / FE-02 |
 | `property_assets` | `buildings`, `facilities`, `equipment` | PropertyAssets |
-| `apartments` | `apartment_units` | Apartments |
+| `apartments` | `apartment_unit_types`, `apartment_units`, `apartment_ownerships` | Apartments / FE-03 |
 | `service_requests` | `service_request_categories`, `service_requests`, `service_request_assignments`, `service_request_activities` | ServiceRequests |
 | `complaints` | `complaints`, `complaint_followups`, `complaint_activities` | Complaints |
 | `maintenance` | `maintenance_schedules`, `maintenance_tasks`, `maintenance_assignments`, `maintenance_task_activities`, `maintenance_results` | Maintenance |
@@ -59,6 +59,7 @@ Consumer module
 - Không expose `DbContext`, repository, `IQueryable` hoặc domain entity qua Contracts.
 - Cross-module references là stable scalar IDs; không tạo EF navigation xuyên module.
 - Physical FK chỉ tồn tại khi `PropFlow.dbml` khai báo `ref:`. Scalar-only references được kiểm tra ở Application layer/Contracts.
+- `residents.resident_apartments.apartment_unit_id` và `apartments.apartment_ownerships.owner_resident_id` là logical scalar references qua module boundary; DBML không mô tả physical FK cho hai cột này.
 - Reporting Administration Overview lấy aggregate từ Apartments, Residents, PropertyAssets và ServiceRequests qua source contracts.
 
 ## 5. Invariants của chung cư hiện hành
@@ -68,6 +69,12 @@ Consumer module
 3. ACTIVE apartment không có ResidentApartment effective tại ngày cục bộ hiện tại là vacant; không tạo cột/status VACANT.
 4. Không dùng UserAccount role để đếm Resident business entity.
 5. ADMIN không trở thành business super-user; quyền đọc aggregate Reporting không cấp quyền CRUD dữ liệu nguồn.
+6. FE-02 sở hữu Resident và residency: `HOUSEHOLD_HEAD`/`HOUSEHOLD_MEMBER` là HouseholdRole, còn `OWNER_OCCUPIED`/`TENANT`/`AUTHORIZED_OCCUPANT` là ResidencyType. Ownership khác residency; household head không mặc định là owner.
+7. FE-03 sở hữu Apartment master, danh mục `apartments.apartment_unit_types` và `apartments.apartment_ownerships`. `apartment_units.apartment_unit_type_id` là physical FK nội bộ cùng Apartments module; tên loại là unique theo normalized lower/trim semantics. Một apartment có thể có 0..N ownership hiện hành; cùng một resident chỉ có tối đa một ownership hiện hành trên cùng apartment. `owner_resident_id` là logical scalar reference đến Resident, được xác thực/đọc qua Residents public Contracts; Apartments không truy cập ResidentsDbContext. Ownership không tạo hoặc thay đổi quan hệ cư trú.
+8. ApartmentStatus khác occupancy: ACTIVE/INACTIVE là trạng thái quản lý; occupancy được suy diễn từ active residency. Owner không tự trở thành occupant nếu không có ResidentApartment active. Tuy nhiên, apartment chỉ được chuyển INACTIVE khi đồng thời không có active residency và không có current ownership (`EndDate IS NULL`); apartment INACTIVE không được nhận current ownership mới.
+9. FE-02 canonical Resident identity là normalized `(IdentityType, IdentityNumber)` và unique toàn cục; normalized non-null email cũng unique. Phone bắt buộc cho onboarding mới nhưng không unique trong Resident domain.
+10. Một Resident có thể có `0..N` active `resident_apartments` ở các Apartment khác nhau. Cùng Resident + Apartment không được overlap active; ended row không bị revive khi re-entry.
+11. FE-01 sở hữu account/registration. Authentication chỉ gọi Residents public Contracts; Residents có thể compose current ownership qua Apartments public Contracts. Không module nào truy cập DbContext của module khác.
 
 ## 6. Migration policy
 

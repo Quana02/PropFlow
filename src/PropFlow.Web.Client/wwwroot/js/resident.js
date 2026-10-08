@@ -1552,7 +1552,7 @@
 
             if (
                 !document.querySelector(
-                    ".resident-modal:not([hidden]):not(.hidden)"
+                    ".resident-portal-modal:not([hidden]):not(.hidden)"
                 )
             ) {
                 document.body.style.overflow =
@@ -1622,7 +1622,7 @@
 
             if (
                 !document.querySelector(
-                    ".resident-modal:not([hidden]):not(.hidden)"
+                    ".resident-portal-modal:not([hidden]):not(.hidden)"
                 )
             ) {
                 document.body.style.overflow =
@@ -1651,6 +1651,15 @@
             chat.classList.toggle(
                 "hidden",
                 !willOpen
+            );
+
+            document.querySelectorAll(
+                '[aria-controls="aiChatWindow"]'
+            ).forEach(button =>
+                button.setAttribute(
+                    "aria-expanded",
+                    String(willOpen)
+                )
             );
         },
 

@@ -1,5 +1,17 @@
-window.currentTheme = "light";
+window.currentTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
 window.currentScreen = "login"; // "login" | "register" | "forgot"
+
+window.syncPublicTheme = function() {
+    const isDark = document.documentElement.classList.contains("dark");
+    window.currentTheme = isDark ? "dark" : "light";
+    const body = document.getElementById("app-body") || document.body;
+    const themeIcon = document.getElementById("theme-icon");
+    const themeLabel = document.getElementById("theme-label");
+    body.style.backgroundColor = isDark ? "#06090e" : "#f8f9ff";
+    body.style.color = isDark ? "#e2e8f0" : "#0f172a";
+    if (themeIcon) themeIcon.textContent = isDark ? "☀️" : "🌙";
+    if (themeLabel) themeLabel.textContent = isDark ? "CHẾ ĐỘ SÁNG" : "CHẾ ĐỘ TỐI";
+};
 
 // UI Panel Navigation Functions
 window.switchToLogin = function() {
@@ -137,6 +149,7 @@ const themePalettes = {
 };
 
 window.initLandingPage = function() {
+    window.syncPublicTheme();
     const container = document.getElementById("threejs-bg");
     if (!container) return;
 
@@ -279,10 +292,16 @@ window.toggleTheme = function() {
     const ambientLight = document.getElementById("ambient-light-glows");
     const ambientDark = document.getElementById("ambient-dark-glows");
 
-    if (window.currentTheme === "light") {
-        window.currentTheme = "dark";
-        html.classList.add("dark");
-        html.classList.remove("light");
+    const nextTheme = html.classList.contains("dark") ? "light" : "dark";
+    const isDark = nextTheme === "dark";
+    window.currentTheme = nextTheme;
+    html.classList.toggle("dark", isDark);
+    html.classList.toggle("light", !isDark);
+    html.dataset.theme = nextTheme;
+    try { localStorage.setItem("propflow-theme", nextTheme); } catch { }
+    window.syncPublicTheme();
+
+    if (isDark) {
         body.style.backgroundColor = "#06090e";
         body.style.color = "#e2e8f0";
 
@@ -292,11 +311,8 @@ window.toggleTheme = function() {
         if (ambientLight) ambientLight.classList.replace("opacity-100", "opacity-0");
         if (ambientDark) ambientDark.classList.replace("opacity-0", "opacity-100");
 
-        window.updateThreeJsTheme("dark");
+        window.updateThreeJsTheme?.("dark");
     } else {
-        window.currentTheme = "light";
-        html.classList.remove("dark");
-        html.classList.add("light");
         body.style.backgroundColor = "#f8f9ff";
         body.style.color = "#0f172a";
 
@@ -306,8 +322,9 @@ window.toggleTheme = function() {
         if (ambientDark) ambientDark.classList.replace("opacity-100", "opacity-0");
         if (ambientLight) ambientLight.classList.replace("opacity-0", "opacity-100");
 
-        window.updateThreeJsTheme("light");
+        window.updateThreeJsTheme?.("light");
     }
+    window.propflowUpdateTheme?.(isDark);
 };
 
 window.focusOtpInput = function(index) {

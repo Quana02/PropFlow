@@ -2,13 +2,17 @@
 @layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
 @inject AuthSession Session
 @inject NavigationManager Navigation
+@using PropFlow.Web.Client.Shared.Feedback
 <span class="auth-form-eyebrow">CỔNG THÔNG TIN TÀI KHOẢN</span>
 <h2>Đăng Nhập Hệ Thống</h2>
 <p class="auth-form-description">Truy cập tài khoản PropFlow của bạn.</p>
 @if (Session.Notice != null) { <p class="feedback" role="status">@Session.Notice</p> }
-<ApiFeedback Result="result" />
-<EditForm Model="form" OnValidSubmit="Submit">
-    <DataAnnotationsValidator /><ValidationSummary />
+@if (!string.IsNullOrWhiteSpace(toastMessage))
+{
+    <PropFlowToast @key="toastVersion" Message="@toastMessage" Severity="error" DurationMs="4000" OnDismiss="DismissToast" />
+}
+<EditForm Model="form" OnValidSubmit="Submit" OnInvalidSubmit="HandleInvalidSubmit">
+    <DataAnnotationsValidator />
     <label for="username">Tên đăng nhập</label>
     <div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">badge</span><InputText id="username" @bind-Value="form.Username" autocomplete="username" placeholder="Nhập tên đăng nhập" /></div>
     <div class="auth-password-heading"><label for="password">Mật khẩu truy cập</label><a href="/forgot-password">QUÊN MẬT KHẨU?</a></div>
@@ -24,7 +28,78 @@
 <nav class="auth-links auth-links-login"><span>Chưa có tài khoản?</span><a href="/register">Tạo tài khoản</a><a class="auth-resume" href="/registration/resume">Đã đăng ký? Tiếp tục xác minh</a></nav>
 @if (Session.Notice?.Contains("chưa xác nhận") == true) { <button class="secondary" disabled="@busy" @onclick="RetryLogout">Thử thu hồi phiên lại</button> }
 @code {
-    private readonly LoginForm form = new(); private bool busy; private bool showPassword; private ApiResult? result;
-    private async Task Submit() { if (busy) return; busy = true; try { result = await Session.LoginAsync(new(form.Username, form.Password)); if (result.IsSuccess) Navigation.NavigateTo(Session.User?.Role switch { "ADMIN" => "/admin/dashboard", "MANAGER" or "STAFF" => "/buildings", "ACCOUNTANT" => "/finance/dashboard", "RESIDENT" => "/resident", _ => "/account" }); } finally { form.Password = ""; busy = false; } }
-    private async Task RetryLogout() { busy = true; try { result = await Session.LogoutAsync(); } finally { busy = false; } }
+    private readonly LoginForm form = new();
+    private bool busy;
+    private bool showPassword;
+    private string? toastMessage;
+    private int toastVersion;
+
+    private void HandleInvalidSubmit(EditContext _)
+        => ShowToast("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.");
+
+    private async Task Submit()
+    {
+        if (busy) return;
+
+        DismissToast();
+        busy = true;
+        try
+        {
+            var result = await Session.LoginAsync(new(form.Username, form.Password));
+            if (result.IsSuccess)
+            {
+                Navigation.NavigateTo(Session.User?.Role switch
+                {
+                    "ADMIN" => "/admin/dashboard",
+                    "MANAGER" or "STAFF" => "/buildings",
+                    "ACCOUNTANT" => "/finance/dashboard",
+                    "RESIDENT" => "/resident",
+                    _ => "/account"
+                });
+                return;
+            }
+
+            ShowToast(GetErrorMessage(result));
+        }
+        finally
+        {
+            form.Password = "";
+            busy = false;
+        }
+    }
+
+    private async Task RetryLogout()
+    {
+        busy = true;
+        try
+        {
+            var result = await Session.LogoutAsync();
+            if (!result.IsSuccess) ShowToast(GetErrorMessage(result));
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void ShowToast(string message)
+    {
+        toastMessage = message;
+        toastVersion++;
+    }
+
+    private void DismissToast() => toastMessage = null;
+
+    private static string GetErrorMessage(ApiResult result)
+    {
+        var validationMessages = result.ValidationErrors?.Values
+            .SelectMany(messages => messages)
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Distinct()
+            .ToArray();
+
+        return validationMessages is { Length: > 0 }
+            ? string.Join(" ", validationMessages)
+            : result.Message ?? "Không thể đăng nhập. Vui lòng thử lại.";
+    }
 }

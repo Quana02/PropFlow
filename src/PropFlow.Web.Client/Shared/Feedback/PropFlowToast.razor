@@ -1,0 +1,51 @@
+@implements IDisposable
+
+<aside class="pf-toast pf-toast--@Severity.ToLowerInvariant()" role="@(Severity is "error" or "warning" ? "alert" : "status")" aria-live="@(Severity is "error" or "warning" ? "assertive" : "polite")">
+    <span class="material-symbols-outlined" aria-hidden="true">@Icon</span>
+    <span>@Message</span>
+    <button type="button" title="Đóng thông báo" aria-label="Đóng thông báo" @onclick="DismissAsync"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public string Message { get; set; } = "";
+    [Parameter] public string Severity { get; set; } = "info";
+    [Parameter] public int DurationMs { get; set; } = 3000;
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private CancellationTokenSource? dismissCancellation;
+    private string Icon => Severity switch
+    {
+        "success" => "check_circle",
+        "error" => "error",
+        "warning" => "warning",
+        _ => "info"
+    };
+
+    protected override void OnInitialized()
+    {
+        dismissCancellation = new CancellationTokenSource();
+        _ = DismissLaterAsync(dismissCancellation.Token);
+    }
+
+    private async Task DismissLaterAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(DurationMs, cancellationToken);
+            await InvokeAsync(DismissAsync);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private Task DismissAsync()
+    {
+        dismissCancellation?.Cancel();
+        return OnDismiss.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        dismissCancellation?.Cancel();
+        dismissCancellation?.Dispose();
+    }
+}

@@ -54,6 +54,25 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("resident_id");
 
+                    b.Property<string>("RegistrationDisplayName")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("registration_display_name");
+
+                    b.Property<string>("RegistrationEmail")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("registration_email");
+
+                    b.Property<string>("RegistrationPasswordHash")
+                        .HasColumnType("text")
+                        .HasColumnName("registration_password_hash");
+
+                    b.Property<string>("RegistrationUsername")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("registration_username");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -68,7 +87,7 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<Guid>("UserId")
+                    b.Property<Guid?>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
@@ -86,6 +105,10 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                     b.HasIndex("ApartmentUnitId");
 
                     b.HasIndex("ResidentId");
+
+                    b.HasIndex("RegistrationEmail");
+
+                    b.HasIndex("RegistrationUsername");
 
                     b.HasIndex("Status");
 
@@ -342,8 +365,7 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                     b.HasOne("PropFlow.Modules.Authentication.Domain.Users.UserAccount", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("User");
                 });

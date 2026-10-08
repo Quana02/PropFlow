@@ -12,10 +12,12 @@ public class ResidentApartment
     public ResidentApartment(
         Guid residentId,
         Guid apartmentUnitId,
-        string relationshipTypeCode,
+        HouseholdRole householdRole,
+        ResidencyType residencyType,
         DateOnly startDate,
         DateTimeOffset now,
-        bool isPrimary = false,
+        Guid? householdHeadResidencyId = null,
+        HouseholdRelationship? relationshipToHead = null,
         DateOnly? endDate = null,
         string? note = null,
         Guid? createdBy = null)
@@ -30,18 +32,19 @@ public class ResidentApartment
             throw new ArgumentException("ApartmentUnitId cannot be empty.", nameof(apartmentUnitId));
         }
 
-        ArgumentException.ThrowIfNullOrWhiteSpace(relationshipTypeCode);
-
         if (endDate.HasValue && endDate.Value < startDate)
         {
             throw new ArgumentException("EndDate cannot be before StartDate.", nameof(endDate));
         }
+        ValidateHousehold(householdRole, householdHeadResidencyId, relationshipToHead);
 
         Id = Guid.NewGuid();
         ResidentId = residentId;
         ApartmentUnitId = apartmentUnitId;
-        RelationshipTypeCode = relationshipTypeCode.Trim();
-        IsPrimary = isPrimary;
+        HouseholdRole = householdRole;
+        ResidencyType = residencyType;
+        HouseholdHeadResidencyId = householdHeadResidencyId;
+        RelationshipToHead = relationshipToHead;
         StartDate = startDate;
         EndDate = endDate;
         Status = ResidencyStatus.ACTIVE;
@@ -58,8 +61,11 @@ public class ResidentApartment
     // Cross-module scalar ID to apartments.apartment_units.id
     public Guid ApartmentUnitId { get; private set; }
 
-    public string RelationshipTypeCode { get; private set; } = null!;
-    public bool IsPrimary { get; private set; }
+    public HouseholdRole HouseholdRole { get; private set; }
+    public ResidencyType ResidencyType { get; private set; }
+    // Self-reference inside Residents: the active head residency for a household member.
+    public Guid? HouseholdHeadResidencyId { get; private set; }
+    public HouseholdRelationship? RelationshipToHead { get; private set; }
     public DateOnly StartDate { get; private set; }
     public DateOnly? EndDate { get; private set; }
     public ResidencyStatus Status { get; private set; } = ResidencyStatus.ACTIVE;
@@ -71,6 +77,7 @@ public class ResidentApartment
 
     // Within-module navigation
     public Resident? Resident { get; private set; }
+    public ResidentApartment? HouseholdHeadResidency { get; private set; }
 
     public bool IsActiveAt(DateOnly date) => Status == ResidencyStatus.ACTIVE && StartDate <= date && (!EndDate.HasValue || EndDate.Value >= date);
 
@@ -87,20 +94,30 @@ public class ResidentApartment
         UpdatedAt = now;
     }
 
-    public void SetPrimary(bool isPrimary, Guid? updatedBy, DateTimeOffset now)
+    public void UpdateHousehold(HouseholdRole householdRole, ResidencyType residencyType, Guid? householdHeadResidencyId,
+        HouseholdRelationship? relationshipToHead, Guid? updatedBy, DateTimeOffset now)
     {
-        IsPrimary = isPrimary;
+        ValidateHousehold(householdRole, householdHeadResidencyId, relationshipToHead);
+        HouseholdRole = householdRole;
+        ResidencyType = residencyType;
+        HouseholdHeadResidencyId = householdHeadResidencyId;
+        RelationshipToHead = relationshipToHead;
         UpdatedBy = updatedBy;
         UpdatedAt = now;
     }
 
-    public void UpdateRelationship(string relationshipTypeCode, string? note, Guid? updatedBy, DateTimeOffset now)
+    public void UpdateNote(string? note, Guid? updatedBy, DateTimeOffset now)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(relationshipTypeCode);
-
-        RelationshipTypeCode = relationshipTypeCode.Trim();
         Note = note?.Trim();
         UpdatedBy = updatedBy;
         UpdatedAt = now;
+    }
+
+    private static void ValidateHousehold(HouseholdRole role, Guid? headResidencyId, HouseholdRelationship? relationship)
+    {
+        if (role == HouseholdRole.HOUSEHOLD_MEMBER && (!headResidencyId.HasValue || !relationship.HasValue))
+            throw new ArgumentException("Household members require both a household head and relationship.");
+        if (role != HouseholdRole.HOUSEHOLD_MEMBER && (headResidencyId.HasValue || relationship.HasValue))
+            throw new ArgumentException("Only household members can reference a household head.");
     }
 }
