@@ -49,6 +49,7 @@ coverage.opencover.xml
 coverage.cobertura.xml
 
 ## Logs and temporary files
+.codex-runtime/
 logs/
 *.log
 *.tmp
