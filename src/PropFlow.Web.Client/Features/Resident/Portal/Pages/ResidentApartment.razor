@@ -3,60 +3,128 @@
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
 @using PropFlow.Web.Client.Features.Apartment.Models
 @using PropFlow.Web.Client.Features.Apartment.Services
+@using PropFlow.Web.Client.Features.Resident.Portal.Models
 @inject IApartmentApiClient Apartments
 @inject NavigationManager Navigation
 
 <PageTitle>Căn hộ của tôi - PropFlow</PageTitle>
 
 <main class="resident-apartment-page">
-    <button class="back" @onclick="Back"><span class="material-symbols-outlined">arrow_back</span>Trang cư dân</button>
-    <header>
-        <div class="title-icon"><span class="material-symbols-outlined">apartment</span></div>
-        <div><span class="eyebrow">MY APARTMENTS</span><h1>Căn hộ của tôi</h1><p>Thông tin căn hộ được xác định từ quan hệ cư trú đang hiệu lực của bạn.</p></div>
-        <button class="refresh" @onclick="Load" title="Tải lại"><span class="material-symbols-outlined">refresh</span></button>
-    </header>
+    <section class="apartment-page-heading">
+        <div>
+            <button class="apartment-back" type="button" @onclick="Back"><span class="material-symbols-outlined">arrow_back</span>Trang cư dân</button>
+            <nav aria-label="Đường dẫn"><span>Resident Portal</span><i>/</i><strong>Căn hộ của tôi</strong></nav>
+            <h1>@Heading</h1>
+            <p>Thông số căn hộ và hồ sơ cư trú được đồng bộ từ hệ thống quản lý PropFlow.</p>
+        </div>
+        <button class="apartment-refresh glass-panel" type="button" @onclick="Load" disabled="@loading" title="Tải lại dữ liệu">
+            <span class="material-symbols-outlined @(loading ? "spin" : null)">refresh</span><span>Tải lại</span>
+        </button>
+    </section>
 
     @if (loading)
     {
-        <section class="state"><span class="material-symbols-outlined spin">progress_activity</span><strong>Đang tải thông tin căn hộ…</strong></section>
+        <section class="apartment-state glass-panel" aria-live="polite"><span class="material-symbols-outlined spin">progress_activity</span><strong>Đang tải thông tin căn hộ…</strong><p>PropFlow đang kiểm tra quan hệ cư trú đang hiệu lực của bạn.</p></section>
     }
     else if (!string.IsNullOrWhiteSpace(error))
     {
-        <section class="state error"><span class="material-symbols-outlined">error</span><strong>@error</strong><button @onclick="Load">Thử lại</button></section>
+        <section class="apartment-state apartment-state-error glass-panel" role="alert"><span class="material-symbols-outlined">error</span><strong>Không thể tải thông tin căn hộ</strong><p>@error</p><button type="button" @onclick="Load">Thử lại</button></section>
     }
     else if (items.Count == 0)
     {
-        <section class="state"><span class="material-symbols-outlined">meeting_room</span><strong>Chưa có căn hộ đang cư trú</strong><p>Khi quan hệ cư trú có hiệu lực, căn hộ sẽ xuất hiện tại đây.</p></section>
+        <section class="apartment-state glass-panel"><span class="material-symbols-outlined">meeting_room</span><strong>Chưa có căn hộ đang cư trú</strong><p>Khi quan hệ cư trú có hiệu lực, căn hộ sẽ xuất hiện tại đây.</p></section>
     }
     else
     {
-        <section class="apartment-grid">
-            @foreach (var item in items)
-            {
-                <article>
-                    <div class="card-head"><span class="material-symbols-outlined">domain</span><div><small>CĂN HỘ</small><h2>@item.UnitNumber</h2></div><span class="status @(item.Status == "ACTIVE" ? "active" : "inactive")">@(item.Status == "ACTIVE" ? "Đang quản lý" : "Ngừng quản lý")</span></div>
-                    <dl>
-                        <div><dt>Tầng</dt><dd>@item.FloorNumber</dd></div>
-                        <div><dt>Loại căn hộ</dt><dd>@item.UnitType</dd></div>
-                        <div><dt>Diện tích sử dụng</dt><dd>@item.UsableAreaM2.ToString("0.##") m²</dd></div>
-                        <div><dt>Phòng ngủ</dt><dd>@(item.BedroomCount?.ToString() ?? "Chưa cập nhật")</dd></div>
-                        <div><dt>Phòng tắm</dt><dd>@(item.BathroomCount?.ToString() ?? "Chưa cập nhật")</dd></div>
-                        <div><dt>Ngày bàn giao</dt><dd>@(item.HandoverDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</dd></div>
+        @foreach (var item in items)
+        {
+            <section class="apartment-overview">
+                <div class="apartment-title-row">
+                    <div>
+                        <span class="apartment-kicker">Thông tin căn hộ</span>
+                        <div class="apartment-title-line">
+                            <h2>Căn hộ @item.UnitNumber</h2>
+                            <span class="apartment-status @(IsActive(item) ? "is-active" : "is-inactive")"><i></i>@StatusLabel(item.Status)</span>
+                            <span class="apartment-floor-badge">Tầng @item.FloorNumber • @item.UnitType</span>
+                        </div>
+                    </div>
+                    <div class="apartment-registry glass-panel"><span class="material-symbols-outlined">verified_user</span><span><small>Mã đăng ký</small><strong>@RegistryId(item)</strong></span></div>
+                </div>
+
+                <article class="apartment-section glass-panel">
+                    <header class="apartment-section-header">
+                        <span class="apartment-section-icon"><span class="material-symbols-outlined">apartment</span></span>
+                        <span><h3>Thông số căn hộ</h3><p>Thông tin kiến trúc và trạng thái đang được ghi nhận trên hệ thống</p></span>
+                        <span class="read-only-pill"><span class="material-symbols-outlined">lock</span>Chỉ xem</span>
+                    </header>
+                    <dl class="apartment-spec-grid">
+                        <div class="glass-inner"><dt>Số căn hộ</dt><dd>@item.UnitNumber</dd><small>Mã căn hộ trên hệ thống</small></div>
+                        <div class="glass-inner"><dt>Tầng</dt><dd>Tầng @item.FloorNumber</dd><small>Vị trí tầng của căn hộ</small></div>
+                        <div class="glass-inner"><dt>Loại căn hộ</dt><dd>@item.UnitType</dd><small>Phân loại mặt bằng</small></div>
+                        <div class="glass-inner"><dt>Diện tích sử dụng</dt><dd>@item.UsableAreaM2.ToString("0.##") <em>m²</em></dd><small>@RoomSummary(item)</small></div>
+                        <div class="glass-inner"><dt>Trạng thái căn hộ</dt><dd><span class="inline-status @(IsActive(item) ? "is-active" : "is-inactive")"><i></i>@StatusLabel(item.Status)</span></dd><small>Trạng thái quản lý hiện tại</small></div>
+                        <div class="glass-inner"><dt>Phòng ngủ</dt><dd>@DisplayCount(item.BedroomCount)</dd><small>Số phòng ngủ đã khai báo</small></div>
+                        <div class="glass-inner"><dt>Phòng tắm</dt><dd>@DisplayCount(item.BathroomCount)</dd><small>Số phòng tắm đã khai báo</small></div>
+                        <div class="glass-inner"><dt>Ngày bàn giao</dt><dd>@DisplayDate(item.HandoverDate)</dd><small>Ngày bàn giao được ghi nhận</small></div>
                     </dl>
                 </article>
-            }
-        </section>
+
+                <article class="apartment-section glass-panel resident-link-section">
+                    <header class="apartment-section-header">
+                        <span class="apartment-section-icon resident-icon"><span class="material-symbols-outlined">badge</span></span>
+                        <span><h3>Hồ sơ cư dân liên kết</h3><p>Thông tin của tài khoản đang truy cập căn hộ này</p></span>
+                    </header>
+                    @if (ProfileContext.IsLoading)
+                    {
+                        <div class="profile-inline-state"><span class="material-symbols-outlined spin">progress_activity</span>Đang tải hồ sơ cư dân…</div>
+                    }
+                    else if (ProfileContext.Profile is null)
+                    {
+                        <div class="profile-inline-state profile-inline-error"><span class="material-symbols-outlined">person_off</span>Chưa tải được hồ sơ cư dân liên kết.</div>
+                    }
+                    else
+                    {
+                        <div class="resident-link-grid">
+                            <div class="resident-highlight glass-inner">
+                                <span class="apartment-resident-avatar">@Initials</span>
+                                <span class="resident-highlight-copy"><h4>@ProfileContext.Profile.FullName</h4><span class="resident-badges"><strong>@RelationshipLabel(item.Id)</strong><em><i></i>@ResidentStatusLabel</em></span><small>Mã cư dân: @ProfileContext.Profile.ResidentCode</small></span>
+                            </div>
+                            <dl class="resident-contact-grid">
+                                <div class="glass-inner"><dt>Số điện thoại</dt><dd>@DisplayText(ProfileContext.Profile.PhoneNumber)</dd><small>Kênh liên hệ chính</small></div>
+                                <div class="glass-inner"><dt>Email</dt><dd>@DisplayText(ProfileContext.Profile.Email)</dd><small>Kênh nhận thông báo</small></div>
+                                <div class="glass-inner"><dt>Giấy tờ định danh</dt><dd>@MaskedIdentity</dd><small>@DisplayText(ProfileContext.Profile.IdentityType)</small></div>
+                                <div class="glass-inner"><dt>Quan hệ căn hộ</dt><dd>@RelationshipLabel(item.Id)</dd><small>@ResidencyPeriod(item.Id)</small></div>
+                            </dl>
+                        </div>
+                        <div class="apartment-readonly-note"><span class="material-symbols-outlined">info</span><span>Thông tin căn hộ và quan hệ cư trú do Ban quản lý xác minh. Vui lòng liên hệ Ban quản lý nếu dữ liệu chưa chính xác.</span><strong>Hồ sơ chỉ đọc</strong></div>
+                    }
+                </article>
+            </section>
+        }
     }
 </main>
 
 <style>
-.resident-apartment-page{min-height:100vh;padding:28px clamp(20px,5vw,72px);background:radial-gradient(circle at 12% 12%,rgba(56,189,248,.16),transparent 30%),radial-gradient(circle at 88% 80%,rgba(99,102,241,.13),transparent 34%),#f4f8ff;color:#17233b;font-family:Inter,"Segoe UI",sans-serif}.resident-apartment-page .back{display:flex;align-items:center;gap:7px;border:0;background:transparent;color:#0284c7;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:18px}.resident-apartment-page>header{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.9);border:1px solid #d9e7f5;border-radius:24px;padding:24px 28px;box-shadow:0 18px 44px rgba(51,65,85,.08)}.title-icon{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;color:white;background:linear-gradient(135deg,#0284c7,#2563eb)}.title-icon span{font-size:28px}.resident-apartment-page h1{margin:2px 0 4px;font-size:28px}.resident-apartment-page header p{margin:0;color:#64748b}.eyebrow{color:#0284c7;font-size:12px;font-weight:800;letter-spacing:.1em}.refresh{margin-left:auto;width:44px;height:44px;border-radius:13px;border:1px solid #cfe0f1;background:#fff;color:#0284c7;cursor:pointer}.refresh:hover span{animation:resident-spin .65s linear}.apartment-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-top:22px}.apartment-grid article{background:rgba(255,255,255,.92);border:1px solid #d9e7f5;border-radius:22px;padding:24px;box-shadow:0 15px 35px rgba(51,65,85,.07)}.card-head{display:flex;align-items:center;gap:12px;padding-bottom:18px;border-bottom:1px solid #e7eef7}.card-head>span:first-child{width:44px;height:44px;border-radius:13px;background:#e0f2fe;color:#0284c7;display:grid;place-items:center}.card-head small{font-size:11px;font-weight:800;color:#0284c7;letter-spacing:.1em}.card-head h2{margin:2px 0 0;font-size:24px}.status{margin-left:auto;padding:7px 11px;border-radius:999px;font-size:12px;font-weight:700}.status.active{background:#dcfce7;color:#15803d}.status.inactive{background:#ffedd5;color:#c2410c}.apartment-grid dl{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0 0}.apartment-grid dl div{background:#f8fafc;border-radius:14px;padding:13px}.apartment-grid dt{color:#64748b;font-size:12px;margin-bottom:5px}.apartment-grid dd{margin:0;font-weight:700}.state{margin-top:22px;min-height:220px;background:rgba(255,255,255,.9);border:1px solid #d9e7f5;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#64748b}.state>span{font-size:36px;color:#0284c7}.state.error>span{color:#dc2626}.state button{border:0;border-radius:12px;background:#0284c7;color:#fff;padding:10px 18px;font-weight:700;cursor:pointer}.spin{animation:resident-spin 1s linear infinite}@@keyframes resident-spin{to{transform:rotate(360deg)}}@@media(max-width:640px){.resident-apartment-page>header{align-items:flex-start}.refresh{margin-left:0}.apartment-grid dl{grid-template-columns:1fr}}
+.resident-apartment-page{--apt-title:#0f172a;--apt-text:#334155;--apt-muted:#64748b;--apt-line:rgba(203,213,225,.62);display:grid;gap:1.5rem;min-width:0;padding:.25rem 3.5rem 2rem 0;color:var(--apt-text)}
+.apartment-page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:1.5rem}.apartment-back{display:inline-flex;align-items:center;gap:.35rem;margin:0 0 1.15rem;padding:0;border:0;color:#0284c7;background:transparent;font:750 .76rem var(--resident-font);cursor:pointer}.apartment-back:hover{color:#0369a1}.apartment-back .material-symbols-outlined{font-size:1.05rem}.apartment-page-heading nav{display:flex;align-items:center;gap:.55rem;margin-bottom:.45rem;color:#94a3b8;font-size:.65rem;font-weight:750;letter-spacing:.1em;text-transform:uppercase}.apartment-page-heading nav span{color:#0284c7}.apartment-page-heading nav i{font-style:normal}.apartment-page-heading nav strong{color:#475569}.apartment-page-heading h1{margin:0;color:var(--apt-title);font:700 clamp(1.8rem,4vw,2.65rem)/1.1 var(--resident-display);letter-spacing:-.035em}.apartment-page-heading p{max-width:46rem;margin:.6rem 0 0;color:var(--apt-muted);font-size:.8rem;line-height:1.6}.apartment-refresh{display:inline-flex;flex:none;align-items:center;gap:.45rem;padding:.7rem 1rem;border-radius:1rem;color:#0369a1;font:750 .72rem var(--resident-font);cursor:pointer}.apartment-refresh:disabled{cursor:wait;opacity:.7}.apartment-refresh .material-symbols-outlined{font-size:1.15rem}
+.apartment-overview{display:grid;gap:1rem;min-width:0}.apartment-title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem}.apartment-kicker{display:block;margin-bottom:.35rem;color:#0284c7;font-size:.66rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.apartment-title-line{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem}.apartment-title-line h2{margin:0;color:var(--apt-title);font:700 clamp(1.35rem,3vw,1.85rem)/1.2 var(--resident-display);letter-spacing:-.025em}.apartment-status,.apartment-floor-badge,.inline-status{display:inline-flex;align-items:center;gap:.4rem;border:1px solid;border-radius:999px;font-size:.65rem;font-weight:750}.apartment-status{padding:.32rem .65rem}.apartment-status i,.inline-status i{width:.42rem;height:.42rem;border-radius:50%;background:currentColor}.is-active{border-color:rgba(16,185,129,.25);color:#047857;background:rgba(209,250,229,.72)}.is-inactive{border-color:rgba(249,115,22,.24);color:#c2410c;background:rgba(255,237,213,.76)}.apartment-floor-badge{padding:.32rem .7rem;border-color:rgba(14,165,233,.2);color:#0369a1;background:rgba(224,242,254,.72)}.apartment-registry{display:flex;flex:none;align-items:center;gap:.7rem;padding:.6rem .85rem;border-radius:1rem}.apartment-registry>.material-symbols-outlined{display:grid;width:2rem;height:2rem;place-items:center;border-radius:.65rem;color:#0284c7;background:#e0f2fe;font-size:1.1rem}.apartment-registry>span:last-child{display:flex;flex-direction:column}.apartment-registry small{color:#94a3b8;font-size:.55rem;font-weight:750;letter-spacing:.08em;text-transform:uppercase}.apartment-registry strong{margin-top:.12rem;color:var(--apt-title);font:700 .72rem var(--resident-display)}
+.apartment-section{min-width:0;padding:1.4rem;border-radius:1.5rem}.apartment-section-header{display:flex;align-items:center;gap:.8rem;padding-bottom:1.15rem;border-bottom:1px solid var(--apt-line)}.apartment-section-icon{display:grid;flex:none;width:2.65rem;height:2.65rem;place-items:center;border-radius:.9rem;color:#0284c7;background:rgba(224,242,254,.85)}.apartment-section-icon .material-symbols-outlined{font-size:1.35rem}.apartment-section-icon.resident-icon{color:#4f46e5;background:rgba(224,231,255,.85)}.apartment-section-header>span:nth-child(2){min-width:0}.apartment-section-header h3{margin:0;color:var(--apt-title);font:700 1rem var(--resident-display)}.apartment-section-header p{margin:.2rem 0 0;color:var(--apt-muted);font-size:.68rem;line-height:1.4}.read-only-pill{display:inline-flex;align-items:center;gap:.3rem;margin-left:auto;padding:.35rem .6rem;border-radius:999px;color:#64748b;background:rgba(241,245,249,.86);font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase}.read-only-pill .material-symbols-outlined{font-size:.85rem}
+.apartment-spec-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin:0;padding-top:1.15rem}.apartment-spec-grid>div,.resident-contact-grid>div{display:flex;min-width:0;min-height:6.2rem;flex-direction:column;justify-content:center;padding:.9rem;border-radius:1rem}.apartment-spec-grid dt,.resident-contact-grid dt{color:#94a3b8;font-size:.58rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.apartment-spec-grid dd,.resident-contact-grid dd{overflow-wrap:anywhere;margin:.4rem 0 .2rem;color:var(--apt-title);font:700 .88rem/1.3 var(--resident-display)}.apartment-spec-grid dd em{color:var(--apt-muted);font-size:.72rem;font-style:normal}.apartment-spec-grid small,.resident-contact-grid small{color:var(--apt-muted);font-size:.61rem;line-height:1.4}.inline-status{padding:.28rem .55rem;font:750 .62rem var(--resident-font)}
+.resident-link-grid{display:grid;grid-template-columns:minmax(17rem,.85fr) minmax(0,1.4fr);gap:.85rem;padding-top:1.15rem}.resident-highlight{display:flex;align-items:center;gap:1rem;padding:1.2rem;border-radius:1rem}.apartment-resident-avatar{display:grid;flex:none;width:4rem;height:4rem;place-items:center;border-radius:1.1rem;color:#fff;background:linear-gradient(45deg,#0ea5e9,#4f46e5);box-shadow:0 10px 25px rgba(14,165,233,.2);font:700 1.15rem var(--resident-display)}.resident-highlight-copy{min-width:0}.resident-highlight h4{overflow-wrap:anywhere;margin:0;color:var(--apt-title);font:700 1rem var(--resident-display)}.resident-highlight-copy>small{display:block;margin-top:.55rem;color:var(--apt-muted);font-size:.63rem}.resident-badges{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.45rem}.resident-badges strong,.resident-badges em{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .5rem;border:1px solid rgba(14,165,233,.2);border-radius:999px;color:#0369a1;background:rgba(224,242,254,.78);font-size:.55rem;font-style:normal;font-weight:800;text-transform:uppercase}.resident-badges em{border-color:rgba(16,185,129,.2);color:#047857;background:rgba(209,250,229,.7)}.resident-badges i{width:.35rem;height:.35rem;border-radius:50%;background:#10b981}.resident-contact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin:0}.resident-contact-grid>div{min-height:0}.apartment-readonly-note{display:flex;align-items:center;gap:.55rem;margin-top:.85rem;padding:.75rem .9rem;border-radius:.8rem;color:var(--apt-muted);background:rgba(248,250,252,.72);font-size:.63rem;line-height:1.45}.apartment-readonly-note .material-symbols-outlined{flex:none;color:#0284c7;font-size:1rem}.apartment-readonly-note strong{margin-left:auto;color:#94a3b8;font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}.profile-inline-state{display:flex;align-items:center;justify-content:center;gap:.5rem;min-height:8rem;color:var(--apt-muted);font-size:.75rem}.profile-inline-state .material-symbols-outlined{color:#0284c7}.profile-inline-error{color:#b91c1c}
+.apartment-state{display:grid;min-height:18rem;place-items:center;align-content:center;gap:.55rem;padding:2rem;border-radius:1.5rem;text-align:center}.apartment-state>.material-symbols-outlined{color:#0284c7;font-size:2.5rem}.apartment-state strong{color:var(--apt-title);font-size:1rem}.apartment-state p{max-width:30rem;margin:0;color:var(--apt-muted);font-size:.75rem;line-height:1.5}.apartment-state button{margin-top:.45rem;padding:.6rem 1rem;border:0;border-radius:.75rem;color:#fff;background:#0284c7;font-weight:750;cursor:pointer}.apartment-state-error>.material-symbols-outlined{color:#dc2626}
+html.dark .resident-apartment-page,html[data-theme="dark"] .resident-apartment-page{--apt-title:#f8fafc;--apt-text:#cbd5e1;--apt-muted:#94a3b8;--apt-line:rgba(51,65,85,.8)}html.dark .apartment-page-heading nav strong,html[data-theme="dark"] .apartment-page-heading nav strong{color:#cbd5e1}html.dark .apartment-floor-badge,html[data-theme="dark"] .apartment-floor-badge{border-color:rgba(34,211,238,.25);color:#67e8f9;background:rgba(8,47,73,.72)}html.dark .is-active,html[data-theme="dark"] .is-active{border-color:rgba(52,211,153,.28);color:#6ee7b7;background:rgba(6,78,59,.48)}html.dark .is-inactive,html[data-theme="dark"] .is-inactive{border-color:rgba(251,146,60,.28);color:#fdba74;background:rgba(124,45,18,.4)}html.dark .apartment-registry>.material-symbols-outlined,html.dark .apartment-section-icon,html[data-theme="dark"] .apartment-registry>.material-symbols-outlined,html[data-theme="dark"] .apartment-section-icon{color:#67e8f9;background:rgba(8,47,73,.72)}html.dark .apartment-section-icon.resident-icon,html[data-theme="dark"] .apartment-section-icon.resident-icon{color:#a5b4fc;background:rgba(49,46,129,.35)}html.dark .read-only-pill,html[data-theme="dark"] .read-only-pill{color:#94a3b8;background:rgba(30,41,59,.78)}html.dark .resident-badges strong,html[data-theme="dark"] .resident-badges strong{border-color:rgba(34,211,238,.24);color:#67e8f9;background:rgba(8,47,73,.6)}html.dark .resident-badges em,html[data-theme="dark"] .resident-badges em{border-color:rgba(52,211,153,.24);color:#6ee7b7;background:rgba(6,78,59,.4)}html.dark .apartment-readonly-note,html[data-theme="dark"] .apartment-readonly-note{background:rgba(15,23,42,.6)}
+@@keyframes resident-apartment-spin{to{transform:rotate(360deg)}}.resident-apartment-page .spin{animation:resident-apartment-spin 1s linear infinite}
+@@media(max-width:1050px){.apartment-spec-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.resident-link-grid{grid-template-columns:1fr}.resident-highlight{min-height:7rem}}
+@@media(max-width:820px){.resident-apartment-page{padding-right:0}.apartment-page-heading{align-items:flex-start}.apartment-registry{display:none}}
+@@media(max-width:620px){.resident-apartment-page{gap:1.15rem}.apartment-page-heading{align-items:stretch;flex-direction:column}.apartment-refresh{align-self:flex-start}.apartment-title-row{align-items:flex-start}.apartment-section{padding:1rem;border-radius:1.25rem}.read-only-pill{display:none}.apartment-spec-grid,.resident-contact-grid{grid-template-columns:1fr}.apartment-spec-grid>div{min-height:5.4rem}.resident-highlight{align-items:flex-start}.apartment-readonly-note{align-items:flex-start}.apartment-readonly-note strong{display:none}}
 </style>
 
 @code {
+    [CascadingParameter] private ResidentPortalProfileContext ProfileContext { get; set; } = ResidentPortalProfileContext.Loading;
     private bool loading = true;
     private string? error;
     private IReadOnlyList<ResidentApartmentSelfItem> items = [];
+    private string Heading => items.Count == 1 ? $"Chi tiết căn hộ {items[0].UnitNumber}" : "Căn hộ của tôi";
 
     protected override Task OnInitializedAsync() => Load();
 
@@ -64,10 +132,65 @@
     {
         loading = true;
         error = null;
-        var result = await Apartments.MeAsync();
-        if (result.IsSuccess) items = result.Data ?? [];
-        else error = result.Message ?? "Không thể tải thông tin căn hộ. Vui lòng thử lại.";
-        loading = false;
+        try
+        {
+            var result = await Apartments.MeAsync();
+            if (result.IsSuccess) items = result.Data ?? [];
+            else error = result.Message ?? "Không thể tải thông tin căn hộ. Vui lòng thử lại.";
+        }
+        catch { error = "Không thể kết nối máy chủ để tải thông tin căn hộ."; }
+        finally { loading = false; }
+    }
+
+    private static bool IsActive(ResidentApartmentSelfItem item) => string.Equals(item.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase);
+    private static string StatusLabel(string status) => status.ToUpperInvariant() switch { "ACTIVE" => "Đang hoạt động", "INACTIVE" => "Ngừng hoạt động", _ => status };
+    private static string DisplayCount(int? count) => count?.ToString() ?? "Chưa cập nhật";
+    private static string DisplayDate(DateOnly? date) => date?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật";
+    private static string DisplayText(string? value) => string.IsNullOrWhiteSpace(value) ? "Chưa cập nhật" : value;
+    private static string RegistryId(ResidentApartmentSelfItem item) => $"PF-{item.Id.ToString("N")[..8].ToUpperInvariant()}";
+
+    private static string RoomSummary(ResidentApartmentSelfItem item)
+    {
+        var parts = new List<string>();
+        if (item.BedroomCount.HasValue) parts.Add($"{item.BedroomCount} phòng ngủ");
+        if (item.BathroomCount.HasValue) parts.Add($"{item.BathroomCount} phòng tắm");
+        return parts.Count == 0 ? "Chưa cập nhật số phòng" : string.Join(" • ", parts);
+    }
+
+    private string Initials
+    {
+        get
+        {
+            var words = (ProfileContext.Profile?.FullName ?? "Cư dân").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return words.Length switch { 0 => "CD", 1 => words[0][..1].ToUpperInvariant(), _ => string.Concat(words[^2][0], words[^1][0]).ToUpperInvariant() };
+        }
+    }
+
+    private string ResidentStatusLabel => ProfileContext.Profile?.Status?.ToUpperInvariant() switch { "ACTIVE" => "Đang hoạt động", "MOVED_OUT" => "Đã chuyển đi", "INACTIVE" => "Ngừng hoạt động", _ => "Chưa xác định" };
+
+    private string MaskedIdentity
+    {
+        get
+        {
+            var identity = ProfileContext.Profile?.IdentityNumber;
+            if (string.IsNullOrWhiteSpace(identity)) return "Chưa cập nhật";
+            return identity.Length <= 4 ? identity : $"••••••••{identity[^4..]}";
+        }
+    }
+
+    private string RelationshipLabel(Guid apartmentId)
+    {
+        var residency = ProfileContext.Profile?.Residencies.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.EndDate is null);
+        if (residency is not null) return residency.HouseholdRole?.ToUpperInvariant() switch { "HOUSEHOLD_HEAD" => "Chủ hộ", "HOUSEHOLD_MEMBER" => "Thành viên hộ", _ => "Cư dân" };
+        return ProfileContext.Profile?.Ownerships.Any(x => x.ApartmentUnitId == apartmentId && x.EndDate is null) == true ? "Chủ sở hữu" : "Đã liên kết";
+    }
+
+    private string ResidencyPeriod(Guid apartmentId)
+    {
+        var residency = ProfileContext.Profile?.Residencies.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.EndDate is null);
+        if (residency is not null) return $"Từ ngày {residency.StartDate:dd/MM/yyyy}";
+        var ownership = ProfileContext.Profile?.Ownerships.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.EndDate is null);
+        return ownership is null ? "Quan hệ đang hiệu lực" : $"Từ ngày {ownership.StartDate:dd/MM/yyyy}";
     }
 
     private void Back() => Navigation.NavigateTo("/resident");

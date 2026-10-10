@@ -39,6 +39,7 @@ using PropFlow.Modules.PropertyAssets.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.ListResidentServiceRequests;
+using PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
@@ -197,6 +198,8 @@ builder.Services.AddScoped<IServiceRequestSubmissionStore, ServiceRequestSubmiss
 builder.Services.AddScoped<SubmitServiceRequestHandler>();
 builder.Services.AddScoped<IResidentServiceRequestReadStore, ResidentServiceRequestReadStore>();
 builder.Services.AddScoped<ListResidentServiceRequestsHandler>();
+builder.Services.AddScoped<IResidentServiceRequestDetailStore, ResidentServiceRequestDetailStore>();
+builder.Services.AddScoped<GetResidentServiceRequestHandler>();
 builder.Services.AddScoped<IResidentServiceRequestFeedbackStore, ResidentServiceRequestFeedbackStore>();
 builder.Services.AddScoped<RateResidentServiceRequestHandler>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
