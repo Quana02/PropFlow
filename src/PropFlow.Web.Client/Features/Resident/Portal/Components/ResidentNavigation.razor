@@ -1,15 +1,72 @@
+@implements IDisposable
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <aside class="resident-floating-nav" id="floating-nav" data-purpose="vertical-navigation">
     <nav class="glass-panel" id="navContainer" aria-label="Điều hướng cổng cư dân">
         <button class="nav-drag-handle" id="navDragHandle" type="button" title="Kéo để di chuyển thanh điều hướng" aria-label="Kéo để di chuyển thanh điều hướng"><span><i></i><i></i><i></i><i></i><i></i><i></i></span></button>
-        <button class="resident-nav-button active" id="navHome" type="button" onclick="window.propFlowResident.switchTab('home')" title="Trang chủ"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="m3 12 9-9 9 9M5 10v10h5v-6h4v6h5V10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><span class="resident-nav-tooltip">Trang Chủ</span></button>
-        <button class="resident-nav-button" type="button" @onclick="OpenMyApartments" title="Căn hộ của tôi"><span class="material-symbols-outlined">apartment</span><span class="resident-nav-tooltip">Căn Hộ Của Tôi</span></button>
-        <button class="resident-nav-button" id="navProcessing" type="button" onclick="window.propFlowResident.switchTab('processing')" title="Xử lý yêu cầu"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12h14V7a2 2 0 0 0-2-2h-2M9 5a3 3 0 0 0 6 0m-7 9 2 2 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><span class="resident-nav-tooltip">Xử Lý Yêu Cầu</span></button>
-        <button class="resident-nav-button" id="navNotifications" type="button" onclick="window.propFlowResident.switchTab('notifications')" title="Thông báo"><span class="notification-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.7V5a2 2 0 1 0-4 0v.3A6 6 0 0 0 6 11v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><i></i></span><span class="resident-nav-tooltip">Thông Báo Tòa Nhà</span></button>
+        <button class="@NavClass("home")" id="navHome" type="button" aria-current="@AriaCurrent("home")" @onclick='() => GoToTabAsync("home")' title="Trang chủ"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="m3 12 9-9 9 9M5 10v10h5v-6h4v6h5V10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><span class="resident-nav-tooltip">Trang Chủ</span></button>
+        <button class="@NavClass("apartment")" id="navApartment" type="button" aria-current="@AriaCurrent("apartment")" @onclick="OpenMyApartments" title="Căn hộ của tôi"><span class="material-symbols-outlined">apartment</span><span class="resident-nav-tooltip">Căn Hộ Của Tôi</span></button>
+        <button class="@NavClass("processing")" id="navProcessing" type="button" aria-current="@AriaCurrent("processing")" @onclick='() => GoToTabAsync("processing")' title="Xử lý yêu cầu"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12h14V7a2 2 0 0 0-2-2h-2M9 5a3 3 0 0 0 6 0m-7 9 2 2 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><span class="resident-nav-tooltip">Xử Lý Yêu Cầu</span></button>
+        <button class="@NavClass("notifications")" id="navNotifications" type="button" aria-current="@AriaCurrent("notifications")" @onclick='() => GoToTabAsync("notifications")' title="Thông báo"><span class="notification-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.7V5a2 2 0 1 0-4 0v.3A6 6 0 0 0 6 11v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><i></i></span><span class="resident-nav-tooltip">Thông Báo Tòa Nhà</span></button>
     </nav>
 </aside>
 
 @code {
-    private void OpenMyApartments() => Navigation.NavigateTo("/resident/apartment");
+    private string _activeDestination = "home";
+
+    protected override void OnInitialized()
+    {
+        SetActiveDestination(Navigation.Uri);
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    private string NavClass(string destination) =>
+        $"resident-nav-button{(_activeDestination == destination ? " active" : string.Empty)}";
+
+    private string? AriaCurrent(string destination) =>
+        _activeDestination == destination ? "page" : null;
+
+    private async Task GoToTabAsync(string tab)
+    {
+        _activeDestination = tab;
+        var currentPath = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+        if (currentPath.Equals("/resident", StringComparison.OrdinalIgnoreCase))
+        {
+            await JS.InvokeVoidAsync("propFlowResident.switchTab", tab);
+            return;
+        }
+
+        var target = tab == "home" ? "/resident" : $"/resident?tab={tab}";
+        Navigation.NavigateTo(target);
+    }
+
+    private void OpenMyApartments()
+    {
+        _activeDestination = "apartment";
+        Navigation.NavigateTo("/resident/apartment");
+    }
+
+    private void HandleLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        SetActiveDestination(args.Location);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void SetActiveDestination(string location)
+    {
+        var uri = Navigation.ToAbsoluteUri(location);
+        var path = uri.AbsolutePath.TrimEnd('/');
+        if (path.Equals("/resident/apartment", StringComparison.OrdinalIgnoreCase))
+            _activeDestination = "apartment";
+        else if (path.StartsWith("/resident/service-requests", StringComparison.OrdinalIgnoreCase) ||
+                 uri.Query.Contains("tab=processing", StringComparison.OrdinalIgnoreCase))
+            _activeDestination = "processing";
+        else if (uri.Query.Contains("tab=notifications", StringComparison.OrdinalIgnoreCase))
+            _activeDestination = "notifications";
+        else
+            _activeDestination = "home";
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
 }

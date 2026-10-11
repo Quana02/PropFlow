@@ -3,6 +3,8 @@
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
 @inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
 @inject PropFlow.Web.Client.Features.Resident.Portal.Services.IResidentServiceRequestApiClient ServiceRequests
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 @using PropFlow.Web.Client.Features.Resident.Portal.Components
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 @using PropFlow.Modules.ServiceRequests.Contracts
@@ -13,13 +15,42 @@
     <div class="resident-greeting glass-panel"><span>👋</span><strong>Xin chào buổi sáng, @DisplayName</strong><i></i></div>
     <div class="resident-clock" data-purpose="digital-clock"><span id="clockTime">--:--</span><small id="clockPeriod">--</small></div>
     <p id="clockDate" class="resident-date">Đang cập nhật ngày giờ…</p>
-    <div class="resident-search-wrap">
+    <div class="resident-search-wrap" @onfocusin="ShowSearchResults" @onfocusout="HideSearchResults">
         <label class="resident-search glass-panel">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg>
             <span class="sr-only">Tìm kiếm</span>
-            <input id="residentSearch" type="search" placeholder="Tìm kiếm dịch vụ, tiện ích, hóa đơn, thông báo ban quản lý... (Ctrl + K)" />
+            <input id="residentSearch" type="search" role="combobox" autocomplete="off"
+                   placeholder="Tìm dịch vụ sửa chữa, vệ sinh, đăng ký xe... (Ctrl + K)"
+                   aria-autocomplete="list" aria-controls="residentSearchSuggestions"
+                   aria-expanded="@ShowCatalogSuggestions" aria-activedescendant="@ActiveSearchOptionId"
+                   @bind="_catalogSearch" @bind:event="oninput" @onkeydown="HandleCatalogSearchKeyDown" />
             <kbd>Ctrl K</kbd>
         </label>
+        @if (ShowCatalogSuggestions)
+        {
+            <section class="resident-search-suggestions glass-panel" id="residentSearchSuggestions" role="listbox" aria-label="Dịch vụ phù hợp">
+                @if (SearchResults.Count == 0)
+                {
+                    <div class="resident-search-empty">Không tìm thấy dịch vụ phù hợp.</div>
+                }
+                else
+                {
+                    @for (var index = 0; index < SearchResults.Count; index++)
+                    {
+                        var resultIndex = index;
+                        var service = SearchResults[index];
+                        <button id="@SearchOptionId(resultIndex)" class="@(resultIndex == _activeSearchIndex ? "active" : null)" type="button" role="option"
+                                aria-selected="@(resultIndex == _activeSearchIndex)"
+                                @onmouseenter="() => _activeSearchIndex = resultIndex"
+                                @onmousedown="() => OpenSearchResult(service)" @onmousedown:preventDefault>
+                            <span class="service-icon @service.Accent">@service.Icon</span>
+                            <span><strong>@service.Title</strong><small>@service.Description</small></span>
+                            <em>Chọn</em>
+                        </button>
+                    }
+                }
+            </section>
+        }
     </div>
 </section>
 
@@ -59,14 +90,10 @@
                 <div>
                     <header class="card-heading"><span><h2>Danh mục dịch vụ căn hộ</h2><small>Tiện ích cư dân 1 chạm</small></span><em class="badge badge-neutral">8 Dịch vụ</em></header>
                     <div class="resident-service-grid">
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("REPAIR", "Sửa chữa kỹ thuật")'><span class="service-icon sky">🔧</span><strong>Sửa chữa</strong></button>
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("CLEANING", "Vệ sinh định kỳ")'><span class="service-icon green">🧹</span><strong>Vệ sinh</strong></button>
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("VISITOR", "Khách thăm căn hộ")'><span class="service-icon indigo">🛡️</span><strong>Khách thăm</strong></button>
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("VEHICLE", "Đăng ký thẻ xe")'><span class="service-icon amber">🚗</span><strong>Đăng ký xe</strong></button>
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("MOVING", "Chuyển đồ / Chuyển nhà")'><span class="service-icon purple">📦</span><strong>Chuyển đồ</strong></button>
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("CONSTRUCTION", "Đăng ký thi công nội thất")'><span class="service-icon rose">🔨</span><strong>Thi công</strong></button>
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("BILLING", "Hóa đơn và thanh toán")'><span class="service-icon teal">💳</span><strong>Hóa đơn</strong></button>
-                        <button class="service-btn glass-inner" type="button" @onclick='() => OpenService("OTHER", "Yêu cầu hỗ trợ Ban Quản Lý")'><span class="service-icon cyan">💬</span><strong>Hotline BQL</strong></button>
+                        @foreach (var service in ServiceCatalog)
+                        {
+                            <button class="service-btn glass-inner" type="button" @onclick="() => OpenSearchResult(service)"><span class="service-icon @service.Accent">@service.Icon</span><strong>@service.ShortTitle</strong></button>
+                        }
                     </div>
                 </div>
                 <footer class="service-card-footer"><span><i></i>Tổng đài hỗ trợ trực tuyến 24/7</span><strong>1900 8899</strong></footer>
@@ -89,15 +116,42 @@
     <div class="resident-tab-panel" id="tabProcessingContent" hidden>
         <article class="resident-detail-panel glass-panel">
             <header class="detail-heading"><span><h2>📋 Chi tiết yêu cầu dịch vụ kỹ thuật &amp; tiện ích</h2><p>Theo dõi tiến độ, phân công nhân sự và phản hồi đánh giá trực tiếp</p></span><button class="resident-primary-action" type="button" @onclick='() => OpenService("OTHER", "Đăng ký hỗ trợ mới")'>+ Đăng ký hỗ trợ mới</button></header>
-            <div class="filter-chips"><button class="active" type="button">Tất cả (@_requests.Count)</button><button type="button">Chờ xử lý (@WaitingRequestCount)</button><button type="button">Đang thi công (@InProgressRequestCount)</button><button type="button">Đã hoàn tất (@CompletedRequestCount)</button></div>
-            <div class="detail-list">
-                @if (_requests.Count == 0)
+            <div class="request-filter-toolbar" aria-label="Tìm kiếm và lọc yêu cầu cá nhân">
+                <label class="request-filter-search">
+                    <span class="sr-only">Tìm theo mã đơn hoặc tiêu đề</span>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg>
+                    <input type="search" placeholder="Tìm theo mã đơn hoặc tiêu đề..." @bind="_requestSearch" @bind:event="oninput" @onkeydown="HandleRequestFilterKeyDown" />
+                </label>
+                <label class="request-filter-date"><span>Từ ngày</span><input type="date" @bind="_requestFromDate" /></label>
+                <label class="request-filter-date"><span>Đến ngày</span><input type="date" @bind="_requestToDate" /></label>
+                <button class="request-filter-apply" type="button" disabled="@_loadingRequests" @onclick="ApplyRequestFiltersAsync">Lọc</button>
+                @if (HasRequestQuery)
                 {
-                    <div class="resident-request-state">Chưa có yêu cầu để theo dõi.</div>
+                    <button class="request-filter-clear" type="button" disabled="@_loadingRequests" @onclick="ClearRequestFiltersAsync">Xóa lọc</button>
+                }
+            </div>
+            <div class="filter-chips" role="group" aria-label="Lọc yêu cầu theo trạng thái">
+                <button class="@RequestFilterClass(RequestFilter.All)" type="button" aria-pressed="@(_requestFilter == RequestFilter.All)" @onclick="() => SelectRequestFilter(RequestFilter.All)">Tất cả (@_requests.Count)</button>
+                <button class="@RequestFilterClass(RequestFilter.Waiting)" type="button" aria-pressed="@(_requestFilter == RequestFilter.Waiting)" @onclick="() => SelectRequestFilter(RequestFilter.Waiting)">Chờ xử lý (@WaitingRequestCount)</button>
+                <button class="@RequestFilterClass(RequestFilter.InProgress)" type="button" aria-pressed="@(_requestFilter == RequestFilter.InProgress)" @onclick="() => SelectRequestFilter(RequestFilter.InProgress)">Đang thi công (@InProgressRequestCount)</button>
+                <button class="@RequestFilterClass(RequestFilter.Completed)" type="button" aria-pressed="@(_requestFilter == RequestFilter.Completed)" @onclick="() => SelectRequestFilter(RequestFilter.Completed)">Đã hoàn tất (@CompletedRequestCount)</button>
+            </div>
+            <div class="detail-list">
+                @if (_loadingRequests)
+                {
+                    <div class="resident-request-state">Đang tải yêu cầu…</div>
+                }
+                else if (!string.IsNullOrWhiteSpace(_requestError))
+                {
+                    <div class="resident-request-state error" role="alert">@_requestError</div>
+                }
+                else if (!FilteredRequests.Any())
+                {
+                    <div class="resident-request-state">@FilterEmptyMessage</div>
                 }
                 else
                 {
-                    @foreach (var request in _requests)
+                    @foreach (var request in FilteredRequests)
                     {
                         <button class="glass-inner detail-row resident-request-detail-button" type="button" @onclick="() => OpenRequest(request)"><span class="detail-symbol @StatusSymbolClass(request.Status)">@CategoryIcon(request.CategoryCode)</span><span class="detail-copy"><span><em>#@request.RequestNumber</em><strong>@request.Title</strong></span><p>@RequestContext(request)</p><small>Gửi lúc: <b>@FormatSubmittedAt(request.SubmittedAt)</b>@PreferredSchedule(request)</small></span><em class="badge @StatusBadgeClass(request.Status)">@StatusLabel(request.Status)</em></button>
                     }
@@ -141,14 +195,47 @@
     private IReadOnlyList<ResidentServiceRequestListItem> _requests = [];
     private string? _requestError;
     private bool _loadingRequests = true;
+    private RequestFilter _requestFilter = RequestFilter.All;
+    private string? _requestSearch;
+    private DateOnly? _requestFromDate;
+    private DateOnly? _requestToDate;
+    private string? _catalogSearch;
+    private bool _catalogSearchFocused;
+    private int _activeSearchIndex;
+
+    private static readonly IReadOnlyList<ResidentServiceSearchItem> ServiceCatalog =
+    [
+        new("REPAIR", "Sửa chữa kỹ thuật", "Sửa chữa", "Điện, nước và thiết bị trong căn hộ", "🔧", "sky", ["hỏng", "điện", "nước", "vòi", "ống", "kỹ thuật"]),
+        new("CLEANING", "Vệ sinh định kỳ", "Vệ sinh", "Vệ sinh căn hộ và khu vực sinh hoạt", "🧹", "green", ["dọn dẹp", "lau dọn", "làm sạch"]),
+        new("VISITOR", "Khách thăm căn hộ", "Khách thăm", "Đăng ký khách ra vào tòa nhà", "🛡️", "indigo", ["khách", "ra vào", "bảo vệ", "an ninh"]),
+        new("VEHICLE", "Đăng ký thẻ xe", "Đăng ký xe", "Đăng ký phương tiện và thẻ gửi xe", "🚗", "amber", ["xe", "ô tô", "xe máy", "bãi xe", "thẻ xe"]),
+        new("MOVING", "Chuyển đồ / Chuyển nhà", "Chuyển đồ", "Đăng ký vận chuyển đồ qua tòa nhà", "📦", "purple", ["chuyển nhà", "vận chuyển", "thang hàng"]),
+        new("CONSTRUCTION", "Đăng ký thi công nội thất", "Thi công", "Đăng ký sửa chữa và thi công căn hộ", "🔨", "rose", ["nội thất", "cải tạo", "khoan", "xây dựng"]),
+        new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "💳", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
+        new("OTHER", "Yêu cầu hỗ trợ Ban Quản Lý", "Hotline BQL", "Gửi yêu cầu hỗ trợ khác đến Ban Quản Lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "khác"])
+    ];
 
     protected override async Task OnInitializedAsync() => await LoadRequestsAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var query = new Uri(Navigation.Uri).Query;
+        if (query.Contains("tab=processing", StringComparison.OrdinalIgnoreCase))
+            await JS.InvokeVoidAsync("propFlowResident.switchTab", "processing", false);
+        else if (query.Contains("tab=notifications", StringComparison.OrdinalIgnoreCase))
+            await JS.InvokeVoidAsync("propFlowResident.switchTab", "notifications", false);
+    }
 
     private async Task LoadRequestsAsync()
     {
         _loadingRequests = true;
         _requestError = null;
-        var result = await ServiceRequests.ListAsync();
+        var result = await ServiceRequests.ListAsync(new ResidentServiceRequestListQuery(
+            _requestSearch,
+            FromDate: _requestFromDate,
+            ToDate: _requestToDate));
         if (result.IsSuccess)
             _requests = result.Data ?? [];
         else
@@ -158,15 +245,134 @@
 
     private async Task HandleRequestCreatedAsync(ResidentServiceRequestCreatedResponse _) => await LoadRequestsAsync();
 
+    private async Task ApplyRequestFiltersAsync()
+    {
+        if (_requestFromDate.HasValue && _requestToDate.HasValue && _requestFromDate > _requestToDate)
+        {
+            _requestError = "Ngày bắt đầu không được sau ngày kết thúc.";
+            return;
+        }
+
+        await LoadRequestsAsync();
+    }
+
+    private async Task ClearRequestFiltersAsync()
+    {
+        _requestSearch = null;
+        _requestFromDate = null;
+        _requestToDate = null;
+        _requestFilter = RequestFilter.All;
+        await LoadRequestsAsync();
+    }
+
+    private async Task HandleRequestFilterKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !_loadingRequests)
+            await ApplyRequestFiltersAsync();
+    }
+
     private void OpenService(string categoryCode, string title) =>
         _serviceRequestModal?.Open(categoryCode, title);
-    private void OpenRequest(ResidentServiceRequestListItem request) => _requestDetailModal?.Open(request);
+
+    private IReadOnlyList<ResidentServiceSearchItem> SearchResults
+    {
+        get
+        {
+            var query = NormalizeSearch(_catalogSearch);
+            if (query.Length == 0) return [];
+
+            return ServiceCatalog
+                .Where(service => SearchText(service).Contains(query, StringComparison.Ordinal))
+                .OrderBy(service => NormalizeSearch(service.Title).StartsWith(query, StringComparison.Ordinal) ? 0 : 1)
+                .ThenBy(service => service.Title)
+                .Take(6)
+                .ToArray();
+        }
+    }
+
+    private bool ShowCatalogSuggestions => _catalogSearchFocused && !string.IsNullOrWhiteSpace(_catalogSearch);
+    private string? ActiveSearchOptionId => SearchResults.Count == 0 ? null : SearchOptionId(Math.Clamp(_activeSearchIndex, 0, SearchResults.Count - 1));
+    private static string SearchOptionId(int index) => $"residentSearchOption{index}";
+
+    private void ShowSearchResults()
+    {
+        _catalogSearchFocused = true;
+        _activeSearchIndex = 0;
+    }
+
+    private void HideSearchResults() => _catalogSearchFocused = false;
+
+    private void OpenSearchResult(ResidentServiceSearchItem service)
+    {
+        _catalogSearch = null;
+        _catalogSearchFocused = false;
+        _activeSearchIndex = 0;
+        OpenService(service.CategoryCode, service.Title);
+    }
+
+    private void HandleCatalogSearchKeyDown(KeyboardEventArgs args)
+    {
+        var results = SearchResults;
+        if (args.Key == "Escape")
+        {
+            _catalogSearchFocused = false;
+            return;
+        }
+        if (results.Count == 0) return;
+
+        if (args.Key == "ArrowDown")
+            _activeSearchIndex = (_activeSearchIndex + 1) % results.Count;
+        else if (args.Key == "ArrowUp")
+            _activeSearchIndex = (_activeSearchIndex - 1 + results.Count) % results.Count;
+        else if (args.Key == "Enter")
+            OpenSearchResult(results[Math.Clamp(_activeSearchIndex, 0, results.Count - 1)]);
+    }
+
+    private static string SearchText(ResidentServiceSearchItem service) =>
+        NormalizeSearch(string.Join(' ', new[] { service.Title, service.ShortTitle, service.Description }.Concat(service.Keywords)));
+
+    private static string NormalizeSearch(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+
+        var decomposed = value.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        return new string(decomposed
+            .Where(character => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(character) != System.Globalization.UnicodeCategory.NonSpacingMark)
+            .ToArray())
+            .Normalize(System.Text.NormalizationForm.FormC)
+            .Replace('đ', 'd');
+    }
+    private async Task OpenRequest(ResidentServiceRequestListItem request)
+    {
+        if (_requestDetailModal is not null)
+            await _requestDetailModal.OpenAsync(request.Id);
+    }
     private string DisplayName => ProfileContext.Profile?.FullName ?? Session.User?.DisplayName ?? "Cư dân";
     private string Initials => string.Concat(DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => x[0])).ToUpperInvariant();
     private int CompletedRequestCount => _requests.Count(request => request.Status is "RESOLVED" or "CLOSED");
     private int WaitingRequestCount => _requests.Count(request => request.Status is "SUBMITTED" or "UNDER_REVIEW");
     private int InProgressRequestCount => _requests.Count(request => request.Status is "ASSIGNED" or "IN_PROGRESS");
     private string ProgressStyle => $"width: {(_requests.Count == 0 ? 0 : CompletedRequestCount * 100 / _requests.Count)}%";
+    private IEnumerable<ResidentServiceRequestListItem> FilteredRequests => _requestFilter switch
+    {
+        RequestFilter.Waiting => _requests.Where(request => request.Status is "SUBMITTED" or "UNDER_REVIEW"),
+        RequestFilter.InProgress => _requests.Where(request => request.Status is "ASSIGNED" or "IN_PROGRESS"),
+        RequestFilter.Completed => _requests.Where(request => request.Status is "RESOLVED" or "CLOSED"),
+        _ => _requests
+    };
+    private string FilterEmptyMessage => _requestFilter switch
+    {
+        RequestFilter.Waiting => "Không có yêu cầu nào đang chờ xử lý.",
+        RequestFilter.InProgress => "Không có yêu cầu nào đang thi công.",
+        RequestFilter.Completed => "Không có yêu cầu nào đã hoàn tất.",
+        _ when HasRequestQuery => "Không tìm thấy yêu cầu phù hợp với điều kiện lọc.",
+        _ => "Chưa có yêu cầu để theo dõi."
+    };
+    private bool HasRequestQuery =>
+        !string.IsNullOrWhiteSpace(_requestSearch) || _requestFromDate.HasValue || _requestToDate.HasValue;
+
+    private void SelectRequestFilter(RequestFilter filter) => _requestFilter = filter;
+    private string RequestFilterClass(RequestFilter filter) => _requestFilter == filter ? "active" : string.Empty;
 
     private static string StatusLabel(string status) => status switch
     {
@@ -208,4 +414,21 @@
         ? $" • Hẹn: {date:dd/MM/yyyy}{(string.IsNullOrWhiteSpace(request.PreferredTimeCode) ? string.Empty : $" ({request.PreferredTimeCode})")}" : string.Empty;
 
     private static string FormatSubmittedAt(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+
+    private enum RequestFilter
+    {
+        All,
+        Waiting,
+        InProgress,
+        Completed
+    }
+
+    private sealed record ResidentServiceSearchItem(
+        string CategoryCode,
+        string Title,
+        string ShortTitle,
+        string Description,
+        string Icon,
+        string Accent,
+        IReadOnlyList<string> Keywords);
 }

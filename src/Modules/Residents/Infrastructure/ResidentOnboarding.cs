@@ -25,6 +25,7 @@ public sealed class ResidentOnboarding(
                 && r.IdentityType != null && r.IdentityType.Trim().ToUpper() == identityType
                 && r.IdentityNumber != null && r.IdentityNumber == normalizedIdentityNumber)
             .Select(r => new { r.Id, r.UserId, r.Status, r.Email, r.PhoneNumber, r.IdentityType, r.IdentityNumber })
+            .OrderBy(r => r.Id)
             .Take(2).ToListAsync(ct);
         if (matches.Count != 1 || matches[0].UserId != null || matches[0].Status != ResidentStatus.ACTIVE) return null;
         var match = matches[0];

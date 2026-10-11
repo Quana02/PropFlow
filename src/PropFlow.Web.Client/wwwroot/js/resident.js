@@ -1445,12 +1445,14 @@
                     tab === "home"
                         ? "/resident"
                         : tab === "processing"
-                            ? "/resident/service-requests"
+                            ? "/resident?tab=processing"
                             : "/resident?tab=notifications";
 
-                global.location.assign(
-                    target
-                );
+                if (global.Blazor?.navigateTo) {
+                    global.Blazor.navigateTo(target);
+                } else {
+                    global.location.assign(target);
+                }
 
                 return;
             }
