@@ -1,0 +1,229 @@
+@page "/manager/service-requests/{Id:guid}"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.IManagerServiceRequestApiClient Api
+
+<PageTitle>Chi tiết yêu cầu dịch vụ - PropFlow</PageTitle>
+
+<div class="manager-request-page">
+    <nav class="request-breadcrumb" aria-label="Đường dẫn">
+        <a href="/">Vận hành</a><span>/</span><a href="/manager/service-requests">Yêu cầu dịch vụ</a><span>/</span><strong>Chi tiết phiếu</strong>
+    </nav>
+
+    <section class="request-hero" aria-labelledby="manager-request-title">
+        <div class="hero-copy">
+            <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>FE-05.5 · Manager workspace</div>
+            <div class="hero-title-row">
+                <h1 id="manager-request-title">Chi tiết phiếu dịch vụ</h1>
+                <span class="status-badge status-progress"><i></i>@StatusLabel(detail?.Status)</span>
+            </div>
+            <p>Theo dõi tiếp nhận, điều phối nhân sự và liên kết công việc bảo trì trong một không gian quản lý.</p>
+        </div>
+        <div class="hero-actions">
+            <span class="request-code"><span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>@(detail?.RequestNumber ?? "Đang tải…")</span>
+            <button class="secondary-action" type="button" @onclick="ToggleNotePanel"><span class="material-symbols-outlined" aria-hidden="true">edit_note</span>Ghi chú nội bộ</button>
+            @if (detail?.Status == "SUBMITTED")
+            {
+                <button class="primary-action" disabled="@reviewing" type="button" @onclick="ReviewAsync"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span>@(reviewing ? "Đang tiếp nhận…" : "Tiếp nhận yêu cầu")</button>
+            }
+            else
+            {
+                <button class="primary-action" type="button" @onclick="ToggleAssignPanel"><span class="material-symbols-outlined" aria-hidden="true">person_add</span>Phân công</button>
+            }
+        </div>
+    </section>
+
+    <section class="signal-strip" aria-label="Tóm tắt xử lý">
+        <article><span class="signal-icon sky"><span class="material-symbols-outlined">schedule</span></span><div><small>Thời gian từ khi gửi</small><strong>@ElapsedLabel()</strong></div></article>
+        <article><span class="signal-icon amber"><span class="material-symbols-outlined">priority_high</span></span><div><small>Mức ưu tiên</small><strong>@PriorityLabel(detail?.PriorityCode)</strong></div></article>
+        <article><span class="signal-icon emerald"><span class="material-symbols-outlined">engineering</span></span><div><small>Nhân sự phụ trách</small><strong>@(detail?.AssignedStaffUserId is null ? "Chưa phân công" : "Đã phân công")</strong></div></article>
+        <article><span class="signal-icon violet"><span class="material-symbols-outlined">build_circle</span></span><div><small>Liên kết bảo trì</small><strong>@(detail?.AiInsight?.MaintenanceRecommended == true ? "AI đề xuất bảo trì" : "Chưa có đề xuất")</strong></div></article>
+    </section>
+
+    <div class="request-workspace">
+        <div class="request-main-column">
+            <section class="glass-card request-overview" aria-labelledby="request-information-title">
+                <header class="card-header">
+                    <div class="card-heading">
+                        <span class="card-icon"><span class="material-symbols-outlined">assignment</span></span>
+                        <div><h2 id="request-information-title">Thông tin yêu cầu</h2><p>Dữ liệu cư dân cung cấp tại thời điểm gửi phiếu</p></div>
+                    </div>
+                    <span class="classification-chip">@(detail?.CategoryCode ?? "CHƯA PHÂN LOẠI")</span>
+                </header>
+
+                <div class="request-title-block">
+                    <small>Tiêu đề yêu cầu</small>
+                    <strong>@(detail?.Title ?? "Đang tải dữ liệu yêu cầu…")</strong>
+                    <span><span class="material-symbols-outlined">location_on</span>@LocationLabel()</span>
+                </div>
+
+                <dl class="fact-grid">
+                    <div><dt>Hạng mục dịch vụ</dt><dd>@(detail?.CategoryName ?? "Chưa phân loại")</dd></div>
+                    <div><dt>Cư dân gửi yêu cầu</dt><dd>@(detail?.ResidentName ?? "Chưa xác định")</dd></div>
+                    <div><dt>Thời gian tiếp nhận</dt><dd>@SubmittedLabel()</dd></div>
+                    <div><dt>Khung giờ thuận tiện</dt><dd>@PreferredTimeLabel()</dd></div>
+                    <div><dt>Thiết bị liên quan</dt><dd>@(detail?.Equipment?.Name ?? "Không có")</dd></div>
+                    <div><dt>Kênh tiếp nhận</dt><dd>Resident Portal</dd></div>
+                </dl>
+
+                <div class="description-block">
+                    <div><span class="material-symbols-outlined">subject</span><strong>Mô tả hiện trạng</strong></div>
+                    <p>@(detail?.Description ?? "Đang tải mô tả…")</p>
+                </div>
+            </section>
+
+            <section class="glass-card resident-card" aria-labelledby="resident-context-title">
+                <header class="card-header">
+                    <div class="card-heading">
+                        <span class="card-icon emerald-icon"><span class="material-symbols-outlined">person_pin_circle</span></span>
+                        <div><h2 id="resident-context-title">Cư dân &amp; địa điểm phục vụ</h2><p>Thông tin liên hệ phục vụ điều phối</p></div>
+                    </div>
+                    <span class="verified-chip"><span class="material-symbols-outlined">verified</span>Đã xác minh</span>
+                </header>
+                <div class="resident-content">
+                    <div class="resident-profile">
+                        <span class="resident-avatar">@Initials(detail?.ResidentName)</span>
+                        <div><strong>@(detail?.ResidentName ?? "Chưa xác định")</strong><p>@(detail?.ResidentCode ?? "Chưa có mã cư dân")</p><span>Thông tin liên hệ được bảo vệ</span></div>
+                    </div>
+                    <div class="location-summary">
+                        <span class="material-symbols-outlined">apartment</span>
+                        <div><small>Căn hộ thụ hưởng</small><strong>@LocationLabel()</strong><p>@(detail?.Facility?.Name ?? "Theo thông tin yêu cầu")</p></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="glass-card evidence-card" aria-labelledby="evidence-title">
+                <header class="card-header">
+                    <div class="card-heading">
+                        <span class="card-icon amber-icon"><span class="material-symbols-outlined">photo_library</span></span>
+                        <div><h2 id="evidence-title">Ảnh hiện trường</h2><p>Tệp đính kèm của yêu cầu</p></div>
+                    </div>
+                </header>
+                <div class="evidence-grid">
+                    <p>Service Request hiện chưa có contract tệp đính kèm, nên không hiển thị dữ liệu ảnh giả.</p>
+                </div>
+            </section>
+
+            <section class="manager-action-card" aria-labelledby="manager-actions-title">
+                <div>
+                    <span class="manager-action-symbol"><span class="material-symbols-outlined">hub</span></span>
+                <div><h2 id="manager-actions-title">Điều phối xử lý</h2><p>FE-05.5 hỗ trợ Manager tiếp nhận và xem xét; phân công và tạo Maintenance Task thuộc bước tiếp theo.</p></div>
+                </div>
+                <div class="manager-action-buttons">
+                    <button type="button" class="outline-action" @onclick="ToggleAssignPanel"><span class="material-symbols-outlined">groups</span>Đổi người phụ trách</button>
+                    <button type="button" class="maintenance-action" @onclick="ShowUiNotice"><span class="material-symbols-outlined">add_task</span>Tạo Maintenance Task</button>
+                </div>
+                @if (showUiNotice)
+                {
+                    <p class="ui-notice" role="status"><span class="material-symbols-outlined">info</span>@noticeMessage</p>
+                }
+            </section>
+        </div>
+
+        <aside class="request-side-column">
+            <section class="glass-card timeline-card" aria-labelledby="timeline-title">
+                <header class="card-header compact-header">
+                    <div><h2 id="timeline-title">Tiến độ xử lý</h2><p>Lịch sử được ghi trong database</p></div>
+                    <span class="step-chip">@(detail?.Activities.Count ?? 0) cập nhật</span>
+                </header>
+                <ol class="timeline">
+                    @foreach (var activity in detail?.Activities ?? [])
+                    {
+                        <li class="is-complete"><span class="timeline-node"><span class="material-symbols-outlined">check</span></span><div><header><strong>@ActivityLabel(activity.ActivityType)</strong><time>@activity.CreatedAt.ToLocalTime().ToString("HH:mm")</time></header><p>@(activity.Detail ?? StatusTransition(activity.FromStatus, activity.ToStatus))</p><small>@activity.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></div></li>
+                    }
+                </ol>
+            </section>
+
+            <section class="glass-card assignee-card" aria-labelledby="assignee-title">
+                <header class="card-header compact-header"><div><h2 id="assignee-title">Nhân sự phụ trách</h2><p>Trạng thái phân công hiện tại</p></div></header>
+                <div class="assignee-profile">
+                    <span class="assignee-avatar">@(detail?.AssignedStaffUserId is null ? "?" : "✓")<i></i></span>
+                    <div><strong>@(detail?.AssignedStaffUserId is null ? "Chưa phân công" : "Đã phân công nhân sự")</strong><p>@(detail?.AssignedStaffUserId?.ToString() ?? "FE-05.7 sẽ đảm nhiệm thao tác này")</p></div>
+                </div>
+            </section>
+
+            <section class="glass-card manager-note-card" aria-labelledby="latest-note-title">
+                <header><span class="material-symbols-outlined">sticky_note_2</span><h2 id="latest-note-title">Ghi chú gần nhất</h2></header>
+                <blockquote>“@(LatestActivity()?.Detail ?? "Chưa có ghi chú nội bộ.")”</blockquote>
+                <footer><span>Dữ liệu lịch sử yêu cầu</span><time>@(LatestActivity()?.CreatedAt.ToLocalTime().ToString("HH:mm · dd/MM/yyyy") ?? "—")</time></footer>
+            </section>
+        </aside>
+    </div>
+</div>
+
+@if (showAssignPanel)
+{
+    <div class="dialog-backdrop" @onclick="ToggleAssignPanel">
+        <section class="manager-dialog" role="dialog" aria-modal="true" aria-labelledby="assign-dialog-title" @onclick:stopPropagation="true">
+            <header><div><span class="dialog-icon"><span class="material-symbols-outlined">person_add</span></span><div><h2 id="assign-dialog-title">Phân công nhân sự</h2><p>Chọn kỹ thuật viên phù hợp cho phiếu #SR-2026-0842</p></div></div><button type="button" aria-label="Đóng" @onclick="ToggleAssignPanel"><span class="material-symbols-outlined">close</span></button></header>
+            <div class="dialog-search"><span class="material-symbols-outlined">search</span><input aria-label="Tìm nhân sự" placeholder="Tìm theo tên hoặc chuyên môn…" /></div>
+            <div class="staff-options">
+                <button type="button" class="is-selected"><span class="staff-initial">LT</span><span><strong>Lê Minh Tuấn</strong><small>Kỹ thuật M&amp;E · Đang xử lý 2 việc</small></span><span class="material-symbols-outlined">check_circle</span></button>
+                <button type="button"><span class="staff-initial violet-avatar">QH</span><span><strong>Phạm Quốc Huy</strong><small>Điện nước · Sẵn sàng</small></span><span class="availability">Sẵn sàng</span></button>
+                <button type="button"><span class="staff-initial amber-avatar">NV</span><span><strong>Nguyễn Văn Vũ</strong><small>Kỹ thuật tổng hợp · Đang xử lý 1 việc</small></span><span class="availability">12 phút</span></button>
+            </div>
+            <footer><button type="button" class="dialog-cancel" @onclick="ToggleAssignPanel">Hủy</button><button type="button" class="dialog-confirm" @onclick="ConfirmUiAssignment">Xác nhận phân công</button></footer>
+        </section>
+    </div>
+}
+
+@if (showNotePanel)
+{
+    <div class="dialog-backdrop" @onclick="ToggleNotePanel">
+        <section class="manager-dialog note-dialog" role="dialog" aria-modal="true" aria-labelledby="note-dialog-title" @onclick:stopPropagation="true">
+            <header><div><span class="dialog-icon note-icon"><span class="material-symbols-outlined">edit_note</span></span><div><h2 id="note-dialog-title">Thêm ghi chú nội bộ</h2><p>Chỉ Manager và Staff được phân công có thể xem.</p></div></div><button type="button" aria-label="Đóng" @onclick="ToggleNotePanel"><span class="material-symbols-outlined">close</span></button></header>
+            <label class="note-field"><span>Nội dung ghi chú</span><textarea rows="5" placeholder="Nhập lưu ý điều phối, yêu cầu nghiệm thu hoặc thông tin cần theo dõi…"></textarea></label>
+            <footer><button type="button" class="dialog-cancel" @onclick="ToggleNotePanel">Hủy</button><button type="button" class="dialog-confirm" @onclick="ConfirmUiNote">Lưu ghi chú</button></footer>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestDetailResponse? detail;
+    private bool showAssignPanel;
+    private bool showNotePanel;
+    private bool showUiNotice;
+    private bool reviewing;
+    private string noticeMessage = "Chức năng này thuộc FE-05.7/FE-07 và chưa được triển khai trong FE-05.5.";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Id is not { } id) return;
+        var result = await Api.GetAsync(id);
+        if (result.IsSuccess) detail = result.Data;
+        else { noticeMessage = result.Message ?? "Không tải được chi tiết yêu cầu."; showUiNotice = true; }
+    }
+
+    private async Task ReviewAsync()
+    {
+        if (Id is not { } id || detail?.Status != "SUBMITTED") return;
+        reviewing = true;
+        var result = await Api.ReviewAsync(id, new(null));
+        reviewing = false;
+        if (result.IsSuccess && result.Data is not null) detail = result.Data;
+        else { noticeMessage = result.Message ?? "Không thể tiếp nhận yêu cầu."; showUiNotice = true; }
+    }
+
+    private void ToggleAssignPanel() => showAssignPanel = !showAssignPanel;
+    private void ToggleNotePanel() => showNotePanel = !showNotePanel;
+    private void ShowUiNotice() => showUiNotice = true;
+    private void ConfirmUiAssignment() { showAssignPanel = false; showUiNotice = true; }
+    private void ConfirmUiNote() { showNotePanel = false; showUiNotice = true; }
+    private string LocationLabel() => detail?.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{detail.ApartmentUnitNumber} · Tầng {detail.FloorNumber}";
+    private string SubmittedLabel() => detail is null ? "Đang tải…" : detail.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
+    private string PreferredTimeLabel() => detail?.PreferredDate is null ? (detail?.PreferredTimeCode ?? "Không yêu cầu") : $"{detail.PreferredDate:dd/MM/yyyy} · {detail.PreferredTimeCode ?? "Linh hoạt"}";
+    private string ElapsedLabel()
+    {
+        if (detail is null) return "Đang tải…";
+        var elapsed = DateTimeOffset.UtcNow - detail.SubmittedAt;
+        return elapsed.TotalDays >= 1 ? $"{(int)elapsed.TotalDays} ngày {elapsed.Hours} giờ" : $"{Math.Max(0, elapsed.Hours)} giờ {Math.Max(0, elapsed.Minutes)} phút";
+    }
+    private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem? LatestActivity() => detail?.Activities.LastOrDefault(x => !string.IsNullOrWhiteSpace(x.Detail));
+    private static string ActivityLabel(string type) => type switch { "CREATED" => "Cư dân gửi yêu cầu", "MANAGER_REVIEWED" => "Ban Quản lý tiếp nhận", "ASSIGNED" => "Đã phân công", "REASSIGNED" => "Đã điều phối lại", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Ghi nhận kết quả", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", _ => "Cập nhật trạng thái" };
+    private static string StatusTransition(string? from, string? to) => to is null ? "Yêu cầu đã được cập nhật." : $"{StatusLabel(from)} → {StatusLabel(to)}";
+    private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));
+    private static string StatusLabel(string? status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", null => "Đang tải…", _ => status };
+    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", null => "Chưa xác định", _ => "Tiêu chuẩn" };
+}

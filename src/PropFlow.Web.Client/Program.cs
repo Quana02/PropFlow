@@ -11,6 +11,7 @@ using PropFlow.Web.Client.Features.Maintenance.Services;
 using PropFlow.Web.Client.Features.Resident.Portal.Services;
 using PropFlow.Web.Client.Features.Resident.Shared.Services;
 using PropFlow.Web.Client.Features.Finance.Services;
+using PropFlow.Web.Client.Features.ServiceRequests.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -38,6 +39,7 @@ builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
 builder.Services.AddScoped<IMaintenanceApiClient, MaintenanceApiClient>();
 builder.Services.AddScoped<IResidentServiceRequestApiClient, ResidentServiceRequestApiClient>();
+builder.Services.AddScoped<IManagerServiceRequestApiClient, ManagerServiceRequestApiClient>();
 builder.Services.AddScoped<IFinanceApiClient, FinanceApiClient>();
 builder.Services.AddScoped<IResidentApiClient, ResidentApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Apartment.Services.IApartmentApiClient, PropFlow.Web.Client.Features.Apartment.Services.ApartmentApiClient>();
