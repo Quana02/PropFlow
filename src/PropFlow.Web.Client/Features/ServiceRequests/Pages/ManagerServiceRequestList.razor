@@ -1,0 +1,176 @@
+@page "/manager/service-requests"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
+@inject NavigationManager Navigation
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.IManagerServiceRequestApiClient Api
+
+<PageTitle>Quản lý yêu cầu dịch vụ - PropFlow</PageTitle>
+
+<div class="manager-request-list">
+    <nav class="list-breadcrumb" aria-label="Đường dẫn"><a href="/">Vận hành</a><span>/</span><strong>Yêu cầu dịch vụ</strong></nav>
+
+    <section class="list-hero" aria-labelledby="service-request-list-title">
+        <div>
+            <span class="list-kicker"><span class="material-symbols-outlined">support_agent</span>FE-05.5 · Manager workspace</span>
+            <h1 id="service-request-list-title">Quản lý yêu cầu dịch vụ</h1>
+            <p>Tiếp nhận, theo dõi và điều phối yêu cầu hỗ trợ từ cư dân.</p>
+        </div>
+        <div class="hero-summary"><span class="live-dot"></span><strong>@items.Count</strong><span>yêu cầu đang hiển thị</span></div>
+    </section>
+
+    <section class="metric-grid" aria-label="Thống kê yêu cầu dịch vụ">
+        <article><span class="metric-icon sky"><span class="material-symbols-outlined">inbox</span></span><div><small>Tổng yêu cầu</small><strong>@(summary?.Total ?? 0)</strong><p>Tất cả yêu cầu đã ghi nhận</p></div></article>
+        <article><span class="metric-icon amber"><span class="material-symbols-outlined">pending_actions</span></span><div><small>Chờ tiếp nhận</small><strong>@(summary?.Submitted ?? 0)</strong><p>Cần Manager xem xét</p></div></article>
+        <article><span class="metric-icon blue"><span class="material-symbols-outlined">engineering</span></span><div><small>Đang xử lý</small><strong>@(summary?.InProgress ?? 0)</strong><p>Đang trong luồng vận hành</p></div></article>
+        <article><span class="metric-icon emerald"><span class="material-symbols-outlined">task_alt</span></span><div><small>Đã hoàn thành</small><strong>@(summary?.Completed ?? 0)</strong><p>Đã xử lý hoặc đóng</p></div></article>
+    </section>
+
+    <section class="request-panel" aria-labelledby="request-table-title">
+        <header class="panel-heading">
+            <div><h2 id="request-table-title">Danh sách yêu cầu</h2><p>Dữ liệu trực tiếp từ hệ thống Service Request</p></div>
+            <button type="button" class="refresh-button" @onclick="LoadAsync"><span class="material-symbols-outlined">refresh</span>Làm mới</button>
+        </header>
+
+        <div class="status-tabs" role="tablist" aria-label="Lọc theo trạng thái">
+            @foreach (var tab in StatusTabs)
+            {
+                <button type="button" role="tab" aria-selected="@(selectedStatus == tab.Value)" class="@(selectedStatus == tab.Value ? "is-selected" : null)" @onclick="() => SelectStatus(tab.Value)">
+                    @if (!string.IsNullOrWhiteSpace(tab.DotClass)) { <i class="@tab.DotClass"></i> }
+                    <span>@tab.Label</span><b>@tab.Count</b>
+                </button>
+            }
+        </div>
+
+        <div class="filter-toolbar">
+            <label class="search-field">
+                <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                <input @bind="searchText" @onkeyup="HandleSearchKey" placeholder="Tìm theo mã hoặc tiêu đề…" />
+                @if (!string.IsNullOrWhiteSpace(searchText))
+                {
+                    <button type="button" aria-label="Xóa tìm kiếm" @onclick="ClearSearch"><span class="material-symbols-outlined">close</span></button>
+                }
+            </label>
+            <div class="quick-filters" aria-label="Bộ lọc nhanh">
+                <button type="button" class="@(priorityFilter == "URGENT" ? "is-active" : null)" @onclick='() => TogglePriority("URGENT")'><span class="material-symbols-outlined">priority_high</span>Khẩn cấp</button>
+                <button type="button" class="@(unassignedOnly ? "is-active" : null)" @onclick="ToggleUnassigned"><span class="material-symbols-outlined">person_off</span>Chưa phân công</button>
+                <button type="button"><span class="material-symbols-outlined">calendar_month</span>30 ngày gần nhất</button>
+            </div>
+        </div>
+
+        @if (loading)
+        {
+            <div class="empty-state"><span class="material-symbols-outlined">hourglass_top</span><h3>Đang tải yêu cầu</h3></div>
+        }
+        else if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="empty-state"><span class="material-symbols-outlined">error</span><h3>Không tải được dữ liệu</h3><p>@errorMessage</p><button type="button" @onclick="LoadAsync">Thử lại</button></div>
+        }
+        else if (items.Count == 0)
+        {
+            <div class="empty-state">
+                <span class="material-symbols-outlined">search_off</span>
+                <h3>Không tìm thấy yêu cầu phù hợp</h3>
+                <p>Thử thay đổi từ khóa hoặc đặt lại bộ lọc.</p>
+                <button type="button" @onclick="ResetFilters">Đặt lại bộ lọc</button>
+            </div>
+        }
+        else
+        {
+            <div class="request-table-wrap">
+                <table class="request-table">
+                    <thead><tr><th>Yêu cầu</th><th>Cư dân / Căn hộ</th><th>Thời gian</th><th>Ưu tiên</th><th>Trạng thái</th><th>Phụ trách</th><th><span class="sr-only">Thao tác</span></th></tr></thead>
+                    <tbody>
+                        @foreach (var request in items)
+                        {
+                            <tr class="request-row" @onclick="() => OpenDetail(request.Id)">
+                                <td data-label="Yêu cầu">
+                                    <button type="button" class="request-identity" @onclick="() => OpenDetail(request.Id)" @onclick:stopPropagation="true">
+                                        <span class="request-number">@request.RequestNumber</span>
+                                        <strong>@request.Title</strong>
+                                        <small><span class="material-symbols-outlined">category</span>@(request.CategoryName ?? "Chưa phân loại")</small>
+                                    </button>
+                                </td>
+                                <td data-label="Cư dân / Căn hộ"><div class="resident-cell"><span class="resident-mini-avatar">@Initials(request.ResidentName)</span><div><strong>@(request.ResidentName ?? "Chưa xác định")</strong><small>@ApartmentLabel(request)</small></div></div></td>
+                                <td data-label="Thời gian"><div class="date-cell"><strong>@request.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy")</strong><small>@request.SubmittedAt.ToLocalTime().ToString("HH:mm")</small></div></td>
+                                <td data-label="Ưu tiên"><span class="priority-chip @PriorityClass(request.PriorityCode)"><i></i>@PriorityLabel(request.PriorityCode)</span></td>
+                                <td data-label="Trạng thái"><span class="status-chip @StatusClass(request.Status)"><i></i>@StatusLabel(request.Status)</span></td>
+                                <td data-label="Phụ trách">
+                                    @if (request.AssignedStaffUserId is null)
+                                    {
+                                        <span class="unassigned"><span class="material-symbols-outlined">person_add</span>Chưa phân công</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="assignee-cell"><span>✓</span><div><strong>Đã phân công</strong><small>@request.AssignedStaffUserId</small></div></div>
+                                    }
+                                </td>
+                                <td class="row-action"><button type="button" title="Xem chi tiết @request.RequestNumber" aria-label="Xem chi tiết @request.RequestNumber" @onclick="() => OpenDetail(request.Id)" @onclick:stopPropagation="true"><span class="material-symbols-outlined">arrow_forward</span></button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <footer class="panel-footer">
+            <span>Hiển thị <strong>@items.Count</strong> trong <strong>@totalCount</strong> yêu cầu phù hợp</span>
+            <nav class="pagination" aria-label="Phân trang"><button type="button" disabled="@(page == 1)" @onclick="PreviousPage" aria-label="Trang trước"><span class="material-symbols-outlined">chevron_left</span></button><button type="button" class="current" aria-current="page">@(page)</button><button type="button" disabled="@(page * PageSize >= totalCount)" @onclick="NextPage" aria-label="Trang sau"><span class="material-symbols-outlined">chevron_right</span></button></nav>
+        </footer>
+    </section>
+</div>
+
+@code {
+    private const int PageSize = 20;
+    private string? searchText;
+    private string selectedStatus = "ALL";
+    private string? priorityFilter;
+    private bool unassignedOnly;
+    private int page = 1;
+    private int totalCount;
+    private bool loading;
+    private string? errorMessage;
+    private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestSummary? summary;
+    private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestListItem> items = [];
+
+    private IReadOnlyList<StatusTab> StatusTabs =>
+    [
+        new("ALL", "Tất cả", summary?.Total ?? 0, null),
+        new("SUBMITTED", "Chờ tiếp nhận", summary?.Submitted ?? 0, "amber-dot"),
+        new("ACTIVE", "Đang xử lý", summary?.InProgress ?? 0, "blue-dot"),
+        new("RESOLVED", "Hoàn thành", summary?.Completed ?? 0, "emerald-dot")
+    ];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        var status = selectedStatus == "ALL" ? null : selectedStatus;
+        var result = await Api.ListAsync(new(searchText, status, priorityFilter, unassignedOnly, page, PageSize));
+        loading = false;
+        if (!result.IsSuccess || result.Data is null) { errorMessage = result.Message; items = []; return; }
+        items = result.Data.Items;
+        totalCount = result.Data.TotalCount;
+        summary = result.Data.Summary;
+    }
+
+    private async Task SelectStatus(string status) { selectedStatus = status; page = 1; await LoadAsync(); }
+    private async Task TogglePriority(string priority) { priorityFilter = priorityFilter == priority ? null : priority; page = 1; await LoadAsync(); }
+    private async Task ToggleUnassigned() { unassignedOnly = !unassignedOnly; page = 1; await LoadAsync(); }
+    private async Task ClearSearch() { searchText = null; page = 1; await LoadAsync(); }
+    private async Task ResetFilters() { searchText = null; selectedStatus = "ALL"; priorityFilter = null; unassignedOnly = false; page = 1; await LoadAsync(); }
+    private async Task PreviousPage() { if (page > 1) { page--; await LoadAsync(); } }
+    private async Task NextPage() { if (page * PageSize < totalCount) { page++; await LoadAsync(); } }
+    private async Task HandleSearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args) { if (args.Key == "Enter") { page = 1; await LoadAsync(); } }
+    private void OpenDetail(Guid id) => Navigation.NavigateTo($"/manager/service-requests/{id}");
+
+    private static string StatusLabel(string status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status };
+    private static string StatusClass(string status) => status switch { "SUBMITTED" => "status-amber", "UNDER_REVIEW" or "ASSIGNED" => "status-violet", "IN_PROGRESS" => "status-blue", "RESOLVED" or "CLOSED" => "status-emerald", _ => "" };
+    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", _ => "Tiêu chuẩn" };
+    private static string PriorityClass(string? priority) => priority switch { "URGENT" => "priority-urgent", "HIGH" => "priority-high", _ => "priority-standard" };
+    private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));
+    private static string ApartmentLabel(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestListItem x) => x.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{x.ApartmentUnitNumber} · Tầng {x.FloorNumber}";
+
+    private sealed record StatusTab(string Value, string Label, int Count, string? DotClass);
+}
