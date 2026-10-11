@@ -3,24 +3,25 @@
 @attribute [Authorize(Roles = "MANAGER")]
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IManagerServiceRequestApiClient Api
 
-<PageTitle>Chi tiết yêu cầu dịch vụ - PropFlow</PageTitle>
+<PageTitle>Chi tiết yêu cầu - PropFlow</PageTitle>
 
 <div class="manager-request-page">
     <nav class="request-breadcrumb" aria-label="Đường dẫn">
-        <a href="/">Vận hành</a><span>/</span><a href="/manager/service-requests">Yêu cầu dịch vụ</a><span>/</span><strong>Chi tiết phiếu</strong>
+        <a href="/">Vận hành</a><span>/</span><a href="/manager/service-requests">Yêu cầu dịch vụ</a><span>/</span><strong>Chi tiết yêu cầu</strong>
     </nav>
 
     <section class="request-hero" aria-labelledby="manager-request-title">
         <div class="hero-copy">
             <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>FE-05.5 · Manager workspace</div>
             <div class="hero-title-row">
-                <h1 id="manager-request-title">Chi tiết phiếu dịch vụ</h1>
+                <h1 id="manager-request-title">Chi tiết yêu cầu</h1>
                 <span class="status-badge status-progress"><i></i>@StatusLabel(detail?.Status)</span>
             </div>
             <p>Theo dõi tiếp nhận, điều phối nhân sự và liên kết công việc bảo trì trong một không gian quản lý.</p>
         </div>
         <div class="hero-actions">
             <span class="request-code"><span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>@(detail?.RequestNumber ?? "Đang tải…")</span>
+            <a class="service-sheet-action" href="/manager/service-requests/@Id/property-context"><span class="material-symbols-outlined" aria-hidden="true">assignment_add</span>Phiếu dịch vụ</a>
             <button class="secondary-action" type="button" @onclick="ToggleNotePanel"><span class="material-symbols-outlined" aria-hidden="true">edit_note</span>Ghi chú nội bộ</button>
             @if (detail?.Status == "SUBMITTED")
             {
@@ -110,6 +111,7 @@
                 <div><h2 id="manager-actions-title">Điều phối xử lý</h2><p>FE-05.5 hỗ trợ Manager tiếp nhận và xem xét; phân công và tạo Maintenance Task thuộc bước tiếp theo.</p></div>
                 </div>
                 <div class="manager-action-buttons">
+                    <a class="outline-action" href="/manager/service-requests/@Id/property-context"><span class="material-symbols-outlined">location_on</span>Liên kết tài sản</a>
                     <button type="button" class="outline-action" @onclick="ToggleAssignPanel"><span class="material-symbols-outlined">groups</span>Đổi người phụ trách</button>
                     <button type="button" class="maintenance-action" @onclick="ShowUiNotice"><span class="material-symbols-outlined">add_task</span>Tạo Maintenance Task</button>
                 </div>
