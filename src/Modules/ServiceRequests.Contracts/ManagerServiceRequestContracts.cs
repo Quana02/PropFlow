@@ -6,7 +6,8 @@ public sealed record ManagerServiceRequestListQuery(
     string? Priority = null,
     bool UnassignedOnly = false,
     int Page = 1,
-    int PageSize = 20);
+    int PageSize = 20,
+    int? SubmittedWithinDays = null);
 
 public sealed record ManagerServiceRequestSummary(
     int Total,
@@ -30,7 +31,9 @@ public sealed record ManagerServiceRequestListItem(
     string? PriorityCode,
     DateTimeOffset SubmittedAt,
     DateTimeOffset UpdatedAt,
-    Guid? AssignedStaffUserId);
+    Guid? AssignedStaffUserId,
+    string? AssignedStaffUsername,
+    string? AssignedStaffDisplayName);
 
 public sealed record ManagerServiceRequestListResponse(
     IReadOnlyList<ManagerServiceRequestListItem> Items,
@@ -97,6 +100,38 @@ public sealed record ManagerServiceRequestDetailResponse(
     IReadOnlyList<ManagerServiceRequestActivityItem> Activities);
 
 public sealed record ReviewManagerServiceRequestRequest(string? Note = null);
+
+public sealed record AssignManagerServiceRequestRequest(
+    Guid StaffUserId,
+    string? Note = null);
+
+public sealed record ManagerServiceRequestStaffOption(
+    Guid UserId,
+    string Username,
+    string DisplayName);
+
+public sealed record ManagerServiceRequestAssignmentOptionsResponse(
+    IReadOnlyList<ManagerServiceRequestStaffOption> Staff);
+
+public sealed record ConfirmManagerServiceRequestPropertyContextRequest(
+    Guid? ApartmentUnitId,
+    Guid? FacilityId,
+    Guid? EquipmentId,
+    string? ServiceAreaCode = null,
+    string? Note = null);
+
+public sealed record ManagerPropertyContextOption(
+    Guid Id,
+    string Code,
+    string Name,
+    string? SecondaryText,
+    string? Status,
+    Guid? ParentId = null);
+
+public sealed record ManagerPropertyContextOptionsResponse(
+    IReadOnlyList<ManagerPropertyContextOption> Apartments,
+    IReadOnlyList<ManagerPropertyContextOption> Facilities,
+    IReadOnlyList<ManagerPropertyContextOption> Equipment);
 
 public interface IManagerServiceRequestInsightSource
 {

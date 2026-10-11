@@ -8,8 +8,10 @@ using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.ServiceRequests.Infrastructure;
 
-public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db) : IManagerServiceRequestStore
+public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, TimeProvider? clock = null) : IManagerServiceRequestStore
 {
+    private readonly TimeProvider timeProvider = clock ?? TimeProvider.System;
+
     public async Task<ManagerServiceRequestPage> ListAsync(ManagerServiceRequestListQuery query, CancellationToken ct)
     {
         var requests = db.ServiceRequests.AsNoTracking().AsQueryable();
@@ -27,6 +29,11 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db) : IM
             requests = requests.Where(x => x.FinalPriorityCode == query.Priority);
         if (query.UnassignedOnly)
             requests = requests.Where(x => !x.Assignments.Any(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS));
+        if (query.SubmittedWithinDays is { } days)
+        {
+            var submittedFrom = timeProvider.GetUtcNow().AddDays(-days);
+            requests = requests.Where(x => x.SubmittedAt >= submittedFrom);
+        }
 
         var totalCount = await requests.CountAsync(ct);
         var items = await requests
@@ -93,7 +100,98 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db) : IM
             title: "Ban Quản lý đã tiếp nhận yêu cầu",
             detail: note,
             performedBy: managerUserId));
-        await db.SaveChangesAsync(ct);
-        return ManagerServiceRequestOutcome.Success;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return ManagerServiceRequestOutcome.Success;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ManagerServiceRequestOutcome.Conflict;
+        }
+    }
+
+    public async Task<ManagerServiceRequestOutcome> ConfirmPropertyContextAsync(
+        Guid id, Guid managerUserId, Guid? apartmentUnitId, Guid? facilityId, Guid? equipmentId,
+        string? serviceAreaCode, string? note, DateTimeOffset now, CancellationToken ct)
+    {
+        var request = await db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (request is null) return ManagerServiceRequestOutcome.NotFound;
+        if (request.Status != ServiceRequestStatus.SUBMITTED) return ManagerServiceRequestOutcome.Conflict;
+
+        request.AssociatePropertyContext(apartmentUnitId, facilityId, equipmentId, now);
+        if (!string.Equals(request.ServiceAreaCode, serviceAreaCode, StringComparison.OrdinalIgnoreCase))
+            request.UpdateServiceArea(serviceAreaCode, now);
+        request.MarkUnderReview(now);
+
+        var contextDetail = $"ApartmentUnitId={apartmentUnitId?.ToString() ?? "null"}; FacilityId={facilityId?.ToString() ?? "null"}; EquipmentId={equipmentId?.ToString() ?? "null"}; ServiceAreaCode={serviceAreaCode ?? "null"}.";
+        db.ServiceRequestActivities.Add(new ServiceRequestActivity(
+            request.Id, ServiceActivityType.PROPERTY_CONTEXT_ASSOCIATED, now,
+            title: "Đã gắn bối cảnh tài sản cho đơn dịch vụ",
+            detail: contextDetail,
+            performedBy: managerUserId));
+        db.ServiceRequestActivities.Add(new ServiceRequestActivity(
+            request.Id, ServiceActivityType.MANAGER_REVIEWED, now,
+            fromStatus: ServiceRequestStatus.SUBMITTED,
+            toStatus: ServiceRequestStatus.UNDER_REVIEW,
+            title: "Ban Quản lý đã xác nhận đơn dịch vụ",
+            detail: note,
+            performedBy: managerUserId));
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return ManagerServiceRequestOutcome.Success;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ManagerServiceRequestOutcome.Conflict;
+        }
+    }
+
+    public async Task<ManagerServiceRequestOutcome> AssignAsync(
+        Guid id, Guid managerUserId, Guid staffUserId, string? note, DateTimeOffset now, CancellationToken ct)
+    {
+        var request = await db.ServiceRequests
+            .Include(x => x.Assignments)
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (request is null) return ManagerServiceRequestOutcome.NotFound;
+        if (request.Status is not (ServiceRequestStatus.UNDER_REVIEW or ServiceRequestStatus.ASSIGNED or ServiceRequestStatus.IN_PROGRESS))
+            return ManagerServiceRequestOutcome.Conflict;
+
+        var activeAssignment = request.Assignments
+            .Where(x => x.IsActive)
+            .OrderByDescending(x => x.AssignedAt)
+            .FirstOrDefault();
+        if (activeAssignment?.StaffUserId == staffUserId)
+            return ManagerServiceRequestOutcome.Conflict;
+
+        var previousStatus = request.Status;
+        var isReassignment = activeAssignment is not null;
+        if (activeAssignment is not null)
+            activeAssignment.EndAsReassigned(now);
+
+        var assignment = new ServiceRequestAssignment(request.Id, staffUserId, managerUserId, now, note);
+        db.ServiceRequestAssignments.Add(assignment);
+        request.MarkAssigned(now);
+        db.ServiceRequestActivities.Add(new ServiceRequestActivity(
+            request.Id,
+            isReassignment ? ServiceActivityType.REASSIGNED : ServiceActivityType.ASSIGNED,
+            now,
+            assignmentId: assignment.Id,
+            fromStatus: previousStatus,
+            toStatus: ServiceRequestStatus.ASSIGNED,
+            title: isReassignment ? "Ban Quản lý đã đổi nhân sự phụ trách" : "Ban Quản lý đã phân công nhân sự",
+            detail: note,
+            performedBy: managerUserId));
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return ManagerServiceRequestOutcome.Success;
+        }
+        catch (DbUpdateException)
+        {
+            return ManagerServiceRequestOutcome.Conflict;
+        }
     }
 }

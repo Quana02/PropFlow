@@ -9,6 +9,7 @@ public enum ServiceActivityType
     PROGRESS_UPDATED,
     WORK_RESULT_ADDED,
     MANAGER_REVIEWED,
+    PROPERTY_CONTEXT_ASSOCIATED,
     RESOLVED,
     CLOSED
 }

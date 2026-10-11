@@ -7,6 +7,24 @@ namespace PropFlow.Modules.Apartments.Infrastructure;
 public sealed class ApartmentResidentRelationshipSource(ApartmentsDbContext db)
     : IApartmentResidentRelationshipSource
 {
+    public async Task<IReadOnlyList<ApartmentReference>> SearchApartmentsAsync(
+        string? search,
+        int take,
+        CancellationToken ct)
+    {
+        if (take is < 1 or > 200) throw new ArgumentOutOfRangeException(nameof(take));
+        var query = db.ApartmentUnits.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(unit => EF.Functions.ILike(unit.UnitNumber, $"%{term}%"));
+        }
+        return await query.OrderBy(unit => unit.FloorNumber).ThenBy(unit => unit.UnitNumber)
+            .Take(take)
+            .Select(unit => new ApartmentReference(unit.Id, unit.UnitNumber, unit.FloorNumber))
+            .ToArrayAsync(ct);
+    }
+
     public async Task<IReadOnlyList<ApartmentReference>> GetApartmentsAsync(
         IReadOnlyCollection<Guid> apartmentUnitIds,
         CancellationToken ct)

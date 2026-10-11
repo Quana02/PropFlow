@@ -96,6 +96,7 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
             .HasColumnName("updated_at")
             .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("now()")
+            .IsConcurrencyToken()
             .IsRequired();
 
         builder.HasMany(request => request.Assignments)

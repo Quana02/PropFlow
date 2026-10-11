@@ -123,6 +123,13 @@ public class ServiceRequest
         UpdatedAt = now;
     }
 
+    public void UpdateServiceArea(string? serviceAreaCode, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        ServiceAreaCode = string.IsNullOrWhiteSpace(serviceAreaCode) ? null : serviceAreaCode.Trim().ToUpperInvariant();
+        UpdatedAt = now;
+    }
+
     public void MarkAssigned(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
