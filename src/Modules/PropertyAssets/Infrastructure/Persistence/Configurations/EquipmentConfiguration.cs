@@ -19,7 +19,7 @@ public class EquipmentConfiguration : IEntityTypeConfiguration<Equipment>
 
         builder.Property(e => e.Code)
             .HasColumnName("code")
-            .HasMaxLength(50)
+            .HasMaxLength(512)
             .IsRequired();
 
         builder.Property(e => e.Name)

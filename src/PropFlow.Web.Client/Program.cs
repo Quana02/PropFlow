@@ -38,6 +38,7 @@ builder.Services.AddScoped<IFacilityApiClient, FacilityApiClient>();
 builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
 builder.Services.AddScoped<IMaintenanceApiClient, MaintenanceApiClient>();
+builder.Services.AddScoped<MaintenanceHubConnectionFactory>();
 builder.Services.AddScoped<IResidentServiceRequestApiClient, ResidentServiceRequestApiClient>();
 builder.Services.AddScoped<IManagerServiceRequestApiClient, ManagerServiceRequestApiClient>();
 builder.Services.AddScoped<IFinanceApiClient, FinanceApiClient>();

@@ -11,7 +11,9 @@ public sealed record ServiceRequestMaintenanceReference(
     string? PriorityCode,
     DateTimeOffset SubmittedAt,
     bool IsLinkable,
-    string? IneligibilityCode);
+    string? IneligibilityCode,
+    string? ApartmentUnitNumber = null,
+    int? ApartmentFloorNumber = null);
 
 public interface IServiceRequestMaintenanceSource
 {

@@ -2,6 +2,7 @@ using PropFlow.Modules.PropertyAssets.Application;
 using PropFlow.Modules.PropertyAssets.Application.Equipment.Dtos;
 using PropFlow.Modules.PropertyAssets.Domain.Equipment;
 using EquipmentEntity = PropFlow.Modules.PropertyAssets.Domain.Equipment.Equipment;
+using PropFlow.Shared;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Equipment.Services;
 
@@ -57,8 +58,6 @@ public class EquipmentService : IEquipmentService
     public async Task<EquipmentDto> CreateEquipmentAsync(CreateEquipmentCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        if (string.IsNullOrWhiteSpace(command.Code) || !System.Text.RegularExpressions.Regex.IsMatch(command.Code.Trim(), "^TB-[A-Z0-9]+-[A-Z0-9]+-[0-9]{2}$")) throw new ArgumentException("Mã thiết bị không đúng định dạng. Quy ước: TB-[LOẠI]-[TÊN THIẾT BỊ]-[STT].");
-
         // Validate Facility exists if FacilityId is provided
         if (command.FacilityId.HasValue)
         {
@@ -69,34 +68,34 @@ public class EquipmentService : IEquipmentService
             }
         }
 
-        var codeUpper = command.Code.Trim();
-        var existingEquipment = await _store.EquipmentCodeExistsAsync(codeUpper, cancellationToken);
+        var name = IdentifierCodeNormalizer.NormalizeRequired(command.Name, "Tên thiết bị");
+        var prefix = $"TB-{name}-";
+        if (prefix.Length + 3 > 512) throw new ArgumentException("Mã thiết bị sau chuẩn hóa vượt quá 512 ký tự.");
 
-        if (existingEquipment)
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            throw new InvalidOperationException($"Mã thiết bị '{command.Code}' đã tồn tại.");
+            EquipmentEntity? equipment = null;
+            try
+            {
+                return await _store.WithAdvisoryLockAsync($"equipment:{name}", async token =>
+                {
+                    var number = NextSequence(await _store.EquipmentCodesWithPrefixAsync(prefix, token), prefix);
+                    var code = $"{prefix}{number:000}";
+                    equipment = new EquipmentEntity(code, command.Name, DateTimeOffset.UtcNow, command.FacilityId,
+                        command.EquipmentType, command.Manufacturer, command.Model, command.SerialNumber,
+                        command.InstallationDate, command.WarrantyExpiryDate, command.LocationDescription,
+                        command.Description, command.CreatedBy);
+                    _store.Add(equipment);
+                    await _store.SaveGeneratedCodeAsync(token);
+                    return await MapToDtoWithIncludesAsync(equipment.Id, token);
+                }, cancellationToken);
+            }
+            catch (IdentifierCodeConflictException) when (equipment is not null && attempt < 2)
+            {
+                _store.Detach(equipment);
+            }
         }
-
-        var now = DateTimeOffset.UtcNow;
-        var equipment = new EquipmentEntity(
-            command.Code,
-            command.Name,
-            now,
-            command.FacilityId,
-            command.EquipmentType,
-            command.Manufacturer,
-            command.Model,
-            command.SerialNumber,
-            command.InstallationDate,
-            command.WarrantyExpiryDate,
-            command.LocationDescription,
-            command.Description,
-            command.CreatedBy);
-
-        _store.Add(equipment);
-        await _store.SaveAsync(cancellationToken);
-
-        return await MapToDtoWithIncludesAsync(equipment.Id, cancellationToken);
+        throw new InvalidOperationException("Không thể cấp mã thiết bị duy nhất. Vui lòng thử lại.");
     }
 
     public async Task<EquipmentDto> UpdateEquipmentAsync(Guid id, UpdateEquipmentCommand command, CancellationToken cancellationToken = default)
@@ -202,5 +201,13 @@ public class EquipmentService : IEquipmentService
         var equipment = await _store.EquipmentAsync(id, false, cancellationToken);
 
         return MapToDto(equipment ?? throw new InvalidOperationException("Equipment not found"));
+    }
+
+    private static int NextSequence(IReadOnlyList<string> codes, string prefix)
+    {
+        var max = 0;
+        foreach (var code in codes)
+            if (int.TryParse(code[prefix.Length..], out var sequence)) max = Math.Max(max, sequence);
+        return max + 1;
     }
 }

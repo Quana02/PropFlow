@@ -8,6 +8,7 @@ public interface IManagerServiceRequestApiClient
     Task<ApiResult<ManagerServiceRequestListResponse>> ListAsync(ManagerServiceRequestListQuery query, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> GetAsync(Guid id, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> ReviewAsync(Guid id, ReviewManagerServiceRequestRequest request, CancellationToken ct = default);
+    Task<ApiResult<IReadOnlyList<ServiceRequestMaintenanceReference>>> SearchLinkCandidatesAsync(string? search, int limit = 20, CancellationToken ct = default);
 }
 
 public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) : IManagerServiceRequestApiClient
@@ -27,6 +28,10 @@ public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) :
 
     public Task<ApiResult<ManagerServiceRequestDetailResponse>> ReviewAsync(Guid id, ReviewManagerServiceRequestRequest request, CancellationToken ct = default) =>
         api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/review", request, ct: ct);
+
+    public Task<ApiResult<IReadOnlyList<ServiceRequestMaintenanceReference>>> SearchLinkCandidatesAsync(string? search, int limit = 20, CancellationToken ct = default) =>
+        api.SendAsync<IReadOnlyList<ServiceRequestMaintenanceReference>>(HttpMethod.Get,
+            $"api/v1/manager/service-requests/link-candidates?limit={limit}&search={Uri.EscapeDataString(search?.Trim() ?? string.Empty)}", ct: ct);
 
     private static void Add(ICollection<string> values, string key, string? value)
     {

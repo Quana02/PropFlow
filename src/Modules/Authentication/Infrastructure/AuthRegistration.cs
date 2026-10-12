@@ -80,6 +80,16 @@ public static class AuthRegistration
             };
             options.Events = new JwtBearerEvents
             {
+                OnMessageReceived = context =>
+                {
+                    if (context.HttpContext.Request.Path.StartsWithSegments("/hubs/maintenance") &&
+                        context.Request.Query.TryGetValue("access_token", out var accessToken))
+                    {
+                        context.Token = accessToken;
+                    }
+
+                    return Task.CompletedTask;
+                },
                 OnTokenValidated = async context =>
                 {
                     if (context.Principal is null ||

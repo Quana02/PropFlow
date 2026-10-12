@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
@@ -8,8 +10,12 @@ namespace PropFlow.Modules.Maintenance.Presentation.Hubs;
 
 public class MaintenanceNotifier(IHubContext<MaintenanceHub> hubContext) : IMaintenanceNotifier
 {
-    public async Task NotifyTaskUpdatedAsync(Guid taskId, CancellationToken ct = default)
+    public Task NotifyTaskUpdatedAsync(Guid taskId, IReadOnlyCollection<Guid> recipientStaffUserIds, CancellationToken ct = default)
     {
-        await hubContext.Clients.All.SendAsync("TaskUpdated", taskId, cancellationToken: ct);
+        var recipients = recipientStaffUserIds.Where(userId => userId != Guid.Empty).Distinct()
+            .Select(userId => userId.ToString()).ToArray();
+        return recipients.Length == 0
+            ? Task.CompletedTask
+            : hubContext.Clients.Users(recipients).SendAsync("TaskUpdated", taskId, cancellationToken: ct);
     }
 }

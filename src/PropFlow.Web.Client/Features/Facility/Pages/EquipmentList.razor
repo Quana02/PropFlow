@@ -626,17 +626,6 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                            MÃ THIẾT BỊ <span class="text-rose-500">*</span>
-                        </label>
-                        <input @bind="FormModel.Code" type="text" placeholder="VD: TB-MAYBOM-HIYORI-01"
-                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-mono focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all uppercase"
-                               disabled="@(SelectedEquipmentToEdit != null)" />
-                        <p class="text-[11px] text-slate-400">Quy ước: TB-[LOẠI]-[TÊN THIẾT BỊ]-[STT]</p>
-                        @if (!string.IsNullOrWhiteSpace(EquipmentCodeError)) { <p class="text-xs text-rose-600" role="alert">@EquipmentCodeError</p> }
-                    </div>
-
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
                             Tên Thiết Bị <span class="text-rose-500">*</span>
                         </label>
                         <input @bind="FormModel.Name" type="text" placeholder="VD: Bơm nhiệt tuần hoàn nước nóng 75kW"
@@ -814,7 +803,6 @@
     private bool IsDetailOpen { get; set; }
     private bool IsSaving { get; set; }
     private bool IsSaveConfirmationOpen { get; set; }
-    private string? EquipmentCodeError { get; set; }
     private string? SuccessMessage { get; set; }
     private string? ErrorMessage { get; set; }
     private EquipmentModel? SelectedEquipmentToEdit { get; set; }
@@ -1001,7 +989,6 @@
         SelectedEquipmentToEdit = item;
         FormModel = new CreateEquipmentModel
         {
-            Code = item.Code,
             Name = item.Name,
             FacilityId = item.FacilityId,
             EquipmentType = item.EquipmentType,
@@ -1022,7 +1009,6 @@
     {
         if (!IsManager) return;
         ErrorMessage = null;
-        EquipmentCodeError = null;
         var validationModel = SelectedEquipmentToEdit == null
             ? (object)FormModel
             : new UpdateEquipmentModel
@@ -1040,10 +1026,7 @@
             };
         if (!TryValidate(validationModel, out var validationMessage))
         {
-            if (SelectedEquipmentToEdit is null && validationMessage?.Contains("Mã thiết bị", StringComparison.Ordinal) == true)
-                EquipmentCodeError = validationMessage;
-            else
-                ErrorMessage = validationMessage;
+            ErrorMessage = validationMessage;
             return;
         }
         IsSaveConfirmationOpen = true;
@@ -1065,7 +1048,7 @@
             {
                 var createResult = await EquipmentApiClient.CreateEquipmentAsync(FormModel);
                 if (!createResult.IsSuccess) { ErrorMessage = createResult.Message; return; }
-                SuccessMessage = $"Đã thêm mới thiết bị '{FormModel.Name}' thành công!";
+                SuccessMessage = $"Đã thêm mới thiết bị '{FormModel.Name}' với mã {createResult.Data?.Code} thành công!";
             }
             else
             {

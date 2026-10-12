@@ -20,7 +20,7 @@ public class MaintenanceScheduleConfiguration : IEntityTypeConfiguration<Mainten
 
         builder.Property(schedule => schedule.ScheduleCode)
             .HasColumnName("schedule_code")
-            .HasMaxLength(30)
+            .HasMaxLength(512)
             .IsRequired();
         builder.HasIndex(schedule => schedule.ScheduleCode).IsUnique();
 
