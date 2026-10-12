@@ -172,12 +172,108 @@ public sealed class ManagerServiceRequestReviewTests
         Assert.Equal(1, page.TotalCount);
     }
 
+    [Fact]
+    public async Task ApproveResolution_CompletesAssignment_ResolvesRequest_AndWritesActivity()
+    {
+        await using var db = CreateDb();
+        var now = new DateTimeOffset(2026, 10, 12, 4, 0, 0, TimeSpan.Zero);
+        var (request, assignment) = await AddInProgressRequestWithResultAsync(db, now);
+        var managerId = Guid.NewGuid();
+
+        var outcome = await new ManagerServiceRequestStore(db).ApproveResolutionAsync(
+            request.Id, managerId, "Kết quả đạt yêu cầu", now.AddMinutes(6), CancellationToken.None);
+
+        Assert.Equal(ManagerServiceRequestOutcome.Success, outcome);
+        Assert.Equal(ServiceRequestStatus.RESOLVED, request.Status);
+        Assert.Equal(AssignmentStatus.COMPLETED, assignment.Status);
+        Assert.NotNull(request.ResolvedAt);
+        Assert.Contains(await db.ServiceRequestActivities.ToListAsync(), x =>
+            x.ActivityType == ServiceActivityType.RESOLVED &&
+            x.FromStatus == ServiceRequestStatus.IN_PROGRESS &&
+            x.ToStatus == ServiceRequestStatus.RESOLVED &&
+            x.PerformedBy == managerId);
+    }
+
+    [Fact]
+    public async Task RequestRework_KeepsRequestInProgress_AndRequiresANewerStaffResult()
+    {
+        await using var db = CreateDb();
+        var now = new DateTimeOffset(2026, 10, 12, 4, 0, 0, TimeSpan.Zero);
+        var (request, assignment) = await AddInProgressRequestWithResultAsync(db, now);
+        var store = new ManagerServiceRequestStore(db);
+        var managerId = Guid.NewGuid();
+
+        var reworkOutcome = await store.RequestReworkAsync(
+            request.Id, managerId, "Ảnh chưa chứng minh đã xử lý xong", now.AddMinutes(6), CancellationToken.None);
+        var prematureApproval = await store.ApproveResolutionAsync(
+            request.Id, managerId, null, now.AddMinutes(7), CancellationToken.None);
+
+        Assert.Equal(ManagerServiceRequestOutcome.Success, reworkOutcome);
+        Assert.Equal(ManagerServiceRequestOutcome.Conflict, prematureApproval);
+        Assert.Equal(ServiceRequestStatus.IN_PROGRESS, request.Status);
+        Assert.Equal(AssignmentStatus.IN_PROGRESS, assignment.Status);
+        Assert.Contains(await db.ServiceRequestActivities.ToListAsync(), x =>
+            x.ActivityType == ServiceActivityType.REWORK_REQUESTED &&
+            x.Detail == "Ảnh chưa chứng minh đã xử lý xong");
+    }
+
+    [Fact]
+    public async Task Close_ClosesResolvedRequest_AndWritesManagerAuditActivity()
+    {
+        await using var db = CreateDb();
+        var now = new DateTimeOffset(2026, 10, 12, 4, 0, 0, TimeSpan.Zero);
+        var request = NewRequest(now);
+        request.MarkUnderReview(now.AddMinutes(1));
+        request.MarkAssigned(now.AddMinutes(2));
+        request.MarkInProgress(now.AddMinutes(3));
+        request.Resolve(now.AddMinutes(4));
+        db.ServiceRequests.Add(request);
+        await db.SaveChangesAsync();
+        var managerId = Guid.NewGuid();
+
+        var outcome = await new ManagerServiceRequestStore(db).CloseAsync(
+            request.Id, managerId, "Đã nghiệm thu và bàn giao", now.AddMinutes(5), CancellationToken.None);
+
+        Assert.Equal(ManagerServiceRequestOutcome.Success, outcome);
+        Assert.Equal(ServiceRequestStatus.CLOSED, request.Status);
+        Assert.Equal(managerId, request.ClosedBy);
+        Assert.NotNull(request.ClosedAt);
+        Assert.Contains(await db.ServiceRequestActivities.ToListAsync(), x =>
+            x.ActivityType == ServiceActivityType.CLOSED &&
+            x.FromStatus == ServiceRequestStatus.RESOLVED &&
+            x.ToStatus == ServiceRequestStatus.CLOSED &&
+            x.PerformedBy == managerId);
+    }
+
     private static ServiceRequestsDbContext CreateDb() => new(new DbContextOptionsBuilder<ServiceRequestsDbContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
     private static ServiceRequest NewRequest(DateTimeOffset now) => new(
         $"SR-{Guid.NewGuid():N}"[..20], Guid.NewGuid(), Guid.NewGuid(),
         "Kiểm tra rò rỉ nước", "Mô tả yêu cầu đủ dài để Manager xem xét.", now);
+
+    private static async Task<(ServiceRequest Request, ServiceRequestAssignment Assignment)> AddInProgressRequestWithResultAsync(
+        ServiceRequestsDbContext db,
+        DateTimeOffset now)
+    {
+        var request = NewRequest(now);
+        request.MarkUnderReview(now.AddMinutes(1));
+        request.MarkAssigned(now.AddMinutes(2));
+        request.MarkInProgress(now.AddMinutes(3));
+        var assignment = new ServiceRequestAssignment(
+            request.Id, Guid.NewGuid(), Guid.NewGuid(), now.AddMinutes(2));
+        assignment.Start(now.AddMinutes(3));
+        var result = new ServiceRequestActivity(
+            request.Id,
+            ServiceActivityType.WORK_RESULT_ADDED,
+            now.AddMinutes(5),
+            assignment.Id,
+            workResult: "Đã xử lý hoàn tất và kiểm tra vận hành.",
+            performedBy: assignment.StaffUserId);
+        db.AddRange(request, assignment, result);
+        await db.SaveChangesAsync();
+        return (request, assignment);
+    }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

@@ -49,6 +49,7 @@ public sealed record ManagerServiceRequestActivityItem(
     string? ToStatus,
     string? Title,
     string? Detail,
+    string? WorkResult,
     Guid? PerformedBy,
     DateTimeOffset CreatedAt);
 
@@ -104,6 +105,10 @@ public sealed record ReviewManagerServiceRequestRequest(string? Note = null);
 public sealed record AssignManagerServiceRequestRequest(
     Guid StaffUserId,
     string? Note = null);
+
+public sealed record ReviewManagerServiceRequestResolutionRequest(string? Note = null);
+
+public sealed record CloseManagerServiceRequestRequest(string? Note = null);
 
 public sealed record ManagerServiceRequestStaffOption(
     Guid UserId,

@@ -82,7 +82,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
             .Select(x => new ManagerServiceRequestActivityItem(
                 x.Id, x.ActivityType.ToString(), x.FromStatus == null ? null : x.FromStatus.ToString(),
-                x.ToStatus == null ? null : x.ToStatus.ToString(), x.Title, x.Detail, x.PerformedBy, x.CreatedAt))
+                x.ToStatus == null ? null : x.ToStatus.ToString(), x.Title, x.Detail, x.WorkResult, x.PerformedBy, x.CreatedAt))
             .ToArrayAsync(ct);
 
     public async Task<ManagerServiceRequestOutcome> ReviewAsync(
@@ -184,6 +184,110 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             detail: note,
             performedBy: managerUserId));
 
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return ManagerServiceRequestOutcome.Success;
+        }
+        catch (DbUpdateException)
+        {
+            return ManagerServiceRequestOutcome.Conflict;
+        }
+    }
+
+    public Task<ManagerServiceRequestOutcome> RequestReworkAsync(
+        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct) =>
+        ReviewResolutionAsync(id, managerUserId, note, approve: false, now, ct);
+
+    public Task<ManagerServiceRequestOutcome> ApproveResolutionAsync(
+        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct) =>
+        ReviewResolutionAsync(id, managerUserId, note, approve: true, now, ct);
+
+    public async Task<ManagerServiceRequestOutcome> CloseAsync(
+        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct)
+    {
+        var request = await db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (request is null) return ManagerServiceRequestOutcome.NotFound;
+        if (request.Status != ServiceRequestStatus.RESOLVED) return ManagerServiceRequestOutcome.Conflict;
+
+        request.Close(managerUserId, now);
+        db.ServiceRequestActivities.Add(new ServiceRequestActivity(
+            request.Id,
+            ServiceActivityType.CLOSED,
+            now,
+            fromStatus: ServiceRequestStatus.RESOLVED,
+            toStatus: ServiceRequestStatus.CLOSED,
+            title: "Ban Quản lý đã đóng yêu cầu",
+            detail: note,
+            performedBy: managerUserId));
+
+        return await SaveAsync(ct);
+    }
+
+    private async Task<ManagerServiceRequestOutcome> ReviewResolutionAsync(
+        Guid id, Guid managerUserId, string? note, bool approve, DateTimeOffset now, CancellationToken ct)
+    {
+        var request = await db.ServiceRequests
+            .Include(x => x.Assignments)
+            .Include(x => x.Activities)
+            .SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (request is null) return ManagerServiceRequestOutcome.NotFound;
+        if (request.Status != ServiceRequestStatus.IN_PROGRESS) return ManagerServiceRequestOutcome.Conflict;
+
+        var latestWorkResult = request.Activities
+            .Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED)
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefault();
+        var latestRework = request.Activities
+            .Where(x => x.ActivityType == ServiceActivityType.REWORK_REQUESTED)
+            .OrderByDescending(x => x.CreatedAt)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefault();
+        if (latestWorkResult is null ||
+            (latestRework is not null && latestRework.CreatedAt >= latestWorkResult.CreatedAt))
+            return ManagerServiceRequestOutcome.Conflict;
+
+        var activeAssignment = request.Assignments
+            .Where(x => x.IsActive)
+            .OrderByDescending(x => x.AssignedAt)
+            .FirstOrDefault();
+
+        if (approve)
+        {
+            activeAssignment?.Complete(now);
+            request.Resolve(now);
+            db.ServiceRequestActivities.Add(new ServiceRequestActivity(
+                request.Id,
+                ServiceActivityType.RESOLVED,
+                now,
+                assignmentId: activeAssignment?.Id,
+                fromStatus: ServiceRequestStatus.IN_PROGRESS,
+                toStatus: ServiceRequestStatus.RESOLVED,
+                title: "Ban Quản lý đã xác nhận kết quả xử lý",
+                detail: note,
+                performedBy: managerUserId));
+        }
+        else
+        {
+            request.MarkInProgress(now);
+            db.ServiceRequestActivities.Add(new ServiceRequestActivity(
+                request.Id,
+                ServiceActivityType.REWORK_REQUESTED,
+                now,
+                assignmentId: activeAssignment?.Id,
+                fromStatus: ServiceRequestStatus.IN_PROGRESS,
+                toStatus: ServiceRequestStatus.IN_PROGRESS,
+                title: "Ban Quản lý yêu cầu Staff xử lý lại",
+                detail: note,
+                performedBy: managerUserId));
+        }
+
+        return await SaveAsync(ct);
+    }
+
+    private async Task<ManagerServiceRequestOutcome> SaveAsync(CancellationToken ct)
+    {
         try
         {
             await db.SaveChangesAsync(ct);

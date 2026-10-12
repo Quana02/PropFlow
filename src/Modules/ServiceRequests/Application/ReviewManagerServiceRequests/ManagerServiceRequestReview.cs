@@ -37,6 +37,12 @@ public interface IManagerServiceRequestStore
         string? serviceAreaCode, string? note, DateTimeOffset now, CancellationToken ct);
     Task<ManagerServiceRequestOutcome> AssignAsync(
         Guid id, Guid managerUserId, Guid staffUserId, string? note, DateTimeOffset now, CancellationToken ct);
+    Task<ManagerServiceRequestOutcome> RequestReworkAsync(
+        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct);
+    Task<ManagerServiceRequestOutcome> ApproveResolutionAsync(
+        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct);
+    Task<ManagerServiceRequestOutcome> CloseAsync(
+        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct);
 }
 
 public sealed class ManagerServiceRequestReviewHandler(
@@ -155,6 +161,59 @@ public sealed class ManagerServiceRequestReviewHandler(
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "service_request_assignment_conflict",
                 Message: "Yêu cầu chưa được tiếp nhận, đã hoàn tất hoặc nhân sự này đang được phân công.");
+        return await GetAsync(id, ct);
+    }
+
+    public Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> RequestReworkAsync(
+        Guid id, Guid managerUserId, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct) =>
+        ReviewResolutionAsync(id, managerUserId, request.Note, approve: false, ct);
+
+    public Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ApproveResolutionAsync(
+        Guid id, Guid managerUserId, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct) =>
+        ReviewResolutionAsync(id, managerUserId, request.Note, approve: true, ct);
+
+    public async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> CloseAsync(
+        Guid id, Guid managerUserId, CloseManagerServiceRequestRequest request, CancellationToken ct)
+    {
+        if (id == Guid.Empty || managerUserId == Guid.Empty)
+            return Invalid<ManagerServiceRequestDetailResponse>("invalid_close_request", "Thông tin đóng yêu cầu không hợp lệ.");
+        if (request.Note?.Trim().Length > 2000)
+            return Invalid<ManagerServiceRequestDetailResponse>("close_note_too_long", "Ghi chú đóng yêu cầu không được vượt quá 2000 ký tự.");
+
+        var current = await store.GetAsync(id, ct);
+        if (current is null) return NotFound<ManagerServiceRequestDetailResponse>();
+        if (current.Status != "RESOLVED")
+            return new(ManagerServiceRequestOutcome.Conflict, ErrorCode: "service_request_not_resolved",
+                Message: "Chỉ yêu cầu đã được xác nhận hoàn thành mới có thể đóng.");
+
+        var outcome = await store.CloseAsync(id, managerUserId, request.Note?.Trim(), clock.GetUtcNow(), ct);
+        if (outcome == ManagerServiceRequestOutcome.NotFound) return NotFound<ManagerServiceRequestDetailResponse>();
+        if (outcome == ManagerServiceRequestOutcome.Conflict)
+            return new(outcome, ErrorCode: "service_request_close_conflict", Message: "Trạng thái yêu cầu vừa thay đổi nên không thể đóng.");
+        return await GetAsync(id, ct);
+    }
+
+    private async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ReviewResolutionAsync(
+        Guid id, Guid managerUserId, string? note, bool approve, CancellationToken ct)
+    {
+        if (id == Guid.Empty || managerUserId == Guid.Empty)
+            return Invalid<ManagerServiceRequestDetailResponse>("invalid_resolution_review", "Thông tin nghiệm thu kết quả không hợp lệ.");
+        if (note?.Trim().Length > 2000)
+            return Invalid<ManagerServiceRequestDetailResponse>("resolution_review_note_too_long", "Ghi chú nghiệm thu không được vượt quá 2000 ký tự.");
+
+        var current = await store.GetAsync(id, ct);
+        if (current is null) return NotFound<ManagerServiceRequestDetailResponse>();
+        if (current.Status != "IN_PROGRESS")
+            return new(ManagerServiceRequestOutcome.Conflict, ErrorCode: "service_request_not_in_progress",
+                Message: "Chỉ yêu cầu đang tiến hành và đã có kết quả từ Staff mới có thể nghiệm thu.");
+
+        var outcome = approve
+            ? await store.ApproveResolutionAsync(id, managerUserId, note?.Trim(), clock.GetUtcNow(), ct)
+            : await store.RequestReworkAsync(id, managerUserId, note?.Trim(), clock.GetUtcNow(), ct);
+        if (outcome == ManagerServiceRequestOutcome.NotFound) return NotFound<ManagerServiceRequestDetailResponse>();
+        if (outcome == ManagerServiceRequestOutcome.Conflict)
+            return new(outcome, ErrorCode: "staff_work_result_not_available",
+                Message: "Không có kết quả Staff mới đang chờ nghiệm thu hoặc trạng thái yêu cầu vừa thay đổi.");
         return await GetAsync(id, ct);
     }
 

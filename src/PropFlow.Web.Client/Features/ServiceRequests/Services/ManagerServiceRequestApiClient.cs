@@ -12,6 +12,9 @@ public interface IManagerServiceRequestApiClient
     Task<ApiResult<ManagerServiceRequestDetailResponse>> ConfirmPropertyContextAsync(Guid id, ConfirmManagerServiceRequestPropertyContextRequest request, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestAssignmentOptionsResponse>> AssignmentOptionsAsync(Guid id, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> AssignAsync(Guid id, AssignManagerServiceRequestRequest request, CancellationToken ct = default);
+    Task<ApiResult<ManagerServiceRequestDetailResponse>> RequestReworkAsync(Guid id, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct = default);
+    Task<ApiResult<ManagerServiceRequestDetailResponse>> ApproveResolutionAsync(Guid id, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct = default);
+    Task<ApiResult<ManagerServiceRequestDetailResponse>> CloseAsync(Guid id, CloseManagerServiceRequestRequest request, CancellationToken ct = default);
 }
 
 public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) : IManagerServiceRequestApiClient
@@ -44,6 +47,15 @@ public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) :
 
     public Task<ApiResult<ManagerServiceRequestDetailResponse>> AssignAsync(Guid id, AssignManagerServiceRequestRequest request, CancellationToken ct = default) =>
         api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Put, $"api/v1/manager/service-requests/{id}/assignment", request, ct: ct);
+
+    public Task<ApiResult<ManagerServiceRequestDetailResponse>> RequestReworkAsync(Guid id, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct = default) =>
+        api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/resolution/rework", request, ct: ct);
+
+    public Task<ApiResult<ManagerServiceRequestDetailResponse>> ApproveResolutionAsync(Guid id, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct = default) =>
+        api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/resolution/approve", request, ct: ct);
+
+    public Task<ApiResult<ManagerServiceRequestDetailResponse>> CloseAsync(Guid id, CloseManagerServiceRequestRequest request, CancellationToken ct = default) =>
+        api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/close", request, ct: ct);
 
     private static void Add(ICollection<string> values, string key, string? value)
     {
