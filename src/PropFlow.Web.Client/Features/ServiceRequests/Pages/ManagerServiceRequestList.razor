@@ -11,7 +11,7 @@
 
     <section class="list-hero" aria-labelledby="service-request-list-title">
         <div>
-            <span class="list-kicker"><span class="material-symbols-outlined">support_agent</span>FE-05.5 · Manager workspace</span>
+            <span class="list-kicker"><span class="material-symbols-outlined">support_agent</span>FE-05.5 · FE-05.9 · Manager workspace</span>
             <h1 id="service-request-list-title">Quản lý yêu cầu dịch vụ</h1>
             <p>Tiếp nhận, theo dõi và điều phối yêu cầu hỗ trợ từ cư dân.</p>
         </div>
@@ -53,7 +53,7 @@
             <div class="quick-filters" aria-label="Bộ lọc nhanh">
                 <button type="button" class="@(priorityFilter == "URGENT" ? "is-active" : null)" @onclick='() => TogglePriority("URGENT")'><span class="material-symbols-outlined">priority_high</span>Khẩn cấp</button>
                 <button type="button" class="@(unassignedOnly ? "is-active" : null)" @onclick="ToggleUnassigned"><span class="material-symbols-outlined">person_off</span>Chưa phân công</button>
-                <button type="button"><span class="material-symbols-outlined">calendar_month</span>30 ngày gần nhất</button>
+                <button type="button" class="@(submittedWithinDays == 30 ? "is-active" : null)" @onclick="ToggleRecentThirtyDays"><span class="material-symbols-outlined">calendar_month</span>30 ngày gần nhất</button>
             </div>
         </div>
 
@@ -101,7 +101,7 @@
                                     }
                                     else
                                     {
-                                        <div class="assignee-cell"><span>✓</span><div><strong>Đã phân công</strong><small>@request.AssignedStaffUserId</small></div></div>
+                                        <div class="assignee-cell"><span>✓</span><div><strong>@(request.AssignedStaffDisplayName ?? "Đã phân công")</strong><small>@(request.AssignedStaffUsername ?? request.AssignedStaffUserId.ToString())</small></div></div>
                                     }
                                 </td>
                                 <td class="row-action"><button type="button" title="Xem chi tiết @request.RequestNumber" aria-label="Xem chi tiết @request.RequestNumber" @onclick="() => OpenDetail(request.Id)" @onclick:stopPropagation="true"><span class="material-symbols-outlined">arrow_forward</span></button></td>
@@ -125,6 +125,7 @@
     private string selectedStatus = "ALL";
     private string? priorityFilter;
     private bool unassignedOnly;
+    private int? submittedWithinDays;
     private int page = 1;
     private int totalCount;
     private bool loading;
@@ -147,7 +148,7 @@
         loading = true;
         errorMessage = null;
         var status = selectedStatus == "ALL" ? null : selectedStatus;
-        var result = await Api.ListAsync(new(searchText, status, priorityFilter, unassignedOnly, page, PageSize));
+        var result = await Api.ListAsync(new(searchText, status, priorityFilter, unassignedOnly, page, PageSize, submittedWithinDays));
         loading = false;
         if (!result.IsSuccess || result.Data is null) { errorMessage = result.Message; items = []; return; }
         items = result.Data.Items;
@@ -158,14 +159,15 @@
     private async Task SelectStatus(string status) { selectedStatus = status; page = 1; await LoadAsync(); }
     private async Task TogglePriority(string priority) { priorityFilter = priorityFilter == priority ? null : priority; page = 1; await LoadAsync(); }
     private async Task ToggleUnassigned() { unassignedOnly = !unassignedOnly; page = 1; await LoadAsync(); }
+    private async Task ToggleRecentThirtyDays() { submittedWithinDays = submittedWithinDays == 30 ? null : 30; page = 1; await LoadAsync(); }
     private async Task ClearSearch() { searchText = null; page = 1; await LoadAsync(); }
-    private async Task ResetFilters() { searchText = null; selectedStatus = "ALL"; priorityFilter = null; unassignedOnly = false; page = 1; await LoadAsync(); }
+    private async Task ResetFilters() { searchText = null; selectedStatus = "ALL"; priorityFilter = null; unassignedOnly = false; submittedWithinDays = null; page = 1; await LoadAsync(); }
     private async Task PreviousPage() { if (page > 1) { page--; await LoadAsync(); } }
     private async Task NextPage() { if (page * PageSize < totalCount) { page++; await LoadAsync(); } }
     private async Task HandleSearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args) { if (args.Key == "Enter") { page = 1; await LoadAsync(); } }
     private void OpenDetail(Guid id) => Navigation.NavigateTo($"/manager/service-requests/{id}");
 
-    private static string StatusLabel(string status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status };
+    private static string StatusLabel(string status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đã tiếp nhận", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang tiến hành", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status };
     private static string StatusClass(string status) => status switch { "SUBMITTED" => "status-amber", "UNDER_REVIEW" or "ASSIGNED" => "status-violet", "IN_PROGRESS" => "status-blue", "RESOLVED" or "CLOSED" => "status-emerald", _ => "" };
     private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", _ => "Tiêu chuẩn" };
     private static string PriorityClass(string? priority) => priority switch { "URGENT" => "priority-urgent", "HIGH" => "priority-high", _ => "priority-standard" };

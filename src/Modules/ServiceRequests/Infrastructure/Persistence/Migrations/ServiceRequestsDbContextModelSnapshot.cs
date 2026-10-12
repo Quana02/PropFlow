@@ -364,6 +364,7 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnName("title");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")

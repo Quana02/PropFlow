@@ -12,7 +12,7 @@
 
     <section class="request-hero" aria-labelledby="manager-request-title">
         <div class="hero-copy">
-            <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>FE-05.5 · Manager workspace</div>
+            <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>FE-05.5 · FE-05.7 · FE-05.8 · Manager workspace</div>
             <div class="hero-title-row">
                 <h1 id="manager-request-title">Chi tiết yêu cầu</h1>
                 <span class="status-badge status-progress"><i></i>@StatusLabel(detail?.Status)</span>
@@ -21,15 +21,11 @@
         </div>
         <div class="hero-actions">
             <span class="request-code"><span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>@(detail?.RequestNumber ?? "Đang tải…")</span>
-            <a class="service-sheet-action" href="/manager/service-requests/@Id/property-context"><span class="material-symbols-outlined" aria-hidden="true">assignment_add</span>Phiếu dịch vụ</a>
+            <a class="service-sheet-action" href="/manager/service-requests/@Id/property-context"><span class="material-symbols-outlined" aria-hidden="true">assignment_add</span>@(detail?.Status == "SUBMITTED" ? "Lập đơn dịch vụ" : "Xem đơn dịch vụ")</a>
             <button class="secondary-action" type="button" @onclick="ToggleNotePanel"><span class="material-symbols-outlined" aria-hidden="true">edit_note</span>Ghi chú nội bộ</button>
-            @if (detail?.Status == "SUBMITTED")
+            @if (CanAssign)
             {
-                <button class="primary-action" disabled="@reviewing" type="button" @onclick="ReviewAsync"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span>@(reviewing ? "Đang tiếp nhận…" : "Tiếp nhận yêu cầu")</button>
-            }
-            else
-            {
-                <button class="primary-action" type="button" @onclick="ToggleAssignPanel"><span class="material-symbols-outlined" aria-hidden="true">person_add</span>Phân công</button>
+                <button class="primary-action" type="button" @onclick="OpenAssignPanelAsync"><span class="material-symbols-outlined" aria-hidden="true">person_add</span>@(detail?.AssignedStaffUserId is null ? "Phân công" : "Phân công lại")</button>
             }
         </div>
     </section>
@@ -37,7 +33,7 @@
     <section class="signal-strip" aria-label="Tóm tắt xử lý">
         <article><span class="signal-icon sky"><span class="material-symbols-outlined">schedule</span></span><div><small>Thời gian từ khi gửi</small><strong>@ElapsedLabel()</strong></div></article>
         <article><span class="signal-icon amber"><span class="material-symbols-outlined">priority_high</span></span><div><small>Mức ưu tiên</small><strong>@PriorityLabel(detail?.PriorityCode)</strong></div></article>
-        <article><span class="signal-icon emerald"><span class="material-symbols-outlined">engineering</span></span><div><small>Nhân sự phụ trách</small><strong>@(detail?.AssignedStaffUserId is null ? "Chưa phân công" : "Đã phân công")</strong></div></article>
+        <article><span class="signal-icon emerald"><span class="material-symbols-outlined">engineering</span></span><div><small>Nhân sự phụ trách</small><strong>@AssignedStaffName()</strong></div></article>
         <article><span class="signal-icon violet"><span class="material-symbols-outlined">build_circle</span></span><div><small>Liên kết bảo trì</small><strong>@(detail?.AiInsight?.MaintenanceRecommended == true ? "AI đề xuất bảo trì" : "Chưa có đề xuất")</strong></div></article>
     </section>
 
@@ -108,11 +104,14 @@
             <section class="manager-action-card" aria-labelledby="manager-actions-title">
                 <div>
                     <span class="manager-action-symbol"><span class="material-symbols-outlined">hub</span></span>
-                <div><h2 id="manager-actions-title">Điều phối xử lý</h2><p>FE-05.5 hỗ trợ Manager tiếp nhận và xem xét; phân công và tạo Maintenance Task thuộc bước tiếp theo.</p></div>
+                <div><h2 id="manager-actions-title">Điều phối xử lý</h2><p>Manager tiếp nhận yêu cầu, phân công hoặc điều phối lại Staff phụ trách.</p></div>
                 </div>
                 <div class="manager-action-buttons">
                     <a class="outline-action" href="/manager/service-requests/@Id/property-context"><span class="material-symbols-outlined">location_on</span>Liên kết tài sản</a>
-                    <button type="button" class="outline-action" @onclick="ToggleAssignPanel"><span class="material-symbols-outlined">groups</span>Đổi người phụ trách</button>
+                    @if (CanAssign)
+                    {
+                        <button type="button" class="outline-action" @onclick="OpenAssignPanelAsync"><span class="material-symbols-outlined">groups</span>@(detail?.AssignedStaffUserId is null ? "Phân công nhân sự" : "Đổi người phụ trách")</button>
+                    }
                     <button type="button" class="maintenance-action" @onclick="ShowUiNotice"><span class="material-symbols-outlined">add_task</span>Tạo Maintenance Task</button>
                 </div>
                 @if (showUiNotice)
@@ -131,7 +130,14 @@
                 <ol class="timeline">
                     @foreach (var activity in detail?.Activities ?? [])
                     {
-                        <li class="is-complete"><span class="timeline-node"><span class="material-symbols-outlined">check</span></span><div><header><strong>@ActivityLabel(activity.ActivityType)</strong><time>@activity.CreatedAt.ToLocalTime().ToString("HH:mm")</time></header><p>@(activity.Detail ?? StatusTransition(activity.FromStatus, activity.ToStatus))</p><small>@activity.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></div></li>
+                        <li class="is-complete">
+                            <span class="timeline-node"><span class="material-symbols-outlined">check</span></span>
+                            <button type="button" class="timeline-entry" @onclick="() => OpenResultPanel(activity)" aria-label="Xem chi tiết cập nhật @ActivityLabel(activity.ActivityType)">
+                                <header><strong>@ActivityLabel(activity.ActivityType)</strong><time>@activity.CreatedAt.ToLocalTime().ToString("HH:mm")</time></header>
+                                <p>@(activity.WorkResult ?? activity.Detail ?? StatusTransition(activity.FromStatus, activity.ToStatus))</p>
+                                <footer><small>@activity.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small><span>Xem chi tiết <span class="material-symbols-outlined">chevron_right</span></span></footer>
+                            </button>
+                        </li>
                     }
                 </ol>
             </section>
@@ -140,7 +146,7 @@
                 <header class="card-header compact-header"><div><h2 id="assignee-title">Nhân sự phụ trách</h2><p>Trạng thái phân công hiện tại</p></div></header>
                 <div class="assignee-profile">
                     <span class="assignee-avatar">@(detail?.AssignedStaffUserId is null ? "?" : "✓")<i></i></span>
-                    <div><strong>@(detail?.AssignedStaffUserId is null ? "Chưa phân công" : "Đã phân công nhân sự")</strong><p>@(detail?.AssignedStaffUserId?.ToString() ?? "FE-05.7 sẽ đảm nhiệm thao tác này")</p></div>
+                    <div><strong>@AssignedStaffName()</strong><p>@(AssignedStaff()?.Username ?? "Chưa có nhân sự phụ trách")</p></div>
                 </div>
             </section>
 
@@ -153,18 +159,90 @@
     </div>
 </div>
 
+@if (selectedActivity is not null)
+{
+    <div class="dialog-backdrop" @onclick="CloseResultPanel">
+        <section class="manager-dialog result-review-dialog" role="dialog" aria-modal="true" aria-labelledby="result-review-title" @onclick:stopPropagation="true">
+            <header>
+                <div><span class="dialog-icon result-icon"><span class="material-symbols-outlined">fact_check</span></span><div><h2 id="result-review-title">Kiểm tra kết quả xử lý</h2><p>@ActivityLabel(selectedActivity.ActivityType) · @selectedActivity.CreatedAt.ToLocalTime().ToString("HH:mm · dd/MM/yyyy")</p></div></div>
+                <button type="button" aria-label="Đóng" @onclick="CloseResultPanel"><span class="material-symbols-outlined">close</span></button>
+            </header>
+
+            <div class="result-review-body">
+                <section class="result-summary">
+                    <span><span class="material-symbols-outlined">description</span>Kết quả Staff gửi</span>
+                    <p>@ResultText(selectedActivity)</p>
+                </section>
+
+                <section class="result-evidence" aria-labelledby="result-evidence-title">
+                    <header><div><span class="material-symbols-outlined">photo_library</span><strong id="result-evidence-title">Ảnh minh chứng sau xử lý</strong></div><small>0 ảnh</small></header>
+                    <div class="result-evidence-empty">
+                        <span class="material-symbols-outlined">imagesmode</span>
+                        <strong>Chưa có ảnh kết quả</strong>
+                        <p>Ảnh Staff gửi sẽ hiển thị tại đây khi contract tệp đính kèm của Service Request được bổ sung.</p>
+                    </div>
+                </section>
+
+                <label class="note-field result-note"><span>Ghi chú nghiệm thu</span><textarea rows="3" maxlength="2000" @bind="reviewDecisionNote" placeholder="Nhập nhận xét cho Staff hoặc ghi chú nghiệm thu…"></textarea></label>
+                @if (!string.IsNullOrWhiteSpace(resultActionNotice))
+                {
+                    <p class="result-action-notice" role="status"><span class="material-symbols-outlined">info</span>@resultActionNotice</p>
+                }
+            </div>
+
+            <footer class="result-review-actions">
+                <button type="button" class="rework-action" disabled="@(savingResolution || !CanReviewStaffResult)" @onclick="RequestReworkAsync"><span class="material-symbols-outlined">replay</span>@(savingResolution ? "Đang lưu…" : "Yêu cầu xử lý lại")</button>
+                <button type="button" class="approve-action" disabled="@(savingResolution || !CanReviewStaffResult)" @onclick="ApproveResultAsync"><span class="material-symbols-outlined">task_alt</span>@(savingResolution ? "Đang lưu…" : "Xác nhận đã hoàn thành")</button>
+                <button type="button" class="close-request-action" disabled="@(savingResolution || detail?.Status != "RESOLVED")" @onclick="OpenClosePanel"><span class="material-symbols-outlined">lock</span>Đóng yêu cầu</button>
+            </footer>
+        </section>
+    </div>
+}
+
+@if (showClosePanel)
+{
+    <div class="dialog-backdrop close-confirm-backdrop" @onclick="CloseClosePanel">
+        <section class="manager-dialog close-request-dialog" role="dialog" aria-modal="true" aria-labelledby="close-request-title" @onclick:stopPropagation="true">
+            <header><div><span class="dialog-icon close-icon"><span class="material-symbols-outlined">lock</span></span><div><h2 id="close-request-title">Đóng yêu cầu dịch vụ</h2><p>#@detail?.RequestNumber · @detail?.Title</p></div></div><button type="button" aria-label="Đóng" @onclick="CloseClosePanel"><span class="material-symbols-outlined">close</span></button></header>
+            <div class="close-warning"><span class="material-symbols-outlined">warning</span><div><strong>Xác nhận kết thúc yêu cầu</strong><p>Sau khi đóng, yêu cầu sẽ chuyển sang trạng thái Đã đóng và không thể tiếp tục điều phối.</p></div></div>
+            <label class="note-field"><span>Ghi chú đóng yêu cầu</span><textarea rows="4" maxlength="2000" @bind="closeRequestNote" placeholder="Nhập kết luận nghiệm thu hoặc lưu ý cuối cùng…"></textarea></label>
+            @if (!string.IsNullOrWhiteSpace(closeActionNotice)) { <p class="result-action-notice" role="status">@closeActionNotice</p> }
+            <footer><button type="button" class="dialog-cancel" disabled="@savingClose" @onclick="CloseClosePanel">Thoát</button><button type="button" class="close-request-action" disabled="@savingClose" @onclick="ConfirmCloseAsync"><span class="material-symbols-outlined">lock</span>@(savingClose ? "Đang đóng…" : "Xác nhận đóng yêu cầu")</button></footer>
+        </section>
+    </div>
+}
+
 @if (showAssignPanel)
 {
-    <div class="dialog-backdrop" @onclick="ToggleAssignPanel">
+    <div class="dialog-backdrop" @onclick="CloseAssignPanel">
         <section class="manager-dialog" role="dialog" aria-modal="true" aria-labelledby="assign-dialog-title" @onclick:stopPropagation="true">
-            <header><div><span class="dialog-icon"><span class="material-symbols-outlined">person_add</span></span><div><h2 id="assign-dialog-title">Phân công nhân sự</h2><p>Chọn kỹ thuật viên phù hợp cho phiếu #SR-2026-0842</p></div></div><button type="button" aria-label="Đóng" @onclick="ToggleAssignPanel"><span class="material-symbols-outlined">close</span></button></header>
-            <div class="dialog-search"><span class="material-symbols-outlined">search</span><input aria-label="Tìm nhân sự" placeholder="Tìm theo tên hoặc chuyên môn…" /></div>
+            <header><div><span class="dialog-icon"><span class="material-symbols-outlined">person_add</span></span><div><h2 id="assign-dialog-title">@(detail?.AssignedStaffUserId is null ? "Phân công nhân sự" : "Phân công lại")</h2><p>Chọn Staff phụ trách phiếu #@detail?.RequestNumber</p></div></div><button type="button" aria-label="Đóng" @onclick="CloseAssignPanel"><span class="material-symbols-outlined">close</span></button></header>
+            <div class="dialog-search"><span class="material-symbols-outlined">search</span><input aria-label="Tìm nhân sự" placeholder="Tìm theo tên hoặc username…" @bind="staffSearch" @bind:event="oninput" /></div>
             <div class="staff-options">
-                <button type="button" class="is-selected"><span class="staff-initial">LT</span><span><strong>Lê Minh Tuấn</strong><small>Kỹ thuật M&amp;E · Đang xử lý 2 việc</small></span><span class="material-symbols-outlined">check_circle</span></button>
-                <button type="button"><span class="staff-initial violet-avatar">QH</span><span><strong>Phạm Quốc Huy</strong><small>Điện nước · Sẵn sàng</small></span><span class="availability">Sẵn sàng</span></button>
-                <button type="button"><span class="staff-initial amber-avatar">NV</span><span><strong>Nguyễn Văn Vũ</strong><small>Kỹ thuật tổng hợp · Đang xử lý 1 việc</small></span><span class="availability">12 phút</span></button>
+                @if (loadingStaff)
+                {
+                    <p>Đang tải danh sách nhân sự…</p>
+                }
+                else if (!FilteredStaff.Any())
+                {
+                    <p>Không tìm thấy tài khoản Staff đang hoạt động.</p>
+                }
+                else
+                {
+                    @foreach (var staff in FilteredStaff)
+                    {
+                        <button type="button" class="@(selectedStaffUserId == staff.UserId ? "is-selected" : null)" @onclick="() => selectedStaffUserId = staff.UserId">
+                            <span class="staff-initial">@Initials(staff.DisplayName)</span>
+                            <span><strong>@staff.DisplayName</strong><small>@staff.Username</small></span>
+                            @if (selectedStaffUserId == staff.UserId) { <span class="material-symbols-outlined">check_circle</span> }
+                            else { <span class="availability">Sẵn sàng</span> }
+                        </button>
+                    }
+                }
             </div>
-            <footer><button type="button" class="dialog-cancel" @onclick="ToggleAssignPanel">Hủy</button><button type="button" class="dialog-confirm" @onclick="ConfirmUiAssignment">Xác nhận phân công</button></footer>
+            <label class="note-field"><span>Ghi chú phân công (không bắt buộc)</span><textarea rows="3" maxlength="2000" @bind="assignmentNote" placeholder="Thông tin cần lưu ý cho Staff…"></textarea></label>
+            @if (!string.IsNullOrWhiteSpace(assignmentError)) { <p class="ui-notice" role="alert">@assignmentError</p> }
+            <footer><button type="button" class="dialog-cancel" disabled="@savingAssignment" @onclick="CloseAssignPanel">Hủy</button><button type="button" class="dialog-confirm" disabled="@(savingAssignment || selectedStaffUserId is null)" @onclick="ConfirmAssignmentAsync">@(savingAssignment ? "Đang lưu…" : "Xác nhận phân công")</button></footer>
         </section>
     </div>
 }
@@ -187,32 +265,175 @@
     private bool showAssignPanel;
     private bool showNotePanel;
     private bool showUiNotice;
-    private bool reviewing;
+    private bool showClosePanel;
+    private bool loadingStaff;
+    private bool savingAssignment;
+    private bool savingResolution;
+    private bool savingClose;
+    private string? staffSearch;
+    private string? assignmentNote;
+    private string? assignmentError;
+    private string? reviewDecisionNote;
+    private string? resultActionNotice;
+    private string? closeRequestNote;
+    private string? closeActionNotice;
+    private Guid? selectedStaffUserId;
+    private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem? selectedActivity;
+    private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption> staffOptions = [];
     private string noticeMessage = "Chức năng này thuộc FE-05.7/FE-07 và chưa được triển khai trong FE-05.5.";
 
     protected override async Task OnParametersSetAsync()
     {
         if (Id is not { } id) return;
-        var result = await Api.GetAsync(id);
+        var detailTask = Api.GetAsync(id);
+        var staffTask = Api.AssignmentOptionsAsync(id);
+        await Task.WhenAll(detailTask, staffTask);
+        var result = await detailTask;
         if (result.IsSuccess) detail = result.Data;
         else { noticeMessage = result.Message ?? "Không tải được chi tiết yêu cầu."; showUiNotice = true; }
+        var staffResult = await staffTask;
+        if (staffResult.IsSuccess && staffResult.Data is not null)
+            staffOptions = staffResult.Data.Staff;
     }
 
-    private async Task ReviewAsync()
+    private bool CanAssign => detail?.Status is "UNDER_REVIEW" or "ASSIGNED" or "IN_PROGRESS";
+    private bool CanReviewStaffResult => selectedActivity?.ActivityType == "WORK_RESULT_ADDED" && detail?.Status == "IN_PROGRESS";
+    private IEnumerable<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption> FilteredStaff =>
+        string.IsNullOrWhiteSpace(staffSearch)
+            ? staffOptions
+            : staffOptions.Where(x => x.DisplayName.Contains(staffSearch, StringComparison.OrdinalIgnoreCase) || x.Username.Contains(staffSearch, StringComparison.OrdinalIgnoreCase));
+
+    private async Task OpenAssignPanelAsync()
     {
-        if (Id is not { } id || detail?.Status != "SUBMITTED") return;
-        reviewing = true;
-        var result = await Api.ReviewAsync(id, new(null));
-        reviewing = false;
-        if (result.IsSuccess && result.Data is not null) detail = result.Data;
-        else { noticeMessage = result.Message ?? "Không thể tiếp nhận yêu cầu."; showUiNotice = true; }
+        if (Id is not { } id || !CanAssign) return;
+        showAssignPanel = true;
+        loadingStaff = true;
+        assignmentError = null;
+        staffSearch = null;
+        assignmentNote = null;
+        selectedStaffUserId = detail?.AssignedStaffUserId;
+        if (staffOptions.Count == 0)
+        {
+            var result = await Api.AssignmentOptionsAsync(id);
+            if (result.IsSuccess && result.Data is not null)
+                staffOptions = result.Data.Staff;
+            else
+                assignmentError = result.Message ?? "Không tải được danh sách nhân sự đang hoạt động.";
+        }
+        loadingStaff = false;
     }
 
-    private void ToggleAssignPanel() => showAssignPanel = !showAssignPanel;
+    private void CloseAssignPanel()
+    {
+        if (savingAssignment) return;
+        showAssignPanel = false;
+    }
+
+    private void OpenResultPanel(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem activity)
+    {
+        selectedActivity = activity;
+        reviewDecisionNote = null;
+        resultActionNotice = null;
+    }
+
+    private void CloseResultPanel() => selectedActivity = null;
+
+    private async Task RequestReworkAsync()
+    {
+        if (Id is not { } id || !CanReviewStaffResult) return;
+        savingResolution = true;
+        resultActionNotice = null;
+        var result = await Api.RequestReworkAsync(id, new(reviewDecisionNote));
+        savingResolution = false;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            resultActionNotice = result.Message ?? "Không thể yêu cầu Staff xử lý lại.";
+            return;
+        }
+
+        detail = result.Data;
+        selectedActivity = null;
+        noticeMessage = "Đã yêu cầu Staff xử lý lại. Yêu cầu vẫn ở trạng thái Đang tiến hành.";
+        showUiNotice = true;
+    }
+
+    private async Task ApproveResultAsync()
+    {
+        if (Id is not { } id || !CanReviewStaffResult) return;
+        savingResolution = true;
+        resultActionNotice = null;
+        var result = await Api.ApproveResolutionAsync(id, new(reviewDecisionNote));
+        savingResolution = false;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            resultActionNotice = result.Message ?? "Không thể xác nhận kết quả xử lý.";
+            return;
+        }
+
+        detail = result.Data;
+        resultActionNotice = "Đã nghiệm thu kết quả. Yêu cầu đã chuyển sang trạng thái Đã xử lý và có thể đóng.";
+    }
+
+    private void OpenClosePanel()
+    {
+        if (detail?.Status != "RESOLVED") return;
+        selectedActivity = null;
+        showClosePanel = true;
+        closeRequestNote = null;
+        closeActionNotice = null;
+    }
+
+    private void CloseClosePanel()
+    {
+        if (savingClose) return;
+        showClosePanel = false;
+    }
+
+    private async Task ConfirmCloseAsync()
+    {
+        if (Id is not { } id || detail?.Status != "RESOLVED") return;
+        savingClose = true;
+        closeActionNotice = null;
+        var result = await Api.CloseAsync(id, new(closeRequestNote));
+        savingClose = false;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            closeActionNotice = result.Message ?? "Không thể đóng yêu cầu.";
+            return;
+        }
+
+        detail = result.Data;
+        showClosePanel = false;
+        noticeMessage = "Đã đóng yêu cầu dịch vụ.";
+        showUiNotice = true;
+    }
+
+    private async Task ConfirmAssignmentAsync()
+    {
+        if (Id is not { } id || selectedStaffUserId is not { } staffUserId) return;
+        savingAssignment = true;
+        assignmentError = null;
+        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote));
+        savingAssignment = false;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            assignmentError = result.Message ?? "Không thể phân công nhân sự.";
+            return;
+        }
+
+        detail = result.Data;
+        showAssignPanel = false;
+        noticeMessage = "Đã phân công nhân sự và cập nhật trạng thái yêu cầu thành Đã phân công.";
+        showUiNotice = true;
+    }
     private void ToggleNotePanel() => showNotePanel = !showNotePanel;
     private void ShowUiNotice() => showUiNotice = true;
-    private void ConfirmUiAssignment() { showAssignPanel = false; showUiNotice = true; }
     private void ConfirmUiNote() { showNotePanel = false; showUiNotice = true; }
+    private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption? AssignedStaff() =>
+        detail?.AssignedStaffUserId is { } id ? staffOptions.FirstOrDefault(x => x.UserId == id) : null;
+    private string AssignedStaffName() => detail?.AssignedStaffUserId is null ? "Chưa phân công" : AssignedStaff()?.DisplayName ?? "Đã phân công nhân sự";
+    private static string ResultText(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem activity) =>
+        activity.WorkResult ?? activity.Detail ?? StatusTransition(activity.FromStatus, activity.ToStatus);
     private string LocationLabel() => detail?.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{detail.ApartmentUnitNumber} · Tầng {detail.FloorNumber}";
     private string SubmittedLabel() => detail is null ? "Đang tải…" : detail.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string PreferredTimeLabel() => detail?.PreferredDate is null ? (detail?.PreferredTimeCode ?? "Không yêu cầu") : $"{detail.PreferredDate:dd/MM/yyyy} · {detail.PreferredTimeCode ?? "Linh hoạt"}";
@@ -223,9 +444,9 @@
         return elapsed.TotalDays >= 1 ? $"{(int)elapsed.TotalDays} ngày {elapsed.Hours} giờ" : $"{Math.Max(0, elapsed.Hours)} giờ {Math.Max(0, elapsed.Minutes)} phút";
     }
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem? LatestActivity() => detail?.Activities.LastOrDefault(x => !string.IsNullOrWhiteSpace(x.Detail));
-    private static string ActivityLabel(string type) => type switch { "CREATED" => "Cư dân gửi yêu cầu", "MANAGER_REVIEWED" => "Ban Quản lý tiếp nhận", "ASSIGNED" => "Đã phân công", "REASSIGNED" => "Đã điều phối lại", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Ghi nhận kết quả", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", _ => "Cập nhật trạng thái" };
+    private static string ActivityLabel(string type) => type switch { "CREATED" => "Cư dân gửi yêu cầu", "MANAGER_REVIEWED" => "Ban Quản lý tiếp nhận", "PROPERTY_CONTEXT_ASSOCIATED" => "Đã gắn bối cảnh tài sản", "ASSIGNED" => "Đã phân công", "REASSIGNED" => "Đã điều phối lại", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Ghi nhận kết quả", "REWORK_REQUESTED" => "Manager yêu cầu xử lý lại", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", _ => "Cập nhật trạng thái" };
     private static string StatusTransition(string? from, string? to) => to is null ? "Yêu cầu đã được cập nhật." : $"{StatusLabel(from)} → {StatusLabel(to)}";
     private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));
-    private static string StatusLabel(string? status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", null => "Đang tải…", _ => status };
+    private static string StatusLabel(string? status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đã tiếp nhận", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang tiến hành", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", null => "Đang tải…", _ => status };
     private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", null => "Chưa xác định", _ => "Tiêu chuẩn" };
 }

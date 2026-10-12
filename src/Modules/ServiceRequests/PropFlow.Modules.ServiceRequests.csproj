@@ -11,6 +11,7 @@
     <ProjectReference Include="../PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj" />
     <ProjectReference Include="../Apartments.Contracts/PropFlow.Modules.Apartments.Contracts.csproj" />
     <ProjectReference Include="../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj" />
+    <ProjectReference Include="../Administration.Contracts/PropFlow.Modules.Administration.Contracts.csproj" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" />
     <ProjectReference Include="../ServiceRequests.Contracts/PropFlow.Modules.ServiceRequests.Contracts.csproj" />
