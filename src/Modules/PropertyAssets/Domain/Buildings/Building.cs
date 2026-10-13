@@ -8,7 +8,6 @@ public class Building
     }
 
     public Building(
-        string code,
         string name,
         string address,
         DateTimeOffset now,
@@ -17,7 +16,6 @@ public class Building
         string? description = null,
         Guid? createdBy = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
         ArgumentException.ThrowIfNullOrWhiteSpace(timeZoneId);
@@ -28,7 +26,6 @@ public class Building
         }
 
         Id = Guid.NewGuid();
-        Code = code.Trim();
         Name = name.Trim();
         Address = address.Trim();
         TimeZoneId = ValidateTimeZoneId(timeZoneId);
@@ -42,7 +39,6 @@ public class Building
     }
 
     public Guid Id { get; private set; }
-    public string Code { get; private set; } = null!;
     public string Name { get; private set; } = null!;
     public string Address { get; private set; } = null!;
     public string TimeZoneId { get; private set; } = "Asia/Ho_Chi_Minh";

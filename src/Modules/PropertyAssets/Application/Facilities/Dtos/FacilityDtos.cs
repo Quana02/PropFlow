@@ -33,7 +33,7 @@ public record FacilityDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateFacilityCommand(
-    [Required(ErrorMessage = "Mã cơ sở vật chất là bắt buộc."), StringLength(30, ErrorMessage = "Mã cơ sở vật chất không được vượt quá 30 ký tự.")] string Code,
+    [Required(ErrorMessage = "Mã cơ sở vật chất là bắt buộc."), RegularExpression("^CSVC-[A-Z0-9]+-[A-Z0-9]+$", ErrorMessage = "Mã cơ sở vật chất không đúng định dạng. Quy ước: CSVC-[TÊN]-[VỊ TRÍ]."), StringLength(30, ErrorMessage = "Mã cơ sở vật chất không được vượt quá 30 ký tự.")] string Code,
     [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc."), StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")] string Name,
     [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")] string? FacilityType = null,
     [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")] string? LocationDescription = null,

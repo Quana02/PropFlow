@@ -33,6 +33,7 @@ public class EquipmentDetailModel : EquipmentModel
 public class CreateEquipmentModel
 {
     [Required(ErrorMessage = "Mã thiết bị là bắt buộc.")]
+    [RegularExpression("^TB-[A-Z0-9]+-[A-Z0-9]+-[0-9]{2}$", ErrorMessage = "Mã thiết bị không đúng định dạng. Quy ước: TB-[LOẠI]-[TÊN THIẾT BỊ]-[STT].")]
     [StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")]
     public string Code { get; set; } = string.Empty;
 

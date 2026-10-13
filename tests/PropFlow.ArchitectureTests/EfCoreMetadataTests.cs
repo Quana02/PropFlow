@@ -573,7 +573,9 @@ public class EfCoreMetadataTests
         Assert.Contains(assignmentEntity.GetIndexes(), index =>
             index.IsUnique &&
             index.GetFilter() == "\"status\" IN ('ASSIGNED', 'IN_PROGRESS')" &&
-            index.Properties.Single().Name == nameof(MaintenanceAssignment.MaintenanceTaskId));
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(MaintenanceAssignment.MaintenanceTaskId),
+                nameof(MaintenanceAssignment.StaffUserId)]));
 
         var activityEntity = model.FindEntityType(typeof(MaintenanceTaskActivity));
         Assert.NotNull(activityEntity);

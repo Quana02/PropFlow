@@ -105,7 +105,7 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        db.Buildings.Add(new Building("B1", "Building 1", "Address 1", Now, "Asia/Ho_Chi_Minh"));
+        db.Buildings.Add(new Building("Building 1", "Address 1", Now, "Asia/Ho_Chi_Minh"));
         await db.SaveChangesAsync();
 
         var tz = await new CurrentBuildingTimeZone(db).GetAsync(default);
@@ -118,9 +118,9 @@ public sealed class AdministrationOverviewTests
     {
         await using var db = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        var historical = new Building("B1", "Building 1", "Address 1", Now, "UTC");
+        var historical = new Building("Building 1", "Address 1", Now, "UTC");
         historical.Deactivate(null, Now.AddMinutes(1));
-        var current = new Building("B2", "Building 2", "Address 2", Now.AddMinutes(2), "Asia/Ho_Chi_Minh");
+        var current = new Building("Building 2", "Address 2", Now.AddMinutes(2), "Asia/Ho_Chi_Minh");
         db.Buildings.AddRange(historical, current);
         await db.SaveChangesAsync();
 

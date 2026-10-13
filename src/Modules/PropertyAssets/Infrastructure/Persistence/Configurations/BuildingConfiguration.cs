@@ -14,11 +14,6 @@ public class BuildingConfiguration : IEntityTypeConfiguration<Building>
         builder.Property(b => b.Id)
             .HasColumnName("id");
 
-        builder.Property(b => b.Code)
-            .HasColumnName("code")
-            .HasMaxLength(30)
-            .IsRequired();
-
         builder.Property(b => b.Name)
             .HasColumnName("name")
             .HasMaxLength(150)
@@ -64,9 +59,6 @@ public class BuildingConfiguration : IEntityTypeConfiguration<Building>
             .IsRequired();
 
         // Indexes
-        builder.HasIndex(b => b.Code)
-            .IsUnique();
-
         builder.HasIndex(b => b.Name);
 
         builder.HasIndex(b => b.Status);

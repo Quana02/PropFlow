@@ -14,3 +14,27 @@ public sealed record ResidentServiceRequestCreatedResponse(
     string RequestNumber,
     string Status,
     DateTimeOffset SubmittedAt);
+
+public sealed record ResidentServiceRequestListItem(
+    Guid Id,
+    string RequestNumber,
+    string Title,
+    string? CategoryCode,
+    string Status,
+    string? PriorityCode,
+    string? ServiceAreaCode,
+    DateOnly? PreferredDate,
+    string? PreferredTimeCode,
+    DateTimeOffset SubmittedAt,
+    DateTimeOffset UpdatedAt,
+    int? Rating,
+    string? FeedbackComment,
+    DateTimeOffset? FeedbackSubmittedAt);
+
+public sealed record RateResidentServiceRequestRequest(int Rating, string Comment);
+
+public sealed record ResidentServiceRequestFeedbackResponse(
+    Guid ServiceRequestId,
+    int Rating,
+    string Comment,
+    DateTimeOffset SubmittedAt);

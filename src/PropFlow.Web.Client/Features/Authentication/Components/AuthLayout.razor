@@ -9,13 +9,7 @@ else if (IsForgot) { <PageTitle>Quên mật khẩu — PropFlow</PageTitle> }
 
 <div class="auth-shell @(IsRegister ? "register-mode" : IsForgot ? "forgot-mode" : "") @(IsLogin || IsRegister ? "switch-route" : "") @_transition">
     <div id="threejs-bg" class="auth-three" aria-hidden="true"></div>
-    <header class="auth-header">
-        <a href="/" class="brand">PropFlow <small>HỆ THỐNG ĐIỀU HÀNH TÒA NHÀ</small></a>
-        <div class="header-actions">
-            <button type="button" class="theme-toggle" onclick="toggleTheme()"><span id="theme-icon">🌙</span> <span id="theme-label">CHẾ ĐỘ TỐI</span></button>
-            <a href="/" class="home-icon" aria-label="Trang chủ" title="Trang chủ"><span class="material-symbols-outlined" aria-hidden="true">apartment</span></a>
-        </div>
-    </header>
+    <PropFlow.Web.Client.Layout.Shared.PublicHeader />
     <main class="auth-main">
         @if (IsOtp) { <div class="auth-step">BƯỚC 2: XÁC THỰC BẢO MẬT OTP</div> }
         else if (IsReset) { <div class="auth-step">THIẾT LẬP BẢO MẬT / MẬT KHẨU MỚI</div> }

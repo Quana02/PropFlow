@@ -56,7 +56,7 @@ public record EquipmentDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateEquipmentCommand(
-    [Required(ErrorMessage = "Mã thiết bị là bắt buộc."), StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")] string Code,
+    [Required(ErrorMessage = "Mã thiết bị là bắt buộc."), RegularExpression("^TB-[A-Z0-9]+-[A-Z0-9]+-[0-9]{2}$", ErrorMessage = "Mã thiết bị không đúng định dạng. Quy ước: TB-[LOẠI]-[TÊN THIẾT BỊ]-[STT]."), StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")] string Code,
     [Required(ErrorMessage = "Tên thiết bị là bắt buộc."), StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")] string Name,
     Guid? FacilityId = null,
     [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc."), StringLength(100, ErrorMessage = "Phân loại thiết bị không được vượt quá 100 ký tự.")] string? EquipmentType = null,

@@ -26,10 +26,10 @@ public class MaintenanceAssignmentConfiguration : IEntityTypeConfiguration<Maint
 
         builder.Property(assignment => assignment.MaintenanceTaskId).HasColumnName("maintenance_task_id").IsRequired();
         builder.HasIndex(assignment => assignment.MaintenanceTaskId);
-        builder.HasIndex(assignment => assignment.MaintenanceTaskId)
+        builder.HasIndex(assignment => new { assignment.MaintenanceTaskId, assignment.StaffUserId })
             .IsUnique()
             .HasFilter("\"status\" IN ('ASSIGNED', 'IN_PROGRESS')")
-            .HasDatabaseName("IX_maintenance_assignments_active_maintenance_task_id");
+            .HasDatabaseName("IX_maintenance_assignments_active_task_staff");
 
         builder.Property(assignment => assignment.StaffUserId).HasColumnName("staff_user_id").IsRequired();
         builder.HasIndex(assignment => assignment.StaffUserId);
