@@ -103,8 +103,8 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("code");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -163,8 +163,8 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasDefaultValue("ACTIVE")
                         .HasColumnName("status");
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -22,7 +23,8 @@ public sealed class ServiceRequestMaintenanceSourceTests
         db.Add(request);
         await db.SaveChangesAsync();
 
-        var result = await new ServiceRequestMaintenanceSource(db)
+        var apartment = new ApartmentReference(request.ApartmentUnitId!.Value, "dư", 2);
+        var result = await new ServiceRequestMaintenanceSource(db, new Apartments(apartment))
             .GetAsync(request.Id, CancellationToken.None);
 
         Assert.NotNull(result);
@@ -32,6 +34,8 @@ public sealed class ServiceRequestMaintenanceSourceTests
         Assert.Equal("SUBMITTED", result.Status);
         Assert.True(result.IsLinkable);
         Assert.Null(result.IneligibilityCode);
+        Assert.Equal("dư", result.ApartmentUnitNumber);
+        Assert.Equal(2, result.ApartmentFloorNumber);
     }
 
     [Fact]
@@ -46,7 +50,7 @@ public sealed class ServiceRequestMaintenanceSourceTests
         db.Add(request);
         await db.SaveChangesAsync();
 
-        var result = await new ServiceRequestMaintenanceSource(db)
+        var result = await new ServiceRequestMaintenanceSource(db, new Apartments())
             .GetAsync(request.Id, CancellationToken.None);
 
         Assert.NotNull(result);
@@ -70,7 +74,7 @@ public sealed class ServiceRequestMaintenanceSourceTests
         db.AddRange(numberMatch, titleMatch, closedMatch);
         await db.SaveChangesAsync();
 
-        var results = await new ServiceRequestMaintenanceSource(db)
+        var results = await new ServiceRequestMaintenanceSource(db, new Apartments())
             .SearchAsync("  maybom  ", 20, CancellationToken.None);
 
         Assert.Equal([titleMatch.Id, numberMatch.Id], results.Select(item => item.Id));
@@ -94,6 +98,41 @@ public sealed class ServiceRequestMaintenanceSourceTests
             facilityId: Guid.NewGuid(),
             equipmentId: Guid.NewGuid(),
             finalPriorityCode: "URGENT");
+
+    private sealed class Apartments(params ApartmentReference[] apartments)
+        : IApartmentResidentRelationshipSource
+    {
+        public Task<IReadOnlyList<ApartmentReference>> SearchApartmentsAsync(
+            string? search,
+            int take,
+            CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ApartmentReference>>(
+                apartments.Where(apartment => string.IsNullOrWhiteSpace(search)
+                    || apartment.UnitNumber.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    .Take(take).ToArray());
+
+        public Task<IReadOnlyList<ApartmentReference>> GetApartmentsAsync(
+            IReadOnlyCollection<Guid> apartmentUnitIds,
+            CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ApartmentReference>>(
+                apartments.Where(apartment => apartmentUnitIds.Contains(apartment.Id)).ToArray());
+
+        public Task<IReadOnlyList<ResidentApartmentOwnership>> GetOwnershipsAsync(
+            IReadOnlyCollection<Guid> residentIds,
+            CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ResidentApartmentOwnership>>([]);
+
+        public Task<IReadOnlyList<Guid>> GetCurrentOwnerResidentIdsAsync(
+            Guid apartmentUnitId,
+            DateOnly date,
+            CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<Guid>>([]);
+
+        public Task<IReadOnlyList<Guid>> GetCurrentOwnerResidentIdsAsync(
+            DateOnly date,
+            CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<Guid>>([]);
+    }
 }
 
 [Trait("Feature", "FE-05")]

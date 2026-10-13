@@ -1,0 +1,11 @@
+@inject FinanceCycleApi Api
+<section class="billing-workspace">
+    <h1>Đơn giá phí dịch vụ</h1><p>Đơn giá theo m² do manager quy định. Hóa đơn phát hành đầu tháng, hạn thanh toán ngày 10.</p>
+    @if (error is not null) { <p role="alert">@error</p> }
+    <table><thead><tr><th>Hiệu lực từ</th><th>VND/m²/tháng</th></tr></thead><tbody>@foreach(var r in rates) { <tr><td>@r.EffectiveFrom.ToString("MM/yyyy")</td><td>@r.UnitRate.ToString("N0") đ</td></tr> }</tbody></table>
+    @if(rates.Length == 0 && error is null) { <p>Manager chưa cấu hình đơn giá.</p> }
+</section>
+@code {
+    private ServiceRateRow[] rates = []; private string? error;
+    protected override async Task OnInitializedAsync() { var r = await Api.GetAsync<ServiceRateRow[]>("api/v1/billing/cycle/rates"); rates = r.Data ?? []; error = r.IsSuccess ? null : r.Message; }
+}

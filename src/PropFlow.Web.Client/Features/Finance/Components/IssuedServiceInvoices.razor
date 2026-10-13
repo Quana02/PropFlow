@@ -1,0 +1,15 @@
+@inject FinanceCycleApi Api
+<section class="billing-workspace">
+    <h1>Hóa đơn đã phát hành</h1><p>Hóa đơn dịch vụ được tự động lập theo đơn giá manager đặt và diện tích căn hộ.</p>
+    <a href="/finance/invoices/unpaid">Mở hóa đơn chưa thanh toán / thu tiền</a><button @onclick="Load">Tải lại</button>
+    @if (error is not null) { <p role="alert">@error</p> }
+    <table><thead><tr><th>Hóa đơn / kỳ</th><th>Căn hộ / chủ hộ</th><th>Tổng</th><th>Đã thu</th><th>Còn nợ / hạn</th><th>Chứng từ</th></tr></thead><tbody>
+    @foreach(var i in invoices) { <tr><td>@i.Number / @i.Period.ToString("MM/yyyy") · @(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</td><td>@i.Apartment / @i.ResidentName</td><td>@i.Total.ToString("N0") đ</td><td>@i.Paid.ToString("N0") đ</td><td>@i.Outstanding.ToString("N0") đ / @i.DueDate?.ToString("dd/MM/yyyy")</td><td><FinanceDocumentButton Path="@($"api/v1/billing/cycle/invoices/{i.Id}/print")" Label="In hóa đơn" /></td></tr> }
+    </tbody></table>
+</section>
+@code {
+    private HouseholdInvoice[] invoices = []; private string? error;
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load() { var r = await Api.GetAsync<HouseholdInvoice[]>("api/v1/billing/cycle/invoices"); invoices = r.Data ?? []; error = r.IsSuccess ? null : r.Message; }
+}
+

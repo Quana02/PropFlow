@@ -1,0 +1,183 @@
+@using PropFlow.Web.Client.Shared.Forms
+@using PropFlow.Web.Client.Features.Finance.Models
+@using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Services.Api
+@using Microsoft.JSInterop
+@inject BillingWorkspaceApi Api
+@inject IFinanceApiClient Finance
+@inject IJSRuntime Js
+@implements IAsyncDisposable
+<section class="billing-workspace">
+<nav class="billing-breadcrumb" aria-label="Đường dẫn trang"><a href="/finance/dashboard">Tài chính &amp; Sổ cái</a><span aria-hidden="true">›</span><span aria-current="page">@Title</span></nav>
+<h1>@Title</h1>
+<p>Hóa đơn được lập từ căn hộ, kỳ thu và đơn giá đã cấu hình. Chọn một hóa đơn để xem nguồn từng khoản phí, lịch sử phát hành và thanh toán.</p>
+<div class="actions">
+    @if (CanWrite) { <button disabled="@busy" @onclick="NewDraft">Tạo hóa đơn nháp</button><a class="button" href="/finance/fees">Cấu hình loại phí / đơn giá</a> }
+    <button disabled="@(busy || loading)" @onclick="Export">Xuất báo cáo Excel</button>
+    <button disabled="@(busy || loading)" @onclick="() => Load(1)">Tải lại</button>
+</div>
+@if (error is not null) { <p role="alert" class="error">@error</p> }
+@if (notice is not null) { <p role="status" class="notice">@notice</p> }
+<form @onsubmit="Search" @onsubmit:preventDefault>
+<div class="fields">
+    <label>Mã hóa đơn<input @bind="search" /></label>
+    <label>Căn hộ<PropFlowSelect @bind-Value="ApartmentFilterValue" Options="ApartmentFilterOptions" AriaLabel="Lọc căn hộ" Searchable="true" /></label>
+    <label>Trạng thái hóa đơn<PropFlowSelect @bind-Value="status" Options="StatusOptions" AriaLabel="Trạng thái hóa đơn" /></label>
+    <label>Thanh toán<PropFlowSelect @bind-Value="settlement" Options="SettlementOptions" AriaLabel="Trạng thái thanh toán" /></label>
+    <label>Kỳ thu giao từ<PropFlowDatePicker @bind-Value="from" ValidityChanged="v => fromValid = v" AriaLabel="Kỳ thu từ" Disabled="busy" /></label><label>Đến ngày<PropFlowDatePicker @bind-Value="to" ValidityChanged="v => toValid = v" AriaLabel="Kỳ thu đến" Disabled="busy" /></label>
+    <button type="submit" disabled="@(loading || busy)">Tìm kiếm / lọc</button>
+</div></form>
+@if (loading) { <p role="status">Đang tải hóa đơn…</p> }
+else if (data is not null)
+{
+    <div class="summary" aria-label="Tổng quan hóa đơn">
+        <article class="summary-card"><span>Hóa đơn phù hợp</span><strong>@data.Total</strong><small>Theo bộ lọc hiện tại</small></article>
+        <article class="summary-card"><span>Tổng phải thu</span><strong>@Money(data.TotalAmount)</strong><small>Hóa đơn đã phát hành</small></article>
+        <article class="summary-card collected"><span>Đã xác nhận</span><strong>@Money(data.ConfirmedPaidAmount)</strong><small>Khoản thu đã được xác nhận</small></article>
+        <article class="summary-card outstanding"><span>Còn nợ</span><strong>@Money(data.OutstandingAmount)</strong><small>Tổng dư nợ theo bộ lọc</small></article>
+    </div>
+    <p><small>Tổng thu tính trên toàn bộ kết quả đã phát hành, không tính hóa đơn nháp/hủy. Đơn vị: VND.</small></p>
+    <div class="table-scroll"><table><thead><tr><th>Mã / căn hộ</th><th>Kỳ thu / hạn trả</th><th>Trạng thái</th><th>Tổng hóa đơn</th><th>Đã xác nhận</th><th>Còn nợ</th><th>Chi tiết</th></tr></thead><tbody>
+    @foreach (var x in data.Items)
+    { <tr><td><strong>@x.InvoiceNumber</strong><small>Căn hộ @x.ApartmentNumber</small></td><td>@Date(x.PeriodStart) – @Date(x.PeriodEnd)<small>Hạn: @Date(x.DueDate)</small></td><td>@Status(x.Status)<small>@Status(x.SettlementStatus)</small></td><td class="money">@Money(x.TotalAmount)</td><td class="money">@Money(x.ConfirmedPaidAmount)</td><td class="money">@Money(x.OutstandingAmount)</td><td><button disabled="@busy" @onclick="() => Open(x.Id)">Xem</button></td></tr> }
+    @if (data.Items.Count == 0) { <tr><td colspan="7">Chưa có hóa đơn phù hợp. Hóa đơn chỉ xuất hiện sau khi được lập và lưu.</td></tr> }
+    </tbody></table></div>
+    <div class="actions"><button disabled="@(page <= 1 || busy)" @onclick="() => Load(page - 1)">Trang trước</button><span>Trang @(page) / @Math.Max(1, (int)Math.Ceiling(data.Total / 20d))</span><button disabled="@(page * 20 >= data.Total || busy)" @onclick="() => Load(page + 1)">Trang sau</button></div>
+}
+@if (editing && CanWrite)
+{
+    <form @ref="editorElement" tabindex="-1" @onsubmit="SaveDraft" @onsubmit:preventDefault>
+    <h2>@(editId.HasValue ? "Sửa hóa đơn nháp" : "Lập hóa đơn nháp")</h2>
+    <div class="fields">
+        <label>Mã hóa đơn<input required maxlength="50" disabled="@(editId.HasValue || busy)" @bind="invoiceNumber" /></label>
+        <label>Căn hộ<PropFlowSelect @bind-Value="ApartmentValue" Options="ApartmentOptions" Disabled="@(editId.HasValue || busy)" AriaLabel="Căn hộ lập hóa đơn" Searchable="true" /></label>
+        <label>Kỳ từ<PropFlowDatePicker @bind-Value="periodStart" ValidityChanged="v => periodStartValid = v" AriaLabel="Bắt đầu kỳ thu" Disabled="busy" /></label><label>Kỳ đến<PropFlowDatePicker @bind-Value="periodEnd" ValidityChanged="v => periodEndValid = v" AriaLabel="Kết thúc kỳ thu" Disabled="busy" /></label>
+        <label>Hạn thanh toán<PropFlowDatePicker @bind-Value="dueDate" ValidityChanged="v => dueDateValid = v" AriaLabel="Hạn thanh toán nháp" Disabled="busy" /></label><label>Ghi chú<input @bind="note" disabled="@busy" /></label>
+    </div>
+    <p>Số lượng do kế toán kiểm tra/nhập (ví dụ diện tích hoặc số đơn vị). Thành tiền = số lượng × đơn giá, làm tròn đến đồng từng dòng. Không tự lấy chỉ số điện/nước khi chưa có nguồn dữ liệu.</p>
+    @foreach (var line in lines)
+    {
+        <div class="fields" @key="line">
+            <label>Khoản phí / đơn giá<PropFlowSelect @bind-Value="line.RateValue" Options="RateOptions" Disabled="busy" AriaLabel="Khoản phí và đơn giá" Searchable="true" /></label>
+            <label>Số lượng<input class="line-input" required type="number" min="0.0001" step="0.0001" @bind="line.Quantity" disabled="@busy" /></label>
+            <label>Diễn giải<input @bind="line.Description" disabled="@busy" /></label><button type="button" disabled="@busy" @onclick="() => lines.Remove(line)">Bỏ dòng</button>
+        </div>
+    }
+    <button type="button" disabled="@busy" @onclick="() => lines.Add(new())">Thêm khoản phí</button><button type="submit" disabled="@(busy || lines.Count == 0)">Lưu nháp</button><button type="button" disabled="@busy" @onclick="() => editing = false">Đóng nhập</button>
+    </form>
+}
+@if (detail is not null)
+{
+    <section class="detail" @ref="detailElement" tabindex="-1" aria-label="Chi tiết hóa đơn">
+    <h2>@detail.InvoiceNumber — Căn hộ @detail.ApartmentNumber</h2>
+    <p>Kỳ @Date(detail.PeriodStart) – @Date(detail.PeriodEnd) · @Status(detail.Status) · Phát hành @Date(detail.IssueDate) · Hạn @Date(detail.DueDate)</p>
+    <div class="table-scroll"><table><thead><tr><th>Mã / khoản phí</th><th>Diễn giải</th><th>Số lượng</th><th>Đơn vị</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>
+    @foreach (var line in detail.Lines) { <tr><td>@line.FeeCode — @line.FeeName<small>Đơn giá nguồn: @(line.RateId?.ToString() ?? "Không có liên kết đơn giá")</small></td><td>@line.Description</td><td>@line.Quantity.ToString("0.####", Vi)</td><td>@line.UnitName</td><td>@Money(line.UnitRate)</td><td>@Money(line.Amount)</td></tr> }
+    </tbody></table></div>
+    <p><strong>Tổng: @Money(detail.TotalAmount) · Đã xác nhận thu: @Money(detail.ConfirmedPaidAmount) · Còn nợ: @Money(detail.OutstandingAmount)</strong></p>
+    <p>@detail.Note</p><small>Tạo lúc @detail.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · Mã người tạo: @detail.CreatedBy</small>
+    <div class="actions"><button disabled="@busy" @onclick="Print">In / Lưu PDF</button><button disabled="@busy" @onclick="DownloadPrint">Tải bản in HTML</button><button disabled="@busy" @onclick="() => detail = null">Đóng chi tiết</button>
+    @if (CanWrite && detail.Status == "DRAFT") { <button disabled="@busy" @onclick="EditDraft">Sửa nháp</button> }
+    </div>
+    @if (CanWrite && detail.Status == "DRAFT")
+    { <form @onsubmit="Issue" @onsubmit:preventDefault><div class="fields"><label>Ngày phát hành<PropFlowDatePicker @bind-Value="issueDate" ValidityChanged="v => issueDateValid = v" AriaLabel="Ngày phát hành" Disabled="busy" /></label><label>Hạn thanh toán<PropFlowDatePicker @bind-Value="issueDue" ValidityChanged="v => issueDueValid = v" AriaLabel="Hạn thanh toán phát hành" Disabled="busy" /></label><button type="submit" disabled="@busy">Phát hành hóa đơn</button></div><small>Sau khi phát hành, các khoản phí không được sửa.</small></form> }
+    @if (CanWrite && detail.Status != "CANCELLED" && detail.ConfirmedPaidAmount == 0)
+    { <form @onsubmit="Cancel" @onsubmit:preventDefault><label>Lý do hủy<input required @bind="cancelReason" /></label><button type="submit" disabled="@busy">Hủy hóa đơn</button></form> }
+    <h2>Lịch sử hóa đơn</h2>
+    @foreach (var h in detail.History) { <p>@h.ChangedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") — @Status(h.ToStatus) · @h.Reason<small>Người xử lý: @h.ChangedBy</small></p> }
+    <h2>Giao dịch thanh toán</h2>
+    @if (paymentsError is not null) { <p role="alert" class="error">@paymentsError</p> }
+    else if (payments.Length == 0) { <p>Chưa có giao dịch cho hóa đơn này.</p> }
+    else { <table><thead><tr><th>Mã / ngày</th><th>Số tiền</th><th>Phương thức / tham chiếu</th><th>Trạng thái</th></tr></thead><tbody>
+    @foreach (var p in payments) { <tr><td>@p.PaymentNumber<small>@p.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></td><td>@Money(p.Amount)</td><td>@p.PaymentMethodCode / @p.ReferenceNumber<small>@p.Note</small></td><td>@PaymentStatus(p.Status) @if (CanWrite && p.Status == "PENDING") { <button disabled="@busy" @onclick="() => Confirm(p.Id)">Xác nhận</button><button disabled="@busy" @onclick="() => rejecting = p.Id">Từ chối</button> }</td></tr> }
+    </tbody></table> }
+    @if (rejecting.HasValue && CanWrite) { <form @onsubmit="Reject" @onsubmit:preventDefault><label>Lý do từ chối<input required @bind="rejectReason" /></label><button disabled="@busy" type="submit">Lưu từ chối</button></form> }
+    @if (CanWrite && detail.Status == "ISSUED" && detail.OutstandingAmount > 0)
+    {
+        <form @onsubmit="RecordPayment" @onsubmit:preventDefault><h2>Ghi nhận khoản thanh toán</h2><p>Khoản ghi nhận ở trạng thái chờ xác nhận, chưa làm giảm dư nợ.</p><div class="fields">
+            <label>Số tiền (VND)<input type="number" min="1" step="1" max="@detail.OutstandingAmount" required @bind="paymentAmount" /></label>
+            <label>Phương thức<PropFlowSelect @bind-Value="paymentMethod" Options="PaymentMethodOptions" AriaLabel="Phương thức thanh toán" Disabled="busy" /></label>
+            <label>Ngày thanh toán<PropFlowDatePicker @bind-Value="paymentDate" ValidityChanged="v => paymentDateValid = v" AriaLabel="Ngày thanh toán" Disabled="busy" /></label>
+            <label>Mã tham chiếu<input maxlength="100" @bind="paymentReference" /></label><label>Ghi chú<input @bind="paymentNote" /></label>
+        </div><button type="submit" disabled="@busy">Ghi nhận chờ xác nhận</button></form>
+    }
+    </section>
+}
+</section>
+@code {
+    [Parameter] public bool CanWrite { get; set; }
+    [Parameter] public string? InitialSettlement { get; set; }
+    [Parameter] public Guid? InitialInvoiceId { get; set; }
+    private string Title => InitialSettlement switch { "OUTSTANDING" => "Hóa đơn chưa thanh toán", "OVERDUE" => "Công nợ quá hạn", _ => "Hóa đơn và công nợ" };
+    private ElementReference detailElement, editorElement;
+    private bool focusDetail, focusEditor;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusEditor) { focusEditor = false; await editorElement.FocusAsync(); }
+        else if (focusDetail) { focusDetail = false; await detailElement.FocusAsync(); }
+    }
+    private static readonly System.Globalization.CultureInfo Vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+    private Guid? lastRequestedInvoice;
+    private InvoicePage? data; private InvoiceView? detail; private BillingApartment[] apartments = []; private RateView[] rates = []; private PaymentRow[] payments = [];
+    private bool loading, busy, editing; private string? error, notice, paymentsError; private int page = 1;
+    private string search = "", status = "", settlement = ""; private Guid? apartmentFilter; private DateOnly? from, to;
+    private InvoiceFilter applied = new();
+    private string ApartmentFilterValue { get => apartmentFilter?.ToString() ?? ""; set => apartmentFilter = Guid.TryParse(value, out var id) ? id : null; }
+    private string ApartmentValue { get => apartmentId == Guid.Empty ? "" : apartmentId.ToString(); set => apartmentId = Guid.TryParse(value, out var id) ? id : Guid.Empty; }
+    private IReadOnlyList<PropFlowSelectOption> ApartmentOptions => apartments.Select(x => new PropFlowSelectOption(x.Id.ToString(), x.UnitNumber)).ToArray();
+    private IReadOnlyList<PropFlowSelectOption> ApartmentFilterOptions => new[] { new PropFlowSelectOption("", "Tất cả căn hộ") }.Concat(ApartmentOptions).ToArray();
+    private IReadOnlyList<PropFlowSelectOption> RateOptions => rates.Select(r => new PropFlowSelectOption(r.Id.ToString(), $"{r.FeeName} — {r.Name} — {Money(r.UnitRate)} / {r.UnitName}" + (r.IsActive ? "" : " (Ngừng dùng)"), !r.IsActive)).ToArray();
+    private static readonly PropFlowSelectOption[] PaymentMethodOptions = [new("CASH", "Tiền mặt"),new("BANK_TRANSFER", "Chuyển khoản")];
+    private static readonly PropFlowSelectOption[] StatusOptions = [new("", "Tất cả"),new("DRAFT", "Nháp"),new("ISSUED", "Đã phát hành"),new("CANCELLED", "Đã hủy")];
+    private static readonly PropFlowSelectOption[] SettlementOptions = [new("", "Tất cả"),new("OUTSTANDING", "Còn nợ"),new("UNPAID", "Chưa thanh toán"),new("PARTIAL", "Một phần"),new("PAID", "Đã thanh toán"),new("OVERDUE", "Quá hạn")];
+    private Guid? editId, rejecting; private Guid apartmentId;
+    private string invoiceNumber = "", note = "", cancelReason = "", rejectReason = "";
+    private DateOnly? periodStart = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1), periodEnd = DateOnly.FromDateTime(DateTime.Today), issueDate = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? dueDate, issueDue;
+    private List<LineInput> lines = [];
+    private decimal paymentAmount; private string paymentMethod = "", paymentReference = "", paymentNote = "";
+    private DateOnly? paymentDate = DateOnly.FromDateTime(DateTime.Today);
+    private bool fromValid = true, toValid = true, periodStartValid = true, periodEndValid = true, dueDateValid = true, issueDateValid = true, issueDueValid = true, paymentDateValid = true;
+    private string paymentKey = Guid.NewGuid().ToString(); private string? paymentPayload;
+    private IJSObjectReference? jsModule;
+    private sealed class LineInput { public Guid RateId { get; set; } public string RateValue { get => RateId == Guid.Empty ? "" : RateId.ToString(); set => RateId = Guid.TryParse(value, out var id) ? id : Guid.Empty; } public decimal Quantity { get; set; } = 1; public string? Description { get; set; } }
+    protected override async Task OnInitializedAsync() {
+        settlement = InitialSettlement ?? ""; applied = new(Settlement: InitialSettlement);
+        var a = await Api.GetAsync<BillingApartment[]>("apartments"); var r = await Api.GetAsync<RateView[]>("rates");
+        apartments = a.Data ?? []; rates = r.Data ?? []; if (!a.IsSuccess || !r.IsSuccess) error = a.Message ?? r.Message;
+        await Load(1);
+    }
+    protected override async Task OnParametersSetAsync() {
+        if (InitialInvoiceId.HasValue && InitialInvoiceId != lastRequestedInvoice) { lastRequestedInvoice = InitialInvoiceId; await Open(InitialInvoiceId.Value); }
+    }
+    private async Task Load(int target) { loading = true; var result = await Api.GetAsync<InvoicePage>("invoices?" + BillingWorkspaceApi.Query(applied) + $"&page={target}"); if (result.IsSuccess) { data = result.Data; page = target; } else { data = null; error = result.Message; } loading = false; }
+    private async Task Search() { if (!fromValid || !toValid) { error = "Ngày lọc không hợp lệ."; return; } error = null; applied = new(search, status, apartmentFilter, from, to, settlement); await Load(1); }
+    private async Task Open(Guid id) { busy = true; error = null; var result = await Api.GetAsync<InvoiceView>($"invoices/{id}"); detail = result.Data; if (!result.IsSuccess) error = result.Message; else { focusDetail = true; issueDue = detail!.DueDate; cancelReason = ""; var p = await Api.PaymentsAsync(id); payments = p.Data ?? []; paymentsError = p.IsSuccess ? null : p.Message; } busy = false; }
+    private void NewDraft() { detail = null; editing = true; focusEditor = true; editId = null; invoiceNumber = ""; apartmentId = Guid.Empty; note = ""; lines = [new()]; }
+    private void EditDraft() { if (detail is null) return; editing = true; focusEditor = true; editId = detail.Id; invoiceNumber = detail.InvoiceNumber; apartmentId = detail.ApartmentUnitId; periodStart = detail.PeriodStart; periodEnd = detail.PeriodEnd; dueDate = detail.DueDate; note = detail.Note ?? ""; lines = detail.Lines.Select(x => new LineInput { RateId = x.RateId ?? Guid.Empty, Quantity = x.Quantity, Description = x.Description }).ToList(); }
+    private async Task SaveDraft() { if (busy) return; if (!periodStart.HasValue || !periodEnd.HasValue || !periodStartValid || !periodEndValid || !dueDateValid) { error = "Vui lòng nhập kỳ thu hợp lệ."; return; } busy = true; error = notice = null; var r = await Api.SaveAsync<SavedId>(editId.HasValue ? $"invoices/{editId}" : "invoices", new DraftInput(invoiceNumber, apartmentId, periodStart.Value, periodEnd.Value, dueDate, note, lines.Select(x => new DraftLine(x.RateId, x.Quantity, x.Description)).ToArray()), editId.HasValue ? HttpMethod.Put : HttpMethod.Post); if (r.IsSuccess) { editing = false; notice = "Đã lưu hóa đơn nháp."; await Load(1); await Open(r.Data!.Id); } else error = r.Message; busy = false; }
+    private async Task Issue() { if (!issueDate.HasValue || !issueDateValid || !issueDueValid) { error = "Ngày phát hành / hạn thanh toán không hợp lệ."; return; } await Mutate("issue", new IssueInput(issueDate.Value, issueDue)); }
+    private async Task Cancel() => await Mutate("cancel", new CancelInput(cancelReason));
+    private async Task Mutate(string action, object request) { if (detail is null || busy) return; var id = detail.Id; busy = true; error = null; var r = await Api.SaveAsync<EmptyResponse>($"invoices/{id}/{action}", request); if (r.IsSuccess) { notice = "Đã cập nhật hóa đơn."; await Load(page); await Open(id); } else error = r.Message; busy = false; }
+    private async Task Export() { busy = true; error = null; var result = await Api.FileAsync("invoices/export?" + BillingWorkspaceApi.Query(applied)); await Download(result, false); busy = false; }
+    private async Task Print() { if (detail is null) return; busy = true; await Download(await Api.FileAsync($"invoices/{detail.Id}/print"), true); busy = false; }
+    private async Task DownloadPrint() { if (detail is null) return; busy = true; await Download(await Api.FileAsync($"invoices/{detail.Id}/print"), false); busy = false; }
+    private async Task Download(ApiResult<FileResponse> r, bool print) {
+        if (!r.IsSuccess || r.Data is null) { error = r.Message; return; }
+        try { jsModule ??= await Js.InvokeAsync<IJSObjectReference>("import", "./js/finance-documents.js"); if (print) await jsModule.InvokeVoidAsync("print", r.Data.Content); else await jsModule.InvokeVoidAsync("download", r.Data.Content, r.Data.ContentType, r.Data.FileName); }
+        catch (JSException) { error = "Trình duyệt chưa thể mở bản in/tải file. Vui lòng thử lại."; }
+    }
+    private async Task RecordPayment() { if (busy || detail is null) return; if (!paymentDate.HasValue || !paymentDateValid) { error = "Ngày thanh toán không hợp lệ."; return; } busy = true; error = null; var id = detail.Id;
+        var payload = new { invoiceId = id, amount = paymentAmount, paymentMethodCode = paymentMethod, paymentDate = new DateTimeOffset(paymentDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeOffset.Now.Offset), referenceNumber = paymentReference, note = paymentNote };
+        var serialized = System.Text.Json.JsonSerializer.Serialize(payload); if (serialized != paymentPayload) { paymentKey = Guid.NewGuid().ToString(); paymentPayload = serialized; }
+        var r = await Api.RecordPaymentAsync(payload, paymentKey); if (r.IsSuccess) { paymentPayload = null; notice = "Đã ghi nhận khoản thanh toán chờ xác nhận."; await Open(id); } else error = r.Message; busy = false;
+    }
+    private readonly Dictionary<Guid, string> confirmationKeys = new();
+    private async Task Confirm(Guid id) { if (busy || detail is null) return; busy = true; error = null; if (!confirmationKeys.TryGetValue(id, out var key)) confirmationKeys[id] = key = Guid.NewGuid().ToString(); var r = await Finance.ConfirmPaymentAsync(id, key); if (r.IsSuccess) { await Load(page); await Open(detail.Id); } else error = r.Message; busy = false; }
+    private async Task Reject() { if (busy || !rejecting.HasValue || detail is null) return; busy = true; error = null; var r = await Finance.RejectPaymentAsync(rejecting.Value, rejectReason, Guid.NewGuid().ToString()); if (r.IsSuccess) { rejecting = null; await Open(detail.Id); } else error = r.Message; busy = false; }
+    private static string Money(decimal n) => n.ToString("N0", Vi) + " ₫";
+    private static string Date(DateOnly? d) => d?.ToString("dd/MM/yyyy") ?? "—";
+    private static string Status(string s) => s switch { "DRAFT" => "Nháp", "ISSUED" => "Đã phát hành", "CANCELLED" => "Đã hủy", "PAID" => "Đã thanh toán", "PARTIAL" => "Thanh toán một phần", "UNPAID" => "Chưa thanh toán", _ => "Không áp dụng" };
+    private static string PaymentStatus(string s) => s switch { "PENDING" => "Chờ xác nhận", "CONFIRMED" => "Đã xác nhận", "REJECTED" => "Đã từ chối", _ => s };
+    public async ValueTask DisposeAsync() { if (jsModule is not null) await jsModule.DisposeAsync(); }
+}

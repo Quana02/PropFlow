@@ -91,3 +91,5 @@
     .overdue-actions { justify-content: flex-start; }
     .overdue-summary, .overdue-filters { grid-template-columns: 1fr; }
 }
+
+.process-button { cursor: pointer; }

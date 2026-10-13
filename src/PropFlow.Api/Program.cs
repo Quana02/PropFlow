@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using PropFlow.Modules.Authentication.Infrastructure;
@@ -21,6 +22,7 @@ using PropFlow.Modules.Maintenance.Infrastructure.Persistence;
 using PropFlow.Modules.Maintenance.Application;
 using PropFlow.Modules.Maintenance.Contracts;
 using PropFlow.Modules.Maintenance.Presentation;
+using PropFlow.Modules.Maintenance.Infrastructure.Storage;
 using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Contracts;
 using PropFlow.Modules.Payments.Application.Finance;
@@ -171,7 +173,9 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
+builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage, LocalMaintenanceEvidenceStorage>();
 builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceNotifier, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceNotifier>();
+builder.Services.AddSingleton<IUserIdProvider, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceUserIdProvider>();
 builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
@@ -186,12 +190,23 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(ResidentServiceRequestsController).Assembly)
     .AddApplicationPart(typeof(MaintenanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
-    .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly);
+    .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.Communication.Presentation.ResidentNotificationsController).Assembly);
 builder.Services.AddScoped<IInvoiceFinancialSource, InvoiceFinancialSource>();
 builder.Services.AddScoped<IConfirmedPaymentSource, ConfirmedPaymentSource>();
 builder.Services.AddScoped<BillingFinanceQueries>();
-builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceStore>();
+builder.Services.AddScoped<PaymentFinanceStore>();
+builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceNotifications>();
 builder.Services.AddScoped<PaymentFinanceUseCases>();
+builder.Services.AddScoped<IBillingHouseholdDirectory, BillingHouseholdDirectory>();
+builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
+builder.Services.AddScoped<IBillingCycle, BillingCycle>();
+builder.Services.AddScoped<IRentalPricing, RentalPricing>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationStore, PropFlow.Modules.Communication.Infrastructure.FinanceNoticePublisher>();
+builder.Services.AddScoped<IFinanceNoticePublisher, FinanceNoticePublisherBridge>();
+builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("Authentication:Mail"));
+builder.Services.AddHostedService<BillingCycleWorker>();
+builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
 builder.Services.AddScoped<IResidentResidenceSource, ResidentResidenceSource>();
@@ -221,6 +236,10 @@ builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoord
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("finance.manage", policy => policy.RequireRole(SystemRoleCodes.Accountant).RequireClaim("permission", SystemPermissionCodes.ManageFinance));
+    options.AddPolicy("billing.configure", policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy("billing.read", policy => policy.RequireAssertion(c =>
+        (c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
+        (c.User.IsInRole(SystemRoleCodes.Accountant) && c.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
     options.AddPolicy(AdministrationAuthorizationPolicies.ManageInternalAccounts,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageInternalAccounts));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewAdministrationActivity,

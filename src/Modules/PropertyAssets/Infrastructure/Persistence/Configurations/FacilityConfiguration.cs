@@ -17,7 +17,7 @@ public class FacilityConfiguration : IEntityTypeConfiguration<Facility>
 
         builder.Property(f => f.Code)
             .HasColumnName("code")
-            .HasMaxLength(30)
+            .HasMaxLength(512)
             .IsRequired();
 
         builder.Property(f => f.Name)

@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using PropFlow.Shared;
 using PropFlow.Modules.PropertyAssets.Application;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
@@ -119,6 +121,9 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetRead
     public Task<bool> FacilityCodeExistsAsync(string code, CancellationToken ct) =>
         db.Facilities.AnyAsync(f => f.Code.ToLower() == code.ToLower(), ct);
 
+    public async Task<IReadOnlyList<string>> FacilityCodesWithPrefixAsync(string prefix, CancellationToken ct) =>
+        await db.Facilities.AsNoTracking().Where(item => item.Code.StartsWith(prefix)).Select(item => item.Code).ToArrayAsync(ct);
+
     public void Add(Facility facility) => db.Facilities.Add(facility);
 
     public async Task<EquipmentPage> EquipmentAsync(EquipmentFilterQuery query, CancellationToken ct)
@@ -154,7 +159,24 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetRead
     public Task<bool> EquipmentCodeExistsAsync(string code, CancellationToken ct) =>
         db.Equipment.AnyAsync(e => e.Code.ToLower() == code.ToLower(), ct);
 
+    public async Task<IReadOnlyList<string>> EquipmentCodesWithPrefixAsync(string prefix, CancellationToken ct) =>
+        await db.Equipment.AsNoTracking().Where(item => item.Code.StartsWith(prefix)).Select(item => item.Code).ToArrayAsync(ct);
+
     public void Add(EquipmentEntity equipment) => db.Equipment.Add(equipment);
+
+    public async Task<T> WithAdvisoryLockAsync<T>(string scope, Func<CancellationToken, Task<T>> action, CancellationToken ct)
+    {
+        if (!db.Database.IsNpgsql())
+            return await action(ct);
+
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0})", [IdentifierCodeNormalizer.AdvisoryLockKey(scope)], ct);
+        var result = await action(ct);
+        await transaction.CommitAsync(ct);
+        return result;
+    }
+
+    public void Detach(object entity) => db.Entry(entity).State = EntityState.Detached;
 
     private IQueryable<Facility> VisibleFacilities(AssetReadScope scope)
     {
@@ -171,4 +193,16 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetRead
     }
 
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
+
+    public async Task SaveGeneratedCodeAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        {
+            throw new IdentifierCodeConflictException();
+        }
+    }
 }

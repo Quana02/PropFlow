@@ -26,7 +26,7 @@ public class MaintenanceTaskConfiguration : IEntityTypeConfiguration<Maintenance
 
         builder.Property(task => task.TaskNumber)
             .HasColumnName("task_number")
-            .HasMaxLength(30)
+            .HasMaxLength(512)
             .IsRequired();
         builder.HasIndex(task => task.TaskNumber).IsUnique();
 
