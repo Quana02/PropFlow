@@ -73,6 +73,15 @@ public sealed record ManagerServiceRequestAsset(
     string Status,
     string? LocationDescription);
 
+public sealed record ManagerServiceRequestEvidenceItem(
+    Guid Id,
+    Guid ActivityId,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    DateTimeOffset UploadedAt,
+    string DownloadUrl);
+
 public sealed record ManagerServiceRequestDetailResponse(
     Guid Id,
     string RequestNumber,
@@ -98,7 +107,8 @@ public sealed record ManagerServiceRequestDetailResponse(
     ManagerServiceRequestAsset? Facility,
     ManagerServiceRequestAsset? Equipment,
     ManagerServiceRequestAiInsight? AiInsight,
-    IReadOnlyList<ManagerServiceRequestActivityItem> Activities);
+    IReadOnlyList<ManagerServiceRequestActivityItem> Activities,
+    IReadOnlyList<ManagerServiceRequestEvidenceItem> Evidence);
 
 public sealed record ReviewManagerServiceRequestRequest(string? Note = null);
 

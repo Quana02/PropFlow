@@ -85,6 +85,23 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 x.ToStatus == null ? null : x.ToStatus.ToString(), x.Title, x.Detail, x.WorkResult, x.PerformedBy, x.CreatedAt))
             .ToArrayAsync(ct);
 
+    public async Task<IReadOnlyList<ManagerServiceRequestEvidenceMetadata>> GetEvidenceAsync(Guid id, CancellationToken ct) =>
+        await db.ServiceRequestEvidenceFiles.AsNoTracking()
+            .Where(x => x.ServiceRequestId == id)
+            .OrderBy(x => x.UploadedAt)
+            .Select(x => new ManagerServiceRequestEvidenceMetadata(
+                x.Id, x.ServiceRequestId, x.ActivityId, x.FileName, x.ContentType,
+                x.SizeBytes, x.StorageKey, x.UploadedAt))
+            .ToArrayAsync(ct);
+
+    public Task<ManagerServiceRequestEvidenceMetadata?> GetEvidenceFileAsync(Guid id, Guid evidenceId, CancellationToken ct) =>
+        db.ServiceRequestEvidenceFiles.AsNoTracking()
+            .Where(x => x.ServiceRequestId == id && x.Id == evidenceId)
+            .Select(x => new ManagerServiceRequestEvidenceMetadata(
+                x.Id, x.ServiceRequestId, x.ActivityId, x.FileName, x.ContentType,
+                x.SizeBytes, x.StorageKey, x.UploadedAt))
+            .SingleOrDefaultAsync(ct);
+
     public async Task<ManagerServiceRequestOutcome> ReviewAsync(
         Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct)
     {
@@ -246,6 +263,9 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             .FirstOrDefault();
         if (latestWorkResult is null ||
             (latestRework is not null && latestRework.CreatedAt >= latestWorkResult.CreatedAt))
+            return ManagerServiceRequestOutcome.Conflict;
+        if (!await db.ServiceRequestEvidenceFiles.AsNoTracking()
+                .AnyAsync(x => x.ServiceRequestId == id && x.ActivityId == latestWorkResult.Id, ct))
             return ManagerServiceRequestOutcome.Conflict;
 
         var activeAssignment = request.Assignments

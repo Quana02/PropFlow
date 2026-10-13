@@ -40,6 +40,7 @@ builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
 builder.Services.AddScoped<IMaintenanceApiClient, MaintenanceApiClient>();
 builder.Services.AddScoped<IResidentServiceRequestApiClient, ResidentServiceRequestApiClient>();
 builder.Services.AddScoped<IManagerServiceRequestApiClient, ManagerServiceRequestApiClient>();
+builder.Services.AddScoped<IStaffServiceRequestApiClient, StaffServiceRequestApiClient>();
 builder.Services.AddScoped<IFinanceApiClient, FinanceApiClient>();
 builder.Services.AddScoped<IResidentApiClient, ResidentApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Apartment.Services.IApartmentApiClient, PropFlow.Web.Client.Features.Apartment.Services.ApartmentApiClient>();
