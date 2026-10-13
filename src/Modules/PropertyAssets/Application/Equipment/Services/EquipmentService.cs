@@ -40,7 +40,8 @@ public class EquipmentService : IEquipmentService
             equipment.Facility?.Name,
             equipment.Code,
             equipment.Name,
-            equipment.EquipmentType,
+            equipment.EquipmentTypeId,
+            equipment.Type?.Name,
             equipment.Manufacturer,
             equipment.Model,
             equipment.SerialNumber,
@@ -58,6 +59,7 @@ public class EquipmentService : IEquipmentService
     public async Task<EquipmentDto> CreateEquipmentAsync(CreateEquipmentCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+        await ResolveEquipmentTypeAsync(command.EquipmentTypeId, cancellationToken);
         // Validate Facility exists if FacilityId is provided
         if (command.FacilityId.HasValue)
         {
@@ -82,7 +84,7 @@ public class EquipmentService : IEquipmentService
                     var number = NextSequence(await _store.EquipmentCodesWithPrefixAsync(prefix, token), prefix);
                     var code = $"{prefix}{number:000}";
                     equipment = new EquipmentEntity(code, command.Name, DateTimeOffset.UtcNow, command.FacilityId,
-                        command.EquipmentType, command.Manufacturer, command.Model, command.SerialNumber,
+                        command.EquipmentTypeId, command.Manufacturer, command.Model, command.SerialNumber,
                         command.InstallationDate, command.WarrantyExpiryDate, command.LocationDescription,
                         command.Description, command.CreatedBy);
                     _store.Add(equipment);
@@ -101,6 +103,7 @@ public class EquipmentService : IEquipmentService
     public async Task<EquipmentDto> UpdateEquipmentAsync(Guid id, UpdateEquipmentCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+        await ResolveEquipmentTypeAsync(command.EquipmentTypeId, cancellationToken);
 
         var equipment = await _store.EquipmentAsync(id, true, cancellationToken);
         if (equipment is null)
@@ -122,7 +125,7 @@ public class EquipmentService : IEquipmentService
         equipment.Update(
             command.Name,
             command.FacilityId,
-            command.EquipmentType,
+            command.EquipmentTypeId,
             null, // Preserve existing status - FE-04.6 owns status management
             command.Manufacturer,
             command.Model,
@@ -181,7 +184,8 @@ public class EquipmentService : IEquipmentService
             equipment.Facility?.Name,
             equipment.Code,
             equipment.Name,
-            equipment.EquipmentType,
+            equipment.EquipmentTypeId,
+            equipment.Type?.Name,
             equipment.Manufacturer,
             equipment.Model,
             equipment.SerialNumber,
@@ -203,6 +207,38 @@ public class EquipmentService : IEquipmentService
         return MapToDto(equipment ?? throw new InvalidOperationException("Equipment not found"));
     }
 
+    private async Task<EquipmentType?> ResolveEquipmentTypeAsync(Guid? id, CancellationToken ct)
+    {
+        if (!id.HasValue) return null;
+        var type = await _store.EquipmentTypeAsync(id.Value, false, ct);
+        if (type is null || !type.IsActive)
+            throw new ArgumentException("Loại thiết bị không tồn tại hoặc đã ngừng sử dụng.");
+        return type;
+    }
+
+    public async Task<IReadOnlyList<EquipmentTypeDto>> GetEquipmentTypesAsync(bool activeOnly, CancellationToken cancellationToken = default) =>
+        (await _store.EquipmentTypesAsync(activeOnly, cancellationToken)).Select(MapType).ToArray();
+
+    public async Task<EquipmentTypeDto> CreateEquipmentTypeAsync(CreateEquipmentTypeCommand command, CancellationToken cancellationToken = default)
+    {
+        var name = EquipmentType.NormalizeName(command.Name);
+        try
+        {
+            return await _store.WithAdvisoryLockAsync($"equipment-type:{name.ToUpperInvariant()}", async ct =>
+            {
+                if (await _store.EquipmentTypeNameExistsAsync(name, ct)) throw new EquipmentTypeNameConflictException();
+                var type = new EquipmentType(name, command.CreatedBy, DateTimeOffset.UtcNow);
+                _store.Add(type);
+                await _store.SaveAsync(ct);
+                return MapType(type);
+            }, cancellationToken);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        { throw new EquipmentTypeNameConflictException(); }
+    }
+
+    private static EquipmentTypeDto MapType(EquipmentType type) => new(type.Id, type.Name, type.IsActive, type.CreatedAt, type.UpdatedAt);
+
     private static int NextSequence(IReadOnlyList<string> codes, string prefix)
     {
         var max = 0;
@@ -211,3 +247,5 @@ public class EquipmentService : IEquipmentService
         return max + 1;
     }
 }
+
+public sealed class EquipmentTypeNameConflictException : InvalidOperationException { }

@@ -6,8 +6,11 @@
 @using PropFlow.Web.Client.Features.ServiceRequests.Services
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Shared.Feedback
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 @inject IMaintenanceApiClient Api
 @inject IManagerServiceRequestApiClient ServiceRequestApi
+@inject MaintenanceHubConnectionFactory MaintenanceHubConnectionFactory
 
 <PageTitle>Chi tiết công việc bảo trì - PropFlow</PageTitle>
 
@@ -132,7 +135,8 @@
     private MaintenanceTaskModel? Task; private MaintenanceHistoryDetailModel? History; private IReadOnlyList<AssetModel> Assets = []; private IReadOnlyList<AssignableMaintenanceStaffModel> Staff = [];
     private bool Loading = true, Busy, ShowAssignment, LinkPickerOpen, EvidenceLoading; private string? Error, EvidenceError, SelectedEvidenceUrl; private readonly Dictionary<Guid, string> EvidenceUrls = []; private string StaffSearch = string.Empty, RequestSearch = string.Empty, ReviewNote = string.Empty; private List<Guid> SelectedStaffIds = []; private IReadOnlyList<ServiceRequestMaintenanceReference> Candidates = []; private Guid? SelectedRequestId;
     private Func<Task>? PendingConfirmation; private string ConfirmationMessage = string.Empty;
-    protected override async Task OnParametersSetAsync() { Loading = true; Error = null; Task = null; History = null; await Load(); Loading = false; }
+    private HubConnection? HubConnection; private Guid? JoinedTaskId; private readonly SemaphoreSlim RealtimeRefreshGate = new(1, 1); private bool Disposed;
+    protected override async Task OnParametersSetAsync() { Loading = true; Error = null; Task = null; History = null; await Load(); Loading = false; await EnsureRealtimeConnectionAsync(); }
     private async Task Load() { var assets = await Api.AssetsAsync(); Assets = assets.Data ?? []; var task = await Api.TaskAsync(TaskId); if (!task.IsSuccess || task.Data is null) { Error = task.Message ?? "Không tìm thấy công việc bảo trì."; return; } Task = task.Data; var history = await Api.HistoryDetailAsync(TaskId); History = history.Data; await LoadEvidenceAsync(); }
     private async Task LoadEvidenceAsync() { EvidenceUrls.Clear(); EvidenceError = null; if (Task is null) return; var results = History?.Results ?? (Task.LatestResult is null ? [] : [Task.LatestResult]); if (!results.Any(item => item.Attachments is { Count: > 0 })) return; EvidenceLoading = true; try { foreach (var result in results) foreach (var attachment in result.Attachments ?? []) { var image = await Api.ResultAttachmentAsync(Task.Id, result.Id, attachment.Id); if (!image.IsSuccess || image.Data is null) { EvidenceError = image.Message ?? "Không thể tải ảnh minh chứng."; return; } EvidenceUrls[attachment.Id] = $"data:{attachment.ContentType};base64,{Convert.ToBase64String(image.Data)}"; } } finally { EvidenceLoading = false; } }
     private bool HasAssignees => Task?.CurrentAssignees?.Any() == true;
@@ -178,4 +182,67 @@
     private void RequestConfirmation(string message, Func<Task> action) { ConfirmationMessage = message; PendingConfirmation = action; }
     private async Task Confirm() { var action = PendingConfirmation; if (action is null || Busy) return; await action(); if (!Busy) PendingConfirmation = null; }
     private async Task ReloadHistory() { var result = await Api.HistoryDetailAsync(TaskId); History = result.Data; }
+
+    private async Task EnsureRealtimeConnectionAsync()
+    {
+        if (Disposed) return;
+        try
+        {
+            if (HubConnection is null)
+            {
+                var hub = MaintenanceHubConnectionFactory.Create();
+                hub.On<Guid>("MaintenanceTaskUpdated", HandleRealtimeTaskUpdatedAsync);
+                hub.Reconnected += async _ => await JoinCurrentTaskGroupAsync();
+                await hub.StartAsync();
+                HubConnection = hub;
+            }
+            await JoinCurrentTaskGroupAsync();
+        }
+        catch
+        {
+            // The normal API workflow remains usable if SignalR is unavailable.
+        }
+    }
+
+    private async Task JoinCurrentTaskGroupAsync()
+    {
+        if (HubConnection is null || HubConnection.State != HubConnectionState.Connected || JoinedTaskId == TaskId) return;
+        if (JoinedTaskId is { } previous) await HubConnection.InvokeAsync("LeaveTask", previous);
+        await HubConnection.InvokeAsync("JoinTask", TaskId);
+        JoinedTaskId = TaskId;
+    }
+
+    private async Task HandleRealtimeTaskUpdatedAsync(Guid taskId)
+    {
+        if (Disposed || taskId != TaskId || !await RealtimeRefreshGate.WaitAsync(0)) return;
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (Disposed || taskId != TaskId) return;
+                await Load();
+                StateHasChanged();
+            });
+        }
+        finally
+        {
+            RealtimeRefreshGate.Release();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Disposed = true;
+        if (HubConnection is not null)
+        {
+            try
+            {
+                if (JoinedTaskId is { } taskId && HubConnection.State == HubConnectionState.Connected)
+                    await HubConnection.InvokeAsync("LeaveTask", taskId);
+            }
+            catch { }
+            await HubConnection.DisposeAsync();
+        }
+        RealtimeRefreshGate.Dispose();
+    }
 }
