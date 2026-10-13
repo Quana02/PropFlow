@@ -70,7 +70,10 @@
 .form-actions > span .material-symbols-outlined { color:#10b981; font-size:1rem; }
 .form-actions > div { display:flex; gap:.6rem; }
 .form-actions button,.context-state button { border:0; border-radius:.75rem; padding:.68rem 1rem; font-size:.7rem; font-weight:800; cursor:pointer; }
+.form-actions button:disabled { cursor:not-allowed; opacity:.55; }
 .cancel-button { color:#5f6f85; background:white; border:1px solid #dce4ed !important; }
+.cancel-button { display:flex; align-items:center; justify-content:center; gap:.35rem; }
+.cancel-button .material-symbols-outlined { font-size:1rem; }
 .save-button { display:flex; align-items:center; gap:.35rem; color:white; background:linear-gradient(135deg,#0284c7,#4f46e5); box-shadow:0 8px 18px rgba(2,132,199,.22); }
 .save-button .material-symbols-outlined { font-size:1rem; }
 .context-state { display:grid; justify-items:center; gap:.45rem; padding:4rem; border:1px solid #dce5ee; border-radius:1.5rem; background:rgba(255,255,255,.84); text-align:center; }
@@ -83,6 +86,9 @@
 .context-toast > .material-symbols-outlined { color:#34d399; font-size:1.7rem; }
 .context-toast strong { font-size:.75rem; }
 .context-toast p { margin:.15rem 0 0; color:#cbd5e1; font-size:.65rem; }
+.context-toast button { margin-left:auto; border:1px solid #475569; border-radius:.65rem; padding:.5rem .7rem; background:#1e293b; color:white; font-size:.65rem; font-weight:800; cursor:pointer; white-space:nowrap; }
+.form-error { display:flex; align-items:center; gap:.4rem; margin:.8rem 0 0; padding:.65rem .75rem; border:1px solid #fecdd3; border-radius:.75rem; background:#fff1f2; color:#be123c; font-size:.7rem; font-weight:700; }
+.form-error .material-symbols-outlined { font-size:1rem; }
 @media (max-width:1050px) { .context-grid { grid-template-columns:1fr; } }
 @media (max-width:720px) { .context-page { padding:.8rem .65rem 4rem; } .context-hero { align-items:flex-start; flex-direction:column; } .hero-tags { justify-content:flex-start; } .context-card { padding:1rem; border-radius:1.2rem; } .summary-grid { grid-template-columns:1fr; } .form-actions { align-items:flex-start; flex-direction:column; } .form-actions > div { width:100%; } .form-actions button { flex:1; justify-content:center; } .source-facts > div { grid-template-columns:1fr; gap:.25rem; } .source-facts dd { text-align:left; } .original-apartment dd { justify-content:flex-start; } .card-title-row { flex-wrap:wrap; } }
 :global(html[data-theme="dark"]) .context-page { color:#e8eef8; }

@@ -4,19 +4,19 @@
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IManagerServiceRequestApiClient Api
 @inject NavigationManager Navigation
 
-<PageTitle>Liên kết bối cảnh tài sản - PropFlow</PageTitle>
+<PageTitle>Đơn dịch vụ - PropFlow</PageTitle>
 
 <div class="context-page">
     <nav class="context-breadcrumb" aria-label="Đường dẫn">
         <a href="/manager/service-requests">Quản lý yêu cầu</a><span>/</span>
         <a href="/manager/service-requests/@Id">@(detail?.RequestNumber ?? "Yêu cầu")</a><span>/</span>
-        <strong>Liên kết bối cảnh tài sản</strong>
+        <strong>Đơn dịch vụ</strong>
     </nav>
 
     <header class="context-hero">
         <div>
             <span class="context-kicker"><span class="material-symbols-outlined">location_on</span>FE-05.6 · Quản trị kỹ thuật</span>
-            <h1>Liên kết bối cảnh tài sản</h1>
+            <h1>Đơn dịch vụ</h1>
             <p>Xác định căn hộ, khu vực tiện ích hoặc thiết bị kỹ thuật bị ảnh hưởng để phục vụ điều phối chính xác.</p>
         </div>
         <div class="hero-tags">
@@ -66,17 +66,17 @@
                 <div class="association-form">
                     <label class="context-field">
                         <span><b><span class="material-symbols-outlined">home</span>1. Căn hộ liên quan</b><small>Tùy chọn</small></span>
-                        <PropFlowSelect @bind-Value="apartmentValue" Options="ApartmentOptions" AriaLabel="Chọn căn hộ liên quan" Searchable="true" />
+                        <PropFlowSelect @bind-Value="apartmentValue" Options="ApartmentOptions" AriaLabel="Chọn căn hộ liên quan" Searchable="true" Disabled="@(!CanConfirm)" />
                         <em>Mặc định là căn hộ đang gắn với yêu cầu nếu sự cố phát sinh nội bộ.</em>
                     </label>
                     <label class="context-field">
                         <span><b><span class="material-symbols-outlined">domain</span>2. Khu vực tiện ích</b><small>Tùy chọn</small></span>
-                        <PropFlowSelect @bind-Value="facilityValue" Options="FacilitySelectOptions" AriaLabel="Chọn khu vực tiện ích" Searchable="true" />
+                        <PropFlowSelect @bind-Value="facilityValue" Options="FacilityOptions" AriaLabel="Chọn khu vực tiện ích" Searchable="true" Disabled="@(!CanConfirm)" />
                         <em>Dùng cho sự cố ở khu vực sinh hoạt chung hoặc tiện ích tòa nhà.</em>
                     </label>
                     <label class="context-field">
                         <span><b><span class="material-symbols-outlined">settings</span>3. Thiết bị liên quan</b><small>Tùy chọn</small></span>
-                        <PropFlowSelect @bind-Value="equipmentValue" Options="EquipmentSelectOptions" AriaLabel="Chọn thiết bị kỹ thuật" Searchable="true" />
+                        <PropFlowSelect @bind-Value="equipmentValue" Options="EquipmentOptions" AriaLabel="Chọn thiết bị kỹ thuật" Searchable="true" Disabled="@(!CanConfirm)" />
                         <em>Gắn thiết bị cụ thể để chuẩn bị tra cứu lịch sử bảo trì.</em>
                     </label>
                 </div>
@@ -85,23 +85,27 @@
                     <header><div><i></i><h3 id="summary-title">Thông tin liên kết hiện tại</h3></div><span>@ProjectedContextCode</span></header>
                     <div class="summary-grid">
                         <article><small>Căn hộ tác động</small><strong><span class="material-symbols-outlined">check</span>@SelectedLabel(ApartmentOptions, apartmentValue)</strong></article>
-                        <article><small>Khu vực tiện ích</small><strong>@SelectedLabel(FacilitySelectOptions, facilityValue)</strong></article>
-                        <article><small>Thiết bị kỹ thuật</small><strong>@SelectedLabel(EquipmentSelectOptions, equipmentValue)</strong></article>
+                        <article><small>Khu vực tiện ích</small><strong>@SelectedLabel(FacilityOptions, facilityValue)</strong></article>
+                        <article><small>Thiết bị kỹ thuật</small><strong>@SelectedLabel(EquipmentOptions, equipmentValue)</strong></article>
                     </div>
                     <footer><span>Mã định danh bối cảnh dự kiến</span><b>@ProjectedContextCode</b></footer>
                 </section>
 
                 <footer class="form-actions">
                     <span><span class="material-symbols-outlined">verified_user</span>Dữ liệu sẽ được lưu vào nhật ký quản trị</span>
-                    <div><button type="button" class="cancel-button" @onclick="ResetForm">Hủy thay đổi</button><button type="button" class="save-button" @onclick="SaveUi"><span class="material-symbols-outlined">check</span>Lưu liên kết</button></div>
+                    <div><button type="button" class="cancel-button" disabled="@saving" @onclick="BackToDetail"><span class="material-symbols-outlined">logout</span>Thoát</button><button type="button" class="save-button" disabled="@(!CanConfirm || saving)" @onclick="ConfirmAsync"><span class="material-symbols-outlined">check</span>@(saving ? "Đang xác nhận…" : "Xác nhận đơn dịch vụ")</button></div>
                 </footer>
+                @if (!string.IsNullOrWhiteSpace(actionError))
+                {
+                    <p class="form-error" role="alert"><span class="material-symbols-outlined">error</span>@actionError</p>
+                }
             </section>
         </div>
     }
 
     @if (showToast)
     {
-        <div class="context-toast" role="status"><span class="material-symbols-outlined">check_circle</span><div><strong>Đã cập nhật giao diện</strong><p>Backend FE-05.6 chưa được kết nối nên thay đổi chưa lưu vào database.</p></div></div>
+        <div class="context-toast" role="status"><span class="material-symbols-outlined">check_circle</span><div><strong>Đã xác nhận đơn dịch vụ</strong><p>Bối cảnh đã được lưu và yêu cầu chuyển sang trạng thái Đã tiếp nhận.</p></div><button type="button" @onclick="BackToDetail">Xem chi tiết</button></div>
     }
 </div>
 
@@ -109,61 +113,68 @@
     [Parameter] public Guid Id { get; set; }
 
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestDetailResponse? detail;
+    private PropFlow.Modules.ServiceRequests.Contracts.ManagerPropertyContextOptionsResponse? contextOptions;
     private bool loading;
     private bool showToast;
+    private bool saving;
     private string? errorMessage;
+    private string? actionError;
     private string apartmentValue = string.Empty;
     private string facilityValue = string.Empty;
     private string equipmentValue = string.Empty;
 
-    private static readonly IReadOnlyList<PropFlowSelectOption> FacilityOptions =
-    [
-        new("", "Chưa gán khu vực tiện ích"), new("lobby-1", "Sảnh chung tầng 1"),
-        new("corridor-8", "Hành lang tầng 8"), new("pool", "Hồ bơi vô cực"), new("parking-b2", "Bãi đỗ xe B2")
-    ];
-    private static readonly IReadOnlyList<PropFlowSelectOption> EquipmentOptions =
-    [
-        new("", "Chưa gán thiết bị"), new("elevator-1", "Thang máy số 1"),
-        new("elevator-2", "Thang máy số 2"), new("water-valve", "Cụm van cấp nước nhánh Master"),
-        new("booster-pump", "Máy bơm tăng áp"), new("corridor-light", "Đèn chiếu sáng hành lang")
-    ];
     private IReadOnlyList<PropFlowSelectOption> ApartmentOptions =>
-    [
-        new("", "Không chọn / Ngoại vi"),
-        new(detail?.ApartmentUnitId?.ToString() ?? "resident-apartment", $"{OriginalApartmentLabel()} (Căn hộ người gửi)"),
-        new("sample-p802", "P802 - Tầng 8"), new("sample-p901", "P901 - Tầng 9"), new("sample-p902", "P902 - Tầng 9")
-    ];
-    private IReadOnlyList<PropFlowSelectOption> FacilitySelectOptions => IncludeCurrent(
-        FacilityOptions, detail?.Facility?.Id, detail?.Facility is null ? null : $"{detail.Facility.Code} · {detail.Facility.Name}");
-    private IReadOnlyList<PropFlowSelectOption> EquipmentSelectOptions => IncludeCurrent(
-        EquipmentOptions, detail?.Equipment?.Id, detail?.Equipment is null ? null : $"{detail.Equipment.Code} · {detail.Equipment.Name}");
+        [new("", "Không chọn / Ngoại vi"), .. (contextOptions?.Apartments ?? []).Select(x => new PropFlowSelectOption(x.Id.ToString(), $"{x.Code} · {x.SecondaryText}"))];
+    private IReadOnlyList<PropFlowSelectOption> FacilityOptions =>
+        [new("", "Chưa gán khu vực tiện ích"), .. (contextOptions?.Facilities ?? []).Select(x => new PropFlowSelectOption(x.Id.ToString(), $"{x.Code} · {x.Name}"))];
+    private IReadOnlyList<PropFlowSelectOption> EquipmentOptions =>
+        [new("", "Chưa gán thiết bị"), .. (contextOptions?.Equipment ?? []).Select(x => new PropFlowSelectOption(x.Id.ToString(), $"{x.Code} · {x.Name}"))];
+    private bool CanConfirm => detail?.Status == "SUBMITTED";
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
         loading = true; errorMessage = null; showToast = false;
-        var result = await Api.GetAsync(Id);
+        var detailTask = Api.GetAsync(Id);
+        var optionsTask = Api.PropertyContextOptionsAsync(Id);
+        await Task.WhenAll(detailTask, optionsTask);
+        var result = await detailTask;
+        var optionResult = await optionsTask;
         loading = false;
         if (!result.IsSuccess || result.Data is null) { errorMessage = result.Message ?? "Không tìm thấy yêu cầu dịch vụ."; return; }
+        if (!optionResult.IsSuccess || optionResult.Data is null) { errorMessage = optionResult.Message ?? "Không tải được danh mục bối cảnh tài sản."; return; }
         detail = result.Data;
+        contextOptions = optionResult.Data;
         ResetForm();
     }
 
     private void ResetForm()
     {
-        apartmentValue = detail?.ApartmentUnitId?.ToString() ?? (detail is null ? string.Empty : "resident-apartment");
+        apartmentValue = detail?.ApartmentUnitId?.ToString() ?? string.Empty;
         facilityValue = detail?.Facility?.Id.ToString() ?? string.Empty;
         equipmentValue = detail?.Equipment?.Id.ToString() ?? string.Empty;
         showToast = false;
+        actionError = null;
     }
 
-    private void SaveUi() { showToast = true; }
+    private async Task ConfirmAsync()
+    {
+        if (!CanConfirm || saving) return;
+        saving = true; actionError = null; showToast = false;
+        var request = new PropFlow.Modules.ServiceRequests.Contracts.ConfirmManagerServiceRequestPropertyContextRequest(
+            ParseOptionalGuid(apartmentValue), ParseOptionalGuid(facilityValue), ParseOptionalGuid(equipmentValue));
+        var result = await Api.ConfirmPropertyContextAsync(Id, request);
+        saving = false;
+        if (!result.IsSuccess || result.Data is null) { actionError = result.Message ?? "Không thể xác nhận đơn dịch vụ."; return; }
+        detail = result.Data;
+        showToast = true;
+    }
+    private void BackToDetail() => Navigation.NavigateTo($"/manager/service-requests/{Id}");
     private string OriginalApartmentLabel() => detail?.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{detail.ApartmentUnitNumber} (Tầng {detail.FloorNumber})";
     private string ProjectedContextCode => $"CTX-{ShortRequestNumber()}-{(string.IsNullOrWhiteSpace(apartmentValue) ? "EXT" : "APT")}-{(string.IsNullOrWhiteSpace(equipmentValue) ? "GEN" : "ME")}";
     private string ShortRequestNumber() => detail?.RequestNumber.Replace("#", string.Empty).Replace("-", string.Empty) ?? "REQUEST";
     private static string SelectedLabel(IEnumerable<PropFlowSelectOption> options, string value) => options.FirstOrDefault(x => x.Value == value)?.Label ?? "Chưa gán";
-    private static IReadOnlyList<PropFlowSelectOption> IncludeCurrent(IReadOnlyList<PropFlowSelectOption> options, Guid? id, string? label) =>
-        id is null || options.Any(x => x.Value == id.Value.ToString()) ? options : [options[0], new(id.Value.ToString(), label ?? id.Value.ToString()), .. options.Skip(1)];
-    private static string StatusLabel(string? status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status ?? "Đang tải" };
+    private static Guid? ParseOptionalGuid(string? value) => Guid.TryParse(value, out var id) ? id : null;
+    private static string StatusLabel(string? status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đã tiếp nhận", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang tiến hành", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status ?? "Đang tải" };
 }
