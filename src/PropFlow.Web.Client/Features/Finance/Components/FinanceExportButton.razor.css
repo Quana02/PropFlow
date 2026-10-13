@@ -1,0 +1,4 @@
+button { display:inline-flex; align-items:center; justify-content:center; min-height:42px; padding:10px 14px; border:1px solid var(--line,#dbe4ee); border-radius:10px; background:var(--surface,#fff); color:var(--text,#17243a); font:600 14px/1.4 Inter,sans-serif; cursor:pointer; }
+button:disabled { opacity:.55; cursor:wait; }
+button:focus-visible { outline:3px solid var(--accent,#0284c7); outline-offset:3px; }
+[role=alert] { display:block; max-width:300px; color:#be123c; font-size:13px; }

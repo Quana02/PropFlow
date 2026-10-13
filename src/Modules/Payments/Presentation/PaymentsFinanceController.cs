@@ -7,6 +7,16 @@ namespace PropFlow.Modules.Payments.Presentation;
 public sealed class PaymentsFinanceController(PaymentFinanceUseCases useCases) : ControllerBase
 {
     private Guid Actor => Guid.Parse(User.FindFirstValue("sub")!);
+    [HttpPost("collect")]
+    public async Task<ActionResult<PaymentRow>> Collect(CollectPaymentRequest request,
+        [FromHeader(Name="Idempotency-Key")] string? key, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.Length > 100) return Problem(400,"idempotency_key_required","Thiếu khóa xử lý yêu cầu.");
+        if (request.InvoiceId == Guid.Empty || request.Amount <= 0 || request.Amount != decimal.Round(request.Amount, 0)
+            || request.PaymentMethodCode is not ("CASH" or "BANK_TRANSFER") || request.ReferenceNumber?.Length > 100 || request.Note?.Length > 1000)
+            return Problem(400,"invalid_collection","Vui lòng nhập số tiền VND nguyên dương và phương thức thu hợp lệ.");
+        return Map(await useCases.CollectAsync(request, key, Actor, ct));
+    }
     [HttpGet("pending")] public Task<PagedPayments> Pending(string? search, int page=1, int pageSize=20, string sortDirection="desc", CancellationToken ct=default) => useCases.ListAsync("PENDING",search,page,pageSize,sortDirection,ct);
     [HttpGet("confirmed")] public Task<PagedPayments> Confirmed(string? search, int page=1, int pageSize=20, string sortDirection="desc", CancellationToken ct=default) => useCases.ListAsync("CONFIRMED",search,page,pageSize,sortDirection,ct);
     [HttpGet("{id:guid}")] public async Task<ActionResult<PaymentRow>> Detail(Guid id,CancellationToken ct) => await useCases.DetailAsync(id,ct) is {} x ? Ok(x) : Problem(404,"payment_not_found","Không tìm thấy khoản thanh toán.");

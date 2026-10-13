@@ -1,0 +1,71 @@
+@using PropFlow.Web.Client.Shared.Forms
+@using PropFlow.Web.Client.Features.Finance.Models
+@using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Services.Api
+@inject BillingWorkspaceApi Api
+<section class="billing-workspace">
+    <h1>Loại phí và đơn giá</h1>
+    <p>Đơn giá dùng để tạo các dòng hóa đơn. Khi cần đổi đơn giá, tạo phiên bản mới và ngừng phiên bản cũ; hóa đơn đã phát hành giữ nguyên số tiền.</p>
+    @if (!string.IsNullOrEmpty(error)) { <p role="alert" class="error">@error</p> }
+    @if (loading) { <p role="status">Đang tải cấu hình phí…</p> }
+    else
+    {
+        <table><thead><tr><th>Mã phí</th><th>Tên</th><th>Cách tính / tần suất</th><th>Trạng thái</th>@if (CanWrite) { <th>Thao tác</th> }</tr></thead><tbody>
+        @foreach (var f in fees) { <tr><td>@f.Code</td><td>@f.Name</td><td>@f.CalculationMethod / @f.BillingFrequency</td><td>@(f.Status == "ACTIVE" ? "Đang dùng" : "Ngừng dùng")</td>@if (CanWrite) { <td><button disabled="@busy" @onclick="() => Edit(f)">Sửa</button><button disabled="@busy" @onclick="() => SetActive(f)">@(f.Status == "ACTIVE" ? "Ngừng dùng" : "Kích hoạt")</button></td> }</tr> }
+        @if (fees.Length == 0) { <tr><td colspan="5">Chưa có loại phí. Tạo loại phí và đơn giá trước khi lập hóa đơn.</td></tr> }
+        </tbody></table>
+        @if (CanWrite)
+        {
+            <form @onsubmit="SaveFee" @onsubmit:preventDefault>
+                <h2>@(editing.HasValue ? "Sửa loại phí" : "Thêm loại phí")</h2>
+                <div class="fields">
+                    <label>Mã phí<input required maxlength="50" disabled="@(editing.HasValue || busy)" @bind="code" /></label>
+                    <label>Tên phí<input required maxlength="150" disabled="@busy" @bind="name" /></label>
+                    <label>Cách tính<PropFlowSelect @bind-Value="method" Options="CalculationOptions" Disabled="busy" AriaLabel="Cách tính" /></label>
+                    <label>Tần suất<input required maxlength="50" disabled="@busy" @bind="frequency" /></label>
+                    <label>Mô tả<input disabled="@busy" @bind="description" /></label>
+                </div>
+                <button disabled="@busy" type="submit">Lưu loại phí</button><button type="button" disabled="@busy" @onclick="Reset">Nhập mới</button>
+            </form>
+        }
+        <h2>Đơn giá và thời gian áp dụng</h2>
+        <table><thead><tr><th>Loại phí / phiên bản</th><th>Đơn giá (VND)</th><th>Đơn vị</th><th>Hiệu lực</th><th>Trạng thái</th></tr></thead><tbody>
+        @foreach (var r in rates) { <tr><td>@r.FeeName — @r.Name</td><td>@r.UnitRate.ToString("N0", Vi)</td><td>@r.UnitName</td><td>@r.EffectiveFrom.ToString("dd/MM/yyyy") → @(r.EffectiveTo?.ToString("dd/MM/yyyy") ?? "Không giới hạn")</td><td>@(r.IsActive ? "Đang dùng" : "Ngừng dùng") @if (CanWrite) { <button disabled="@busy" @onclick="() => SetRateActive(r)">@(r.IsActive ? "Ngừng dùng" : "Kích hoạt")</button> }</td></tr> }
+        @if (rates.Length == 0) { <tr><td colspan="5">Chưa có đơn giá.</td></tr> }
+        </tbody></table>
+        @if (CanWrite)
+        {
+            <form @onsubmit="SaveRate" @onsubmit:preventDefault>
+                <h2>Thêm phiên bản đơn giá</h2><div class="fields">
+                    <label>Loại phí<PropFlowSelect @bind-Value="FeeValue" Options="FeeOptions" Disabled="busy" AriaLabel="Loại phí" Searchable="true" /></label>
+                    <label>Tên phiên bản<input required maxlength="150" disabled="@busy" @bind="rateName" /></label>
+                    <label>Đơn giá (VND)<input type="number" min="0" step="1" required @bind="unitRate" disabled="@busy" /></label>
+                    <label>Đơn vị<input maxlength="50" @bind="unitName" disabled="@busy" /></label>
+                    <label>Hiệu lực từ<PropFlowDatePicker @bind-Value="effectiveFrom" ValidityChanged="v => effectiveFromValid = v" AriaLabel="Hiệu lực từ" Disabled="busy" /></label>
+                    <label>Đến ngày (tùy chọn)<PropFlowDatePicker @bind-Value="effectiveTo" ValidityChanged="v => effectiveToValid = v" AriaLabel="Hiệu lực đến" Disabled="busy" /></label>
+                </div><button type="submit" disabled="@busy">Lưu đơn giá</button>
+            </form>
+        }
+    }
+</section>
+@code {
+    [Parameter] public bool CanWrite { get; set; }
+    private static readonly System.Globalization.CultureInfo Vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+    private FeeView[] fees = []; private RateView[] rates = [];
+    private bool loading, busy; private string? error; private Guid? editing;
+    private string code = "", name = "", method = "FIXED", frequency = "MONTHLY", description = "";
+    private string FeeValue { get => feeId == Guid.Empty ? "" : feeId.ToString(); set => feeId = Guid.TryParse(value, out var id) ? id : Guid.Empty; }
+    private IReadOnlyList<PropFlowSelectOption> FeeOptions => fees.Where(x => x.Status == "ACTIVE").Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Code + " — " + x.Name)).ToArray();
+    private static readonly PropFlowSelectOption[] CalculationOptions = [new("FIXED", "Cố định theo số lượng"), new("AREA", "Theo diện tích (nhập số m²)")];
+    private bool effectiveFromValid = true, effectiveToValid = true;
+    private Guid feeId; private string rateName = "", unitName = ""; private decimal unitRate;
+    private DateOnly? effectiveFrom = DateOnly.FromDateTime(DateTime.Today); private DateOnly? effectiveTo;
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load() { loading = true; var f = await Api.GetAsync<FeeView[]>("fees"); var r = await Api.GetAsync<RateView[]>("rates"); fees = f.Data ?? []; rates = r.Data ?? []; if (!f.IsSuccess || !r.IsSuccess) error = f.Message ?? r.Message; loading = false; }
+    private void Edit(FeeView f) { editing = f.Id; code = f.Code; name = f.Name; method = f.CalculationMethod; frequency = f.BillingFrequency; description = f.Description ?? ""; }
+    private void Reset() { editing = null; code = name = description = ""; method = "FIXED"; frequency = "MONTHLY"; }
+    private async Task SaveFee() { if (busy || !CanWrite) return; busy = true; error = null; var r = await Api.SaveAsync<SavedId>(editing.HasValue ? $"fees/{editing}" : "fees", new FeeInput(code, name, method, frequency, description), editing.HasValue ? HttpMethod.Put : HttpMethod.Post); if (r.IsSuccess) { Reset(); await Load(); } else error = r.Message; busy = false; }
+    private async Task SaveRate() { if (busy || !CanWrite) return; if (!effectiveFrom.HasValue || !effectiveFromValid || !effectiveToValid) { error = "Ngày hiệu lực không hợp lệ."; return; } busy = true; error = null; var r = await Api.SaveAsync<SavedId>("rates", new RateInput(feeId, rateName, unitRate, unitName, effectiveFrom.Value, effectiveTo)); if (r.IsSuccess) { rateName = ""; await Load(); } else error = r.Message; busy = false; }
+    private async Task SetActive(FeeView f) { busy = true; error = null; var r = await Api.SaveAsync<EmptyResponse>($"fees/{f.Id}/active", new { active = f.Status != "ACTIVE" }, HttpMethod.Patch); if (r.IsSuccess) await Load(); else error = r.Message; busy = false; }
+    private async Task SetRateActive(RateView r) { busy = true; error = null; var result = await Api.SaveAsync<EmptyResponse>($"rates/{r.Id}/active", new { active = !r.IsActive }, HttpMethod.Patch); if (result.IsSuccess) await Load(); else error = result.Message; busy = false; }
+}
