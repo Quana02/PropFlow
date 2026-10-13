@@ -4,8 +4,8 @@
     <h2>Đơn giá thuê căn hộ</h2>
     <p>Các căn cùng loại dùng chung đơn giá. Giá tháng và giá ngày được lưu riêng; hóa đơn thuê tháng dùng giá tháng. Tiền thuê chỉ áp dụng cho chủ hộ đang thuê căn chưa có chủ sở hữu. Số ngày lấy từ ngày bắt đầu đến ngày kết thúc cư trú, gồm cả hai ngày; tháng lẻ chia đơn giá tháng theo số ngày trong tháng. Phí dịch vụ vẫn được tính riêng.</p>
     <form @onsubmit="Save" @onsubmit:preventDefault>
-        <label>Loại căn hộ<select required @bind="apartmentId" @bind:after="LoadVersions"><option value="@Guid.Empty">Chọn loại căn hộ</option>@foreach(var a in apartmentTypes) { <option value="@a.Id">@a.Name</option> }</select></label>
-        <label>Cơ sở tính thuê<select required @bind="basis" @bind:after="SelectBasis"><option value="">Chọn cơ sở tính</option><option value="MONTHLY">Theo tháng</option><option value="DAILY">Theo ngày</option></select></label>
+        <label>Loại căn hộ<PropFlowSelect @bind-Value="ApartmentIdValue" @bind-Value:after="LoadVersions" Options="ApartmentTypeOptions" Placeholder="Chọn loại căn hộ" AriaLabel="Loại căn hộ" Disabled="busy" /></label>
+        <label>Cơ sở tính thuê<PropFlowSelect @bind-Value="basis" @bind-Value:after="SelectBasis" Options="RentalBasisOptions" Placeholder="Chọn cơ sở tính" AriaLabel="Cơ sở tính thuê" Disabled="busy" /></label>
         <label>Đơn giá VND<input type="number" required min="0" step="1" @bind="amount" /></label>
         <label>Ngày hiệu lực<input type="date" required @bind="effectiveFrom" /></label>
         <button type="submit" disabled="@busy">Lưu đơn giá thuê</button>
@@ -19,6 +19,19 @@
     private ApartmentType[] apartmentTypes = []; private Version[] versions = [];
     private Guid apartmentId; private string basis = ""; private decimal amount;
     private DateTime effectiveFrom = DateTime.Today; private bool busy; private string? message;
+    private IReadOnlyList<PropFlowSelectOption> ApartmentTypeOptions =>
+        [new("", "Chọn loại căn hộ"), .. apartmentTypes.Select(type => new PropFlowSelectOption(type.Id.ToString(), type.Name))];
+    private static readonly IReadOnlyList<PropFlowSelectOption> RentalBasisOptions =
+    [
+        new("", "Chọn cơ sở tính"),
+        new("MONTHLY", "Theo tháng"),
+        new("DAILY", "Theo ngày")
+    ];
+    private string ApartmentIdValue
+    {
+        get => apartmentId == Guid.Empty ? string.Empty : apartmentId.ToString();
+        set => apartmentId = Guid.TryParse(value, out var id) ? id : Guid.Empty;
+    }
     protected override async Task OnInitializedAsync() { var r = await Api.GetAsync<Apartment[]>("api/v1/billing/rental-pricing/apartments"); apartmentTypes = (r.Data ?? []).Where(x => x.ApartmentTypeId != null).Select(x => new ApartmentType(x.ApartmentTypeId!.Value, x.ApartmentTypeName ?? "Loại căn hộ")).DistinctBy(x => x.Id).OrderBy(x => x.Name).ToArray(); if(!r.IsSuccess) message = r.Message; }
     private async Task LoadVersions() {
         versions = []; basis = ""; amount = 0; effectiveFrom = DateTime.Today;

@@ -43,6 +43,7 @@ using PropFlow.Modules.Complaints.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestCategories;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -437,7 +438,7 @@ public class EfCoreMetadataTests
         var model = context.Model;
 
         Assert.Equal("service_requests", model.GetDefaultSchema());
-        Assert.Equal(5, model.GetEntityTypes().Count());
+        Assert.Equal(6, model.GetEntityTypes().Count());
 
         var categoryEntity = model.FindEntityType(typeof(ServiceRequestCategory));
         Assert.NotNull(categoryEntity);
@@ -484,6 +485,17 @@ public class EfCoreMetadataTests
         Assert.Contains(feedbackEntity.GetForeignKeys(), fk =>
             fk.PrincipalEntityType.ClrType == typeof(ServiceRequest) &&
             fk.Properties.Single().Name == nameof(ServiceRequestFeedback.ServiceRequestId));
+
+        var evidenceEntity = model.FindEntityType(typeof(ServiceRequestEvidenceFile));
+        Assert.NotNull(evidenceEntity);
+        Assert.Equal("service_request_evidence_files", evidenceEntity.GetTableName());
+        Assert.Equal("service_requests", evidenceEntity.GetSchema());
+        Assert.Contains(evidenceEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequest) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestEvidenceFile.ServiceRequestId));
+        Assert.Contains(evidenceEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequestActivity) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestEvidenceFile.ActivityId));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
             fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "ApartmentUnitId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));

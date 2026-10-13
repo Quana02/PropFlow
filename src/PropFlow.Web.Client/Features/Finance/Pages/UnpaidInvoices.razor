@@ -86,7 +86,21 @@
     private bool MatchesFilter(InvoiceBalance item) => filter switch { "UNPAID" => item.ConfirmedPaidAmount <= 0, "DUE_SOON" => IsDueSoon(item), "PARTIAL" => IsPartial(item), _ => true };
     private bool IsDueSoon(InvoiceBalance item) => item.DueDate is { } due && due.DayNumber >= Today.DayNumber && due.DayNumber - Today.DayNumber <= 3;
     private static bool IsPartial(InvoiceBalance item) => item.ConfirmedPaidAmount > 0 && item.OutstandingAmount > 0;
-    private string DueText(InvoiceBalance item) { if (item.DueDate is not { } due) return "Chưa có hạn"; var days = due.DayNumber - Today.DayNumber; return days switch { < 0 => $"Quá hạn {-days} ngày", 0 => "Đến hạn hôm nay", _ => $"Còn {days} ngày" }; }
+    private string DueText(InvoiceBalance item)
+    {
+        if (item.DueDate is not { } due)
+        {
+            return "Chưa có hạn";
+        }
+
+        var days = due.DayNumber - Today.DayNumber;
+        if (days < 0)
+        {
+            return $"Quá hạn {-days} ngày";
+        }
+
+        return days == 0 ? "Đến hạn hôm nay" : $"Còn {days} ngày";
+    }
     private string DueClass(InvoiceBalance item) => item.DueDate is { } due && due.CompareTo(Today) == -1 ? "due-cell overdue" : "due-cell";
     private static string StatusName(InvoiceBalance item) => IsPartial(item) ? "Đóng một phần" : "Chưa nộp";
     private static string StatusClass(InvoiceBalance item) => IsPartial(item) ? "status-partial" : "status-unpaid";

@@ -6,7 +6,7 @@
     <p>Còn phải thu: <strong>@Invoice.OutstandingAmount.ToString("N0") đ</strong></p>
     <form @onsubmit="Save" @onsubmit:preventDefault>
         <label>Số tiền (VND)<input type="number" min="1" max="@Invoice.OutstandingAmount" step="1" required @bind="amount" disabled="@busy" /></label>
-        <label>Phương thức<select @bind="method" disabled="@busy"><option value="CASH">Tiền mặt</option><option value="BANK_TRANSFER">Chuyển khoản</option></select></label>
+        <label>Phương thức<PropFlowSelect @bind-Value="method" Options="PaymentMethodOptions" AriaLabel="Phương thức thanh toán" Disabled="busy" /></label>
         <label>Mã tham chiếu<input maxlength="100" @bind="reference" disabled="@busy" /></label>
         <label>Ghi chú<input maxlength="1000" @bind="note" disabled="@busy" /></label>
         <label><input type="checkbox" @bind="verified" disabled="@busy" /> Tôi đã kiểm tra và thực nhận khoản tiền này.</label>
@@ -19,6 +19,11 @@
     [Parameter, EditorRequired] public InvoiceBalance Invoice { get; set; } = default!;
     [Parameter] public EventCallback Saved { get; set; }
     [Parameter] public EventCallback Closed { get; set; }
+    private static readonly IReadOnlyList<PropFlowSelectOption> PaymentMethodOptions =
+    [
+        new("CASH", "Tiền mặt"),
+        new("BANK_TRANSFER", "Chuyển khoản")
+    ];
     private decimal amount; private string method = "CASH", reference = "", note = "";
     private string? error; private bool verified, busy; private string key = Guid.NewGuid().ToString(), lastPayload = "";
     protected override void OnInitialized() => amount = Invoice.OutstandingAmount;
