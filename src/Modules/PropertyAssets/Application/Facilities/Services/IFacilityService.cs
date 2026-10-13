@@ -10,4 +10,6 @@ public interface IFacilityService
     Task<FacilityDto> CreateFacilityAsync(CreateFacilityCommand command, CancellationToken cancellationToken = default);
     Task<FacilityDto> UpdateFacilityAsync(Guid id, UpdateFacilityCommand command, CancellationToken cancellationToken = default);
     Task<FacilityDto> SetFacilityStatusAsync(Guid id, SetFacilityStatusCommand command, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<FacilityTypeDto>> GetFacilityTypesAsync(bool activeOnly, CancellationToken cancellationToken = default);
+    Task<FacilityTypeDto> CreateFacilityTypeAsync(CreateFacilityTypeCommand command, CancellationToken cancellationToken = default);
 }

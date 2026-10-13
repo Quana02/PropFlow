@@ -522,9 +522,11 @@ public sealed class MaintenanceService(
 
         await EnsureAssetsAsync(command.FacilityId, command.EquipmentId, ct, requireAnyAsset: true);
 
-        var task = await db.MaintenanceTasks.FindAsync([taskId], ct) ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
+        var task = await db.MaintenanceTasks.Include(item => item.Assignments)
+            .SingleOrDefaultAsync(item => item.Id == taskId, ct) ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
         task.SetAssetContext(command.FacilityId, command.EquipmentId, DateTimeOffset.UtcNow);
         await db.SaveChangesAsync(ct);
+        await NotifyVisibleAssigneesAsync(task, ct);
         return ToDto(task);
     }
     public async Task<Page<ScheduleDto>> SchedulesAsync(ScheduleQuery query, CancellationToken ct)

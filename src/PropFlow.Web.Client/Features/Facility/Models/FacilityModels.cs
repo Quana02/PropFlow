@@ -8,6 +8,7 @@ public class FacilityModel
     public Guid Id { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public Guid? FacilityTypeId { get; set; }
     public string? FacilityType { get; set; }
     public string? LocationDescription { get; set; }
     public string? Description { get; set; }
@@ -33,8 +34,7 @@ public class CreateFacilityModel
     [StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")]
     public string Name { get; set; } = string.Empty;
 
-    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")]
-    public string? FacilityType { get; set; }
+    public Guid? FacilityTypeId { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập vị trí cơ sở vật chất.")]
     [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")]
@@ -50,8 +50,7 @@ public class UpdateFacilityModel
     [StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")]
     public string Name { get; set; } = string.Empty;
 
-    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")]
-    public string? FacilityType { get; set; }
+    public Guid? FacilityTypeId { get; set; }
 
     [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")]
     public string? LocationDescription { get; set; }
@@ -64,11 +63,25 @@ public class FacilityFilterModel
 {
     public string? SearchKeyword { get; set; }
     public MasterDataStatus? Status { get; set; }
-    public string? FacilityType { get; set; }
+    public Guid? FacilityTypeId { get; set; }
     public int PageIndex { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }
 public class SetFacilityStatusModel
 {
     public MasterDataStatus Status { get; set; }
+}
+
+public sealed class FacilityTypeModel
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public sealed class CreateFacilityTypeModel
+{
+    [Required(ErrorMessage = "Tên loại cơ sở vật chất là bắt buộc.")]
+    [StringLength(80, MinimumLength = 1, ErrorMessage = "Tên loại cơ sở vật chất phải từ 1 đến 80 ký tự.")]
+    public string Name { get; set; } = string.Empty;
 }

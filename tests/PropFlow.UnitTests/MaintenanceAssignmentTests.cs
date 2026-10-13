@@ -176,6 +176,33 @@ public sealed class MaintenanceAssignmentTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.UpdateMyTaskProgressAsync(task.Id, new("Không được ghi"), staffA.UserId, default));
     }
 
+    [Fact]
+    public async Task StaffMutations_NotifyOnlyAfterEachCommittedTaskStateChange()
+    {
+        await using var db = CreateDb();
+        var staff = Staff("Nhân viên A");
+        var task = AddTask(db);
+        var notifier = new RecordingNotifier(db);
+        var service = Service(db, notifier, staff);
+
+        await service.AssignTaskAsync(task.Id, new(staff.UserId), Guid.NewGuid(), default);
+        notifier.Clear();
+
+        await service.StartMyTaskAsync(task.Id, staff.UserId, default);
+        await service.UpdateMyTaskProgressAsync(task.Id, new("Đã kiểm tra"), staff.UserId, default);
+        await service.SubmitMyTaskResultAsync(task.Id, new("Đã hoàn tất"), staff.UserId, default);
+
+        Assert.Equal(3, notifier.Notifications.Count);
+        Assert.All(notifier.Notifications, notification =>
+        {
+            Assert.Equal(task.Id, notification.TaskId);
+            Assert.Contains(staff.UserId, notification.RecipientStaffUserIds);
+            Assert.True(notification.AssignmentWasPersisted);
+        });
+        Assert.Equal(MaintenanceTaskStatus.COMPLETED, (await db.MaintenanceTasks.SingleAsync()).Status);
+        Assert.Equal(4, await db.MaintenanceTaskActivities.CountAsync());
+    }
+
     private static MaintenanceService Service(MaintenanceDbContext db, params MaintenanceStaffRecord[] staff) =>
         new(db, new AssetSource(), new StaffDirectory(staff));
 
