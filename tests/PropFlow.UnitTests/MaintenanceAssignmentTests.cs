@@ -114,6 +114,49 @@ public sealed class MaintenanceAssignmentTests
     }
 
     [Fact]
+    public async Task AssignTaskAsync_NotifiesEveryAffectedStaffOnlyAfterAssignmentIsSaved()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var unrelatedStaff = Staff("Nhân viên không liên quan");
+        var task = AddTask(db);
+        var notifier = new RecordingNotifier(db);
+        var service = Service(db, notifier, staffA, staffB, unrelatedStaff);
+
+        await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffA.UserId, staffB.UserId]), Guid.NewGuid(), default);
+
+        var notification = Assert.Single(notifier.Notifications);
+        Assert.Equal(task.Id, notification.TaskId);
+        Assert.Equal(new[] { staffA.UserId, staffB.UserId }.OrderBy(id => id), notification.RecipientStaffUserIds.OrderBy(id => id));
+        Assert.DoesNotContain(unrelatedStaff.UserId, notification.RecipientStaffUserIds);
+        Assert.True(notification.AssignmentWasPersisted);
+    }
+
+    [Fact]
+    public async Task AssignTaskAsync_ReassignmentNotifiesRemovedAndNewStaffButFailureNotifiesNobody()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var task = AddTask(db);
+        var notifier = new RecordingNotifier(db);
+        var service = Service(db, notifier, staffA, staffB);
+
+        await service.AssignTaskAsync(task.Id, new(staffA.UserId), Guid.NewGuid(), default);
+        notifier.Clear();
+
+        await service.AssignTaskAsync(task.Id, new(staffB.UserId), Guid.NewGuid(), default);
+
+        var notification = Assert.Single(notifier.Notifications);
+        Assert.Equal(new[] { staffA.UserId, staffB.UserId }.OrderBy(id => id), notification.RecipientStaffUserIds.OrderBy(id => id));
+        notifier.Clear();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTaskAsync(task.Id, new(Guid.NewGuid()), Guid.NewGuid(), default));
+        Assert.Empty(notifier.Notifications);
+    }
+
+    [Fact]
     public async Task TeamMemberCanStartAndAnotherMemberCanProgressAndCompleteSharedTask()
     {
         await using var db = CreateDb();
@@ -135,6 +178,9 @@ public sealed class MaintenanceAssignmentTests
 
     private static MaintenanceService Service(MaintenanceDbContext db, params MaintenanceStaffRecord[] staff) =>
         new(db, new AssetSource(), new StaffDirectory(staff));
+
+    private static MaintenanceService Service(MaintenanceDbContext db, IMaintenanceNotifier notifier, params MaintenanceStaffRecord[] staff) =>
+        new(db, new AssetSource(), new StaffDirectory(staff), notifier);
 
     private static MaintenanceDbContext CreateDb() => new(new DbContextOptionsBuilder<MaintenanceDbContext>()
         .UseInMemoryDatabase($"maintenance-assignment-{Guid.NewGuid()}").Options);
@@ -162,4 +208,19 @@ public sealed class MaintenanceAssignmentTests
         public Task<IReadOnlyList<MaintenanceStaffRecord>> GetActiveStaffAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<MaintenanceStaffRecord>>(staff);
         public Task<MaintenanceStaffRecord?> GetActiveStaffAsync(Guid userId, CancellationToken ct) => Task.FromResult<MaintenanceStaffRecord?>(staff.SingleOrDefault(item => item.UserId == userId));
     }
+
+    private sealed class RecordingNotifier(MaintenanceDbContext db) : IMaintenanceNotifier
+    {
+        public List<Notification> Notifications { get; } = [];
+
+        public Task NotifyTaskUpdatedAsync(Guid taskId, IReadOnlyCollection<Guid> recipientStaffUserIds, CancellationToken ct = default)
+        {
+            Notifications.Add(new(taskId, recipientStaffUserIds.ToArray(), db.MaintenanceAssignments.Any(assignment => assignment.MaintenanceTaskId == taskId)));
+            return Task.CompletedTask;
+        }
+
+        public void Clear() => Notifications.Clear();
+    }
+
+    private sealed record Notification(Guid TaskId, IReadOnlyCollection<Guid> RecipientStaffUserIds, bool AssignmentWasPersisted);
 }

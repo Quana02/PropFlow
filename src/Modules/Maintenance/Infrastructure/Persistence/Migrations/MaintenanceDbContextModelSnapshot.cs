@@ -67,8 +67,8 @@ namespace PropFlow.Modules.Maintenance.Infrastructure.Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasDefaultValue("ASSIGNED")
                         .HasColumnName("status");
 
@@ -95,6 +95,33 @@ namespace PropFlow.Modules.Maintenance.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_maintenance_assignments_started_at", "started_at IS NULL OR started_at >= assigned_at");
                         });
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Maintenance.Domain.MaintenanceResults.MaintenanceResultAttachment", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uuid").HasColumnName("id");
+                    b.Property<string>("ContentType").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)").HasColumnName("content_type");
+                    b.Property<Guid>("MaintenanceResultId").HasColumnType("uuid").HasColumnName("maintenance_result_id");
+                    b.Property<string>("OriginalFileName").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)").HasColumnName("original_file_name");
+                    b.Property<long>("SizeBytes").HasColumnType("bigint").HasColumnName("size_bytes");
+                    b.Property<string>("StorageKey").IsRequired().HasMaxLength(512).HasColumnType("character varying(512)").HasColumnName("storage_key");
+                    b.Property<DateTimeOffset>("UploadedAt").HasColumnType("timestamp with time zone").HasColumnName("uploaded_at");
+                    b.Property<Guid>("UploadedBy").HasColumnType("uuid").HasColumnName("uploaded_by");
+                    b.HasKey("Id");
+                    b.HasIndex("MaintenanceResultId");
+                    b.HasIndex("StorageKey").IsUnique();
+                    b.ToTable("maintenance_result_attachments", "maintenance");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Maintenance.Domain.MaintenanceResults.MaintenanceResultAttachment", b =>
+                {
+                    b.HasOne("PropFlow.Modules.Maintenance.Domain.MaintenanceResults.MaintenanceResult", "MaintenanceResult")
+                        .WithMany()
+                        .HasForeignKey("MaintenanceResultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("MaintenanceResult");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Maintenance.Domain.MaintenanceResults.MaintenanceResult", b =>
@@ -129,8 +156,8 @@ namespace PropFlow.Modules.Maintenance.Infrastructure.Persistence.Migrations
                     b.Property<string>("ResultStatus")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasDefaultValue("SUBMITTED")
                         .HasColumnName("result_status");
 
@@ -227,8 +254,8 @@ namespace PropFlow.Modules.Maintenance.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("ScheduleCode")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("schedule_code");
 
                     b.Property<string>("Status")
@@ -412,8 +439,8 @@ namespace PropFlow.Modules.Maintenance.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("TaskNumber")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("task_number");
 
                     b.Property<string>("Title")

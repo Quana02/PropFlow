@@ -429,19 +429,8 @@
                     
                     @if (SelectedFacilityToEdit == null)
                     {
-                        <!-- Field 1: Mã CSVT (Required) -->
-                        <div class="space-y-1.5">
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                MÃ CƠ SỞ VẬT CHẤT <span class="text-rose-500">*</span>
-                            </label>
-                            <div class="relative">
-                                <input @bind="CreateFormModel.Code" type="text" placeholder="VD: CSVC-HOBOI-T05" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all font-mono" />
-                            </div>
-                            <p class="text-[11px] text-slate-400">Quy ước: CSVC-[TÊN]-[VỊ TRÍ]</p>
-                            @if (!string.IsNullOrWhiteSpace(FacilityCodeError)) { <p class="text-xs text-rose-600" role="alert">@FacilityCodeError</p> }
-                        </div>
-
-                        <!-- Field 2: Tên CSVT (Required) -->
+                        <div class="sm:col-span-2 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">Mã sẽ được hệ thống tự động tạo khi lưu.</div>
+                        <!-- Field 1: Tên CSVT (Required) -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
                                 Tên Cơ Sở Vật Chất <span class="text-rose-500">*</span>
@@ -449,7 +438,7 @@
                             <input @bind="CreateFormModel.Name" type="text" placeholder="VD: Khu vui chơi trẻ em KidZone" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
 
-                        <!-- Field 3: Loại CSVT (FacilityType) -->
+                        <!-- Field 2: Loại CSVT (FacilityType) -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
                                 Loại Cơ Sở Vật Chất
@@ -459,10 +448,10 @@
                             </div>
                         </div>
 
-                        <!-- Field 4: Vị trí -->
+                        <!-- Field 3: Vị trí -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Vị trí
+                                Vị trí <span class="text-rose-500">*</span>
                             </label>
                             <input @bind="CreateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 1, khu vực A" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
@@ -772,10 +761,11 @@
                 : await FacilityApiClient.UpdateFacilityAsync(SelectedFacilityToEdit.Id, UpdateFormModel);
             if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu cơ sở vật chất."; return; }
             var name = SelectedFacilityToEdit == null ? CreateFormModel.Name : UpdateFormModel.Name;
+            var generatedCode = SelectedFacilityToEdit is null ? result.Data?.Code : null;
             IsSaveConfirmationOpen = false;
             CloseDialog();
             await Task.WhenAll(LoadData(), LoadSummaryAsync());
-            if (ErrorMessage == null) SuccessMessage = $"Đã lưu cơ sở vật chất '{name}' thành công!";
+            if (ErrorMessage == null) SuccessMessage = generatedCode is null ? $"Đã lưu cơ sở vật chất '{name}' thành công!" : $"Đã tạo cơ sở vật chất '{name}' với mã {generatedCode}.";
         }
         finally { IsSaving = false; }
     }

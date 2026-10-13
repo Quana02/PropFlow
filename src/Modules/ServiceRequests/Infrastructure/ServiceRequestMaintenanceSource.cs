@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.ServiceRequests.Infrastructure;
 
-public sealed class ServiceRequestMaintenanceSource(ServiceRequestsDbContext db)
+public sealed class ServiceRequestMaintenanceSource(
+    ServiceRequestsDbContext db,
+    IApartmentResidentRelationshipSource apartments)
     : IServiceRequestMaintenanceSource
 {
     public async Task<ServiceRequestMaintenanceReference?> GetAsync(
@@ -19,7 +22,11 @@ public sealed class ServiceRequestMaintenanceSource(ServiceRequestsDbContext db)
             .AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == serviceRequestId, ct);
 
-        return request is null ? null : Map(request);
+        if (request is null)
+            return null;
+
+        var apartment = await FindApartmentAsync(request.ApartmentUnitId, ct);
+        return Map(request, apartment);
     }
 
     public async Task<IReadOnlyList<ServiceRequestMaintenanceReference>> SearchAsync(
@@ -56,10 +63,34 @@ public sealed class ServiceRequestMaintenanceSource(ServiceRequestsDbContext db)
             .Take(limit)
             .ToArrayAsync(ct);
 
-        return requests.Select(Map).ToArray();
+        var apartmentIds = requests
+            .Where(request => request.ApartmentUnitId.HasValue)
+            .Select(request => request.ApartmentUnitId!.Value)
+            .Distinct()
+            .ToArray();
+        var apartmentsById = apartmentIds.Length == 0
+            ? new Dictionary<Guid, ApartmentReference>()
+            : (await apartments.GetApartmentsAsync(apartmentIds, ct))
+                .ToDictionary(apartment => apartment.Id);
+
+        return requests
+            .Select(request => Map(
+                request,
+                request.ApartmentUnitId is { } apartmentId && apartmentsById.TryGetValue(apartmentId, out var apartment)
+                    ? apartment
+                    : null))
+            .ToArray();
     }
 
-    private static ServiceRequestMaintenanceReference Map(ServiceRequest request)
+    private async Task<ApartmentReference?> FindApartmentAsync(Guid? apartmentUnitId, CancellationToken ct)
+    {
+        if (apartmentUnitId is not { } id)
+            return null;
+
+        return (await apartments.GetApartmentsAsync([id], ct)).SingleOrDefault();
+    }
+
+    private static ServiceRequestMaintenanceReference Map(ServiceRequest request, ApartmentReference? apartment)
     {
         var isLinkable = request.Status is
             ServiceRequestStatus.SUBMITTED or
@@ -78,6 +109,8 @@ public sealed class ServiceRequestMaintenanceSource(ServiceRequestsDbContext db)
             request.FinalPriorityCode,
             request.SubmittedAt,
             isLinkable,
-            isLinkable ? null : "service_request_not_linkable");
+            isLinkable ? null : "service_request_not_linkable",
+            apartment?.UnitNumber,
+            apartment?.FloorNumber);
     }
 }

@@ -44,6 +44,31 @@ public sealed class MaintenanceApiClientTests
     }
 
     [Fact]
+    public async Task Link_task_service_request_posts_only_service_request_identifier()
+    {
+        HttpRequestMessage? captured = null;
+        string? payload = null;
+        var taskId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var api = new AuthenticatedApiClient(new HttpClient(new Transport(request =>
+        {
+            captured = request;
+            using var reader = new StreamReader(request.Content!.ReadAsStream());
+            payload = reader.ReadToEnd();
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($"{{\"id\":\"{taskId}\",\"taskNumber\":\"MT-001\",\"title\":\"Kiểm tra\",\"status\":0,\"createdBy\":\"{Guid.NewGuid()}\",\"createdAt\":\"2026-10-11T00:00:00+00:00\",\"sourceServiceRequestId\":\"{requestId}\"}}", Encoding.UTF8, "application/json") };
+        })) { BaseAddress = new Uri("https://test.invalid/") }, NullLogger<ApiClient>.Instance);
+
+        var result = await new MaintenanceApiClient(api).LinkTaskServiceRequestAsync(taskId, new() { ServiceRequestId = requestId });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(requestId, result.Data!.SourceServiceRequestId);
+        Assert.Equal(HttpMethod.Post, captured!.Method);
+        Assert.Equal($"/api/v1/maintenance/tasks/{taskId}/service-request", captured.RequestUri!.AbsolutePath);
+        Assert.Contains("serviceRequestId", payload, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("actor", payload, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Associate_task_asset_patches_only_asset_identifiers()
     {
         HttpRequestMessage? captured = null;

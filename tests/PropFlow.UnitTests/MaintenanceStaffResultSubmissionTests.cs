@@ -52,6 +52,21 @@ public sealed class MaintenanceStaffResultSubmissionTests
     }
 
     [Fact]
+    public async Task SubmitMyTaskResultWithEvidenceAsync_RejectsMissingEvidenceAndKeepsTaskInProgress()
+    {
+        await using var db = CreateDb();
+        var staff = Staff("Nhân viên A");
+        var (task, _) = AddInProgressTask(db, staff.UserId);
+        await db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(db, DateTimeOffset.UtcNow, staff)
+            .SubmitMyTaskResultWithEvidenceAsync(task.Id, new("Đã hoàn tất"), staff.UserId, [], default));
+
+        Assert.Empty(await db.MaintenanceResults.ToListAsync());
+        Assert.Equal(MaintenanceTaskStatus.IN_PROGRESS, (await db.MaintenanceTasks.SingleAsync()).Status);
+    }
+
+    [Fact]
     public async Task SubmitMyTaskResultAsync_RejectsNonCurrentAndReassignedStaff()
     {
         await using var db = CreateDb();

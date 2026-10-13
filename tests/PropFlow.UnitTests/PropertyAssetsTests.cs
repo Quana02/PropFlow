@@ -246,11 +246,11 @@ public class PropertyAssetsTests
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-TESTEQUIPMENT-001", result.Code);
     }
 
     [Fact]
-    public async Task EquipmentService_CreateEquipment_DuplicateCodeThrowsException()
+    public async Task EquipmentService_CreateEquipment_SameNameAllocatesNextSequence()
     {
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -266,14 +266,15 @@ public class PropertyAssetsTests
             EquipmentType: "TEST");
         await service.CreateEquipmentAsync(command1);
 
-        // Try to create second equipment with same code
+        // The client-supplied code is ignored. Same normalized name must receive the next sequence.
         var command2 = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
-            "Second Equipment",
+            "First Equipment",
             EquipmentType: "TEST");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateEquipmentAsync(command2));
-        Assert.Contains("đã tồn tại", exception.Message);
+        var second = await service.CreateEquipmentAsync(command2);
+        Assert.Equal("TB-FIRSTEQUIPMENT-002", second.Code);
+        Assert.NotEqual("TB-FIRSTEQUIPMENT-001", second.Code);
     }
 
     [Fact]
@@ -362,7 +363,7 @@ public class PropertyAssetsTests
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-TREADMILL-001", result.Code);
         Assert.Equal(facility.Id, result.FacilityId);
     }
 
@@ -385,7 +386,7 @@ public class PropertyAssetsTests
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-MAINTRANSFORMER-001", result.Code);
         Assert.Null(result.FacilityId);
     }
 
@@ -881,7 +882,7 @@ public class PropertyAssetsTests
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-TREADMILL-001", result.Code);
         Assert.Equal(facility.Id, result.FacilityId);
     }
 

@@ -55,8 +55,8 @@ public class ModuleBoundaryTests
             .Where(l => l.StartsWith("Project(") && !l.Contains(SolutionFolderGuid))
             .ToList();
 
-        Assert.Equal(28, projectLines.Count);
-        Assert.Equal(6, projectLines.Count(x => x.Contains(".Contracts.csproj")));
+        Assert.Equal(30, projectLines.Count);
+        Assert.Equal(8, projectLines.Count(x => x.Contains(".Contracts.csproj")));
     }
 
     [Fact]

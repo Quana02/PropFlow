@@ -1,0 +1,181 @@
+@page "/maintenance/tasks/{TaskId:guid}"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
+@using PropFlow.Web.Client.Features.Maintenance.Models
+@using PropFlow.Web.Client.Features.Maintenance.Services
+@using PropFlow.Web.Client.Features.ServiceRequests.Services
+@using PropFlow.Modules.ServiceRequests.Contracts
+@using PropFlow.Web.Client.Shared.Feedback
+@inject IMaintenanceApiClient Api
+@inject IManagerServiceRequestApiClient ServiceRequestApi
+
+<PageTitle>Chi tiết công việc bảo trì - PropFlow</PageTitle>
+
+<div class="maintenance-task-detail-page">
+    <nav class="request-breadcrumb" aria-label="Đường dẫn">
+        <a href="/">Vận hành</a><span>/</span><a href="/maintenance?workspace=tasks">Quản lý bảo trì</a><span>/</span><a href="/maintenance?workspace=tasks">Công việc bảo trì</a><span>/</span><strong>Chi tiết công việc</strong>
+    </nav>
+
+    @if (Loading)
+    {
+        <section class="mtd-loading" role="status"><span></span>Đang tải chi tiết công việc bảo trì…</section>
+    }
+    else if (Error is not null)
+    {
+        <section class="mtd-loading mtd-error"><strong>@Error</strong><a href="/maintenance?workspace=tasks">Quay lại danh sách công việc</a></section>
+    }
+    else if (Task is not null)
+    {
+        var lifecycle = MaintenanceProgressLifecycleMapper.Map(Task);
+
+        <section class="request-hero mtd-hero" aria-labelledby="maintenance-task-title">
+            <div class="hero-copy">
+                
+                <div class="hero-title-row"><h1 id="maintenance-task-title">Chi tiết công việc bảo trì</h1><span class="status-badge @StatusClass(Task.Status)"><i></i>@Status(Task.Status)</span></div>
+                <p>@Task.Title</p>
+            </div>
+            <div class="hero-actions">
+                <span class="request-code"><span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>@Task.TaskNumber</span>
+                <a class="secondary-action" href="/maintenance?workspace=tasks"><span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>Quay lại danh sách</a>
+                
+            </div>
+        </section>
+
+        <section class="signal-strip mtd-signal-strip" aria-label="Tóm tắt công việc">
+            <article><span class="signal-icon @StatusIconClass(Task.Status)"><span class="material-symbols-outlined">task_alt</span></span><div><small>Trạng thái công việc</small><strong>@Status(Task.Status)</strong></div></article>
+            <article><span class="signal-icon @PriorityIconClass(Task.PriorityCode)"><span class="material-symbols-outlined">priority_high</span></span><div><small>Mức độ ưu tiên</small><strong>@MaintenancePriority.DisplayName(Task.PriorityCode)</strong></div></article>
+            <article><span class="signal-icon emerald"><span class="material-symbols-outlined">engineering</span></span><div><small>Nhân viên phụ trách</small><strong>@AssigneeLabel(Task)</strong></div></article>
+            <article><span class="signal-icon @(Task.IsOverdue ? "rose" : "violet")"><span class="material-symbols-outlined">event</span></span><div><small>Hạn hoàn thành</small><strong>@DateOrUnrecorded(Task.DueAt)</strong></div></article>
+        </section>
+
+        <section class="glass-card mtd-progress-card" aria-labelledby="maintenance-progress-title">
+            <header class="card-header"><div class="card-heading"><span class="card-icon"><span class="material-symbols-outlined">route</span></span><div><h2 id="maintenance-progress-title">Quy trình bảo trì · 5 bước</h2><p>Theo dõi tiến độ thực tế của công việc bảo trì</p></div></div><span class="step-chip">@Status(Task.Status)</span></header>
+            @if (lifecycle.IsCancelled)
+            {
+                <div class="mtd-cancelled-progress"><span class="material-symbols-outlined">cancel</span><div><strong>Công việc đã hủy</strong><p>Tiến trình xử lý đã dừng, các bước còn lại không được đánh dấu hoàn thành.</p></div></div>
+            }
+            else
+            {
+                <div class="mtd-stepper" role="list" aria-label="Tiến trình công việc bảo trì">
+                    @foreach (var step in ProgressSteps)
+                    {
+                        <article role="listitem" class="mtd-step @ProgressStepClass(step.Index, lifecycle)"><span class="mtd-step-icon">@if (lifecycle.IsStepCompleted(step.Index)) { <span class="material-symbols-outlined">check</span> } else { @step.Index }</span><div><strong>@step.Label</strong><small>@StepTimestamp(step.Index)</small></div></article>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="mtd-time-strip" aria-label="Các mốc thời gian">
+            <article><span class="mtd-time-icon sky"><span class="material-symbols-outlined">event_available</span></span><div><small>Bắt đầu dự kiến</small><strong>@DateOrUnrecorded(Task.PlannedStartAt)</strong></div></article>
+            <article><span class="mtd-time-icon emerald"><span class="material-symbols-outlined">play_circle</span></span><div><small>Bắt đầu thực tế</small><strong>@ActualStart</strong></div></article>
+            <article><span class="mtd-time-icon amber"><span class="material-symbols-outlined">update</span></span><div><small>Cập nhật gần nhất</small><strong>@DateOrUnrecorded(Task.LastProgressAt)</strong></div></article>
+            <article class="@(Task.IsOverdue ? "is-overdue" : string.Empty)"><span class="mtd-time-icon @(Task.IsOverdue ? "rose" : "violet")"><span class="material-symbols-outlined">alarm</span></span><div><small>Hạn hoàn thành</small><strong>@DateOrUnrecorded(Task.DueAt)</strong></div></article>
+        </section>
+
+        <div class="request-workspace mtd-workspace">
+            <div class="request-main-column mtd-main-column">
+                <section class="glass-card request-overview" aria-labelledby="task-information-title">
+                    <header class="card-header"><div class="card-heading"><span class="card-icon"><span class="material-symbols-outlined">assignment</span></span><div><h2 id="task-information-title">Thông tin công việc bảo trì</h2><p>Phạm vi, tài sản và thời gian thực hiện</p></div></div><span class="classification-chip">@MaintenancePriority.DisplayName(Task.PriorityCode)</span></header>
+                    <div class="request-title-block mtd-task-title-block"><small>Tiêu đề công việc</small><strong>@Task.Title</strong><span><span class="material-symbols-outlined">confirmation_number</span>@Task.TaskNumber · @(Task.SourceScheduleCode is null ? "Công việc trực tiếp" : $"Theo lịch · {Task.SourceScheduleCode}")</span></div>
+                    <dl class="fact-grid mtd-fact-grid">
+                        <div><dt>Trạng thái</dt><dd>@Status(Task.Status)</dd></div><div><dt>Ưu tiên</dt><dd>@MaintenancePriority.DisplayName(Task.PriorityCode)</dd></div><div><dt>Nguồn công việc</dt><dd>@(Task.SourceScheduleCode is null ? "Công việc trực tiếp" : $"Lịch {Task.SourceScheduleCode}")</dd></div><div><dt>Bắt đầu dự kiến</dt><dd>@DateOrUnrecorded(Task.PlannedStartAt)</dd></div><div><dt>Hạn hoàn thành</dt><dd>@DateOrUnrecorded(Task.DueAt)</dd></div><div><dt>Vị trí thực hiện</dt><dd>@TaskAssetContext()</dd></div><div><dt>Cơ sở vật chất</dt><dd>@Asset(Task.FacilityId)</dd></div><div><dt>Thiết bị</dt><dd>@Asset(Task.EquipmentId)</dd></div>
+                    </dl>
+                    <div class="description-block"><div><span class="material-symbols-outlined">subject</span><strong>Mô tả công việc</strong></div><p>@(string.IsNullOrWhiteSpace(Task.Description) ? "Chưa có mô tả công việc." : Task.Description)</p></div>
+                </section>
+
+                @if (MaintenanceFeatureFlags.ServiceRequestLinkingEnabled)
+                {
+                <section class="glass-card mtd-related-request" aria-labelledby="related-request-title">
+                    <header class="card-header"><div class="card-heading"><span class="card-icon emerald-icon"><span class="material-symbols-outlined">support_agent</span></span><div><h2 id="related-request-title">Yêu cầu dịch vụ liên quan</h2><p>Liên kết với yêu cầu cư dân</p></div></div></header>
+                    @if (Task.RelatedServiceRequest is { } request)
+                    {
+                        <div class="mtd-request-summary"><div><span class="request-code"><span class="material-symbols-outlined">confirmation_number</span>@request.RequestNumber</span><strong>@request.Title</strong><span class="status-badge status-progress"><i></i>@RequestStatus(request.Status)</span></div><dl class="mtd-request-facts"><div><dt>Vị trí phát sinh</dt><dd>@(request.LocationDescription ?? "Chưa xác định")</dd></div><div><dt>Vị trí thực hiện bảo trì</dt><dd>@TaskAssetContext()</dd></div></dl>@if (!string.IsNullOrWhiteSpace(request.ContextWarning)) { <p class="mtd-warning"><span class="material-symbols-outlined">warning</span>@request.ContextWarning</p> }<a class="outline-action" href="@($"/manager/service-requests/{request.Id}")"><span class="material-symbols-outlined">arrow_forward</span>Xem yêu cầu</a></div>
+                    }
+                    else if (Task.SourceServiceRequestId is not null) { <p class="mtd-empty">Không thể tải thông tin yêu cầu dịch vụ liên quan.</p> }
+                    else
+                    {
+                        <div class="mtd-empty"><p>Chưa liên kết yêu cầu dịch vụ.</p><button class="outline-action" @onclick="OpenLinkPicker"><span class="material-symbols-outlined">link</span>Liên kết yêu cầu</button></div>
+                        @if (LinkPickerOpen) { <div class="mtd-link-picker"><input type="search" @bind="RequestSearch" @bind:event="oninput" placeholder="Tìm mã hoặc tiêu đề yêu cầu…" /><button class="secondary-action" @onclick="LoadCandidates">Tìm</button>@if (Candidates.Count == 0) { <p>Không có yêu cầu đủ điều kiện liên kết.</p> } else { @foreach (var item in Candidates) { <label><input type="radio" name="service-request" checked="@(SelectedRequestId == item.Id)" @onchange="_ => SelectedRequestId = item.Id" /> <b>@item.RequestNumber</b> · @item.Title</label> } }<button class="primary-action" disabled="@(SelectedRequestId is null || Busy)" @onclick="LinkRequest">Liên kết đã chọn</button></div> }
+                    }
+                </section>
+                }
+            </div>
+
+            <aside class="request-side-column mtd-side-column">
+                <section id="assignment" class="glass-card assignee-card" aria-labelledby="assignee-title">
+                    <header class="card-header compact-header"><div class="card-heading"><span class="card-icon emerald-icon"><span class="material-symbols-outlined">groups</span></span><div><h2 id="assignee-title">Nhân sự phụ trách</h2><p>Nhóm Staff cùng xử lý công việc</p></div></div></header>
+                    <p class="mtd-guidance">Nhiều nhân viên chia sẻ trạng thái, tiến độ và nghiệm thu chung của công việc này.</p>
+                    <div class="mtd-assignees">@if (!HasAssignees) { <p class="mtd-empty">Chưa có nhân viên được phân công.</p> } else { @foreach (var staff in Task.CurrentAssignees!) { <article><span class="mtd-avatar">@Initials(staff.DisplayName)</span><div><strong>@staff.DisplayName</strong><small>@staff.Username · Staff kỹ thuật</small></div></article> } }</div>
+                    @if (Task.Status != MaintenanceTaskStatus.CLOSED && Task.Status != MaintenanceTaskStatus.CANCELLED) { <button class="outline-action" @onclick="ToggleAssignment"><span class="material-symbols-outlined">group_add</span>@(ShowAssignment ? "Ẩn chọn nhân viên" : HasAssignees ? "Phân công lại" : "Phân công")</button> }
+                    @if (ShowAssignment) { <div class="mtd-assignment-form"><input type="search" @bind="StaffSearch" @bind:event="oninput" placeholder="Tìm nhân viên…" />@foreach (var staff in VisibleStaff) { <label><input type="checkbox" checked="@SelectedStaffIds.Contains(staff.UserId)" @onchange="args => SetStaff(staff.UserId, args.Value is true)" /> @staff.DisplayName <small>(@staff.Username)</small></label> }<button class="primary-action" disabled="@(Busy || SelectedStaffIds.Count == 0)" @onclick="Assign">@(Busy ? "Đang lưu…" : "Lưu phân công")</button></div> }
+                </section>
+
+                <section class="glass-card mtd-result-card" aria-labelledby="result-title">
+                    <header class="card-header compact-header"><div class="card-heading"><span class="card-icon amber-icon"><span class="material-symbols-outlined">fact_check</span></span><div><h2 id="result-title">Tiến độ và kết quả</h2><p>Thông tin Staff gửi và Manager nghiệm thu</p></div></div></header>
+                    <dl class="mtd-mini-facts"><dt>Bắt đầu thực tế</dt><dd>@ActualStart</dd><dt>Cập nhật tiến độ</dt><dd>@ProgressUpdate</dd><dt>Hạn hoàn thành</dt><dd>@DateOrUnrecorded(Task.DueAt)</dd></dl>
+                    @if (Task.LatestResult is { } result) { <div class="mtd-result"><strong>@ResultStatus(result.ResultStatus)</strong><dl class="mtd-result-facts"><dt>Kết quả thực hiện</dt><dd>@(string.IsNullOrWhiteSpace(result.Summary) ? "—" : result.Summary)</dd><dt>Staff thực hiện</dt><dd>@SubmittedBy(result.SubmittedBy)</dd><dt>Gửi kết quả lúc</dt><dd>@DateOrUnrecorded(result.SubmittedAt)</dd>@if (!string.IsNullOrWhiteSpace(result.Recommendation)) { <dt>Khuyến nghị</dt><dd>@result.Recommendation</dd> }@if (!string.IsNullOrWhiteSpace(result.ReviewNote)) { <dt>Ghi chú Manager</dt><dd>@result.ReviewNote</dd> }</dl><section class="mtd-evidence"><h3>Ảnh minh chứng</h3>@if (result.Attachments is not { Count: > 0 }) { <p class="mtd-empty">Chưa có ảnh minh chứng.</p> } else if (EvidenceLoading) { <p class="mtd-empty">Đang tải ảnh minh chứng…</p> } else if (!string.IsNullOrWhiteSpace(EvidenceError)) { <p class="mtd-empty">@EvidenceError</p> } else { <div class="mtd-evidence-gallery">@foreach (var attachment in result.Attachments) { @if (EvidenceUrls.TryGetValue(attachment.Id, out var url)) { <button type="button" @onclick="() => SelectedEvidenceUrl = url"><img src="@url" alt="@attachment.OriginalFileName" /></button> } }</div> }</section>@if (result.ResultStatus == MaintenanceResultStatus.SUBMITTED && Task.Status == MaintenanceTaskStatus.COMPLETED) { <label class="mtd-review-note"><span>Ghi chú nghiệm thu</span><textarea @bind="ReviewNote" placeholder="Nhập ghi chú khi chấp nhận hoặc yêu cầu xử lý thêm…"></textarea></label><div class="mtd-review-actions"><button class="primary-action" @onclick='() => Review(result.Id, "approve")'>Chấp nhận &amp; đóng</button><button class="secondary-action" @onclick='() => Review(result.Id, "request_revision")'>Yêu cầu xử lý thêm</button></div> } else if (result.ResultStatus == MaintenanceResultStatus.REVISION_REQUIRED && Task.Status == MaintenanceTaskStatus.ASSIGNED) { <p class="mtd-empty">Đã yêu cầu xử lý thêm. Dùng khu vực phân công để giao lại nhân viên khi cần.</p> }</div> } else { <p class="mtd-empty">Chưa có kết quả thực hiện.</p> }
+                    @if (History?.Results.Count > 1) { <details class="mtd-result-history"><summary>Lịch sử các lần gửi kết quả</summary>@foreach (var previous in History.Results.OrderBy(item => item.AttemptNo)) { <article><strong>Lần @previous.AttemptNo · @ResultStatus(previous.ResultStatus)</strong><p>@previous.Summary</p>@if (previous.Attachments is { Count: > 0 }) { <div class="mtd-evidence-gallery">@foreach (var attachment in previous.Attachments) { @if (EvidenceUrls.TryGetValue(attachment.Id, out var url)) { <button type="button" @onclick="() => SelectedEvidenceUrl = url"><img src="@url" alt="@attachment.OriginalFileName" /></button> } }</div> }</article> }</details> }
+                </section>
+
+                <section class="glass-card manager-note-card" aria-labelledby="latest-activity-title"><header><span class="material-symbols-outlined">bolt</span><h2 id="latest-activity-title">Hoạt động gần nhất</h2></header><blockquote>“@(Task.LastProgressContent ?? LastActivity)”</blockquote><footer><span>@LastActivity</span><time>@DateOrUnrecorded(Task.LastActivityAt)</time></footer></section>
+                <section class="glass-card timeline-card" aria-labelledby="history-title"><header class="card-header compact-header"><div><h2 id="history-title">Nhật ký hoạt động</h2><p>Lịch sử được ghi nhận trong hệ thống</p></div><span class="step-chip">@(VisibleTimeline.Count) cập nhật</span></header><ol class="timeline">@if (History is null || !VisibleTimeline.Any()) { <li><p>Chưa có hoạt động được ghi nhận.</p></li> } else { @foreach (var item in VisibleTimeline) { <li class="is-complete"><span class="timeline-node"><span class="material-symbols-outlined">check</span></span><div><header><strong>@Activity(item.ActivityType, item.Kind)</strong><time>@Date(item.OccurredAt)</time></header>@if (!string.IsNullOrWhiteSpace(item.Detail)) { <p>@item.Detail</p> }</div></li> } }</ol></section>
+            </aside>
+        </div>
+    }
+</div>
+
+@if (PendingConfirmation is not null) { <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@ConfirmationMessage" ConfirmText="Có" CancelText="Không" Busy="@Busy" BusyText="Đang xử lý…" OnConfirm="Confirm" OnCancel="() => PendingConfirmation = null" /> }
+@if (SelectedEvidenceUrl is not null) { <div class="mtd-image-lightbox" role="presentation" @onclick="() => SelectedEvidenceUrl = null"><img src="@SelectedEvidenceUrl" alt="Ảnh minh chứng phóng to" @onclick:stopPropagation="true" /></div> }
+
+@code {
+    [Parameter] public Guid TaskId { get; set; }
+    private MaintenanceTaskModel? Task; private MaintenanceHistoryDetailModel? History; private IReadOnlyList<AssetModel> Assets = []; private IReadOnlyList<AssignableMaintenanceStaffModel> Staff = [];
+    private bool Loading = true, Busy, ShowAssignment, LinkPickerOpen, EvidenceLoading; private string? Error, EvidenceError, SelectedEvidenceUrl; private readonly Dictionary<Guid, string> EvidenceUrls = []; private string StaffSearch = string.Empty, RequestSearch = string.Empty, ReviewNote = string.Empty; private List<Guid> SelectedStaffIds = []; private IReadOnlyList<ServiceRequestMaintenanceReference> Candidates = []; private Guid? SelectedRequestId;
+    private Func<Task>? PendingConfirmation; private string ConfirmationMessage = string.Empty;
+    protected override async Task OnParametersSetAsync() { Loading = true; Error = null; Task = null; History = null; await Load(); Loading = false; }
+    private async Task Load() { var assets = await Api.AssetsAsync(); Assets = assets.Data ?? []; var task = await Api.TaskAsync(TaskId); if (!task.IsSuccess || task.Data is null) { Error = task.Message ?? "Không tìm thấy công việc bảo trì."; return; } Task = task.Data; var history = await Api.HistoryDetailAsync(TaskId); History = history.Data; await LoadEvidenceAsync(); }
+    private async Task LoadEvidenceAsync() { EvidenceUrls.Clear(); EvidenceError = null; if (Task is null) return; var results = History?.Results ?? (Task.LatestResult is null ? [] : [Task.LatestResult]); if (!results.Any(item => item.Attachments is { Count: > 0 })) return; EvidenceLoading = true; try { foreach (var result in results) foreach (var attachment in result.Attachments ?? []) { var image = await Api.ResultAttachmentAsync(Task.Id, result.Id, attachment.Id); if (!image.IsSuccess || image.Data is null) { EvidenceError = image.Message ?? "Không thể tải ảnh minh chứng."; return; } EvidenceUrls[attachment.Id] = $"data:{attachment.ContentType};base64,{Convert.ToBase64String(image.Data)}"; } } finally { EvidenceLoading = false; } }
+    private bool HasAssignees => Task?.CurrentAssignees?.Any() == true;
+    private string Asset(Guid? id) => id is { } value && Assets.FirstOrDefault(x => x.Id == value) is { } asset ? $"{asset.Code} · {asset.Name}" : "Chưa gắn";
+    private string TaskAssetContext() { var value = Task is null ? string.Empty : string.Join(" · ", new[] { Task.FacilityId is null ? null : Asset(Task.FacilityId), Task.EquipmentId is null ? null : Asset(Task.EquipmentId) }.Where(x => x is not null)); return string.IsNullOrEmpty(value) ? "Chưa xác định" : value; }
+    private static string Date(DateTimeOffset? value) => value?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—";
+    private static string DateOrUnrecorded(DateTimeOffset? value) => value?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa ghi nhận";
+    private string ActualStart => History?.Timeline.FirstOrDefault(x => x.ActivityType == MaintenanceActivityType.STATUS_CHANGED && x.Detail == "Bắt đầu công việc") is { } x ? Date(x.OccurredAt) : "Chưa ghi nhận";
+    private IReadOnlyList<MaintenanceHistoryTimelineEventModel> VisibleTimeline => (History?.Timeline ?? [])
+        .Where(item => MaintenanceFeatureFlags.ServiceRequestLinkingEnabled || item.ActivityType != MaintenanceActivityType.SERVICE_REQUEST_LINKED)
+        .ToArray();
+    private string ProgressUpdate => Task?.LastProgressAt is { } at ? $"{Activity(Task.LastProgressActivityType, "Cập nhật tiến độ")} · {Date(at)}" : "Chưa ghi nhận";
+    private string LastActivity => Task?.LastActivityAt is { } at ? $"{Activity(Task.LastActivityType, "Cập nhật công việc")} · {Date(at)}" : "Chưa có hoạt động nào";
+    private string StepTimestamp(int index)
+    {
+        if (index == 1) return DateOrUnrecorded(Task?.AssignedAt);
+        if (index == 2) return ActualStart;
+        if (index == 3) return DateOrUnrecorded(Task?.LastProgressAt);
+        if (index == 4) return DateOrUnrecorded(Task?.LatestResult?.SubmittedAt);
+        var close = History?.Timeline.FirstOrDefault(x => x.ActivityType == MaintenanceActivityType.CLOSED);
+        return close is null ? "Chưa ghi nhận" : Date(close.OccurredAt);
+    }
+    private static string Status(MaintenanceTaskStatus value) => value switch { MaintenanceTaskStatus.ASSIGNED => "Đã phân công", MaintenanceTaskStatus.IN_PROGRESS => "Đang thực hiện", MaintenanceTaskStatus.COMPLETED => "Chờ nghiệm thu", MaintenanceTaskStatus.CLOSED => "Đã đóng", MaintenanceTaskStatus.CANCELLED => "Đã hủy", _ => "Mở" };
+    private static string StatusClass(MaintenanceTaskStatus value) => value == MaintenanceTaskStatus.IN_PROGRESS ? "status-progress" : value is MaintenanceTaskStatus.CLOSED or MaintenanceTaskStatus.COMPLETED ? "status-resolved" : value == MaintenanceTaskStatus.CANCELLED ? "status-cancelled" : "status-assigned";
+    private static string StatusIconClass(MaintenanceTaskStatus value) => value == MaintenanceTaskStatus.CANCELLED ? "rose" : value == MaintenanceTaskStatus.IN_PROGRESS ? "sky" : value is MaintenanceTaskStatus.CLOSED or MaintenanceTaskStatus.COMPLETED ? "emerald" : "violet";
+    private static string PriorityIconClass(string? value) => value is "URGENT" or "HIGH" ? "amber" : "violet";
+    private static string RequestStatus(string value) => value switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang xử lý", _ => value };
+    private static string ResultStatus(MaintenanceResultStatus value) => value == MaintenanceResultStatus.APPROVED ? "Đã chấp nhận" : value == MaintenanceResultStatus.REVISION_REQUIRED ? "Yêu cầu xử lý thêm" : "Chờ nghiệm thu";
+    private static string Activity(MaintenanceActivityType? type, string kind) => type switch { MaintenanceActivityType.ASSIGNED => "Đã phân công", MaintenanceActivityType.REASSIGNED => "Phân công lại", MaintenanceActivityType.PROGRESS_UPDATED => "Cập nhật tiến độ", MaintenanceActivityType.RESULT_SUBMITTED => "Gửi kết quả", MaintenanceActivityType.MANAGER_REVIEWED => "Manager nghiệm thu", MaintenanceActivityType.CLOSED => "Đóng công việc", MaintenanceActivityType.SERVICE_REQUEST_LINKED => "Liên kết yêu cầu dịch vụ", _ => kind == "STATUS_CHANGED" ? "Cập nhật trạng thái" : "Cập nhật công việc" };
+    private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));
+    private static readonly (int Index, string Label)[] ProgressSteps = [(1, "Đã phân công"), (2, "Bắt đầu xử lý"), (3, "Đang thực hiện"), (4, "Chờ nghiệm thu"), (5, "Đóng công việc")];
+    private static string ProgressStepClass(int index, MaintenanceProgressLifecycle lifecycle) => lifecycle.IsStepCompleted(index) ? "is-complete" : lifecycle.IsStepCurrent(index) ? "is-current" : "is-pending";
+    private string AssigneeLabel(MaintenanceTaskModel task) => task.CurrentAssignees?.Any() == true ? string.Join(", ", task.CurrentAssignees.Select(x => x.DisplayName)) : "Chưa phân công";
+    private string SubmittedBy(Guid userId) => Task?.CurrentAssignees?.FirstOrDefault(item => item.UserId == userId)?.DisplayName ?? "Nhân viên thực hiện";
+    private IEnumerable<AssignableMaintenanceStaffModel> VisibleStaff => string.IsNullOrWhiteSpace(StaffSearch) ? Staff : Staff.Where(x => x.DisplayName.Contains(StaffSearch, StringComparison.OrdinalIgnoreCase) || x.Username.Contains(StaffSearch, StringComparison.OrdinalIgnoreCase));
+    private async Task ToggleAssignment() { ShowAssignment = !ShowAssignment; if (!ShowAssignment) return; var staff = await Api.AssignableStaffAsync(); Staff = staff.Data ?? []; SelectedStaffIds = Task?.CurrentAssignees?.Select(x => x.UserId).ToList() ?? []; }
+    private void SetStaff(Guid id, bool selected) { if (selected && !SelectedStaffIds.Contains(id)) SelectedStaffIds.Add(id); else if (!selected) SelectedStaffIds.Remove(id); }
+    private void Assign() => RequestConfirmation("Bạn có muốn cập nhật nhóm nhân viên xử lý công việc này không?", async () => { Busy = true; var result = await Api.AssignTaskAsync(TaskId, new() { StaffUserIds = SelectedStaffIds }); Busy = false; if (result.Data is null) { Error = result.Message ?? "Không thể phân công công việc."; return; } Task = result.Data; ShowAssignment = false; await ReloadHistory(); });
+    private void OpenLinkPicker() { LinkPickerOpen = true; _ = LoadCandidates(); }
+    private async Task LoadCandidates() { var result = await ServiceRequestApi.SearchLinkCandidatesAsync(RequestSearch); Candidates = result.Data ?? []; }
+    private void LinkRequest() => RequestConfirmation("Bạn có chắc chắn muốn liên kết yêu cầu dịch vụ đã chọn không?", async () => { if (SelectedRequestId is null) return; Busy = true; var result = await Api.LinkTaskServiceRequestAsync(TaskId, new() { ServiceRequestId = SelectedRequestId.Value }); Busy = false; if (result.Data is null) { Error = result.Message ?? "Không thể liên kết yêu cầu dịch vụ."; return; } Task = result.Data; LinkPickerOpen = false; });
+    private void Review(Guid resultId, string decision) => RequestConfirmation(decision == "approve" ? "Bạn có muốn chấp nhận kết quả và đóng công việc này không?" : "Bạn có muốn yêu cầu nhân viên xử lý thêm không?", async () => { Busy = true; var response = await Api.ReviewResultAsync(TaskId, resultId, new() { Decision = decision, ReviewNote = string.IsNullOrWhiteSpace(ReviewNote) ? null : ReviewNote.Trim() }); Busy = false; if (response.Data is null) { Error = response.Message ?? "Không thể nghiệm thu kết quả."; return; } Task = response.Data; ReviewNote = string.Empty; await ReloadHistory(); });
+    private void RequestConfirmation(string message, Func<Task> action) { ConfirmationMessage = message; PendingConfirmation = action; }
+    private async Task Confirm() { var action = PendingConfirmation; if (action is null || Busy) return; await action(); if (!Busy) PendingConfirmation = null; }
+    private async Task ReloadHistory() { var result = await Api.HistoryDetailAsync(TaskId); History = result.Data; }
+}

@@ -6,7 +6,7 @@ namespace PropFlow.Web.Client.Features.Maintenance.Models;
 public record Page<T>(IReadOnlyList<T> Items, int TotalCount, int PageIndex, int PageSize);
 public enum MaintenanceScheduleStatus { ACTIVE, COMPLETED, CANCELLED }
 public enum MaintenanceTaskStatus { OPEN, ASSIGNED, IN_PROGRESS, COMPLETED, CLOSED, CANCELLED }
-public enum MaintenanceActivityType { CREATED, ASSIGNED, REASSIGNED, STATUS_CHANGED, PROGRESS_UPDATED, WORK_LOG_ADDED, RESULT_SUBMITTED, MANAGER_REVIEWED, COMPLETED, CLOSED }
+public enum MaintenanceActivityType { CREATED, ASSIGNED, REASSIGNED, STATUS_CHANGED, PROGRESS_UPDATED, WORK_LOG_ADDED, RESULT_SUBMITTED, MANAGER_REVIEWED, SERVICE_REQUEST_LINKED, COMPLETED, CLOSED }
 public enum MaintenanceResultStatus { SUBMITTED, APPROVED, REVISION_REQUIRED }
 public enum MaintenanceAssignmentStatus { ASSIGNED, IN_PROGRESS, COMPLETED, REASSIGNED, CANCELLED }
 public enum MaintenanceHistorySort { NEWEST, OLDEST }
@@ -58,16 +58,14 @@ public record MaintenanceTaskActivityModel(Guid Id, MaintenanceActivityType Acti
 
 public sealed class CreateScheduleModel
 {
-    [Required(ErrorMessage = "Vui lòng nhập mã lịch.")]
-    [RegularExpression("^LBT-[A-Z0-9]+-[0-9]{6}$", ErrorMessage = "Mã lịch bảo trì không đúng định dạng. Quy ước: LBT-[TÊN ĐỐI TƯỢNG]-[DDMMYY].")]
-    [StringLength(30, ErrorMessage = "Mã lịch tối đa 30 ký tự.")]
-    public string ScheduleCode { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ScheduleCode { get; set; }
     [Required(ErrorMessage = "Vui lòng nhập tên lịch bảo trì.")]
     [StringLength(200, ErrorMessage = "Tên lịch tối đa 200 ký tự.")]
     public string Title { get; set; } = string.Empty;
-    public DateTimeOffset PlannedStartAt { get; set; } = DateTimeOffset.Now;
+    [Required(ErrorMessage = "Vui lòng chọn đầy đủ ngày và giờ bắt đầu.")]
+    public DateTimeOffset? PlannedStartAt { get; set; }
+    [Required(ErrorMessage = "Vui lòng chọn đầy đủ ngày và giờ kết thúc.")]
     public DateTimeOffset? PlannedEndAt { get; set; }
-    [Required(ErrorMessage = "Vui lòng chọn cơ sở vật chất.")]
     public Guid? FacilityId { get; set; }
     public Guid? EquipmentId { get; set; }
     [Required(ErrorMessage = "Vui lòng nhập mô tả nhiệm vụ bảo trì.")]
@@ -79,9 +77,10 @@ public sealed class UpdateScheduleModel
     [Required(ErrorMessage = "Vui lòng nhập tên lịch bảo trì.")]
     [StringLength(200, ErrorMessage = "Tên lịch tối đa 200 ký tự.")]
     public string Title { get; set; } = string.Empty;
-    public DateTimeOffset PlannedStartAt { get; set; }
+    [Required(ErrorMessage = "Vui lòng chọn đầy đủ ngày và giờ bắt đầu.")]
+    public DateTimeOffset? PlannedStartAt { get; set; }
+    [Required(ErrorMessage = "Vui lòng chọn đầy đủ ngày và giờ kết thúc.")]
     public DateTimeOffset? PlannedEndAt { get; set; }
-    [Required(ErrorMessage = "Vui lòng chọn cơ sở vật chất.")]
     public Guid? FacilityId { get; set; }
     public Guid? EquipmentId { get; set; }
     [Required(ErrorMessage = "Vui lòng nhập mô tả nhiệm vụ bảo trì.")]
@@ -90,24 +89,49 @@ public sealed class UpdateScheduleModel
 
 public sealed record ScheduleStatusRequest(string Action);
 public sealed class ExtendScheduleModel { [Range(1, 3650, ErrorMessage = "Vui lòng nhập thời lượng gia hạn hợp lệ.")] public int Amount { get; set; } = 1; [Required(ErrorMessage = "Vui lòng chọn đơn vị gia hạn.")] public string Unit { get; set; } = "hour"; }
-public record MaintenanceResultModel(Guid Id, int AttemptNo, Guid SubmittedBy, string Summary, string? WorkPerformed, string? IssueFound, string? PartsOrResourcesUsed, string? Recommendation, MaintenanceResultStatus ResultStatus, Guid? ReviewedBy, string? ReviewNote, DateTimeOffset SubmittedAt, DateTimeOffset? ReviewedAt);
-public record MaintenanceTaskModel(Guid Id, string TaskNumber, Guid? ScheduleId, Guid? FacilityId, Guid? EquipmentId, string Title, string? Description, string? PriorityCode, MaintenanceTaskStatus Status, DateTimeOffset? PlannedStartAt, DateTimeOffset? DueAt, Guid CreatedBy, DateTimeOffset CreatedAt, string? SourceScheduleCode = null, string? SourceScheduleTitle = null, Guid? AssignedStaffUserId = null, string? AssignedStaffDisplayName = null, string? AssignedStaffUsername = null, DateTimeOffset? AssignedAt = null, DateTimeOffset? LastActivityAt = null, MaintenanceActivityType? LastActivityType = null, DateTimeOffset? LastProgressAt = null, MaintenanceActivityType? LastProgressActivityType = null, string? LastProgressContent = null, bool IsOverdue = false, MaintenanceResultModel? LatestResult = null, IReadOnlyList<AssignableMaintenanceStaffModel>? CurrentAssignees = null);
+public record MaintenanceResultAttachmentModel(Guid Id, string OriginalFileName, string ContentType, long SizeBytes);
+public record MaintenanceResultModel(Guid Id, int AttemptNo, Guid SubmittedBy, string Summary, string? WorkPerformed, string? IssueFound, string? PartsOrResourcesUsed, string? Recommendation, MaintenanceResultStatus ResultStatus, Guid? ReviewedBy, string? ReviewNote, DateTimeOffset SubmittedAt, DateTimeOffset? ReviewedAt, IReadOnlyList<MaintenanceResultAttachmentModel>? Attachments = null);
+public record RelatedServiceRequestModel(
+    Guid Id,
+    string RequestNumber,
+    string Title,
+    string Status,
+    Guid? ApartmentUnitId,
+    Guid? FacilityId,
+    Guid? EquipmentId,
+    string? PriorityCode,
+    string? LocationDescription = null,
+    string? ContextMatch = null,
+    string? ContextWarning = null);
+public record MaintenanceTaskModel(Guid Id, string TaskNumber, Guid? ScheduleId, Guid? FacilityId, Guid? EquipmentId, string Title, string? Description, string? PriorityCode, MaintenanceTaskStatus Status, DateTimeOffset? PlannedStartAt, DateTimeOffset? DueAt, Guid CreatedBy, DateTimeOffset CreatedAt, string? SourceScheduleCode = null, string? SourceScheduleTitle = null, Guid? AssignedStaffUserId = null, string? AssignedStaffDisplayName = null, string? AssignedStaffUsername = null, DateTimeOffset? AssignedAt = null, DateTimeOffset? LastActivityAt = null, MaintenanceActivityType? LastActivityType = null, DateTimeOffset? LastProgressAt = null, MaintenanceActivityType? LastProgressActivityType = null, string? LastProgressContent = null, bool IsOverdue = false, MaintenanceResultModel? LatestResult = null, IReadOnlyList<AssignableMaintenanceStaffModel>? CurrentAssignees = null, Guid? SourceServiceRequestId = null, RelatedServiceRequestModel? RelatedServiceRequest = null);
 public sealed class CreateMaintenanceTaskModel
 {
-    [Required(ErrorMessage = "Vui lòng nhập mã công việc.")]
-    [RegularExpression("^CVBT-[A-Z0-9]+-[0-9]{2}-[0-9]{6}$", ErrorMessage = "Mã công việc không đúng định dạng. Quy ước: CVBT-[TÊN CSVC/LOẠI+TÊN TB]-[STT]-[DDMMYY].")]
-    [StringLength(30, ErrorMessage = "Mã công việc tối đa 30 ký tự.")] public string TaskNumber { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? TaskNumber { get; set; }
     [Required(ErrorMessage = "Vui lòng nhập tiêu đề công việc.")]
     [StringLength(200, ErrorMessage = "Tiêu đề công việc tối đa 200 ký tự.")] public string Title { get; set; } = string.Empty;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? ScheduleId { get; set; }
     [Required(ErrorMessage = "Vui lòng nhập mô tả nhiệm vụ bảo trì.")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Description { get; set; }
+    [Required(ErrorMessage = "Vui lòng chọn mức ưu tiên.")]
+    [RegularExpression("^(HIGH|MEDIUM|LOW)$", ErrorMessage = "Vui lòng chọn mức ưu tiên.")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? PriorityCode { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DateTimeOffset? PlannedStartAt { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public DateTimeOffset? DueAt { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? FacilityId { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? EquipmentId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? ServiceRequestId { get; set; }
 }
+public static class MaintenancePriority
+{
+    public static string DisplayName(string? priorityCode) => priorityCode?.Trim().ToUpperInvariant() switch
+    {
+        "HIGH" => "Cao",
+        "MEDIUM" => "Trung bình",
+        "LOW" => "Thấp",
+        _ => "Chưa xác định"
+    };
+}
+public sealed class LinkMaintenanceTaskServiceRequestModel { [Required(ErrorMessage = "Vui lòng chọn yêu cầu dịch vụ.")] public Guid ServiceRequestId { get; set; } }
 public sealed class AssociateMaintenanceTaskAssetModel { public Guid? FacilityId { get; set; } public Guid? EquipmentId { get; set; } }
 public record AssignableMaintenanceStaffModel(Guid UserId, string Username, string DisplayName);
 public sealed class AssignMaintenanceTaskModel

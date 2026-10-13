@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PropFlow.Web.Client.Features.Facility.Models;
 
@@ -25,10 +26,8 @@ public class FacilityDetailModel : FacilityModel
 
 public class CreateFacilityModel
 {
-    [Required(ErrorMessage = "Mã cơ sở vật chất là bắt buộc.")]
-    [RegularExpression("^CSVC-[A-Z0-9]+-[A-Z0-9]+$", ErrorMessage = "Mã cơ sở vật chất không đúng định dạng. Quy ước: CSVC-[TÊN]-[VỊ TRÍ].")]
-    [StringLength(30, ErrorMessage = "Mã cơ sở vật chất không được vượt quá 30 ký tự.")]
-    public string Code { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Code { get; set; }
 
     [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc.")]
     [StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")]
@@ -37,6 +36,7 @@ public class CreateFacilityModel
     [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")]
     public string? FacilityType { get; set; }
 
+    [Required(ErrorMessage = "Vui lòng nhập vị trí cơ sở vật chất.")]
     [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")]
     public string? LocationDescription { get; set; }
 
