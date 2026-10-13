@@ -102,6 +102,15 @@ public sealed class ServiceRequestMaintenanceSourceTests
     private sealed class Apartments(params ApartmentReference[] apartments)
         : IApartmentResidentRelationshipSource
     {
+        public Task<IReadOnlyList<ApartmentReference>> SearchApartmentsAsync(
+            string? search,
+            int take,
+            CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<ApartmentReference>>(
+                apartments.Where(apartment => string.IsNullOrWhiteSpace(search)
+                    || apartment.UnitNumber.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    .Take(take).ToArray());
+
         public Task<IReadOnlyList<ApartmentReference>> GetApartmentsAsync(
             IReadOnlyCollection<Guid> apartmentUnitIds,
             CancellationToken ct) =>
