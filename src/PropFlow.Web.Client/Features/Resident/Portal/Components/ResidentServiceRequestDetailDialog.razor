@@ -2,7 +2,7 @@
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @inject IResidentServiceRequestApiClient Api
 
-@if (_request is not null)
+@if (_open)
 {
     <div class="resident-portal-modal service-modal">
         <button class="resident-portal-modal-backdrop" type="button" aria-label="Đóng chi tiết" @onclick="Close"></button>
@@ -10,44 +10,94 @@
             <header class="service-modal-header">
                 <div>
                     <div class="service-modal-title-row"><span class="service-modal-icon" aria-hidden="true">📋</span><h2 id="requestDetailTitle">Chi tiết yêu cầu</h2></div>
-                    <div class="service-modal-meta"><span>#@_request.RequestNumber</span><small>@StatusLabel(_request.Status)</small></div>
+                    @if (_request is not null)
+                    {
+                        <div class="service-modal-meta"><span>#@_request.RequestNumber</span><small>@StatusLabel(_request.Status)</small></div>
+                    }
                 </div>
                 <button class="service-modal-close" type="button" aria-label="Đóng popup" @onclick="Close">×</button>
             </header>
 
             <div class="request-detail-body">
-                <section class="request-detail-summary">
-                    <h3>@_request.Title</h3>
-                    <dl>
-                        <div><dt>Trạng thái</dt><dd>@StatusLabel(_request.Status)</dd></div>
-                        <div><dt>Khu vực</dt><dd>@(_request.ServiceAreaCode ?? "Chưa xác định")</dd></div>
-                        <div><dt>Mức ưu tiên</dt><dd>@(_request.PriorityCode == "URGENT" ? "Khẩn cấp" : "Bình thường")</dd></div>
-                        <div><dt>Ngày gửi</dt><dd>@_request.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd></div>
-                    </dl>
-                </section>
-
-                @if (IsCompleted)
+                @if (_loading)
                 {
-                    <section class="request-feedback-section">
-                        <span class="request-feedback-eyebrow">Đánh giá dịch vụ</span>
-                        <h3>Bạn hài lòng với kết quả xử lý?</h3>
-                        <div class="request-rating" role="radiogroup" aria-label="Chọn số sao đánh giá">
-                            @for (var star = 1; star <= 5; star++)
-                            {
-                                var value = star;
-                                <button class="@(value <= _rating ? "active" : null)" type="button" role="radio" aria-checked="@(value == _rating)" aria-label="@value sao" disabled="@_saving" @onclick="() => _rating = value">★</button>
-                            }
-                        </div>
-                        <label for="residentFeedbackComment">Nhận xét của bạn</label>
-                        <textarea id="residentFeedbackComment" maxlength="1000" placeholder="Chia sẻ chất lượng phục vụ và kết quả xử lý..." disabled="@_saving" @bind="_comment"></textarea>
-                        @if (!string.IsNullOrWhiteSpace(_error)) { <p class="request-feedback-error" role="alert">@_error</p> }
-                        @if (_saved) { <p class="request-feedback-success" role="status">Đã lưu đánh giá của bạn.</p> }
-                        <button class="service-submit-button" type="button" disabled="@(_saving || _rating == 0 || string.IsNullOrWhiteSpace(_comment))" @onclick="SaveAsync">@(_saving ? "Đang lưu..." : _request.Rating.HasValue ? "Cập nhật đánh giá" : "Gửi đánh giá")</button>
-                    </section>
+                    <div class="resident-request-state" role="status">Đang tải chi tiết yêu cầu…</div>
                 }
-                else
+                else if (!string.IsNullOrWhiteSpace(_loadError))
                 {
-                    <div class="resident-request-state">Bạn có thể đánh giá sau khi yêu cầu được hoàn thành.</div>
+                    <div class="resident-request-state error" role="alert">
+                        <p>@_loadError</p>
+                        <button class="resident-muted-action" type="button" @onclick="LoadAsync">Thử lại</button>
+                    </div>
+                }
+                else if (_request is not null)
+                {
+                    <section class="request-detail-summary">
+                        <h3>@_request.Title</h3>
+                        <p class="request-detail-description">@_request.Description</p>
+                        <dl>
+                            <div><dt>Trạng thái</dt><dd>@StatusLabel(_request.Status)</dd></div>
+                            <div><dt>Loại dịch vụ</dt><dd>@(_request.CategoryName ?? _request.CategoryCode ?? "Chưa xác định")</dd></div>
+                            <div><dt>Khu vực</dt><dd>@AreaLabel(_request.ServiceAreaCode)</dd></div>
+                            <div><dt>Mức ưu tiên</dt><dd>@PriorityLabel(_request.PriorityCode)</dd></div>
+                            <div><dt>Ngày gửi</dt><dd>@FormatDateTime(_request.SubmittedAt)</dd></div>
+                            <div><dt>Lịch mong muốn</dt><dd>@PreferredSchedule(_request)</dd></div>
+                        </dl>
+                    </section>
+
+                    <section class="request-activity-section" aria-labelledby="requestActivityTitle">
+                        <div class="request-activity-heading">
+                            <span><small>Tiến độ xử lý</small><h3 id="requestActivityTitle">Lịch sử yêu cầu</h3></span>
+                            <em>@_request.Activities.Count cập nhật</em>
+                        </div>
+                        @if (_request.Activities.Count == 0)
+                        {
+                            <div class="resident-request-state">Chưa có cập nhật xử lý.</div>
+                        }
+                        else
+                        {
+                            <ol class="request-activity-timeline">
+                                @foreach (var activity in _request.Activities.OrderByDescending(item => item.CreatedAt))
+                                {
+                                    <li>
+                                        <i aria-hidden="true"></i>
+                                        <div>
+                                            <span><strong>@activity.Title</strong><time datetime="@activity.CreatedAt.ToString("O")">@FormatDateTime(activity.CreatedAt)</time></span>
+                                            <p>@activity.Description</p>
+                                            @if (!string.IsNullOrWhiteSpace(activity.ToStatus))
+                                            {
+                                                <small>@StatusTransition(activity.FromStatus, activity.ToStatus)</small>
+                                            }
+                                        </div>
+                                    </li>
+                                }
+                            </ol>
+                        }
+                    </section>
+
+                    @if (IsCompleted)
+                    {
+                        <section class="request-feedback-section">
+                            <span class="request-feedback-eyebrow">Đánh giá dịch vụ</span>
+                            <h3>Bạn hài lòng với kết quả xử lý?</h3>
+                            <div class="request-rating" role="radiogroup" aria-label="Chọn số sao đánh giá">
+                                @for (var star = 1; star <= 5; star++)
+                                {
+                                    var value = star;
+                                    <button class="@(value <= _rating ? "active" : null)" type="button" role="radio" aria-checked="@(value == _rating)" aria-label="@value sao" disabled="@_saving" @onclick="() => _rating = value">★</button>
+                                }
+                            </div>
+                            <label for="residentFeedbackComment">Nhận xét của bạn</label>
+                            <textarea id="residentFeedbackComment" maxlength="1000" placeholder="Chia sẻ chất lượng phục vụ và kết quả xử lý..." disabled="@_saving" @bind="_comment"></textarea>
+                            @if (!string.IsNullOrWhiteSpace(_feedbackError)) { <p class="request-feedback-error" role="alert">@_feedbackError</p> }
+                            @if (_saved) { <p class="request-feedback-success" role="status">Đã lưu đánh giá của bạn.</p> }
+                            <button class="service-submit-button" type="button" disabled="@(_saving || _rating == 0 || string.IsNullOrWhiteSpace(_comment))" @onclick="SaveAsync">@(_saving ? "Đang lưu..." : _request.Rating.HasValue ? "Cập nhật đánh giá" : "Gửi đánh giá")</button>
+                        </section>
+                    }
+                    else
+                    {
+                        <div class="resident-request-state">Bạn có thể đánh giá sau khi yêu cầu được hoàn thành.</div>
+                    }
                 }
             </div>
         </section>
@@ -57,22 +107,51 @@
 @code {
     [Parameter] public EventCallback FeedbackSaved { get; set; }
 
-    private ResidentServiceRequestListItem? _request;
+    private Guid _requestId;
+    private ResidentServiceRequestDetailResponse? _request;
+    private bool _open;
+    private bool _loading;
+    private string? _loadError;
     private int _rating;
     private string _comment = string.Empty;
-    private string? _error;
+    private string? _feedbackError;
     private bool _saving;
     private bool _saved;
     private bool IsCompleted => _request?.Status is "RESOLVED" or "CLOSED";
 
-    public void Open(ResidentServiceRequestListItem request)
+    public async Task OpenAsync(Guid requestId)
     {
-        _request = request;
-        _rating = request.Rating ?? 0;
-        _comment = request.FeedbackComment ?? string.Empty;
-        _error = null;
-        _saved = false;
+        _requestId = requestId;
+        _request = null;
+        _open = true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadError = null;
         StateHasChanged();
+        try
+        {
+            var result = await Api.GetAsync(_requestId);
+            if (!result.IsSuccess || result.Data is null)
+            {
+                _loadError = result.Message ?? "Không thể tải chi tiết yêu cầu.";
+                return;
+            }
+
+            _request = result.Data;
+            _rating = _request.Rating ?? 0;
+            _comment = _request.FeedbackComment ?? string.Empty;
+            _feedbackError = null;
+            _saved = false;
+        }
+        catch
+        {
+            _loadError = "Không thể kết nối máy chủ để tải chi tiết yêu cầu.";
+        }
+        finally { _loading = false; }
     }
 
     private async Task SaveAsync()
@@ -80,13 +159,13 @@
         if (_request is null) return;
         _saving = true;
         _saved = false;
-        _error = null;
+        _feedbackError = null;
         try
         {
             var result = await Api.RateAsync(_request.Id, new(_rating, _comment));
             if (!result.IsSuccess || result.Data is null)
             {
-                _error = result.Message ?? "Không thể lưu đánh giá.";
+                _feedbackError = result.Message ?? "Không thể lưu đánh giá.";
                 return;
             }
 
@@ -104,9 +183,22 @@
 
     private void Close()
     {
-        if (!_saving) _request = null;
+        if (!_saving) _open = false;
     }
 
+    private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    private static string PreferredSchedule(ResidentServiceRequestDetailResponse request) => request.PreferredDate is null
+        ? "Không yêu cầu"
+        : $"{request.PreferredDate:dd/MM/yyyy} · {TimeLabel(request.PreferredTimeCode)}";
+    private static string TimeLabel(string? code) => code switch
+    {
+        "MORNING" => "Buổi sáng", "AFTERNOON" => "Buổi chiều", "EVENING" => "Buổi tối", "ANYTIME" => "Cả ngày", _ => "Chưa chọn"
+    };
+    private static string AreaLabel(string? code) => code?.Replace('_', ' ') ?? "Chưa xác định";
+    private static string PriorityLabel(string? code) => code == "URGENT" ? "Khẩn cấp" : "Bình thường";
+    private static string StatusTransition(string? from, string? to) => string.IsNullOrWhiteSpace(from)
+        ? StatusLabel(to ?? string.Empty)
+        : $"{StatusLabel(from)} → {StatusLabel(to ?? string.Empty)}";
     private static string StatusLabel(string status) => status switch
     {
         "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công",

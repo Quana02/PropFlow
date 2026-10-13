@@ -1,7 +1,9 @@
 @page "/resident/service-requests/{Id:guid}"
 @attribute [Authorize(Roles = "RESIDENT")]
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
-@using PropFlow.Web.Client.Features.Resident.Portal.Components
+@using PropFlow.Modules.ServiceRequests.Contracts
+@using PropFlow.Web.Client.Features.Resident.Portal.Services
+@inject IResidentServiceRequestApiClient Api
 
 <PageTitle>Chi tiết yêu cầu dịch vụ - PropFlow</PageTitle>
 
@@ -9,20 +11,138 @@
     <a href="/resident/service-requests">← Yêu cầu của tôi</a>
     <p>FE-05.2 · FE-05.3</p>
     <h1>Chi tiết yêu cầu</h1>
-    <span>Mã tham chiếu: @Id</span>
+    @if (_detail is not null) { <span>Mã yêu cầu: #@_detail.RequestNumber</span> }
 </div>
 
-<section class="detail-card">
-    <ServiceRequestApiUnavailable ShowBackLink="true" />
-    <div class="detail-placeholder" aria-hidden="true">
-        <div><span></span><span></span></div>
-        <div><span></span><span></span></div>
-        <div class="timeline-line"><i></i><span></span></div>
-        <div class="timeline-line"><i></i><span></span></div>
-        <div class="timeline-line"><i></i><span></span></div>
+@if (_loading)
+{
+    <section class="detail-card detail-state" role="status">
+        <span class="state-symbol" aria-hidden="true">◌</span>
+        <h2>Đang tải yêu cầu</h2>
+        <p>PropFlow đang lấy thông tin và lịch sử xử lý mới nhất.</p>
+    </section>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <section class="detail-card detail-state error" role="alert">
+        <span class="state-symbol" aria-hidden="true">!</span>
+        <h2>Không thể hiển thị yêu cầu</h2>
+        <p>@_error</p>
+        <button type="button" @onclick="LoadAsync">Thử lại</button>
+    </section>
+}
+else if (_detail is not null)
+{
+    <div class="request-detail-grid">
+        <section class="detail-card request-overview">
+            <header>
+                <div><small>Thông tin yêu cầu</small><h2>@_detail.Title</h2></div>
+                <span class="status-pill status-@_detail.Status.ToLowerInvariant()">@StatusLabel(_detail.Status)</span>
+            </header>
+
+            <p class="request-description">@_detail.Description</p>
+            <dl class="request-facts">
+                <div><dt>Loại dịch vụ</dt><dd>@(_detail.CategoryName ?? _detail.CategoryCode ?? "Chưa xác định")</dd></div>
+                <div><dt>Khu vực</dt><dd>@AreaLabel(_detail.ServiceAreaCode)</dd></div>
+                <div><dt>Mức ưu tiên</dt><dd>@PriorityLabel(_detail.PriorityCode)</dd></div>
+                <div><dt>Ngày gửi</dt><dd>@FormatDateTime(_detail.SubmittedAt)</dd></div>
+                <div><dt>Lịch mong muốn</dt><dd>@PreferredSchedule(_detail)</dd></div>
+                <div><dt>Cập nhật gần nhất</dt><dd>@FormatDateTime(_detail.UpdatedAt)</dd></div>
+            </dl>
+
+            @if (_detail.Rating.HasValue)
+            {
+                <div class="request-rating-summary">
+                    <span>Đánh giá của bạn</span>
+                    <strong>@string.Concat(Enumerable.Repeat("★", _detail.Rating.Value))@string.Concat(Enumerable.Repeat("☆", 5 - _detail.Rating.Value))</strong>
+                    @if (!string.IsNullOrWhiteSpace(_detail.FeedbackComment)) { <p>@_detail.FeedbackComment</p> }
+                </div>
+            }
+        </section>
+
+        <section class="detail-card request-progress" aria-labelledby="progressTitle">
+            <header>
+                <div><small>Tiến độ xử lý</small><h2 id="progressTitle">Lịch sử yêu cầu</h2></div>
+                <span>@_detail.Activities.Count cập nhật</span>
+            </header>
+
+            @if (_detail.Activities.Count == 0)
+            {
+                <div class="timeline-empty">Chưa có cập nhật xử lý.</div>
+            }
+            else
+            {
+                <ol class="request-timeline">
+                    @foreach (var activity in _detail.Activities.OrderByDescending(item => item.CreatedAt))
+                    {
+                        <li>
+                            <i aria-hidden="true"></i>
+                            <article>
+                                <header><strong>@activity.Title</strong><time datetime="@activity.CreatedAt.ToString("O")">@FormatDateTime(activity.CreatedAt)</time></header>
+                                <p>@activity.Description</p>
+                                @if (!string.IsNullOrWhiteSpace(activity.ToStatus))
+                                {
+                                    <small>@StatusTransition(activity.FromStatus, activity.ToStatus)</small>
+                                }
+                            </article>
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
     </div>
-</section>
+}
 
 @code {
     [Parameter] public Guid Id { get; set; }
+
+    private ResidentServiceRequestDetailResponse? _detail;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Api.GetAsync(Id);
+            if (!result.IsSuccess || result.Data is null)
+            {
+                _detail = null;
+                _error = result.Message ?? "Không tìm thấy yêu cầu thuộc tài khoản của bạn.";
+                return;
+            }
+
+            _detail = result.Data;
+        }
+        catch
+        {
+            _detail = null;
+            _error = "Không thể kết nối máy chủ để tải chi tiết yêu cầu.";
+        }
+        finally { _loading = false; }
+    }
+
+    private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    private static string PreferredSchedule(ResidentServiceRequestDetailResponse request) => request.PreferredDate is null
+        ? "Không yêu cầu"
+        : $"{request.PreferredDate:dd/MM/yyyy} · {TimeLabel(request.PreferredTimeCode)}";
+    private static string TimeLabel(string? code) => code switch
+    {
+        "MORNING" => "Buổi sáng", "AFTERNOON" => "Buổi chiều", "EVENING" => "Buổi tối", "ANYTIME" => "Cả ngày", _ => "Chưa chọn"
+    };
+    private static string AreaLabel(string? code) => code?.Replace('_', ' ') ?? "Chưa xác định";
+    private static string PriorityLabel(string? code) => code == "URGENT" ? "Khẩn cấp" : "Bình thường";
+    private static string StatusTransition(string? from, string? to) => string.IsNullOrWhiteSpace(from)
+        ? StatusLabel(to ?? string.Empty)
+        : $"{StatusLabel(from)} → {StatusLabel(to ?? string.Empty)}";
+    private static string StatusLabel(string status) => status switch
+    {
+        "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công",
+        "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã hoàn tất",
+        "CANCELLED" => "Đã hủy", _ => status
+    };
 }

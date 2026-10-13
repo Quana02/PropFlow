@@ -7,6 +7,11 @@ public interface IApartmentResidentRelationshipSource
         IReadOnlyCollection<Guid> apartmentUnitIds,
         CancellationToken ct);
 
+    Task<IReadOnlyList<ApartmentReference>> SearchApartmentsAsync(
+        string? search,
+        int take,
+        CancellationToken ct);
+
     Task<IReadOnlyList<ResidentApartmentOwnership>> GetOwnershipsAsync(
         IReadOnlyCollection<Guid> residentIds,
         CancellationToken ct);

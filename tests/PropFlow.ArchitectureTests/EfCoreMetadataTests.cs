@@ -43,6 +43,7 @@ using PropFlow.Modules.Complaints.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestCategories;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceAssignments;
@@ -76,7 +77,7 @@ public class EfCoreMetadataTests
         Assert.Equal("property_assets", buildingEntity.GetSchema());
         Assert.NotNull(buildingEntity.FindPrimaryKey());
         Assert.Equal("id", buildingEntity.FindPrimaryKey()!.Properties.Single().GetColumnName());
-        Assert.True(buildingEntity.FindProperty("Code")!.IsIndex());
+        Assert.Null(buildingEntity.FindProperty("Code"));
 
         // Facility
         var facilityEntity = model.FindEntityType(typeof(Facility));
@@ -436,7 +437,7 @@ public class EfCoreMetadataTests
         var model = context.Model;
 
         Assert.Equal("service_requests", model.GetDefaultSchema());
-        Assert.Equal(4, model.GetEntityTypes().Count());
+        Assert.Equal(5, model.GetEntityTypes().Count());
 
         var categoryEntity = model.FindEntityType(typeof(ServiceRequestCategory));
         Assert.NotNull(categoryEntity);
@@ -475,6 +476,14 @@ public class EfCoreMetadataTests
         Assert.Contains(activityEntity.GetForeignKeys(), fk =>
             fk.PrincipalEntityType.ClrType == typeof(ServiceRequestAssignment) &&
             fk.Properties.Single().Name == nameof(ServiceRequestActivity.AssignmentId));
+
+        var feedbackEntity = model.FindEntityType(typeof(ServiceRequestFeedback));
+        Assert.NotNull(feedbackEntity);
+        Assert.Equal("service_request_feedbacks", feedbackEntity.GetTableName());
+        Assert.Equal("service_requests", feedbackEntity.GetSchema());
+        Assert.Contains(feedbackEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequest) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestFeedback.ServiceRequestId));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
             fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "ApartmentUnitId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));

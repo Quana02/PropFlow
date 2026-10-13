@@ -3,6 +3,7 @@ using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Facilities.Dtos;
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
+using PropFlow.Shared;
 
 namespace PropFlow.Modules.PropertyAssets.Application.Facilities.Services;
 
@@ -62,27 +63,30 @@ public class FacilityService : IFacilityService
 
     public async Task<FacilityDto> CreateFacilityAsync(CreateFacilityCommand command, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(command.Code) || !System.Text.RegularExpressions.Regex.IsMatch(command.Code.Trim(), "^CSVC-[A-Z0-9]+-[A-Z0-9]+$")) throw new ArgumentException("Mã cơ sở vật chất không đúng định dạng. Quy ước: CSVC-[TÊN]-[VỊ TRÍ].");
-        var codeExists = await _store.FacilityCodeExistsAsync(command.Code.Trim(), cancellationToken);
-        if (codeExists)
+        ArgumentNullException.ThrowIfNull(command);
+        var type = IdentifierCodeNormalizer.NormalizeRequired(command.FacilityType ?? command.Name, "Loại cơ sở vật chất");
+        var location = IdentifierCodeNormalizer.NormalizeRequired(command.LocationDescription ?? string.Empty, "Vị trí cơ sở vật chất");
+        var code = $"CSVC-{type}-{location}";
+        EnsureCodeLength(code);
+
+        try
         {
-            throw new InvalidOperationException($"Mã tiện ích '{command.Code}' đã tồn tại.");
+            return await _store.WithAdvisoryLockAsync($"facility:{code}", async token =>
+            {
+                if (await _store.FacilityCodeExistsAsync(code, token))
+                    throw new InvalidOperationException($"Đã tồn tại cơ sở vật chất cùng loại và vị trí với mã '{code}'.");
+
+                var facility = new Facility(code, command.Name, DateTimeOffset.UtcNow, command.FacilityType,
+                    command.LocationDescription, command.Description, command.CreatedBy, MasterDataStatus.ACTIVE);
+                _store.Add(facility);
+                await _store.SaveGeneratedCodeAsync(token);
+                return await MapToDtoAsync(facility, token);
+            }, cancellationToken);
         }
-
-        var facility = new Facility(
-            command.Code,
-            command.Name,
-            DateTimeOffset.UtcNow,
-            command.FacilityType,
-            command.LocationDescription,
-            command.Description,
-            command.CreatedBy,
-            MasterDataStatus.ACTIVE);
-
-        _store.Add(facility);
-        await _store.SaveAsync(cancellationToken);
-
-        return await MapToDtoAsync(facility, cancellationToken);
+        catch (IdentifierCodeConflictException)
+        {
+            throw new InvalidOperationException($"Đã tồn tại cơ sở vật chất cùng loại và vị trí với mã '{code}'.");
+        }
     }
 
     public async Task<FacilityDto> UpdateFacilityAsync(Guid id, UpdateFacilityCommand command, CancellationToken cancellationToken = default)
@@ -138,5 +142,11 @@ public class FacilityService : IFacilityService
             facility.UpdatedBy,
             facility.CreatedAt,
             facility.UpdatedAt));
+    }
+
+    private static void EnsureCodeLength(string code)
+    {
+        if (code.Length > 512)
+            throw new ArgumentException("Mã cơ sở vật chất sau chuẩn hóa vượt quá 512 ký tự.");
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.ListResidentServiceRequests;
 using PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
@@ -17,21 +18,49 @@ namespace PropFlow.Modules.ServiceRequests.Presentation;
 public sealed class ResidentServiceRequestsController(
     SubmitServiceRequestHandler submitHandler,
     ListResidentServiceRequestsHandler listHandler,
+    GetResidentServiceRequestHandler detailHandler,
     RateResidentServiceRequestHandler rateHandler) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<ResidentServiceRequestListItem>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<IReadOnlyList<ResidentServiceRequestListItem>>> List(CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyList<ResidentServiceRequestListItem>>> List(
+        [FromQuery] ResidentServiceRequestListQuery query,
+        CancellationToken ct)
     {
         if (!Guid.TryParse(User.FindFirstValue("sub"), out var userId))
             return Problem(StatusCodes.Status401Unauthorized, "invalid_session", "Phiên đăng nhập không hợp lệ.");
 
-        var result = await listHandler.HandleAsync(userId, ct);
-        return result.Outcome == ListResidentServiceRequestsOutcome.Success
-            ? Ok(result.Items)
-            : Problem(StatusCodes.Status403Forbidden, result.ErrorCode!, result.Message!);
+        var result = await listHandler.HandleAsync(userId, query, ct);
+        return result.Outcome switch
+        {
+            ListResidentServiceRequestsOutcome.Success => Ok(result.Items),
+            ListResidentServiceRequestsOutcome.InvalidInput =>
+                Problem(StatusCodes.Status400BadRequest, result.ErrorCode!, result.Message!),
+            _ => Problem(StatusCodes.Status403Forbidden, result.ErrorCode!, result.Message!)
+        };
+    }
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(ResidentServiceRequestDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ResidentServiceRequestDetailResponse>> Detail(Guid id, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var userId))
+            return Problem(StatusCodes.Status401Unauthorized, "invalid_session", "Phiên đăng nhập không hợp lệ.");
+
+        var result = await detailHandler.HandleAsync(userId, id, ct);
+        return result.Outcome switch
+        {
+            GetResidentServiceRequestOutcome.Success => Ok(result.Detail),
+            GetResidentServiceRequestOutcome.ResidentResidenceNotFound =>
+                Problem(StatusCodes.Status403Forbidden, result.ErrorCode!, result.Message!),
+            _ => Problem(StatusCodes.Status404NotFound, result.ErrorCode!, result.Message!)
+        };
     }
 
     [HttpPost]
@@ -96,6 +125,7 @@ public sealed class ResidentServiceRequestsController(
                 StatusCodes.Status400BadRequest => "Thông tin yêu cầu không hợp lệ",
                 StatusCodes.Status401Unauthorized => "Chưa xác thực",
                 StatusCodes.Status403Forbidden => "Không thể xác định căn hộ cư trú",
+                StatusCodes.Status404NotFound => "Không tìm thấy yêu cầu",
                 StatusCodes.Status409Conflict => "Loại dịch vụ chưa sẵn sàng",
                 _ => "Dịch vụ tạm thời chưa sẵn sàng"
             },

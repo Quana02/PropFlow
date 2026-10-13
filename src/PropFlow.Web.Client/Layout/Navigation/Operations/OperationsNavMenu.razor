@@ -26,6 +26,10 @@
         <span class="operations-label">Hồ sơ thiết bị</span>
     </NavLink>
     <AuthorizeView Roles="MANAGER">
+        <NavLink href="/manager/service-requests" Match="NavLinkMatch.Prefix" class="operations-link" title="Yêu cầu dịch vụ" aria-label="Yêu cầu dịch vụ">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">support_agent</span>
+            <span class="operations-label">Yêu cầu dịch vụ</span>
+        </NavLink>
         <NavLink href="/maintenance" Match="NavLinkMatch.All" class="operations-link" title="Bảo trì" aria-label="Bảo trì">
             <span class="material-symbols-outlined operations-icon" aria-hidden="true">build</span>
             <span class="operations-label">Bảo trì</span>

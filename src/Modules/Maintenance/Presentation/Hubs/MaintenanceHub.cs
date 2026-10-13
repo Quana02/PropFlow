@@ -1,18 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using System.Threading.Tasks;
+using PropFlow.Modules.Maintenance.Contracts;
 
 namespace PropFlow.Modules.Maintenance.Presentation.Hubs;
 
+[Authorize(Policy = MaintenanceAuthorizationPolicies.View)]
 public class MaintenanceHub : Hub
 {
-    // Clients can optionally join specific task groups if needed
-    public async Task JoinTaskGroup(string taskId)
-    {
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"Task_{taskId}");
-    }
-
-    public async Task LeaveTaskGroup(string taskId)
-    {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"Task_{taskId}");
-    }
 }
