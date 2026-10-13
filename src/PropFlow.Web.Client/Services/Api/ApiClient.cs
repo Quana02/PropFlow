@@ -11,6 +11,7 @@ public sealed record ApiResult<T>(bool IsSuccess, T? Data = default, int? Status
     string? Message = null, string? TraceId = null, IReadOnlyDictionary<string, string[]>? ValidationErrors = null)
     : ApiResult(IsSuccess, StatusCode, Code, Message, TraceId, ValidationErrors);
 public sealed record EmptyResponse;
+public sealed record ApiFileContent(byte[] Bytes, string ContentType);
 
 public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
 {
@@ -53,6 +54,12 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
         catch (HttpRequestException) { return new(false, Code: "network", Message: "Không kết nối được máy chủ. Vui lòng kiểm tra kết nối."); }
         catch (JsonException) { logger.LogWarning("API response did not match the typed contract."); return new(false, Code: "invalid_response", Message: "Dữ liệu phản hồi không đúng định dạng."); }
     }
+
+    public async Task<ApiResult<T>> SendMultipartAsync<T>(string path, MultipartFormDataContent body, CancellationToken ct = default)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = body };
     public async Task<ApiResult<T>> SendMultipartAsync<T>(HttpMethod method, string path, MultipartFormDataContent content, CancellationToken ct = default)
     {
         try
@@ -63,6 +70,19 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
             var status = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode)
             {
+                Problem? problem = null;
+                if (response.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    try { problem = await response.Content.ReadFromJsonAsync<Problem>(cancellationToken: ct); }
+                    catch (JsonException) { logger.LogWarning("Invalid multipart API error body for status {Status}.", status); }
+                }
+                return new(false, StatusCode: status, Code: problem?.Code, Message: problem?.Detail ?? problem?.Title ?? MessageFor(status),
+                    TraceId: problem?.TraceId, ValidationErrors: problem?.Errors);
+            }
+            var data = await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
+            return data is null
+                ? new(false, StatusCode: status, Code: "invalid_response", Message: "Dữ liệu phản hồi không hợp lệ.")
+                : new(true, data, status);
                 var problem = await ReadProblemAsync(response, ct);
                 return new(false, StatusCode: status, Code: problem?.Code, Message: problem?.Detail ?? problem?.Title ?? MessageFor(status), TraceId: problem?.TraceId, ValidationErrors: problem?.Errors);
             }
@@ -72,6 +92,10 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (OperationCanceledException) { return new(false, Code: "timeout", Message: "Yêu cầu quá thời gian chờ. Vui lòng thử lại."); }
         catch (HttpRequestException) { return new(false, Code: "network", Message: "Không kết nối được máy chủ. Vui lòng kiểm tra kết nối."); }
+        catch (JsonException) { logger.LogWarning("Multipart API response did not match the typed contract."); return new(false, Code: "invalid_response", Message: "Dữ liệu phản hồi không đúng định dạng."); }
+    }
+
+    public async Task<ApiResult<ApiFileContent>> GetFileAsync(string path, CancellationToken ct = default)
         catch (JsonException) { return new(false, Code: "invalid_response", Message: "Dữ liệu phản hồi không đúng định dạng."); }
     }
     public async Task<ApiResult<byte[]>> GetBytesAsync(string path, CancellationToken ct = default)
@@ -84,6 +108,18 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
             var status = (int)response.StatusCode;
             if (!response.IsSuccessStatusCode)
             {
+                Problem? problem = null;
+                if (response.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    try { problem = await response.Content.ReadFromJsonAsync<Problem>(cancellationToken: ct); }
+                    catch (JsonException) { logger.LogWarning("Invalid file API error body for status {Status}.", status); }
+                }
+                return new(false, StatusCode: status, Code: problem?.Code, Message: problem?.Detail ?? problem?.Title ?? MessageFor(status), TraceId: problem?.TraceId);
+            }
+
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
+            var bytes = await response.Content.ReadAsByteArrayAsync(ct);
+            return new(true, new ApiFileContent(bytes, contentType), status);
                 var problem = await ReadProblemAsync(response, ct);
                 return new(false, StatusCode: status, Code: problem?.Code, Message: problem?.Detail ?? problem?.Title ?? MessageFor(status), TraceId: problem?.TraceId, ValidationErrors: problem?.Errors);
             }

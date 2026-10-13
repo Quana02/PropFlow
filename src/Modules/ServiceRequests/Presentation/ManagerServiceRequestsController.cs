@@ -38,6 +38,17 @@ public sealed class ManagerServiceRequestsController(
             : ProblemResult(StatusCodes.Status404NotFound, result.ErrorCode!, result.Message!);
     }
 
+    [HttpGet("{id:guid}/evidence/{evidenceId:guid}")]
+    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DownloadEvidence(Guid id, Guid evidenceId, CancellationToken ct)
+    {
+        var result = await RequiredReviewHandler().DownloadEvidenceAsync(id, evidenceId, ct);
+        if (result.Outcome != ManagerServiceRequestOutcome.Success || result.Value is null)
+            return ProblemResult(404, result.ErrorCode!, result.Message!);
+        return File(result.Value.Content, result.Value.ContentType, enableRangeProcessing: true);
+    }
+
     [HttpPost("{id:guid}/review")]
     [ProducesResponseType(typeof(ManagerServiceRequestDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

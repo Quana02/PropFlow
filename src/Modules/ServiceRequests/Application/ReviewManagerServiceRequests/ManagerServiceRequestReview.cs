@@ -3,6 +3,7 @@ using PropFlow.Modules.Administration.Contracts;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 
 namespace PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests;
 
@@ -26,11 +27,17 @@ public sealed record ManagerServiceRequestPage(
     IReadOnlyList<ManagerServiceRequestCore> Items, int TotalCount,
     ManagerServiceRequestSummary Summary);
 
+public sealed record ManagerServiceRequestEvidenceMetadata(
+    Guid Id, Guid ServiceRequestId, Guid ActivityId, string FileName,
+    string ContentType, long SizeBytes, string StorageKey, DateTimeOffset UploadedAt);
+
 public interface IManagerServiceRequestStore
 {
     Task<ManagerServiceRequestPage> ListAsync(ManagerServiceRequestListQuery query, CancellationToken ct);
     Task<ManagerServiceRequestCore?> GetAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<ManagerServiceRequestActivityItem>> GetActivitiesAsync(Guid id, CancellationToken ct);
+    Task<IReadOnlyList<ManagerServiceRequestEvidenceMetadata>> GetEvidenceAsync(Guid id, CancellationToken ct);
+    Task<ManagerServiceRequestEvidenceMetadata?> GetEvidenceFileAsync(Guid id, Guid evidenceId, CancellationToken ct);
     Task<ManagerServiceRequestOutcome> ReviewAsync(Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct);
     Task<ManagerServiceRequestOutcome> ConfirmPropertyContextAsync(
         Guid id, Guid managerUserId, Guid? apartmentUnitId, Guid? facilityId, Guid? equipmentId,
@@ -52,6 +59,7 @@ public sealed class ManagerServiceRequestReviewHandler(
     IMaintenanceAssetSource assets,
     IMaintenanceStaffDirectory staffDirectory,
     IManagerServiceRequestInsightSource insights,
+    IServiceRequestEvidenceStorage evidenceStorage,
     TimeProvider clock)
 {
     public async Task<ManagerServiceRequestResult<ManagerServiceRequestListResponse>> ListAsync(
@@ -88,6 +96,9 @@ public sealed class ManagerServiceRequestReviewHandler(
         var equipment = item.EquipmentId is { } equipmentId ? await assets.GetEquipmentAsync(equipmentId, ct) : null;
         var insight = await insights.GetAsync(id, ct);
         var activities = await store.GetActivitiesAsync(id, ct);
+        var evidence = (await store.GetEvidenceAsync(id, ct)).Select(x => new ManagerServiceRequestEvidenceItem(
+            x.Id, x.ActivityId, x.FileName, x.ContentType, x.SizeBytes, x.UploadedAt,
+            $"/api/v1/manager/service-requests/{id}/evidence/{x.Id}")).ToArray();
         residentMap.TryGetValue(item.ResidentId, out var resident);
         var apartment = item.ApartmentUnitId is { } unitId && apartmentMap.TryGetValue(unitId, out var value) ? value : null;
 
@@ -96,7 +107,19 @@ public sealed class ManagerServiceRequestReviewHandler(
             item.ResidentId, resident?.ResidentCode, resident?.FullName, item.ResidentApartmentId,
             item.ApartmentUnitId, apartment?.UnitNumber, apartment?.FloorNumber, item.Status, item.PriorityCode,
             item.ServiceAreaCode, item.PreferredDate, item.PreferredTimeCode, item.SubmittedAt, item.UpdatedAt,
-            item.AssignedStaffUserId, ToAsset(facility), ToAsset(equipment), insight, activities));
+            item.AssignedStaffUserId, ToAsset(facility), ToAsset(equipment), insight, activities, evidence));
+    }
+
+    public async Task<ManagerServiceRequestResult<StaffEvidenceDownload>> DownloadEvidenceAsync(
+        Guid id, Guid evidenceId, CancellationToken ct)
+    {
+        if (id == Guid.Empty || evidenceId == Guid.Empty) return NotFound<StaffEvidenceDownload>();
+        var evidence = await store.GetEvidenceFileAsync(id, evidenceId, ct);
+        if (evidence is null) return NotFound<StaffEvidenceDownload>();
+        var stream = await evidenceStorage.OpenReadAsync(evidence.StorageKey, ct);
+        return stream is null
+            ? NotFound<StaffEvidenceDownload>()
+            : new(ManagerServiceRequestOutcome.Success, new StaffEvidenceDownload(stream, evidence.ContentType, evidence.FileName));
     }
 
     public async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ReviewAsync(
@@ -213,7 +236,7 @@ public sealed class ManagerServiceRequestReviewHandler(
         if (outcome == ManagerServiceRequestOutcome.NotFound) return NotFound<ManagerServiceRequestDetailResponse>();
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "staff_work_result_not_available",
-                Message: "Không có kết quả Staff mới đang chờ nghiệm thu hoặc trạng thái yêu cầu vừa thay đổi.");
+                Message: "Không có kết quả Staff mới kèm ảnh bằng chứng đang chờ nghiệm thu hoặc trạng thái yêu cầu vừa thay đổi.");
         return await GetAsync(id, ct);
     }
 

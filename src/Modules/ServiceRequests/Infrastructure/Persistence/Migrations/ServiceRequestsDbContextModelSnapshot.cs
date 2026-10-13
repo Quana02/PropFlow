@@ -218,6 +218,63 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                     b.ToTable("service_request_categories", "service_requests");
                 });
 
+            modelBuilder.Entity("PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence.ServiceRequestEvidenceFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActivityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("activity_id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<Guid>("ServiceRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_request_id");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at");
+
+                    b.Property<Guid>("UploadedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId");
+
+                    b.HasIndex("ServiceRequestId");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.ToTable("service_request_evidence_files", "service_requests");
+                });
+
             modelBuilder.Entity("PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks.ServiceRequestFeedback", b =>
                 {
                     b.Property<Guid>("Id")
@@ -417,6 +474,21 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("ServiceRequest");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence.ServiceRequestEvidenceFile", b =>
+                {
+                    b.HasOne("PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities.ServiceRequestActivity", null)
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PropFlow.Modules.ServiceRequests.Domain.ServiceRequests.ServiceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ServiceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks.ServiceRequestFeedback", b =>

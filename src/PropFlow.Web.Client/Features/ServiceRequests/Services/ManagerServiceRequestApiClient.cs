@@ -16,6 +16,7 @@ public interface IManagerServiceRequestApiClient
     Task<ApiResult<ManagerServiceRequestDetailResponse>> RequestReworkAsync(Guid id, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> ApproveResolutionAsync(Guid id, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> CloseAsync(Guid id, CloseManagerServiceRequestRequest request, CancellationToken ct = default);
+    Task<ApiResult<ApiFileContent>> DownloadEvidenceAsync(string downloadUrl, CancellationToken ct = default);
 }
 
 public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) : IManagerServiceRequestApiClient
@@ -60,6 +61,9 @@ public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) :
 
     public Task<ApiResult<ManagerServiceRequestDetailResponse>> CloseAsync(Guid id, CloseManagerServiceRequestRequest request, CancellationToken ct = default) =>
         api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/close", request, ct: ct);
+
+    public Task<ApiResult<ApiFileContent>> DownloadEvidenceAsync(string downloadUrl, CancellationToken ct = default) =>
+        api.GetFileAsync(downloadUrl.TrimStart('/'), ct);
 
     private static void Add(ICollection<string> values, string key, string? value)
     {

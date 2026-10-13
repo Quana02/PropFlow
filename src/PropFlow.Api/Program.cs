@@ -43,6 +43,7 @@ using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.ListResidentServiceRequests;
 using PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
+using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Presentation;
@@ -221,6 +222,9 @@ builder.Services.AddScoped<IServiceRequestMaintenanceSource, ServiceRequestMaint
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.IManagerServiceRequestStore, ManagerServiceRequestStore>();
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
 builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRequestInsightSource>();
+builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
+builder.Services.AddScoped<IServiceRequestEvidenceStorage, LocalServiceRequestEvidenceStorage>();
+builder.Services.AddScoped<StaffServiceRequestHandler>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentOnboardingService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentCodeGenerator>();
@@ -244,6 +248,8 @@ builder.Services.AddAuthorization(options =>
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ViewSystemOverview));
     options.AddPolicy(ServiceRequestsAuthorizationPolicies.Manage,
         policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy(ServiceRequestsAuthorizationPolicies.WorkAssigned,
+        policy => policy.RequireRole(SystemRoleCodes.Staff).RequireClaim("permission", SystemPermissionCodes.PerformAssignedOperations));
     options.AddPolicy(PropertyAssetsAuthorizationPolicies.View, policy =>
         policy.RequireAssertion(context =>
             (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
