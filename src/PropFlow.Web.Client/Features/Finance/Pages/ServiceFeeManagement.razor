@@ -1,0 +1,46 @@
+@page "/operations/service-fee"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
+@inject FinanceCycleApi Api
+<PageTitle>Đơn giá phí dịch vụ — PropFlow</PageTitle>
+<section class="service-fee-page">
+    <h1>Phí dịch vụ theo diện tích</h1>
+    <p>Phí tháng = diện tích sử dụng căn hộ × đơn giá VND/m². Hệ thống phát hành vào đầu tháng, hạn thanh toán ngày 10. Chủ sở hữu nhận phí dịch vụ; chủ hộ thuê căn chưa có chủ sở hữu nhận thêm tiền thuê nếu đã cấu hình.</p>
+    <p>Ví dụ: căn hộ 70 m² × 10.000 đ/m² = 700.000 đ/tháng.</p>
+    @if (error is not null) { <p role="alert">@error</p> }
+    @if (notice is not null) { <p role="status">@notice</p> }
+    <form @onsubmit="Save" @onsubmit:preventDefault>
+        <label>Đơn giá VND/m²<input type="number" min="1" max="1000000" step="1" required @bind="rate" disabled="@busy" /></label>
+        <label>Tháng bắt đầu<input type="month" required value="@month" @onchange="e => month = e.Value?.ToString() ?? string.Empty" disabled="@busy" /></label>
+        <button disabled="@busy">Lưu đơn giá mới</button>
+    </form>
+    <h2>Lịch sử đơn giá</h2>
+    <table><thead><tr><th>Hiệu lực từ</th><th>Đơn giá VND/m²</th></tr></thead><tbody>@foreach (var r in rates) { <tr><td>@r.EffectiveFrom.ToString("MM/yyyy")</td><td>@r.UnitRate.ToString("N0") đ</td></tr> }</tbody></table>
+    <h2>Hóa đơn đã phát hành</h2>
+    <button @onclick="Load" disabled="@busy">Tải lại</button>
+    <table><thead><tr><th>Hóa đơn</th><th>Chủ hộ / căn hộ</th><th>Kỳ / hạn</th><th>Tổng</th><th>Còn nợ</th><th>Chứng từ</th></tr></thead><tbody>
+    @foreach (var i in invoices) { <tr><td>@i.Number · @(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</td><td>@i.ResidentName / @i.Apartment</td><td>@i.Period.ToString("MM/yyyy") / @i.DueDate?.ToString("dd/MM/yyyy")</td><td>@i.Total.ToString("N0") đ</td><td>@i.Outstanding.ToString("N0") đ</td><td><FinanceDocumentButton Path="@($"api/v1/billing/cycle/invoices/{i.Id}/print")" Label="In hóa đơn" /></td></tr> }
+    </tbody></table>
+    <RentalPricingEditor />
+</section>
+@code {
+    private decimal rate; private string month = DateTime.Today.ToString("yyyy-MM");
+    private ServiceRateRow[] rates = []; private HouseholdInvoice[] invoices = [];
+    private bool busy; private string? error, notice;
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load() {
+        var r = await Api.GetAsync<ServiceRateRow[]>("api/v1/billing/cycle/rates");
+        var i = await Api.GetAsync<HouseholdInvoice[]>("api/v1/billing/cycle/invoices");
+        rates = r.Data ?? []; invoices = i.Data ?? [];
+        if (rate == 0 && rates.FirstOrDefault(x => x.EffectiveFrom <= DateOnly.FromDateTime(DateTime.Today)) is { } currentRate) rate = currentRate.UnitRate; error = r.IsSuccess && i.IsSuccess ? null : r.Message ?? i.Message;
+    }
+    private async Task Save() {
+        if (busy) return;
+        if (!DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", out var start)) { error = "Vui lòng chọn tháng hợp lệ."; return; }
+        busy = true; notice = null;
+        try { var r = await Api.PostAsync<object>("api/v1/billing/cycle/rates", new ServiceRate(rate, start));
+            if (r.IsSuccess) { await Load(); notice = "Đã lưu đơn giá. Hóa đơn còn thiếu được phát hành và gửi đúng bên chịu phí; chứng từ đã phát hành được giữ nguyên."; } else error = r.Message;
+        } finally { busy = false; }
+    }
+}
+

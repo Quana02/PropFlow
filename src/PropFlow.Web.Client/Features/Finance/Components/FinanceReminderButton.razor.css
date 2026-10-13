@@ -1,0 +1,4 @@
+.finance-reminder { display: inline-flex; }
+.finance-reminder button { min-height: 40px; padding: 8px 15px; border: 0; border-radius: 10px; background: var(--overdue-accent, var(--unpaid-accent, #32ac8b)); color: white; font-size: 11px; font-weight: 700; cursor: pointer; }
+.finance-reminder button:disabled { cursor: default; opacity: .6; }
+.material-symbols-outlined { margin-right: 5px; font-size: 15px; vertical-align: -3px; }

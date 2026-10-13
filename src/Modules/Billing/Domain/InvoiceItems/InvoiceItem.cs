@@ -21,7 +21,8 @@ public class InvoiceItem
         Guid? feeTypeId = null,
         Guid? feeRateRuleId = null,
         string? description = null,
-        string? unitName = null)
+        string? unitName = null,
+        int amountDivisor = 1)
     {
         ThrowIfEmpty(invoiceId, nameof(invoiceId));
         ArgumentException.ThrowIfNullOrWhiteSpace(feeCodeSnapshot);
@@ -31,6 +32,7 @@ public class InvoiceItem
             throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be greater than zero.");
         if (unitRate < 0)
             throw new ArgumentOutOfRangeException(nameof(unitRate), "Unit rate cannot be negative.");
+        ArgumentOutOfRangeException.ThrowIfLessThan(amountDivisor, 1);
 
         Id = Guid.NewGuid();
         InvoiceId = invoiceId;
@@ -43,7 +45,8 @@ public class InvoiceItem
         Quantity = quantity;
         UnitName = string.IsNullOrWhiteSpace(unitName) ? null : unitName.Trim();
         UnitRate = unitRate;
-        LineAmount = decimal.Round(quantity * unitRate, 0, MidpointRounding.AwayFromZero);
+        AmountDivisor = amountDivisor;
+        LineAmount = decimal.Round(quantity * unitRate / amountDivisor, 0, MidpointRounding.AwayFromZero);
         CreatedAt = now;
     }
 
@@ -59,6 +62,7 @@ public class InvoiceItem
     public string? UnitName { get; private set; }
     public decimal UnitRate { get; private set; }
     public decimal LineAmount { get; private set; }
+    public int AmountDivisor { get; private set; } = 1;
     public DateTimeOffset CreatedAt { get; private set; }
 
     public Invoice? Invoice { get; private set; }

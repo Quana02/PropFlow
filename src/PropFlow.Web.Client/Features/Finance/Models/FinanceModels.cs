@@ -7,7 +7,7 @@ public sealed record InvoiceBalance(
     DateOnly BillingPeriodStart, DateOnly BillingPeriodEnd,
     DateOnly? IssueDate, DateOnly? DueDate,
     decimal TotalAmount, decimal ConfirmedPaidAmount, decimal OutstandingAmount,
-    string Status, bool IsOverdue, int DaysOverdue);
+    string Status, bool IsOverdue, int DaysOverdue, string? InvoiceType = null);
 
 public sealed record PaymentRow(
     Guid Id, string PaymentNumber, Guid InvoiceId, decimal Amount,

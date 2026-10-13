@@ -6,7 +6,7 @@ namespace PropFlow.Modules.Billing.Application.Finance;
 public sealed record PagedResult<T>(int Total, int Page, int PageSize, IReadOnlyList<T> Items);
 public sealed record InvoiceBalance(Guid Id, string InvoiceNumber, Guid ApartmentUnitId, DateOnly BillingPeriodStart,
     DateOnly BillingPeriodEnd, DateOnly? IssueDate, DateOnly? DueDate, decimal TotalAmount,
-    decimal ConfirmedPaidAmount, decimal OutstandingAmount, string Status, bool IsOverdue, int DaysOverdue);
+    decimal ConfirmedPaidAmount, decimal OutstandingAmount, string Status, bool IsOverdue, int DaysOverdue, string? InvoiceType = null);
 
 public sealed class BillingFinanceQueries(IInvoiceFinancialSource invoices, IConfirmedPaymentSource payments)
 {
@@ -51,7 +51,7 @@ public sealed class BillingFinanceQueries(IInvoiceFinancialSource invoices, ICon
         var outstanding = Math.Max(0, x.TotalAmount - paid);
         var overdue = x.DueDate is { } due && due < today && outstanding > 0;
         return new(x.Id, x.InvoiceNumber, x.ApartmentUnitId, x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate,
-            x.TotalAmount, paid, outstanding, x.Status, overdue, overdue ? today.DayNumber - x.DueDate!.Value.DayNumber : 0);
+            x.TotalAmount, paid, outstanding, x.Status, overdue, overdue ? today.DayNumber - x.DueDate!.Value.DayNumber : 0, x.InvoiceType);
     }
 
     private static PagedResult<InvoiceBalance> Page(IEnumerable<InvoiceBalance> query, int page, int size)

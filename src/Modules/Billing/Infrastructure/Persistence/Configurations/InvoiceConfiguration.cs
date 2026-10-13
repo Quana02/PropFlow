@@ -24,6 +24,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         });
 
         builder.HasKey(invoice => invoice.Id);
+        builder.Property(invoice => invoice.Type).HasColumnName("invoice_type").HasConversion<string>().HasMaxLength(30);
         builder.Property(invoice => invoice.Id).HasColumnName("id");
 
         builder.Property(invoice => invoice.InvoiceNumber)
@@ -45,7 +46,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .HasColumnType("date")
             .IsRequired();
 
-        builder.HasIndex(invoice => new { invoice.ApartmentUnitId, invoice.BillingPeriodStart, invoice.BillingPeriodEnd }).IsUnique();
+        builder.HasIndex(invoice => new { invoice.ApartmentUnitId, invoice.BillingPeriodStart, invoice.BillingPeriodEnd, invoice.Type }).IsUnique();
 
         builder.Property(invoice => invoice.IssueDate)
             .HasColumnName("issue_date")

@@ -1,0 +1,43 @@
+@using PropFlow.Web.Client.Features.Finance.Services
+@implements IDisposable
+@inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState NoticeState
+@inject NavigationManager Navigation
+@if (Compact) {
+    <button class="glass-inner notice-list-item" type="button" @onclick='() => Navigation.NavigateTo("/resident/billing")'>
+        <span><em class="notice-kind finance"><i></i>[Tài chính]</em><small>@(notices.FirstOrDefault()?.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy") ?? "Hóa đơn")</small></span>
+        <strong>@(notices.FirstOrDefault()?.Title ?? "Hóa đơn và thanh toán của tôi")</strong><p>@(notices.FirstOrDefault()?.Message ?? "Xem hóa đơn, trạng thái thanh toán và phiếu xác nhận.")</p>
+    </button>
+} else if (Cards) {
+    @foreach (var n in notices) {
+        <article class="glass-inner announcement sky"><em>Tài chính • @(!n.IsRead ? "Mới" : "Đã đọc")</em><h3>@n.Title</h3><p>@n.Message</p>
+            <a href="@n.ActionPath" @onclick="() => Read(n.Id)">Xem hóa đơn / phiếu thu</a>
+            <footer><span>Ban Kế toán Tòa nhà</span><span>@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span></footer>
+        </article>
+    }
+    @if (!loading && notices.Length == 0) {
+        <article class="glass-inner announcement sky"><em>Tài chính • Phí dịch vụ</em><h3>Hóa đơn và thanh toán của tôi</h3><p>@(error ?? "Chưa có thông báo tài chính mới.")</p><a href="/resident/billing">Xem hóa đơn</a></article>
+    }
+} else {
+<section class="glass-panel resident-finance-notices">
+    <h2>Thông báo hóa đơn và thanh toán</h2><button @onclick="Load" disabled="@loading">Tải lại</button>
+    @if (error is not null) { <p role="alert">@error</p> }
+    @if (!loading && notices.Length == 0 && error is null) { <p>Chưa có thông báo.</p> }
+    @foreach (var n in notices) { <article class="glass-inner">
+        <h3>@n.Title @if (!n.IsRead) { <small>• Mới</small> }</h3><p>@n.Message</p><small>@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+        @if (n.ActionPath?.StartsWith("/resident/billing", StringComparison.Ordinal) == true) { <a href="@n.ActionPath">Xem hóa đơn / phiếu thu</a> }
+        @if (!n.IsRead) { <button @onclick="() => Read(n.Id)">Đánh dấu đã đọc</button> }
+    </article> }
+</section>
+}
+@code {
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public bool Cards { get; set; }
+    private ResidentNotice[] notices => NoticeState.Items;
+    private bool loading => NoticeState.Loading;
+    private string? error => NoticeState.Error;
+    protected override void OnInitialized() => NoticeState.Changed += Refresh;
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    private Task Load() => NoticeState.ReloadAsync();
+    private Task Read(Guid id) => NoticeState.ReadAsync(id);
+    public void Dispose() => NoticeState.Changed -= Refresh;
+}

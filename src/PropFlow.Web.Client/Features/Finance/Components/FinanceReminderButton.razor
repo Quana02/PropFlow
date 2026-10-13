@@ -1,0 +1,12 @@
+@using PropFlow.Web.Client.Features.Finance.Services
+@inject FinanceCycleApi Api
+<span class="finance-reminder"><button type="button" disabled="@(busy || InvoiceIds.Length == 0)" @onclick="Send"><span class="material-symbols-outlined">mail</span> Gửi nhắc thanh toán (@InvoiceIds.Length hóa đơn)</button></span>
+@if (message is not null) { <span role="status">@message</span> }
+@code {
+    [Parameter] public Guid[] InvoiceIds { get; set; } = [];
+    private bool busy; private string? message;
+    private async Task Send() { busy = true; try {
+        var r = await Api.PostAsync<ReminderResult>("api/v1/billing/cycle/reminders", new { invoiceIds = InvoiceIds });
+        message = r.IsSuccess ? $"Đã xử lý nhắc thanh toán cho {r.Data!.Recipients} chủ hộ; nhắc thủ công tối đa một lần/ngày cho mỗi hóa đơn." : r.Message;
+    } finally { busy = false; } }
+}
