@@ -1,6 +1,7 @@
 window.initMarketingPage = function() {
+    window.syncPublicTheme?.();
     // Navigation scrolling & active state
-    const navLinks = document.querySelectorAll('header nav a');
+    const navLinks = document.querySelectorAll('.public-navigation a');
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
@@ -8,11 +9,9 @@ window.initMarketingPage = function() {
             window.dispatchEvent(new CustomEvent('nav-change', { detail: { section: path } }));
             
             navLinks.forEach(l => {
-                l.classList.remove('text-sky-600', 'dark:text-cyan-400', 'font-bold');
-                l.classList.add('text-slate-600', 'dark:text-slate-400');
+                l.classList.remove('is-active');
             });
-            link.classList.add('text-sky-600', 'dark:text-cyan-400', 'font-bold');
-            link.classList.remove('text-slate-600', 'dark:text-slate-400');
+            link.classList.add('is-active');
             
             const targetSection = document.getElementById(path);
             if (targetSection) {
@@ -20,20 +19,6 @@ window.initMarketingPage = function() {
             }
         });
     });
-
-    // Unified Theme Switcher
-    const themeToggleBtn = document.getElementById('theme-toggle');
-    if (themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', () => {
-            const isDark = document.documentElement.classList.toggle('dark');
-            localStorage.setItem('propflow-theme', isDark ? 'dark' : 'light');
-            
-            // Trigger Three.js Scene color refresh
-            if (window.propflowUpdateTheme) {
-                window.propflowUpdateTheme(isDark);
-            }
-        });
-    }
 
     // Init Three.js
     function initThree() {
@@ -64,6 +49,9 @@ window.initMarketingPage = function() {
         renderer.setSize(width, height);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.setClearColor(0x000000, 0);
+        renderer.domElement.style.pointerEvents = 'none';
+        renderer.domElement.style.touchAction = 'pan-y';
+        renderer.domElement.setAttribute('aria-hidden', 'true');
         container.appendChild(renderer.domElement);
 
         const buildingGroup = new THREE.Group();

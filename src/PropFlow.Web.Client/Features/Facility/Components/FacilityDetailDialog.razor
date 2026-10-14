@@ -180,7 +180,7 @@
             </div>
 
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
+                <div class="text-[11px] text-slate-400">Dữ liệu được cập nhật định kỳ khi đang mở</div>
             </div>
         </div>
     </div>
@@ -196,12 +196,19 @@
     private PagedResult<EquipmentModel>? EquipmentPagedResult { get; set; }
     private int EquipmentPageIndex { get; set; } = 1;
     private const int EquipmentPageSize = 10;
+    private FacilityModel? LoadedFacility;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && Facility != null)
+        if (!IsOpen || Facility is null)
         {
-            EquipmentPageIndex = 1; // Reset to first page when opening
+            LoadedFacility = null;
+            return;
+        }
+        if (!ReferenceEquals(Facility, LoadedFacility))
+        {
+            if (LoadedFacility?.Id != Facility.Id) EquipmentPageIndex = 1;
+            LoadedFacility = Facility;
             await LoadEquipmentForFacility();
         }
     }
@@ -225,6 +232,12 @@
             if (result.IsSuccess && result.Data != null)
             {
                 EquipmentPagedResult = result.Data;
+                var lastPage = Math.Max(1, result.Data.TotalPages);
+                if (EquipmentPageIndex > lastPage)
+                {
+                    EquipmentPageIndex = lastPage;
+                    await LoadEquipmentForFacility();
+                }
             }
             else
             {

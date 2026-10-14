@@ -25,7 +25,11 @@ public sealed class AuthEmailQueue(AuthMailOptions options, ILogger<AuthEmailQue
     public Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct)
     {
         if (!queue.Writer.TryWrite(new(email, code, recovery, expiryMinutes, DateTimeOffset.UtcNow)))
+        {
             logger.LogWarning("Authentication email queue is full; a new code may be requested later.");
+            if (!recovery)
+                throw new AuthFailure(503, "email_delivery_unavailable", "Chưa thể gửi mã xác minh. Vui lòng thử lại sau.");
+        }
         return Task.CompletedTask;
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

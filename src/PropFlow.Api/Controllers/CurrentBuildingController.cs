@@ -45,7 +45,7 @@ public class CurrentBuildingController : ControllerBase
         if (!scope.Unrestricted)
         {
             // Operational property identity and scoped asset totals only; no apartment or audit data.
-            return Ok(new { overview.Id, overview.Code, overview.Name, overview.Address,
+            return Ok(new { overview.Id, overview.Name, overview.Address,
                 overview.TimeZoneId, overview.NumberOfFloors, overview.Status,
                 overview.Facilities, overview.Equipment });
         }
@@ -53,7 +53,6 @@ public class CurrentBuildingController : ControllerBase
         var totalApartments = await _apartmentStatisticsReader.GetTotalApartmentsAsync(cancellationToken);
         var response = new CurrentBuildingOverviewResponse(
             overview.Id,
-            overview.Code,
             overview.Name,
             overview.Address,
             overview.TimeZoneId,

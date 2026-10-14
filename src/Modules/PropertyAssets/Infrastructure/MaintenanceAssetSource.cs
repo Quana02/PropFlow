@@ -9,21 +9,21 @@ public sealed class MaintenanceAssetSource(PropertyAssetsDbContext db) : IMainte
 {
     public async Task<IReadOnlyList<MaintenanceAssetReference>> GetAvailableAsync(CancellationToken ct)
     {
-        var facilities = await db.Facilities.AsNoTracking().Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null)).ToListAsync(ct);
-        var equipment = await db.Equipment.AsNoTracking().Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "EQUIPMENT", x.Status.ToString(), x.LocationDescription, x.FacilityId)).ToListAsync(ct);
+        var facilities = await db.Facilities.AsNoTracking().Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null, x.FacilityType == null ? null : x.FacilityType.Name)).ToListAsync(ct);
+        var equipment = await db.Equipment.AsNoTracking().Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "EQUIPMENT", x.Status.ToString(), x.LocationDescription, x.FacilityId, null)).ToListAsync(ct);
         return facilities.Concat(equipment).OrderBy(x => x.AssetType).ThenBy(x => x.Code).ToArray();
     }
 
     public Task<MaintenanceAssetReference?> GetFacilityAsync(Guid facilityId, CancellationToken ct) =>
         db.Facilities.AsNoTracking()
             .Where(x => x.Id == facilityId)
-            .Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null))
+            .Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null, x.FacilityType == null ? null : x.FacilityType.Name))
             .SingleOrDefaultAsync(ct);
 
     public Task<MaintenanceAssetReference?> GetEquipmentAsync(Guid equipmentId, CancellationToken ct) =>
         db.Equipment.AsNoTracking()
             .Where(x => x.Id == equipmentId)
-            .Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "EQUIPMENT", x.Status.ToString(), x.LocationDescription, x.FacilityId))
+            .Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "EQUIPMENT", x.Status.ToString(), x.LocationDescription, x.FacilityId, null))
             .SingleOrDefaultAsync(ct);
 
     public async Task<bool> ExistsAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct)
@@ -33,34 +33,40 @@ public sealed class MaintenanceAssetSource(PropertyAssetsDbContext db) : IMainte
         return true;
     }
 
-    public async Task MarkUnderMaintenanceAsync(Guid facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
+    public async Task MarkUnderMaintenanceAsync(Guid? facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
     {
-        var facility = await db.Facilities.SingleOrDefaultAsync(item => item.Id == facilityId, ct)
-            ?? throw new KeyNotFoundException("Không tìm thấy cơ sở vật chất.");
+        if (facilityId is null && equipmentId is null)
+            throw new ArgumentException("Phải chọn cơ sở vật chất hoặc thiết bị.");
+        var facility = facilityId is { } selectedFacilityId
+            ? await db.Facilities.SingleOrDefaultAsync(item => item.Id == selectedFacilityId, ct) ?? throw new KeyNotFoundException("Không tìm thấy cơ sở vật chất.")
+            : null;
         var equipment = equipmentId is { } id
             ? await db.Equipment.SingleOrDefaultAsync(item => item.Id == id, ct) ?? throw new KeyNotFoundException("Không tìm thấy thiết bị.")
             : null;
-        if (equipment?.FacilityId is not null && equipment.FacilityId != facilityId)
+        if (facility is not null && equipment?.FacilityId is not null && equipment.FacilityId != facilityId)
             throw new ArgumentException("Thiết bị không thuộc cơ sở vật chất đã chọn.");
 
         var now = DateTimeOffset.UtcNow;
-        facility.SetStatus(MasterDataStatus.UNDER_MAINTENANCE, actor, now);
+        facility?.SetStatus(MasterDataStatus.UNDER_MAINTENANCE, actor, now);
         equipment?.MarkUnderMaintenance(actor, now);
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task MarkActiveAsync(Guid facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
+    public async Task MarkActiveAsync(Guid? facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
     {
-        var facility = await db.Facilities.SingleOrDefaultAsync(item => item.Id == facilityId, ct)
-            ?? throw new KeyNotFoundException("Không tìm thấy cơ sở vật chất.");
+        if (facilityId is null && equipmentId is null)
+            throw new ArgumentException("Phải chọn cơ sở vật chất hoặc thiết bị.");
+        var facility = facilityId is { } selectedFacilityId
+            ? await db.Facilities.SingleOrDefaultAsync(item => item.Id == selectedFacilityId, ct) ?? throw new KeyNotFoundException("Không tìm thấy cơ sở vật chất.")
+            : null;
         var equipment = equipmentId is { } id
             ? await db.Equipment.SingleOrDefaultAsync(item => item.Id == id, ct) ?? throw new KeyNotFoundException("Không tìm thấy thiết bị.")
             : null;
-        if (equipment?.FacilityId is not null && equipment.FacilityId != facilityId)
+        if (facility is not null && equipment?.FacilityId is not null && equipment.FacilityId != facilityId)
             throw new ArgumentException("Thiết bị không thuộc cơ sở vật chất đã chọn.");
 
         var now = DateTimeOffset.UtcNow;
-        facility.SetStatus(MasterDataStatus.ACTIVE, actor, now);
+        facility?.SetStatus(MasterDataStatus.ACTIVE, actor, now);
         equipment?.MarkActive(actor, now);
         await db.SaveChangesAsync(ct);
     }

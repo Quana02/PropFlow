@@ -8,7 +8,6 @@ namespace PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 
 public record BuildingDto(
     Guid Id,
-    string Code,
     string Name,
     string Address,
     string TimeZoneId,
@@ -37,7 +36,6 @@ public record EquipmentSummaryDto(
 
 public record CurrentBuildingPropertyOverviewDto(
     Guid Id,
-    string Code,
     string Name,
     string Address,
     string TimeZoneId,
@@ -55,5 +53,4 @@ public record UpdateCurrentBuildingCommand(
     [Required, StringLength(64, ErrorMessage = "Múi giờ không được vượt quá 64 ký tự.")] string TimeZoneId = "Asia/Ho_Chi_Minh",
     [Range(1, int.MaxValue, ErrorMessage = "Tổng số tầng phải lớn hơn 0.")] int NumberOfFloors = 1,
     string? Description = null,
-    [property: JsonIgnore] Guid? UpdatedBy = null,
-    [StringLength(50, ErrorMessage = "Mã chung cư không được vượt quá 50 ký tự.")] string? Code = null);
+    [property: JsonIgnore] Guid? UpdatedBy = null);

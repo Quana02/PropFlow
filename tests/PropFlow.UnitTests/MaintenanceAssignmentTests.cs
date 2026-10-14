@@ -85,8 +85,129 @@ public sealed class MaintenanceAssignmentTests
         Assert.Equal(staffB.DisplayName, item.AssignedStaffDisplayName);
     }
 
+    [Fact]
+    public async Task AssignTaskAsync_StoresActiveTeamAndReassignsOnlyRemovedMembers()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var staffC = Staff("Nhân viên C");
+        var task = AddTask(db);
+        var service = Service(db, staffA, staffB, staffC);
+
+        var assigned = await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffA.UserId, staffB.UserId]), Guid.NewGuid(), default);
+        Assert.Equal(2, assigned.CurrentAssignees!.Count);
+        Assert.Contains(assigned.CurrentAssignees, staff => staff.UserId == staffA.UserId);
+        Assert.Contains(assigned.CurrentAssignees, staff => staff.UserId == staffB.UserId);
+
+        var reassigned = await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffB.UserId, staffC.UserId]), Guid.NewGuid(), default);
+        Assert.Equal(2, reassigned.CurrentAssignees!.Count);
+        Assert.DoesNotContain(reassigned.CurrentAssignees, staff => staff.UserId == staffA.UserId);
+        Assert.Contains(reassigned.CurrentAssignees, staff => staff.UserId == staffB.UserId);
+        Assert.Contains(reassigned.CurrentAssignees, staff => staff.UserId == staffC.UserId);
+
+        var assignments = await db.MaintenanceAssignments.ToListAsync();
+        Assert.Equal(3, assignments.Count);
+        Assert.Equal(AssignmentStatus.REASSIGNED, assignments.Single(item => item.StaffUserId == staffA.UserId).Status);
+        Assert.Equal(AssignmentStatus.ASSIGNED, assignments.Single(item => item.StaffUserId == staffB.UserId).Status);
+        Assert.Equal(AssignmentStatus.ASSIGNED, assignments.Single(item => item.StaffUserId == staffC.UserId).Status);
+    }
+
+    [Fact]
+    public async Task AssignTaskAsync_NotifiesEveryAffectedStaffOnlyAfterAssignmentIsSaved()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var unrelatedStaff = Staff("Nhân viên không liên quan");
+        var task = AddTask(db);
+        var notifier = new RecordingNotifier(db);
+        var service = Service(db, notifier, staffA, staffB, unrelatedStaff);
+
+        await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffA.UserId, staffB.UserId]), Guid.NewGuid(), default);
+
+        var notification = Assert.Single(notifier.Notifications);
+        Assert.Equal(task.Id, notification.TaskId);
+        Assert.Equal(new[] { staffA.UserId, staffB.UserId }.OrderBy(id => id), notification.RecipientStaffUserIds.OrderBy(id => id));
+        Assert.DoesNotContain(unrelatedStaff.UserId, notification.RecipientStaffUserIds);
+        Assert.True(notification.AssignmentWasPersisted);
+    }
+
+    [Fact]
+    public async Task AssignTaskAsync_ReassignmentNotifiesRemovedAndNewStaffButFailureNotifiesNobody()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var task = AddTask(db);
+        var notifier = new RecordingNotifier(db);
+        var service = Service(db, notifier, staffA, staffB);
+
+        await service.AssignTaskAsync(task.Id, new(staffA.UserId), Guid.NewGuid(), default);
+        notifier.Clear();
+
+        await service.AssignTaskAsync(task.Id, new(staffB.UserId), Guid.NewGuid(), default);
+
+        var notification = Assert.Single(notifier.Notifications);
+        Assert.Equal(new[] { staffA.UserId, staffB.UserId }.OrderBy(id => id), notification.RecipientStaffUserIds.OrderBy(id => id));
+        notifier.Clear();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AssignTaskAsync(task.Id, new(Guid.NewGuid()), Guid.NewGuid(), default));
+        Assert.Empty(notifier.Notifications);
+    }
+
+    [Fact]
+    public async Task TeamMemberCanStartAndAnotherMemberCanProgressAndCompleteSharedTask()
+    {
+        await using var db = CreateDb();
+        var staffA = Staff("Nhân viên A");
+        var staffB = Staff("Nhân viên B");
+        var task = AddTask(db);
+        var service = Service(db, staffA, staffB);
+
+        await service.AssignTaskAsync(task.Id, new(StaffUserIds: [staffA.UserId, staffB.UserId]), Guid.NewGuid(), default);
+        await service.StartMyTaskAsync(task.Id, staffA.UserId, default);
+        await service.UpdateMyTaskProgressAsync(task.Id, new("Đã kiểm tra hiện trường"), staffB.UserId, default);
+        var completed = await service.SubmitMyTaskResultAsync(task.Id, new("Đã hoàn tất"), staffB.UserId, default);
+
+        Assert.Equal(MaintenanceTaskStatus.COMPLETED, completed.Status);
+        Assert.Equal(2, completed.CurrentAssignees!.Count);
+        Assert.All(await db.MaintenanceAssignments.ToListAsync(), assignment => Assert.Equal(AssignmentStatus.COMPLETED, assignment.Status));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.UpdateMyTaskProgressAsync(task.Id, new("Không được ghi"), staffA.UserId, default));
+    }
+
+    [Fact]
+    public async Task StaffMutations_NotifyOnlyAfterEachCommittedTaskStateChange()
+    {
+        await using var db = CreateDb();
+        var staff = Staff("Nhân viên A");
+        var task = AddTask(db);
+        var notifier = new RecordingNotifier(db);
+        var service = Service(db, notifier, staff);
+
+        await service.AssignTaskAsync(task.Id, new(staff.UserId), Guid.NewGuid(), default);
+        notifier.Clear();
+
+        await service.StartMyTaskAsync(task.Id, staff.UserId, default);
+        await service.UpdateMyTaskProgressAsync(task.Id, new("Đã kiểm tra"), staff.UserId, default);
+        await service.SubmitMyTaskResultAsync(task.Id, new("Đã hoàn tất"), staff.UserId, default);
+
+        Assert.Equal(3, notifier.Notifications.Count);
+        Assert.All(notifier.Notifications, notification =>
+        {
+            Assert.Equal(task.Id, notification.TaskId);
+            Assert.Contains(staff.UserId, notification.RecipientStaffUserIds);
+            Assert.True(notification.AssignmentWasPersisted);
+        });
+        Assert.Equal(MaintenanceTaskStatus.COMPLETED, (await db.MaintenanceTasks.SingleAsync()).Status);
+        Assert.Equal(4, await db.MaintenanceTaskActivities.CountAsync());
+    }
+
     private static MaintenanceService Service(MaintenanceDbContext db, params MaintenanceStaffRecord[] staff) =>
         new(db, new AssetSource(), new StaffDirectory(staff));
+
+    private static MaintenanceService Service(MaintenanceDbContext db, IMaintenanceNotifier notifier, params MaintenanceStaffRecord[] staff) =>
+        new(db, new AssetSource(), new StaffDirectory(staff), notifier);
 
     private static MaintenanceDbContext CreateDb() => new(new DbContextOptionsBuilder<MaintenanceDbContext>()
         .UseInMemoryDatabase($"maintenance-assignment-{Guid.NewGuid()}").Options);
@@ -114,4 +235,19 @@ public sealed class MaintenanceAssignmentTests
         public Task<IReadOnlyList<MaintenanceStaffRecord>> GetActiveStaffAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<MaintenanceStaffRecord>>(staff);
         public Task<MaintenanceStaffRecord?> GetActiveStaffAsync(Guid userId, CancellationToken ct) => Task.FromResult<MaintenanceStaffRecord?>(staff.SingleOrDefault(item => item.UserId == userId));
     }
+
+    private sealed class RecordingNotifier(MaintenanceDbContext db) : IMaintenanceNotifier
+    {
+        public List<Notification> Notifications { get; } = [];
+
+        public Task NotifyTaskUpdatedAsync(Guid taskId, IReadOnlyCollection<Guid> recipientStaffUserIds, CancellationToken ct = default)
+        {
+            Notifications.Add(new(taskId, recipientStaffUserIds.ToArray(), db.MaintenanceAssignments.Any(assignment => assignment.MaintenanceTaskId == taskId)));
+            return Task.CompletedTask;
+        }
+
+        public void Clear() => Notifications.Clear();
+    }
+
+    private sealed record Notification(Guid TaskId, IReadOnlyCollection<Guid> RecipientStaffUserIds, bool AssignmentWasPersisted);
 }

@@ -30,14 +30,8 @@ public class BuildingService : IBuildingService
         var overview = await _store.CurrentBuildingOverviewAsync(cancellationToken);
         if (overview is null)
         {
-            if (string.IsNullOrWhiteSpace(command.Code))
-            {
-                throw new ArgumentException("Mã chung cư là bắt buộc khi thiết lập hồ sơ ban đầu.");
-            }
-
             var createdAt = DateTimeOffset.UtcNow;
             var newBuilding = new Building(
-                command.Code,
                 command.Name,
                 command.Address,
                 createdAt,
@@ -76,7 +70,6 @@ public class BuildingService : IBuildingService
     {
         return new BuildingDto(
             building.Id,
-            building.Code,
             building.Name,
             building.Address,
             building.TimeZoneId,

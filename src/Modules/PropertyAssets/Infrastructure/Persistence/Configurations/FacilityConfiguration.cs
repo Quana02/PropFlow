@@ -17,7 +17,7 @@ public class FacilityConfiguration : IEntityTypeConfiguration<Facility>
 
         builder.Property(f => f.Code)
             .HasColumnName("code")
-            .HasMaxLength(30)
+            .HasMaxLength(512)
             .IsRequired();
 
         builder.Property(f => f.Name)
@@ -25,9 +25,7 @@ public class FacilityConfiguration : IEntityTypeConfiguration<Facility>
             .HasMaxLength(150)
             .IsRequired();
 
-        builder.Property(f => f.FacilityType)
-            .HasColumnName("facility_type")
-            .HasMaxLength(80);
+        builder.Property(f => f.FacilityTypeId).HasColumnName("facility_type_id");
 
         builder.Property(f => f.LocationDescription)
             .HasColumnName("location_description")
@@ -63,13 +61,18 @@ public class FacilityConfiguration : IEntityTypeConfiguration<Facility>
         builder.HasIndex(f => f.Code)
             .IsUnique();
 
-        builder.HasIndex(f => f.FacilityType);
+        builder.HasIndex(f => f.FacilityTypeId);
         builder.HasIndex(f => f.Status);
 
         // Within-module relationships
         builder.HasMany(f => f.Equipment)
             .WithOne(e => e.Facility)
             .HasForeignKey(e => e.FacilityId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(f => f.FacilityType)
+            .WithMany()
+            .HasForeignKey(f => f.FacilityTypeId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

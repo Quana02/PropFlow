@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PropFlow.Web.Client.Features.Facility.Models;
 
@@ -11,6 +12,7 @@ public class EquipmentModel
     public string? FacilityName { get; set; }
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public Guid? EquipmentTypeId { get; set; }
     public string? EquipmentType { get; set; }
     public string? Manufacturer { get; set; }
     public string? Model { get; set; }
@@ -32,9 +34,8 @@ public class EquipmentDetailModel : EquipmentModel
 
 public class CreateEquipmentModel
 {
-    [Required(ErrorMessage = "Mã thiết bị là bắt buộc.")]
-    [StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")]
-    public string Code { get; set; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Code { get; set; }
 
     [Required(ErrorMessage = "Tên thiết bị là bắt buộc.")]
     [StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")]
@@ -43,8 +44,7 @@ public class CreateEquipmentModel
     public Guid? FacilityId { get; set; }
 
     [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc.")]
-    [StringLength(100, ErrorMessage = "Loại thiết bị không được vượt quá 100 ký tự.")]
-    public string? EquipmentType { get; set; }
+    public Guid? EquipmentTypeId { get; set; }
 
     public EquipmentStatus Status { get; set; } = EquipmentStatus.ACTIVE;
 
@@ -77,8 +77,7 @@ public class UpdateEquipmentModel
     public Guid? FacilityId { get; set; }
 
     [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc.")]
-    [StringLength(100, ErrorMessage = "Loại thiết bị không được vượt quá 100 ký tự.")]
-    public string? EquipmentType { get; set; }
+    public Guid? EquipmentTypeId { get; set; }
 
     [StringLength(100, ErrorMessage = "Hãng sản xuất không được vượt quá 100 ký tự.")]
     public string? Manufacturer { get; set; }
@@ -111,7 +110,21 @@ public class EquipmentFilterModel
     public Guid? FacilityId { get; set; }
     public string? SearchKeyword { get; set; }
     public EquipmentStatus? Status { get; set; }
-    public string? EquipmentType { get; set; }
+    public Guid? EquipmentTypeId { get; set; }
     public int PageIndex { get; set; } = 1;
     public int PageSize { get; set; } = 10;
+}
+
+public sealed class EquipmentTypeModel
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+public sealed class CreateEquipmentTypeModel
+{
+    [Required(ErrorMessage = "Tên loại thiết bị là bắt buộc.")]
+    [StringLength(100, MinimumLength = 1, ErrorMessage = "Tên loại thiết bị phải từ 1 đến 100 ký tự.")]
+    public string Name { get; set; } = string.Empty;
 }

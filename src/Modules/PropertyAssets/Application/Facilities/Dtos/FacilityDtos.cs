@@ -8,6 +8,7 @@ public record FacilityDto(
     Guid Id,
     string Code,
     string Name,
+    Guid? FacilityTypeId,
     string? FacilityType,
     string? LocationDescription,
     string? Description,
@@ -21,6 +22,7 @@ public record FacilityDetailDto(
     Guid Id,
     string Code,
     string Name,
+    Guid? FacilityTypeId,
     string? FacilityType,
     string? LocationDescription,
     string? Description,
@@ -33,16 +35,16 @@ public record FacilityDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateFacilityCommand(
-    [Required(ErrorMessage = "Mã cơ sở vật chất là bắt buộc."), StringLength(30, ErrorMessage = "Mã cơ sở vật chất không được vượt quá 30 ký tự.")] string Code,
+    [StringLength(512)] string? Code,
     [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc."), StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")] string Name,
-    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")] string? FacilityType = null,
+    Guid? FacilityTypeId = null,
     [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")] string? LocationDescription = null,
     string? Description = null,
     [property: JsonIgnore] Guid? CreatedBy = null);
 
 public record UpdateFacilityCommand(
     [Required(ErrorMessage = "Tên cơ sở vật chất là bắt buộc."), StringLength(150, ErrorMessage = "Tên cơ sở vật chất không được vượt quá 150 ký tự.")] string Name,
-    [StringLength(80, ErrorMessage = "Loại cơ sở vật chất không được vượt quá 80 ký tự.")] string? FacilityType = null,
+    Guid? FacilityTypeId = null,
     [StringLength(255, ErrorMessage = "Vị trí không được vượt quá 255 ký tự.")] string? LocationDescription = null,
     string? Description = null,
     [property: JsonIgnore] Guid? UpdatedBy = null);
@@ -54,7 +56,7 @@ public record SetFacilityStatusCommand(
 public record FacilityFilterQuery(
     string? SearchKeyword = null,
     MasterDataStatus? Status = null,
-    string? FacilityType = null,
+    Guid? FacilityTypeId = null,
     int PageIndex = 1,
     int PageSize = 10);
 
@@ -68,3 +70,9 @@ public record PagedResult<T>(
     public bool HasPreviousPage => PageIndex > 1;
     public bool HasNextPage => PageIndex < TotalPages;
 }
+
+public record FacilityTypeDto(Guid Id, string Name, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+public record CreateFacilityTypeCommand(
+    [Required(ErrorMessage = "Tên loại cơ sở vật chất là bắt buộc."), StringLength(80, MinimumLength = 1, ErrorMessage = "Tên loại cơ sở vật chất phải từ 1 đến 80 ký tự.")] string Name,
+    [property: JsonIgnore] Guid? CreatedBy = null);

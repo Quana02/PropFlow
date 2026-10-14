@@ -1,6 +1,9 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
 <nav class="operations-nav" aria-label="Điều hướng vận hành">
     <a class="operations-brand" href="/">PropFlow</a>
     <p class="operations-heading">Phân hệ vận hành</p>
+    <AuthorizeView Roles="MANAGER"><NavLink href="/operations/service-fee" class="operations-link" title="Phí dịch vụ"><span class="material-symbols-outlined operations-icon">receipt_long</span><span class="operations-label">Phí dịch vụ / hóa đơn</span></NavLink></AuthorizeView>
     <NavLink href="/buildings" Match="NavLinkMatch.All" class="operations-link"
              title="Hồ sơ tòa nhà" aria-label="Hồ sơ tòa nhà">
         <span class="material-symbols-outlined operations-icon" aria-hidden="true">apartment</span>
@@ -22,8 +25,24 @@
         <span class="material-symbols-outlined operations-icon" aria-hidden="true">precision_manufacturing</span>
         <span class="operations-label">Hồ sơ thiết bị</span>
     </NavLink>
-    <NavLink href="/maintenance" Match="NavLinkMatch.All" class="operations-link" title="Bảo trì" aria-label="Bảo trì">
-        <span class="material-symbols-outlined operations-icon" aria-hidden="true">build</span>
-        <span class="operations-label">Bảo trì</span>
-    </NavLink>
+    <AuthorizeView Roles="MANAGER">
+        <NavLink href="/manager/service-requests" Match="NavLinkMatch.Prefix" class="operations-link" title="Yêu cầu dịch vụ" aria-label="Yêu cầu dịch vụ">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">support_agent</span>
+            <span class="operations-label">Yêu cầu dịch vụ</span>
+        </NavLink>
+        <NavLink href="/maintenance" Match="NavLinkMatch.All" class="operations-link" title="Bảo trì" aria-label="Bảo trì">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">build</span>
+            <span class="operations-label">Bảo trì</span>
+        </NavLink>
+    </AuthorizeView>
+    <AuthorizeView Roles="STAFF">
+        <NavLink href="/staff/service-requests" Match="NavLinkMatch.Prefix" class="operations-link" title="Yêu cầu được giao" aria-label="Yêu cầu được giao">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">support_agent</span>
+            <span class="operations-label">Yêu cầu được giao</span>
+        </NavLink>
+        <NavLink href="/my-maintenance" Match="NavLinkMatch.All" class="operations-link" title="Công việc của tôi" aria-label="Công việc của tôi">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">assignment</span>
+            <span class="operations-label">Công việc của tôi</span>
+        </NavLink>
+    </AuthorizeView>
 </nav>

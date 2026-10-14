@@ -4,4 +4,5 @@ public static class MaintenanceAuthorizationPolicies
 {
     public const string Manage = "maintenance.manage";
     public const string View = "maintenance.view";
+    public const string Work = "maintenance.work";
 }

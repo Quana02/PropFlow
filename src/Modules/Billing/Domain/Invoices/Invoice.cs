@@ -21,7 +21,8 @@ public class Invoice
         DateTimeOffset now,
         DateOnly? issueDate = null,
         DateOnly? dueDate = null,
-        string? note = null)
+        string? note = null,
+        InvoiceType invoiceType = InvoiceType.SERVICE_FEE)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invoiceNumber);
         ThrowIfEmpty(apartmentUnitId, nameof(apartmentUnitId));
@@ -31,6 +32,7 @@ public class Invoice
 
         Id = Guid.NewGuid();
         InvoiceNumber = invoiceNumber.Trim();
+        Type = invoiceType;
         ApartmentUnitId = apartmentUnitId;
         BillingPeriodStart = billingPeriodStart;
         BillingPeriodEnd = billingPeriodEnd;
@@ -47,6 +49,7 @@ public class Invoice
 
     public Guid Id { get; private set; }
     public string InvoiceNumber { get; private set; } = null!;
+    public InvoiceType? Type { get; private set; }
     public Guid ApartmentUnitId { get; private set; }
     public DateOnly BillingPeriodStart { get; private set; }
     public DateOnly BillingPeriodEnd { get; private set; }
@@ -103,7 +106,8 @@ public class Invoice
         Guid? feeTypeId = null,
         Guid? feeRateRuleId = null,
         string? description = null,
-        string? unitName = null)
+        string? unitName = null,
+        int amountDivisor = 1)
     {
         EnsureDraft();
         ThrowIfEmpty(updatedBy, nameof(updatedBy));
@@ -119,7 +123,8 @@ public class Invoice
             feeTypeId,
             feeRateRuleId,
             description,
-            unitName);
+            unitName,
+            amountDivisor);
 
         _items.Add(item);
         RecalculateTotals();

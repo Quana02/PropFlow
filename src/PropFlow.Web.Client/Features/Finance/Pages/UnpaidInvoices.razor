@@ -16,7 +16,7 @@
         </div>
         <div class="unpaid-actions">
             <span title="Chưa khả dụng: chưa có dịch vụ xuất danh sách hóa đơn"><button type="button" disabled><span class="material-symbols-outlined">description</span> Xuất danh sách (Excel)</button></span>
-            <span title="Chưa khả dụng: chưa có tích hợp gửi thông báo nhắc nợ"><button type="button" disabled><span class="material-symbols-outlined">mail</span> Gửi thông báo nhắc nợ (@(data?.Total ?? 0) hóa đơn)</button></span>
+            <FinanceReminderButton InvoiceIds="@(FilteredItems.Select(x => x.Id).ToArray())" />
         </div>
     </header>
 
@@ -48,13 +48,16 @@
             @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có hóa đơn phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc trạng thái." Icon="inbox" /></td></tr> }
-            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong>@item.InvoiceNumber</strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @ShortId(item.ApartmentUnitId)</strong><small>Mã căn hộ</small></td><td><strong>Kỳ phí @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><button class="collect-button" type="button" disabled title="Chưa có API ghi nhận khoản thu"><span aria-hidden="true">＋</span> Thu tiền</button></td></tr> } }
+            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong>@item.InvoiceNumber</strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @ShortId(item.ApartmentUnitId)</strong><small>Mã căn hộ</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><button class="collect-button" type="button" @onclick="() => collecting = item"><span aria-hidden="true">＋</span> Thu tiền</button></td></tr> } }
         </tbody></table></div>
         @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="unpaid-pagination"><span>Hiển thị @FilteredItems.Count bản ghi phù hợp trên trang; tổng cộng @data.Total hóa đơn chưa thanh toán</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
 </div>
 
+@if (collecting is not null) { <CollectPaymentDialog @key="collecting.Id" Invoice="collecting" Saved="CollectionSaved" Closed="() => collecting = null" /> }
 @code {
+    private InvoiceBalance? collecting;
+    private async Task CollectionSaved() { collecting = null; await ReloadAsync(); }
     private PagedFinanceResult<InvoiceBalance>? data;
     private bool loading;
     private string? error;
@@ -83,7 +86,21 @@
     private bool MatchesFilter(InvoiceBalance item) => filter switch { "UNPAID" => item.ConfirmedPaidAmount <= 0, "DUE_SOON" => IsDueSoon(item), "PARTIAL" => IsPartial(item), _ => true };
     private bool IsDueSoon(InvoiceBalance item) => item.DueDate is { } due && due.DayNumber >= Today.DayNumber && due.DayNumber - Today.DayNumber <= 3;
     private static bool IsPartial(InvoiceBalance item) => item.ConfirmedPaidAmount > 0 && item.OutstandingAmount > 0;
-    private string DueText(InvoiceBalance item) { if (item.DueDate is not { } due) return "Chưa có hạn"; var days = due.DayNumber - Today.DayNumber; return Math.Sign(days) switch { -1 => $"Quá hạn {-days} ngày", 0 => "Đến hạn hôm nay", 1 => "Còn 1 ngày", _ => $"Còn {days} ngày" }; }
+    private string DueText(InvoiceBalance item)
+    {
+        if (item.DueDate is not { } due)
+        {
+            return "Chưa có hạn";
+        }
+
+        var days = due.DayNumber - Today.DayNumber;
+        if (days < 0)
+        {
+            return $"Quá hạn {-days} ngày";
+        }
+
+        return days == 0 ? "Đến hạn hôm nay" : $"Còn {days} ngày";
+    }
     private string DueClass(InvoiceBalance item) => item.DueDate is { } due && due.CompareTo(Today) == -1 ? "due-cell overdue" : "due-cell";
     private static string StatusName(InvoiceBalance item) => IsPartial(item) ? "Đóng một phần" : "Chưa nộp";
     private static string StatusClass(InvoiceBalance item) => IsPartial(item) ? "status-partial" : "status-unpaid";

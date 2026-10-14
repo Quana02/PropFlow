@@ -6,10 +6,17 @@
 @using PropFlow.Web.Client.Features.Facility.Services
 @using PropFlow.Web.Client.Features.Maintenance.Models
 @using PropFlow.Web.Client.Features.Maintenance.Services
+@using PropFlow.Web.Client.Features.ServiceRequests.Services
+@using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Shared.Forms
+@using PropFlow.Web.Client.Shared.Feedback
+@using Microsoft.AspNetCore.SignalR.Client
+@inject NavigationManager Navigation
 @inject IMaintenanceApiClient MaintenanceApi
+@inject MaintenanceHubConnectionFactory MaintenanceHubConnectionFactory
+@inject IManagerServiceRequestApiClient ServiceRequestApi
 @inject IBuildingApiClient BuildingApi
-@implements IDisposable
+@implements IAsyncDisposable
 
 <PageTitle>Quản lý lịch bảo trì - PropFlow</PageTitle>
 
@@ -86,8 +93,7 @@
             </div>
             <div class="fe07-workspace-head-right">
                 <div class="fe07-view-switcher">
-                    <button type="button" class="@(ViewMode == "timeline" ? "is-selected" : null)" @onclick="ShowTimeline">Lưới Giờ</button>
-                    <button type="button" class="@(ViewMode == "list" ? "is-selected" : null)" @onclick="ShowList">Danh Sách</button>
+                    <button type="button" class="is-selected" aria-current="page">Lưới Giờ</button>
                 </div>
                 <button class="fe07-icon-button" type="button" title="Đặt lại bộ lọc" aria-label="Đặt lại bộ lọc" @onclick="ResetFilter">
                     <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
@@ -201,16 +207,11 @@
                                         </div>
                                     </div>
                                     <div class="fe07-agenda-actions">
-                                        <button type="button" class="fe07-row-action" title="Tạo công việc từ lịch" @onclick="() => OpenTaskForSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">build</span></button>
-                                        <button type="button" class="fe07-row-action" title="Sửa lịch" aria-label="Sửa lịch" @onclick="() => OpenEditDialog(item)">
-                                            <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                                        </button>
                                         @if (item.Status == MaintenanceScheduleStatus.ACTIVE)
                                         {
+                                            <button type="button" class="fe07-row-action" title="Tạo công việc từ lịch" @onclick="() => OpenTaskForSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">build</span></button>
+                                            <button type="button" class="fe07-row-action" title="Sửa lịch" aria-label="Sửa lịch" @onclick="() => OpenEditDialog(item)"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
                                             @if (CanExtendSchedule(item)) { <button type="button" class="fe07-row-action" title="Gia hạn bảo trì" aria-label="Gia hạn bảo trì" @onclick="() => OpenExtendSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">more_time</span></button> }
-                                            <button type="button" class="fe07-row-action is-complete" title="Hoàn tất lịch" aria-label="Hoàn tất lịch" @onclick="() => CompleteSchedule(item)">
-                                                <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
-                                            </button>
                                             <button type="button" class="fe07-row-action is-cancel" title="Hủy lịch" aria-label="Hủy lịch" @onclick="() => CancelSchedule(item)">
                                                 <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
                                             </button>
@@ -254,12 +255,11 @@
                                     </div>
                                 </div>
                                 <div class="fe07-agenda-actions">
-                                    <button type="button" class="fe07-row-action" title="Tạo công việc từ lịch" @onclick="() => OpenTaskForSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">build</span></button>
-                                    <button type="button" class="fe07-row-action" title="Sửa lịch" aria-label="Sửa lịch" @onclick="() => OpenEditDialog(item)"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
                                     @if (item.Status == MaintenanceScheduleStatus.ACTIVE)
                                     {
-                                    @if (CanExtendSchedule(item)) { <button type="button" class="fe07-row-action" title="Gia hạn bảo trì" aria-label="Gia hạn bảo trì" @onclick="() => OpenExtendSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">more_time</span></button> }
-                                        <button type="button" class="fe07-row-action is-complete" title="Hoàn tất lịch" aria-label="Hoàn tất lịch" @onclick="() => CompleteSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span></button>
+                                        <button type="button" class="fe07-row-action" title="Tạo công việc từ lịch" @onclick="() => OpenTaskForSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">build</span></button>
+                                        <button type="button" class="fe07-row-action" title="Sửa lịch" aria-label="Sửa lịch" @onclick="() => OpenEditDialog(item)"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>
+                                        @if (CanExtendSchedule(item)) { <button type="button" class="fe07-row-action" title="Gia hạn bảo trì" aria-label="Gia hạn bảo trì" @onclick="() => OpenExtendSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">more_time</span></button> }
                                         <button type="button" class="fe07-row-action is-cancel" title="Hủy lịch" aria-label="Hủy lịch" @onclick="() => CancelSchedule(item)"><span class="material-symbols-outlined" aria-hidden="true">event_busy</span></button>
                                     }
                                 </div>
@@ -334,7 +334,7 @@
                                 <td class="fe07-history-task-cell"><strong>@item.TaskNumber</strong><span>@item.Title</span><small>@HistorySourceLabel(item)</small></td>
                                 <td class="fe07-history-asset-cell"><strong>@HistoryPrimaryAssetName(item)</strong><span>@HistoryPrimaryAssetCode(item)</span><small>@HistoryAssetLocation(item)</small></td>
                                 <td><span class="fe07-history-source-badge">@HistoryTypeLabel(item)</span></td>
-                                <td>@if (string.IsNullOrWhiteSpace(item.PriorityCode)) { <span class="fe07-history-empty">—</span> } else { <span class="fe07-code">@item.PriorityCode</span> }</td>
+                                <td>@if (string.IsNullOrWhiteSpace(item.PriorityCode)) { <span class="fe07-history-empty">—</span> } else { <span class="fe07-code">@MaintenancePriority.DisplayName(item.PriorityCode)</span> }</td>
                                 <td class="fe07-history-staff-cell">@HistoryParticipantsLabel(item)</td>
                                 <td>@if (item.StartedAt is { } startedAt) { <time>@FormatHistoryDateTime(startedAt)</time> } else if (item.PlannedStartAt is { } plannedAt) { <time>@FormatHistoryDateTime(plannedAt)<small>Dự kiến</small></time> } else { <span class="fe07-history-empty">—</span> }</td>
                                 <td>@if (item.CompletedAt is { } completedAt) { <time>@FormatHistoryDateTime(completedAt)<small>@CompletionTimelinessLabel(item)</small></time> } else { <span class="fe07-history-empty">—</span> }</td>
@@ -362,7 +362,7 @@
             <div class="fe07-filter-row">
                 <div class="fe07-search-inline">
                     <span class="material-symbols-outlined" aria-hidden="true">search</span>
-                    <input @bind="TaskFilter.SearchKeyword" @bind:event="oninput" @onkeyup="OnTaskSearchKeyUp" placeholder="Tìm theo mã hoặc tên công việc..." aria-label="Tìm công việc bảo trì" />
+                    <input type="text" @bind="TaskFilter.SearchKeyword" @bind:event="oninput" @onkeyup="OnTaskSearchKeyUp" placeholder="Tìm theo mã hoặc tên công việc..." aria-label="Tìm công việc bảo trì" />
                 </div>
                 <PropFlowSelect Options="TaskStatusOptions" @bind-Value="TaskStatusFilter" Variant="Filter" AriaLabel="Lọc trạng thái công việc" />
                 <button class="fe07-filter-apply" type="button" @onclick="ToggleTaskFilters" aria-expanded="@IsTaskFilterPanelOpen" aria-controls="task-filter-panel"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Lọc@(TaskActiveFilterCount > 0 ? $" ({TaskActiveFilterCount})" : string.Empty)</button>
@@ -393,7 +393,7 @@
                 <div class="fe07-task-list">
                     @foreach (var task in Tasks.Items)
                     {
-                        <article>
+                        <article class="fe07-task-row-link" role="link" tabindex="0" @onclick="() => NavigateToTask(task.Id)" @onkeydown="args => NavigateTaskOnKey(args, task.Id)">
                             <time>@(task.PlannedStartAt is { } start ? InCurrentTimeZone(start).ToString("dd/MM HH:mm") : "—")</time>
                             <div>
                                 <strong>@task.TaskNumber · @task.Title</strong>
@@ -404,9 +404,7 @@
                             </div>
                             <div class="fe07-task-statuses"><span class="fe07-status @TaskStatusClass(task.Status)"><i></i>@TaskStatusLabel(task.Status)</span>@if (task.IsOverdue) { <span class="fe07-status is-overdue"><i></i>Quá hạn</span> }</div>
                             <div class="fe07-task-row-actions">
-                                <button type="button" class="fe07-row-action" title="@(task.AssignedStaffUserId is null ? "Phân công" : "Phân công lại")" aria-label="@(task.AssignedStaffUserId is null ? "Phân công" : "Phân công lại")" @onclick="() => OpenAssignment(task)"><span class="material-symbols-outlined" aria-hidden="true">@(task.AssignedStaffUserId is null ? "person_add" : "manage_accounts")</span></button>
-                                <button type="button" class="fe07-row-action" title="Theo dõi tiến độ" aria-label="Theo dõi tiến độ" @onclick="() => OpenProgressMonitor(task.Id)"><span class="material-symbols-outlined" aria-hidden="true">monitoring</span></button>
-                                <button type="button" class="fe07-row-action" title="Chi tiết công việc" aria-label="Chi tiết công việc" @onclick="() => OpenTaskDetail(task.Id)"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button>
+                                <span class="fe07-row-action" aria-hidden="true"><span class="material-symbols-outlined">arrow_forward</span></span>
                             </div>
                         </article>
                     }
@@ -416,6 +414,11 @@
         </section>
     }
 </div>
+
+@if (PendingConfirmation is not null)
+{
+    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@ConfirmationMessage" ConfirmText="Có" CancelText="Không" Busy="@IsConfirmationBusy" BusyText="Đang xử lý…" OnConfirm="ConfirmPendingAction" OnCancel="CancelPendingAction" />
+}
 
 @if (IsDialogOpen)
 {
@@ -431,20 +434,7 @@
             <EditForm Model="Editor" OnValidSubmit="SaveSchedule">
                 <DataAnnotationsValidator />
                 <div class="fe07-form-grid">
-                    @if (EditingSchedule is null)
-                    {
-                        <div class="fe07-field">
-                            <label>Mã lịch <b>*</b></label>
-                            <InputText @bind-Value="Editor.ScheduleCode" placeholder="VD: LBT-GYMA-29092026" />
-                            <small class="fe07-field-hint">Quy ước: LBT-[TEN-DOITUONG]-[DDMMYY]</small>
-                            <ValidationMessage For="() => Editor.ScheduleCode" />
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="fe07-field"><label>Mã lịch</label><input value="@EditingSchedule.ScheduleCode" disabled /></div>
-                    }
-                    <div class="fe07-field">
+                    <div class="fe07-field fe07-wide">
                         <label>Tên lịch bảo trì <b>*</b></label>
                         <InputText @bind-Value="Editor.Title" placeholder="VD: Bảo trì hệ thống bơm nước" />
                         <ValidationMessage For="() => Editor.Title" />
@@ -455,16 +445,18 @@
                             <PropFlowDatePicker Value="ScheduleStartDate" ValueChanged="OnScheduleStartDateChanged" AriaLabel="Ngày bắt đầu lịch bảo trì" />
                             <input type="time" value="@ScheduleStartTimeString" @onchange="OnScheduleStartTimeChanged" aria-label="Giờ bắt đầu lịch bảo trì" />
                         </div>
+                        <ValidationMessage For="() => Editor.PlannedStartAt" />
                     </div>
                     <div class="fe07-field">
-                        <label>Thời điểm kết thúc</label>
+                        <label>Thời điểm kết thúc <b>*</b></label>
                         <div class="fe07-date-time-controls">
                             <PropFlowDatePicker Value="ScheduleEndDate" ValueChanged="OnScheduleEndDateChanged" AriaLabel="Ngày kết thúc lịch bảo trì" />
-                            <input type="time" value="@ScheduleEndTimeString" @onchange="OnScheduleEndTimeChanged" disabled="@(Editor.PlannedEndAt is null)" aria-label="Giờ kết thúc lịch bảo trì" />
+                            <input type="time" value="@ScheduleEndTimeString" @onchange="OnScheduleEndTimeChanged" aria-label="Giờ kết thúc lịch bảo trì" />
                         </div>
+                        <ValidationMessage For="() => Editor.PlannedEndAt" />
                     </div>
                     <div class="fe07-field">
-                        <label>Cơ sở vật chất <b>*</b></label>
+                        <label>Cơ sở vật chất</label>
                         <PropFlowSelect Options="ScheduleFacilityOptions" @bind-Value="EditorFacilityIdString" AriaLabel="Cơ sở vật chất bảo trì" Searchable="true" />
                         <ValidationMessage For="() => Editor.FacilityId" />
                     </div>
@@ -473,9 +465,14 @@
                         <PropFlowSelect Options="ScheduleEquipmentOptions" @bind-Value="EditorEquipmentIdString" AriaLabel="Thiết bị bảo trì" Searchable="true" />
                     </div>
                     <div class="fe07-field fe07-wide">
-                        <label>Mô tả</label>
-                        <textarea @bind="Editor.Description" rows="4" placeholder="Mô tả phạm vi hoặc lưu ý bảo trì (nếu có)"></textarea>
+                        <label>Mô tả <b>*</b></label>
+                        <InputTextArea @bind-Value="Editor.Description" rows="4" placeholder="Mô tả phạm vi hoặc lưu ý bảo trì" />
+                        <ValidationMessage For="() => Editor.Description" />
                     </div>
+                    @if (!string.IsNullOrWhiteSpace(ScheduleTimeError))
+                    {
+                        <div class="fe07-field fe07-wide"><span class="validation-message" role="alert">@ScheduleTimeError</span></div>
+                    }
                 </div>
                 <footer>
                     <button type="button" class="fe07-secondary" @onclick="CloseDialog" disabled="@IsSaving">Hủy</button>
@@ -525,22 +522,35 @@
         </header>
         <EditForm Model="TaskEditor" OnValidSubmit="SaveTask"><DataAnnotationsValidator />
           <div class="fe07-form-grid">
-            <div class="fe07-field">
-              <label>Mã công việc <b>*</b></label><InputText @bind-Value="TaskEditor.TaskNumber" placeholder="VD: CVBT-MAYBOMHIYORI-01-29092026, CVBT-GYM-01-29092026" /><ValidationMessage For="() => TaskEditor.TaskNumber" /><small class="fe07-field-hint">Quy ước: CVBT-[TENCSVC/LOAI+TENTB]-[STT]-[DDMMYY]</small>
-            </div>
+            <div class="fe07-field fe07-wide"><p class="fe07-field-hint">Mã sẽ được hệ thống tự động tạo khi lưu.</p></div>
             <div class="fe07-field">
               <label>Tiêu đề <b>*</b></label><InputText @bind-Value="TaskEditor.Title" /><ValidationMessage For="() => TaskEditor.Title" />
             </div>
-            <div class="fe07-field"><label>Ưu tiên</label><InputText @bind-Value="TaskEditor.PriorityCode" placeholder="Ví dụ: HIGH" /></div>
-            <div class="fe07-field wide">
-              <label>Mô tả</label><InputTextArea @bind-Value="TaskEditor.Description" rows="3" />
+            <div class="fe07-field"><label>Ưu tiên <b>*</b></label><PropFlowSelect Options="TaskPriorityOptions" @bind-Value="TaskEditor.PriorityCode" AriaLabel="Mức ưu tiên công việc bảo trì" /><ValidationMessage For="() => TaskEditor.PriorityCode" /></div>
+            <div class="fe07-field fe07-wide">
+              <label>Mô tả <b>*</b></label><InputTextArea @bind-Value="TaskEditor.Description" rows="3" disabled="@(TaskSourceSchedule is not null)" /><ValidationMessage For="() => TaskEditor.Description" />
             </div>
+            @if (MaintenanceFeatureFlags.ServiceRequestLinkingEnabled)
+            {
+            <div class="fe07-field wide fe07-service-request-picker">
+                <label>Yêu cầu dịch vụ liên quan</label>
+                @if (SelectedCreateServiceRequest is { } request)
+                {
+                    <div class="fe07-linked-request"><strong>@request.RequestNumber</strong><span>@request.Title</span><small>@ServiceRequestStatusLabel(request.Status)</small><button type="button" class="fe07-secondary" @onclick="ClearCreateServiceRequest">Bỏ chọn</button></div>
+                }
+                else
+                {
+                    <p>Không bắt buộc. Chỉ liên kết yêu cầu còn đủ điều kiện xử lý.</p>
+                    <button type="button" class="fe07-secondary" @onclick="OpenCreateServiceRequestPicker">Chọn yêu cầu dịch vụ</button>
+                }
+            </div>
+            }
             @if (TaskSourceSchedule is null)
             {
-                <div class="fe07-field"><label>Cơ sở vật chất</label><PropFlowSelect Options="MaintenanceFacilityOptions" @bind-Value="TaskFacilityIdString" AriaLabel="Cơ sở vật chất bảo trì" Searchable="true" /></div>
+                <div class="fe07-field"><label>Cơ sở vật chất <b>*</b></label><PropFlowSelect Options="MaintenanceFacilityOptions" @bind-Value="TaskFacilityIdString" AriaLabel="Cơ sở vật chất bảo trì" Searchable="true" />@if (TaskFacilityError is not null) { <span class="validation-message" role="alert">@TaskFacilityError</span> }</div>
                 <div class="fe07-field"><label>Thiết bị</label><PropFlowSelect Options="ManualTaskEquipmentOptions" @bind-Value="TaskEquipmentIdString" AriaLabel="Thiết bị bảo trì" Searchable="true" /></div>
-                <div class="fe07-field"><label>Thời điểm dự kiến</label><div class="fe07-date-time-controls"><PropFlowDatePicker Value="TaskStartDate" ValueChanged="OnTaskStartDateChanged" AriaLabel="Ngày dự kiến thực hiện" /><input type="time" value="@TaskStartTimeString" @onchange="OnTaskStartTimeChanged" disabled="@(TaskEditor.PlannedStartAt is null)" aria-label="Giờ dự kiến thực hiện" /></div></div>
-                <div class="fe07-field"><label>Hạn hoàn thành</label><div class="fe07-date-time-controls"><PropFlowDatePicker Value="TaskDueDate" ValueChanged="OnTaskDueDateChanged" AriaLabel="Ngày hạn hoàn thành" /><input type="time" value="@TaskDueTimeString" @onchange="OnTaskDueTimeChanged" disabled="@(TaskEditor.DueAt is null)" aria-label="Giờ hạn hoàn thành" /></div></div>
+                <div class="fe07-field"><label>Thời điểm dự kiến <b>*</b></label><div class="fe07-date-time-controls"><PropFlowDatePicker Value="TaskStartDate" ValueChanged="OnTaskStartDateChanged" AriaLabel="Ngày dự kiến thực hiện" /><input type="time" value="@TaskStartTimeString" @onchange="OnTaskStartTimeChanged" disabled="@(TaskStartDate is null)" aria-label="Giờ dự kiến thực hiện" /></div>@if (TaskPlannedStartError is not null) { <span class="validation-message" role="alert">@TaskPlannedStartError</span> }</div>
+                <div class="fe07-field"><label>Hạn hoàn thành <b>*</b></label><div class="fe07-date-time-controls"><PropFlowDatePicker Value="TaskDueDate" ValueChanged="OnTaskDueDateChanged" AriaLabel="Ngày hạn hoàn thành" /><input type="time" value="@TaskDueTimeString" @onchange="OnTaskDueTimeChanged" disabled="@(TaskDueDate is null)" aria-label="Giờ hạn hoàn thành" /></div>@if (TaskDueError is not null) { <span class="validation-message" role="alert">@TaskDueError</span> }</div>
             }
             else
             {
@@ -604,16 +614,16 @@
         <section class="fe07-dialog" role="dialog" aria-modal="true" aria-labelledby="assignment-dialog-title">
             <header>
                 <div>
-                    <h2 id="assignment-dialog-title">@(TaskForAssignment.AssignedStaffUserId is null ? "Phân công công việc" : "Phân công lại")</h2>
+                    <h2 id="assignment-dialog-title">@(HasCurrentAssignees(TaskForAssignment) ? "Phân công lại" : "Phân công công việc")</h2>
                     <p><b>@TaskForAssignment.TaskNumber</b> · @TaskForAssignment.Title</p>
                 </div>
                 <button class="fe07-close-button" type="button" @onclick="CloseAssignmentDialog" disabled="@IsAssignmentSaving" aria-label="Đóng">×</button>
             </header>
             <div class="fe07-form-grid">
-                @if (!string.IsNullOrWhiteSpace(TaskForAssignment.PriorityCode)) { <div class="fe07-field"><label>Ưu tiên</label><input value="@TaskForAssignment.PriorityCode" disabled /></div> }
+                @if (!string.IsNullOrWhiteSpace(TaskForAssignment.PriorityCode)) { <div class="fe07-field"><label>Ưu tiên</label><input value="@MaintenancePriority.DisplayName(TaskForAssignment.PriorityCode)" disabled /></div> }
                 <div class="fe07-field"><label>Đối tượng</label><input value="@TaskAssetContext(TaskForAssignment)" disabled /></div>
                 @if (TaskForAssignment.DueAt is { } due) { <div class="fe07-field"><label>Hạn hoàn thành</label><input value="@FormatDateTime(due)" disabled /></div> }
-                @if (TaskForAssignment.AssignedStaffUserId is not null) { <div class="fe07-field fe07-wide"><label>Nhân viên hiện tại</label><input value="@AssigneeLabel(TaskForAssignment)" disabled /></div> }
+                @if (HasCurrentAssignees(TaskForAssignment)) { <div class="fe07-field fe07-wide"><label>Nhân viên hiện tại</label><input value="@AssigneeLabel(TaskForAssignment)" disabled /></div> }
             </div>
             @if (IsStaffLoading)
             {
@@ -630,13 +640,22 @@
                     <div class="fe07-form-grid">
                         <div class="fe07-field fe07-wide">
                             <label>Nhân viên xử lý <b>*</b></label>
-                            <PropFlowSelect Options="SelectableStaffOptions" @bind-Value="AssignmentStaffIdString" AriaLabel="Nhân viên xử lý" Searchable="true" />
-                            <ValidationMessage For="@(() => AssignmentEditor.StaffUserId)" />
+                            <p class="fe07-assignment-guidance">Nhiều nhân viên cùng thực hiện một công việc và chia sẻ trạng thái, tiến độ, nghiệm thu chung. Nếu cần theo dõi riêng từng đầu việc, hãy tạo các công việc bảo trì riêng biệt.</p>
+                            <div class="fe07-assignee-picker" role="group" aria-label="Chọn nhân viên xử lý">
+                                @foreach (var staff in SelectableStaff)
+                                {
+                                    <label class="fe07-assignee-option">
+                                        <input type="checkbox" checked="@AssignmentEditor.StaffUserIds.Contains(staff.UserId)" @onchange="args => SetAssignmentStaff(staff.UserId, args.Value is true)" />
+                                        <span>@staff.DisplayName <small>(@staff.Username)</small></span>
+                                    </label>
+                                }
+                            </div>
+                            <ValidationMessage For="@(() => AssignmentEditor.StaffUserIds)" />
                         </div>
                     </div>
                     <footer>
                         <button type="button" class="fe07-secondary" @onclick="CloseAssignmentDialog" disabled="@IsAssignmentSaving">Hủy</button>
-                        <button type="submit" class="fe07-primary" disabled="@(IsAssignmentSaving || SelectableStaff.Count == 0)">@(IsAssignmentSaving ? "Đang lưu..." : TaskForAssignment.AssignedStaffUserId is null ? "Phân công" : "Phân công lại")</button>
+                        <button type="submit" class="fe07-primary" disabled="@(IsAssignmentSaving || SelectableStaff.Count == 0)">@(IsAssignmentSaving ? "Đang lưu..." : HasCurrentAssignees(TaskForAssignment) ? "Phân công lại" : "Phân công")</button>
                     </footer>
                 </EditForm>
             }
@@ -672,7 +691,7 @@
                                 <div class="fe07-stepper" role="list" aria-label="Tiến trình công việc bảo trì">
                                     @foreach (var step in ProgressSteps)
                                     {
-                                        <div role="listitem" class="@ProgressStepClass(step.Index, lifecycle.CurrentStep)"><span>@if (step.Index < lifecycle.CurrentStep) { <i class="material-symbols-outlined" aria-hidden="true">check</i> } else { @step.Index }</span><strong>@step.Label</strong></div>
+                                        <div role="listitem" class="@ProgressStepClass(step.Index, lifecycle)"><span>@if (lifecycle.IsStepCompleted(step.Index)) { <i class="material-symbols-outlined" aria-hidden="true">check</i> } else { @step.Index }</span><strong>@step.Label</strong></div>
                                     }
                                 </div>
                             }
@@ -687,12 +706,13 @@
                         <section class="fe07-progress-section">
                             <div class="fe07-progress-section-head"><h3>Hoạt động gần nhất</h3><span class="material-symbols-outlined" aria-hidden="true">history</span></div>
                             <p class="fe07-progress-activity">@LastActivityLabel(ProgressMonitor)</p>
+                            @if (!string.IsNullOrWhiteSpace(ProgressMonitor.LastProgressContent)) { <p class="fe07-progress-activity">@ProgressMonitor.LastProgressContent</p> }
                         </section>
                     </div>
                     <div class="fe07-progress-column">
                         <section class="fe07-progress-section">
                             <div class="fe07-progress-section-head"><h3>Tóm tắt công việc</h3><span class="material-symbols-outlined" aria-hidden="true">assignment</span></div>
-                            <dl class="fe07-progress-summary"><dt>Mã công việc</dt><dd>@ProgressMonitor.TaskNumber</dd><dt>Tiêu đề</dt><dd>@ProgressMonitor.Title</dd><dt>Nguồn</dt><dd>@(ProgressMonitor.ScheduleId is null ? "Công việc trực tiếp" : $"{ProgressMonitor.SourceScheduleCode ?? ProgressMonitor.ScheduleId.ToString()} · {ProgressMonitor.SourceScheduleTitle}")</dd><dt>Nhân viên xử lý</dt><dd>@AssigneeLabel(ProgressMonitor)</dd>@if (!string.IsNullOrWhiteSpace(ProgressMonitor.PriorityCode)) { <dt>Ưu tiên</dt><dd>@ProgressMonitor.PriorityCode</dd> }</dl>
+                            <dl class="fe07-progress-summary"><dt>Mã công việc</dt><dd>@ProgressMonitor.TaskNumber</dd><dt>Tiêu đề</dt><dd>@ProgressMonitor.Title</dd><dt>Nguồn</dt><dd>@(ProgressMonitor.ScheduleId is null ? "Công việc trực tiếp" : $"{ProgressMonitor.SourceScheduleCode ?? ProgressMonitor.ScheduleId.ToString()} · {ProgressMonitor.SourceScheduleTitle}")</dd><dt>Nhân viên xử lý</dt><dd>@AssigneeLabel(ProgressMonitor)</dd>@if (!string.IsNullOrWhiteSpace(ProgressMonitor.PriorityCode)) { <dt>Ưu tiên</dt><dd>@MaintenancePriority.DisplayName(ProgressMonitor.PriorityCode)</dd> }</dl>
                         </section>
                         <section class="fe07-progress-section">
                             <div class="fe07-progress-section-head"><h3>Thông tin tài sản &amp; vị trí</h3><span class="material-symbols-outlined" aria-hidden="true">domain</span></div>
@@ -781,7 +801,7 @@
                         <section class="fe07-history-detail-section"><div class="fe07-history-section-title"><span class="material-symbols-outlined" aria-hidden="true">groups</span><h3>Người thực hiện</h3></div>@if (!HistoryDetail.Assignments.Any()) { <p class="fe07-progress-activity">Chưa có nhân viên tham gia.</p> } else { <div class="fe07-history-staff-path">@foreach (var assignment in HistoryDetail.Assignments) { <div><strong>@HistoryStaffLabel(assignment.StaffDisplayName, assignment.StaffUsername)</strong><span>@AssignmentStatusLabel(assignment.Status) · @FormatDateTime(assignment.AssignedAt)</span></div> }</div> }</section>
                     </div>
                     <section class="fe07-history-detail-section fe07-history-results"><div class="fe07-history-section-title"><span class="material-symbols-outlined" aria-hidden="true">fact_check</span><h3>Kết quả bảo trì</h3></div>@if (!HistoryDetail.Results.Any()) { <p class="fe07-progress-activity">Chưa có kết quả thực hiện.</p> } else { <div class="fe07-history-result-cards">@foreach (var result in HistoryDetail.Results) { <article><div><span class="fe07-status @ResultStatusClass(result.ResultStatus)"><i></i>@ResultStatusLabel(result.ResultStatus)</span><time>@FormatDateTime(result.SubmittedAt)</time></div><strong>@result.Summary</strong>@if (!string.IsNullOrWhiteSpace(result.WorkPerformed)) { <p>@result.WorkPerformed</p> }@if (!string.IsNullOrWhiteSpace(result.IssueFound)) { <p><b>Vấn đề ghi nhận:</b> @result.IssueFound</p> }@if (!string.IsNullOrWhiteSpace(result.ReviewNote) || result.ReviewedAt is not null) { <section class="fe07-history-review"><span class="material-symbols-outlined" aria-hidden="true">rate_review</span><div><strong>Đánh giá của quản lý · @ResultStatusLabel(result.ResultStatus)</strong>@if (!string.IsNullOrWhiteSpace(result.ReviewNote)) { <p>@result.ReviewNote</p> }@if (result.ReviewedAt is { } reviewedAt) { <small>@FormatDateTime(reviewedAt)</small> }</div></section> }</article>}</div>}</section>
-                    <section class="fe07-history-detail-section"><div class="fe07-history-section-title"><span class="material-symbols-outlined" aria-hidden="true">timeline</span><h3>Nhật ký vận hành / dòng thời gian</h3></div><div class="fe07-history-timeline">@foreach (var entry in HistoryDetail.Timeline) { <div><time>@FormatDateTime(entry.OccurredAt)</time><p><strong>@TimelineLabel(entry)</strong>@if (!string.IsNullOrWhiteSpace(entry.Detail)) { <span>@entry.Detail</span> }</p></div>}</div></section>
+                    <section class="fe07-history-detail-section"><div class="fe07-history-section-title"><span class="material-symbols-outlined" aria-hidden="true">timeline</span><h3>Nhật ký vận hành / dòng thời gian</h3></div><div class="fe07-history-timeline">@foreach (var entry in HistoryDetail.Timeline.Where(entry => MaintenanceFeatureFlags.ServiceRequestLinkingEnabled || entry.ActivityType != MaintenanceActivityType.SERVICE_REQUEST_LINKED)) { <div><time>@FormatDateTime(entry.OccurredAt)</time><p><strong>@TimelineLabel(entry)</strong>@if (!string.IsNullOrWhiteSpace(entry.Detail)) { <span>@entry.Detail</span> }</p></div>}</div></section>
                 </div>
                 <footer><button type="button" class="fe07-secondary" @onclick="CloseHistoryDetail">Đóng</button></footer>
             }
@@ -811,17 +831,51 @@
                     <div><span>Nguồn lịch</span><strong>@(TaskDetail.ScheduleId is null ? "Công việc trực tiếp" : $"{TaskDetail.SourceScheduleCode ?? TaskDetail.ScheduleId.ToString()} · {TaskDetail.SourceScheduleTitle}")</strong></div>
                     <div><span>Thời gian dự kiến</span><strong>@(TaskDetail.PlannedStartAt is { } start ? InCurrentTimeZone(start).ToString("dd/MM/yyyy HH:mm") : "Chưa xác định")</strong></div>
                     <div><span>Hạn hoàn thành</span><strong>@(TaskDetail.DueAt is { } due ? InCurrentTimeZone(due).ToString("dd/MM/yyyy HH:mm") : "Chưa xác định")</strong></div>
-                    @if (!string.IsNullOrWhiteSpace(TaskDetail.PriorityCode)) { <div><span>Ưu tiên</span><strong>@TaskDetail.PriorityCode</strong></div> }
-                    <div class="wide fe07-assignment-detail"><span>Phân công</span><strong>@AssigneeLabel(TaskDetail)</strong>@if (TaskDetail.AssignedAt is { } assignedAt) { <small>Phân công lúc @InCurrentTimeZone(assignedAt).ToString("dd/MM/yyyy HH:mm")</small> }<button type="button" class="fe07-secondary" @onclick="() => OpenAssignment(TaskDetail, true)">@(TaskDetail.AssignedStaffUserId is null ? "Phân công" : "Phân công lại")</button></div>
+                    @if (!string.IsNullOrWhiteSpace(TaskDetail.PriorityCode)) { <div><span>Ưu tiên</span><strong>@MaintenancePriority.DisplayName(TaskDetail.PriorityCode)</strong></div> }
+                    <div class="wide fe07-assignment-detail"><span>Phân công</span><strong>@AssigneeLabel(TaskDetail)</strong>@if (TaskDetail.AssignedAt is { } assignedAt) { <small>Phân công lúc @InCurrentTimeZone(assignedAt).ToString("dd/MM/yyyy HH:mm")</small> }@if (TaskDetail.Status != MaintenanceTaskStatus.CLOSED) { <button type="button" class="fe07-secondary" @onclick="() => OpenAssignment(TaskDetail, true)">@(HasCurrentAssignees(TaskDetail) ? "Phân công lại" : "Phân công")</button> }</div>
+                    @if (MaintenanceFeatureFlags.ServiceRequestLinkingEnabled)
+                    {
+                    <div class="wide fe07-service-request-detail"><span>Yêu cầu dịch vụ liên quan</span>
+                        @if (TaskDetail.RelatedServiceRequest is { } request)
+                        {
+                            <strong>@request.RequestNumber · @request.Title</strong><small>Trạng thái: @ServiceRequestStatusLabel(request.Status)</small><small>Vị trí phát sinh: @(request.LocationDescription ?? "Chưa xác định")</small><small>Vị trí thực hiện bảo trì: @TaskAssetContext(TaskDetail)</small>@if (!string.IsNullOrWhiteSpace(request.ContextWarning)) { <p class="fe07-service-request-context is-warning">@request.ContextWarning</p> } else if (request.ContextMatch == "MATCHED") { <p class="fe07-service-request-context">Bối cảnh tài sản phù hợp.</p> } else if (request.ContextMatch == "INSUFFICIENT_DATA") { <p class="fe07-service-request-context">Chưa đủ dữ liệu để xác định sự phù hợp giữa yêu cầu dịch vụ và công việc bảo trì.</p> }<a class="fe07-secondary" href="@($"/manager/service-requests/{request.Id}")">Xem yêu cầu</a>
+                        }
+                        else if (TaskDetail.SourceServiceRequestId is not null)
+                        {
+                            <strong>Không thể tải thông tin yêu cầu dịch vụ liên quan.</strong><small>Mã tham chiếu: @TaskDetail.SourceServiceRequestId</small>
+                        }
+                        else
+                        {
+                            <strong>Chưa liên kết yêu cầu dịch vụ.</strong><button type="button" class="fe07-secondary" @onclick="() => OpenTaskServiceRequestPicker(TaskDetail.Id)">Liên kết yêu cầu</button>
+                        }
+                    </div>
+                    }
                     @if (!string.IsNullOrWhiteSpace(TaskDetail.Description)) { <div class="wide"><span>Mô tả</span><strong>@TaskDetail.Description</strong></div> }
                 </div>
-                <footer><button type="button" class="fe07-secondary" @onclick="CloseTaskDetail">Đóng</button><button type="button" class="fe07-primary" @onclick="EditTaskAssets">Chỉnh sửa đối tượng</button></footer>
+                <footer><button type="button" class="fe07-secondary" @onclick="CloseTaskDetail">Đóng</button>@if (TaskDetail.Status != MaintenanceTaskStatus.CLOSED) { <button type="button" class="fe07-primary" @onclick="EditTaskAssets">Chỉnh sửa đối tượng</button> }</footer>
             }
         </section>
     </div>
 }
 
+@if (MaintenanceFeatureFlags.ServiceRequestLinkingEnabled && IsServiceRequestPickerOpen)
+{
+    <div class="fe07-dialog-backdrop" role="presentation">
+        <section class="fe07-dialog fe07-service-request-dialog" role="dialog" aria-modal="true" aria-labelledby="service-request-picker-title">
+            <header><div><h2 id="service-request-picker-title">Liên kết yêu cầu dịch vụ</h2><p>Tìm theo mã hoặc tiêu đề yêu cầu dịch vụ.</p></div><button class="fe07-close-button" type="button" @onclick="CloseServiceRequestPicker" disabled="@IsServiceRequestPickerLoading" aria-label="Đóng">×</button></header>
+            <div class="fe07-service-request-search"><input type="search" @bind="ServiceRequestSearch" @bind:event="oninput" placeholder="Tìm mã hoặc tiêu đề..." aria-label="Tìm yêu cầu dịch vụ" /><button class="fe07-secondary" type="button" @onclick="LoadServiceRequestCandidatesAsync" disabled="@IsServiceRequestPickerLoading">Tìm</button></div>
+            @if (IsServiceRequestPickerLoading) { <p class="fe07-dialog-note" role="status">Đang tải yêu cầu dịch vụ…</p> }
+            else if (!string.IsNullOrWhiteSpace(ServiceRequestPickerError)) { <p class="fe07-dialog-note" role="alert">@ServiceRequestPickerError</p> }
+            else if (ServiceRequestCandidates.Count == 0) { <p class="fe07-dialog-note">Không có yêu cầu dịch vụ đủ điều kiện liên kết.</p> }
+            else { <div class="fe07-service-request-candidates">@foreach (var request in ServiceRequestCandidates) { var context = CandidateContext(request); <button type="button" class="@(SelectedServiceRequestId == request.Id ? "is-selected" : null)" @onclick="() => SelectedServiceRequestId = request.Id" disabled="@(!request.IsLinkable)"><strong>@request.RequestNumber</strong><span>@request.Title</span><small>@ServiceRequestStatusLabel(request.Status)</small><div class="fe07-service-request-context @(context.Match == "DIFFERENT_CONTEXT" ? "is-warning" : null)"><span>Vị trí phát sinh: @RequestLocation(request)</span><span>Vị trí thực hiện: @context.TaskLocation</span><span>@context.Message</span></div>@if (!request.IsLinkable) { <em>Không đủ điều kiện</em> }</button> }</div> }
+            <footer><button type="button" class="fe07-secondary" @onclick="CloseServiceRequestPicker" disabled="@IsServiceRequestPickerLoading">Hủy</button><button type="button" class="fe07-primary" @onclick="SelectServiceRequest" disabled="@(SelectedServiceRequestId is null || IsServiceRequestPickerLoading)">Liên kết</button></footer>
+        </section>
+    </div>
+}
+
 @code {
+    [SupplyParameterFromQuery(Name = "workspace")]
+    public string? Workspace { get; set; }
     private readonly CancellationTokenSource cts = new();
     private Page<ScheduleModel> Schedules { get; set; } = new([], 0, 1, 20);
     private ScheduleFilterModel Filter { get; set; } = new();
@@ -832,6 +886,9 @@
     private bool IsLoading { get; set; } = true;
     private bool IsTasksLoading { get; set; }
     private bool IsSaving { get; set; }
+    private Func<Task>? PendingConfirmation { get; set; }
+    private string ConfirmationMessage { get; set; } = string.Empty;
+    private bool IsConfirmationBusy => IsSaving || IsTaskSaving || IsAssetAssociationSaving || IsAssignmentSaving || IsReviewSaving || IsExtendingSchedule;
     private bool IsDialogOpen { get; set; }
     private ScheduleModel? ScheduleToExtend { get; set; }
     private ExtendScheduleModel ExtendScheduleEditor { get; set; } = new();
@@ -844,6 +901,9 @@
     private CreateMaintenanceTaskModel TaskEditor { get; set; } = new();
     private bool IsTaskDialogOpen { get; set; }
     private bool IsTaskSaving { get; set; }
+    private string? TaskFacilityError { get; set; }
+    private string? TaskPlannedStartError { get; set; }
+    private string? TaskDueError { get; set; }
     private string? TaskSourceLabel { get; set; }
     private ScheduleModel? TaskSourceSchedule { get; set; }
     private MaintenanceTaskModel? TaskForAssetAssociation { get; set; }
@@ -853,6 +913,14 @@
     private MaintenanceTaskModel? TaskDetail { get; set; }
     private bool IsTaskDetailOpen { get; set; }
     private bool IsTaskDetailLoading { get; set; }
+    private bool IsServiceRequestPickerOpen { get; set; }
+    private bool IsServiceRequestPickerLoading { get; set; }
+    private Guid? ServiceRequestPickerTaskId { get; set; }
+    private string ServiceRequestSearch { get; set; } = string.Empty;
+    private string? ServiceRequestPickerError { get; set; }
+    private IReadOnlyList<ServiceRequestMaintenanceReference> ServiceRequestCandidates { get; set; } = [];
+    private Guid? SelectedServiceRequestId { get; set; }
+    private ServiceRequestMaintenanceReference? SelectedCreateServiceRequest { get; set; }
     private MaintenanceTaskModel? ProgressMonitor { get; set; }
     private bool IsProgressMonitorOpen { get; set; }
     private bool IsProgressMonitorLoading { get; set; }
@@ -861,6 +929,7 @@
     private MaintenanceTaskModel? TaskForAssignment { get; set; }
     private IReadOnlyList<AssignableMaintenanceStaffModel> AssignableStaff { get; set; } = [];
     private AssignMaintenanceTaskModel AssignmentEditor { get; set; } = new();
+    private string AssignmentStaffSearch { get; set; } = string.Empty;
     private bool IsAssignmentDialogOpen { get; set; }
     private bool IsAssignmentSaving { get; set; }
     private bool IsStaffLoading { get; set; }
@@ -889,14 +958,23 @@
     private DateOnly WeekStart { get; set; }
     private string ViewMode { get; set; } = "timeline";
     private DateTimeOffset CurrentTime => InCurrentTimeZone(DateTimeOffset.UtcNow);
-    private DateOnly? ScheduleStartDate { get => DatePart(Editor.PlannedStartAt); set { if (value is { } date) Editor.PlannedStartAt = CombineLocalDateTime(date, TimePart(Editor.PlannedStartAt)); } }
-    private DateOnly? ScheduleEndDate { get => Editor.PlannedEndAt is { } value ? DatePart(value) : null; set => Editor.PlannedEndAt = value is { } date ? CombineLocalDateTime(date, Editor.PlannedEndAt is { } end ? TimePart(end) : TimePart(Editor.PlannedStartAt)) : null; }
-    private string ScheduleStartTimeString { get => TimePart(Editor.PlannedStartAt).ToString("HH:mm"); set { if (TryParseTime(value, out var time)) Editor.PlannedStartAt = CombineLocalDateTime(DatePart(Editor.PlannedStartAt), time); } }
-    private string ScheduleEndTimeString { get => Editor.PlannedEndAt is { } value ? TimePart(value).ToString("HH:mm") : string.Empty; set { if (TryParseTime(value, out var time) && Editor.PlannedEndAt is { } end) Editor.PlannedEndAt = CombineLocalDateTime(DatePart(end), time); } }
-    private DateOnly? TaskStartDate { get => TaskEditor.PlannedStartAt is { } value ? DatePart(value) : null; set => TaskEditor.PlannedStartAt = value is { } date ? CombineLocalDateTime(date, TaskEditor.PlannedStartAt is { } start ? TimePart(start) : TimePart(CurrentTime)) : null; }
-    private DateOnly? TaskDueDate { get => TaskEditor.DueAt is { } value ? DatePart(value) : null; set => TaskEditor.DueAt = value is { } date ? CombineLocalDateTime(date, TaskEditor.DueAt is { } due ? TimePart(due) : TimePart(TaskEditor.PlannedStartAt ?? CurrentTime)) : null; }
-    private string TaskStartTimeString { get => TaskEditor.PlannedStartAt is { } value ? TimePart(value).ToString("HH:mm") : string.Empty; set { if (TryParseTime(value, out var time) && TaskEditor.PlannedStartAt is { } start) TaskEditor.PlannedStartAt = CombineLocalDateTime(DatePart(start), time); } }
-    private string TaskDueTimeString { get => TaskEditor.DueAt is { } value ? TimePart(value).ToString("HH:mm") : string.Empty; set { if (TryParseTime(value, out var time) && TaskEditor.DueAt is { } due) TaskEditor.DueAt = CombineLocalDateTime(DatePart(due), time); } }
+    private DateOnly? scheduleStartDate;
+    private TimeOnly? scheduleStartTime;
+    private DateOnly? scheduleEndDate;
+    private TimeOnly? scheduleEndTime;
+    private DateOnly? taskStartDate;
+    private TimeOnly? taskStartTime;
+    private DateOnly? taskDueDate;
+    private TimeOnly? taskDueTime;
+    private string? ScheduleTimeError { get; set; }
+    private DateOnly? ScheduleStartDate { get => scheduleStartDate; set { scheduleStartDate = value; SyncScheduleStart(); } }
+    private DateOnly? ScheduleEndDate { get => scheduleEndDate; set { scheduleEndDate = value; SyncScheduleEnd(); } }
+    private string ScheduleStartTimeString { get => scheduleStartTime?.ToString("HH:mm") ?? string.Empty; set { scheduleStartTime = TryParseTime(value, out var time) ? time : null; SyncScheduleStart(); } }
+    private string ScheduleEndTimeString { get => scheduleEndTime?.ToString("HH:mm") ?? string.Empty; set { scheduleEndTime = TryParseTime(value, out var time) ? time : null; SyncScheduleEnd(); } }
+    private DateOnly? TaskStartDate { get => taskStartDate; set { taskStartDate = value; SyncTaskStart(); } }
+    private DateOnly? TaskDueDate { get => taskDueDate; set { taskDueDate = value; SyncTaskDue(); } }
+    private string TaskStartTimeString { get => taskStartTime?.ToString("HH:mm") ?? string.Empty; set { taskStartTime = TryParseTime(value, out var time) ? time : null; SyncTaskStart(); } }
+    private string TaskDueTimeString { get => taskDueTime?.ToString("HH:mm") ?? string.Empty; set { taskDueTime = TryParseTime(value, out var time) ? time : null; SyncTaskDue(); } }
     private Task OnScheduleStartDateChanged(DateOnly? value) { ScheduleStartDate = value; return Task.CompletedTask; }
     private Task OnScheduleEndDateChanged(DateOnly? value) { ScheduleEndDate = value; return Task.CompletedTask; }
     private Task OnTaskStartDateChanged(DateOnly? value) { TaskStartDate = value; return Task.CompletedTask; }
@@ -905,6 +983,46 @@
     private void OnScheduleEndTimeChanged(ChangeEventArgs args) => ScheduleEndTimeString = args.Value?.ToString() ?? string.Empty;
     private void OnTaskStartTimeChanged(ChangeEventArgs args) => TaskStartTimeString = args.Value?.ToString() ?? string.Empty;
     private void OnTaskDueTimeChanged(ChangeEventArgs args) => TaskDueTimeString = args.Value?.ToString() ?? string.Empty;
+    private void SyncScheduleStart() => Editor.PlannedStartAt = scheduleStartDate is { } date && scheduleStartTime is { } time ? CombineLocalDateTime(date, time) : null;
+    private void SyncScheduleEnd() => Editor.PlannedEndAt = scheduleEndDate is { } date && scheduleEndTime is { } time ? CombineLocalDateTime(date, time) : null;
+    private void SyncTaskStart() => TaskEditor.PlannedStartAt = taskStartDate is { } date && taskStartTime is { } time ? CombineLocalDateTime(date, time) : null;
+    private void SyncTaskDue() => TaskEditor.DueAt = taskDueDate is { } date && taskDueTime is { } time ? CombineLocalDateTime(date, time) : null;
+    private void SetScheduleDateTimeInputs(DateTimeOffset? start, DateTimeOffset? end)
+    {
+        scheduleStartDate = start is { } startValue ? DatePart(startValue) : null;
+        scheduleStartTime = start is { } startTimeValue ? TimePart(startTimeValue) : null;
+        scheduleEndDate = end is { } endValue ? DatePart(endValue) : null;
+        scheduleEndTime = end is { } endTimeValue ? TimePart(endTimeValue) : null;
+    }
+    private void SetTaskDateTimeInputs(DateTimeOffset? start, DateTimeOffset? due)
+    {
+        taskStartDate = start is { } startValue ? DatePart(startValue) : null;
+        taskStartTime = start is { } startTimeValue ? TimePart(startTimeValue) : null;
+        taskDueDate = due is { } dueValue ? DatePart(dueValue) : null;
+        taskDueTime = due is { } dueTimeValue ? TimePart(dueTimeValue) : null;
+    }
+    private bool TryGetScheduleRange(out DateTimeOffset start, out DateTimeOffset end)
+    {
+        start = default;
+        end = default;
+        ScheduleTimeError = null;
+
+        if (Editor.PlannedStartAt is not { } plannedStart || Editor.PlannedEndAt is not { } plannedEnd)
+        {
+            ScheduleTimeError = "Vui lòng chọn đầy đủ ngày và giờ bắt đầu, kết thúc.";
+            return false;
+        }
+
+        if (plannedEnd <= plannedStart)
+        {
+            ScheduleTimeError = "Thời điểm kết thúc phải sau thời điểm bắt đầu.";
+            return false;
+        }
+
+        start = plannedStart;
+        end = plannedEnd;
+        return true;
+    }
     private DateOnly Today => DateOnly.FromDateTime(CurrentTime.DateTime);
     private DateOnly WeekEnd => WeekStart.AddDays(6);
     private IReadOnlyList<DateOnly> WeekDays => Enumerable.Range(0, 7).Select(WeekStart.AddDays).ToList();
@@ -957,7 +1075,6 @@
     private string TaskEquipmentIdString { get => TaskEditor.EquipmentId?.ToString() ?? string.Empty; set => SetTaskEquipment(value); }
     private string AssociationFacilityIdString { get => AssetAssociationEditor.FacilityId?.ToString() ?? string.Empty; set { AssetAssociationEditor.FacilityId = ParseId(value); ClearUnmatchedEquipment(AssetAssociationEditor.FacilityId, id => AssetAssociationEditor.EquipmentId = id, AssetAssociationEditor.EquipmentId); } }
     private string AssociationEquipmentIdString { get => AssetAssociationEditor.EquipmentId?.ToString() ?? string.Empty; set => SetAssociationEquipment(value); }
-    private string AssignmentStaffIdString { get => AssignmentEditor.StaffUserId?.ToString() ?? string.Empty; set => AssignmentEditor.StaffUserId = ParseId(value); }
 
     private IReadOnlyList<PropFlowSelectOption> ScheduleStatusOptions => [new("", "Tất cả trạng thái"), .. Enum.GetValues<MaintenanceScheduleStatus>().Select(status => new PropFlowSelectOption(status.ToString(), StatusLabel(status)))];
     private static readonly IReadOnlyList<PropFlowSelectOption> ExtensionUnitOptions = [new("minute", "Phút"), new("hour", "Giờ"), new("day", "Ngày")];
@@ -973,7 +1090,8 @@
     private IReadOnlyList<PropFlowSelectOption> AssignableStaffOptions => [new("", IsTaskFilterStaffLoading ? "Đang tải nhân viên…" : "Tất cả nhân viên"), .. AssignableStaff.Select(staff => new PropFlowSelectOption(staff.UserId.ToString(), $"{staff.DisplayName} ({staff.Username})"))];
     private IReadOnlyList<PropFlowSelectOption> SelectableStaffOptions => [new("", "Chọn nhân viên"), .. SelectableStaff.Select(staff => new PropFlowSelectOption(staff.UserId.ToString(), $"{staff.DisplayName} ({staff.Username})"))];
     private IReadOnlyList<PropFlowSelectOption> ScheduleFacilityOptions => AssetOptions(IncludeSelected(Facilities, Editor.FacilityId), "Chọn cơ sở vật chất");
-    private IReadOnlyList<PropFlowSelectOption> MaintenanceFacilityOptions => AssetOptions(IncludeSelected(MaintenanceFacilities, TaskEditor.FacilityId), "Không chọn");
+    private IReadOnlyList<PropFlowSelectOption> MaintenanceFacilityOptions => AssetOptions(IncludeSelected(MaintenanceFacilities, TaskEditor.FacilityId), "Chọn cơ sở vật chất");
+    private static readonly IReadOnlyList<PropFlowSelectOption> TaskPriorityOptions = [new("", "Chọn mức ưu tiên"), new("HIGH", "Cao"), new("MEDIUM", "Trung bình"), new("LOW", "Thấp")];
     private IReadOnlyList<PropFlowSelectOption> ScheduleEquipmentOptions => AssetOptions(IncludeSelected(EquipmentFor(Editor.FacilityId), Editor.EquipmentId), "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> ManualTaskEquipmentOptions => AssetOptions(EquipmentForManualTask, "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> AllFacilityOptions => AssetOptions(Facilities, "Không chọn");
@@ -1002,8 +1120,12 @@
         ? $"Tuần này: {WeekStart:dd/MM} – {WeekEnd.ToString("dd/MM/yyyy", VietnameseCulture)}"
         : $"Tuần: {WeekStart:dd/MM} – {WeekEnd.ToString("dd/MM/yyyy", VietnameseCulture)}";
 
+    private HubConnection? _hubConnection;
+
     protected override async Task OnInitializedAsync()
     {
+        if (string.Equals(Workspace, "tasks", StringComparison.OrdinalIgnoreCase))
+            IsScheduleWorkspace = false;
         var assetsTask = MaintenanceApi.AssetsAsync(cts.Token);
         var buildingTask = BuildingApi.GetCurrentBuildingOverviewAsync(cts.Token);
         var building = await buildingTask;
@@ -1011,10 +1133,66 @@
         WeekStart = StartOfWeek(Today);
         SelectedDate = Today;
         await LoadSchedules();
+        if (!IsScheduleWorkspace && !IsHistoryWorkspace)
+            await LoadTasks();
         var assets = await assetsTask;
         if (assets.IsSuccess && assets.Data is not null) Assets = assets.Data;
         else ErrorMessage ??= assets.Message ?? "Không thể tải danh sách tài sản.";
         IsAssetsLoading = false;
+        _ = ConnectMaintenanceHubAsync();
+    }
+
+    private async Task ConnectMaintenanceHubAsync()
+    {
+        try
+        {
+            var hub = MaintenanceHubConnectionFactory.Create();
+            hub.On<Guid>("MaintenanceTaskUpdated", taskId =>
+            {
+                return InvokeAsync(async () =>
+                {
+                    await RefreshTasksForRealtimeAsync(taskId);
+                    StateHasChanged();
+                });
+            });
+            hub.Reconnected += _ => InvokeAsync(async () =>
+            {
+                await RefreshTasksForRealtimeAsync();
+                StateHasChanged();
+            });
+            await hub.StartAsync(cts.Token);
+            _hubConnection = hub;
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            // Realtime refresh is optional; a hub outage must never block Maintenance data loading.
+        }
+    }
+
+    private async Task RefreshTasksForRealtimeAsync(Guid? taskId = null)
+    {
+        if (IsHistoryWorkspace)
+        {
+            await LoadHistory();
+            return;
+        }
+
+        if (IsScheduleWorkspace)
+            return;
+
+        await LoadTasks();
+        if (taskId is { } id && ((IsProgressMonitorOpen && ProgressMonitor?.Id == id) || (IsTaskDetailOpen && TaskDetail?.Id == id)))
+        {
+            var result = await MaintenanceApi.TaskAsync(id, cts.Token);
+            if (result.IsSuccess && result.Data is not null)
+            {
+                if (IsProgressMonitorOpen && ProgressMonitor?.Id == id) ProgressMonitor = result.Data;
+                if (IsTaskDetailOpen && TaskDetail?.Id == id) TaskDetail = result.Data;
+            }
+        }
     }
 
     private async Task LoadSchedules()
@@ -1143,13 +1321,35 @@
         PageIndex = HistoryFilter.PageIndex,
         PageSize = HistoryFilter.PageSize
     };
-    private void OpenCreateDialog() { EditingSchedule = null; Editor = new CreateScheduleModel(); IsDialogOpen = true; ErrorMessage = null; }
-    private void OpenManualTask() { TaskEditor = new CreateMaintenanceTaskModel(); TaskSourceLabel = null; TaskSourceSchedule = null; IsTaskDialogOpen = true; ErrorMessage = null; }
-    private void OpenTaskForSchedule(ScheduleModel schedule) { TaskEditor = new CreateMaintenanceTaskModel { ScheduleId = schedule.Id, Title = schedule.Title, Description = schedule.Description }; TaskSourceLabel = $"{schedule.ScheduleCode} · {schedule.Title}"; TaskSourceSchedule = schedule; IsTaskDialogOpen = true; ErrorMessage = null; }
-    private void CloseTaskDialog() { if (!IsTaskSaving) IsTaskDialogOpen = false; }
-    private async Task SaveTask()
+    private void OpenCreateDialog()
     {
-        if (TaskSourceSchedule is null && TaskEditor.DueAt is not null && TaskEditor.PlannedStartAt is not null && TaskEditor.DueAt < TaskEditor.PlannedStartAt) { ErrorMessage = "Hạn hoàn thành phải sau thời điểm dự kiến."; return; }
+        EditingSchedule = null;
+        Editor = new CreateScheduleModel();
+        SetScheduleDateTimeInputs(null, null);
+        ScheduleTimeError = null;
+        IsDialogOpen = true;
+        ErrorMessage = null;
+    }
+    private void OpenManualTask() { TaskEditor = new CreateMaintenanceTaskModel(); SetTaskDateTimeInputs(null, null); ClearTaskValidationErrors(); SelectedCreateServiceRequest = null; TaskSourceLabel = null; TaskSourceSchedule = null; IsTaskDialogOpen = true; ErrorMessage = null; }
+    private void OpenTaskForSchedule(ScheduleModel schedule) { TaskEditor = new CreateMaintenanceTaskModel { ScheduleId = schedule.Id, Title = schedule.Title, Description = schedule.Description }; SetTaskDateTimeInputs(null, null); ClearTaskValidationErrors(); SelectedCreateServiceRequest = null; TaskSourceLabel = $"{schedule.ScheduleCode} · {schedule.Title}"; TaskSourceSchedule = schedule; IsTaskDialogOpen = true; ErrorMessage = null; }
+    private void CloseTaskDialog() { if (!IsTaskSaving) IsTaskDialogOpen = false; }
+    private void SaveTask()
+    {
+        if (TaskSourceSchedule is null && !ValidateManualTask()) return;
+        RequestConfirmation(TaskSourceSchedule is null ? "Bạn có muốn tạo công việc bảo trì này không?" : "Bạn có muốn tạo công việc từ lịch bảo trì này không?", ConfirmSaveTask);
+    }
+    private bool ValidateManualTask()
+    {
+        ClearTaskValidationErrors();
+        if (TaskEditor.FacilityId is not { } facilityId || facilityId == Guid.Empty) TaskFacilityError = "Vui lòng chọn cơ sở vật chất.";
+        if (TaskEditor.PlannedStartAt is null) TaskPlannedStartError = "Vui lòng chọn thời điểm dự kiến.";
+        if (TaskEditor.DueAt is null) TaskDueError = "Vui lòng chọn hạn hoàn thành.";
+        else if (TaskEditor.PlannedStartAt is { } plannedStart && TaskEditor.DueAt <= plannedStart) TaskDueError = "Hạn hoàn thành phải sau thời điểm dự kiến.";
+        return TaskFacilityError is null && TaskPlannedStartError is null && TaskDueError is null;
+    }
+    private void ClearTaskValidationErrors() { TaskFacilityError = null; TaskPlannedStartError = null; TaskDueError = null; }
+    private async Task ConfirmSaveTask()
+    {
         IsTaskSaving = true;
         var result = await MaintenanceApi.CreateTaskAsync(TaskEditor, cts.Token);
         IsTaskSaving = false;
@@ -1168,6 +1368,76 @@
             TaskForAssetAssociation = null;
         }
         if (!IsScheduleWorkspace && !IsHistoryWorkspace) await LoadTasks();
+    }
+    private void OpenCreateServiceRequestPicker()
+    {
+        ServiceRequestPickerTaskId = null;
+        OpenServiceRequestPicker();
+    }
+    private void OpenTaskServiceRequestPicker(Guid taskId)
+    {
+        ServiceRequestPickerTaskId = taskId;
+        OpenServiceRequestPicker();
+    }
+    private void OpenServiceRequestPicker()
+    {
+        ServiceRequestSearch = string.Empty;
+        ServiceRequestPickerError = null;
+        ServiceRequestCandidates = [];
+        SelectedServiceRequestId = null;
+        IsServiceRequestPickerOpen = true;
+        _ = LoadServiceRequestCandidatesAsync();
+    }
+    private void CloseServiceRequestPicker()
+    {
+        if (!IsServiceRequestPickerLoading)
+        {
+            IsServiceRequestPickerOpen = false;
+            ServiceRequestPickerTaskId = null;
+        }
+    }
+    private async Task LoadServiceRequestCandidatesAsync()
+    {
+        IsServiceRequestPickerLoading = true;
+        ServiceRequestPickerError = null;
+        var result = await ServiceRequestApi.SearchLinkCandidatesAsync(ServiceRequestSearch, ct: cts.Token);
+        IsServiceRequestPickerLoading = false;
+        if (result.IsSuccess && result.Data is not null) ServiceRequestCandidates = result.Data;
+        else ServiceRequestPickerError = result.Message ?? "Không thể tải danh sách yêu cầu dịch vụ.";
+    }
+    private void SelectServiceRequest()
+    {
+        var request = ServiceRequestCandidates.FirstOrDefault(item => item.Id == SelectedServiceRequestId && item.IsLinkable);
+        if (request is null) { ServiceRequestPickerError = "Vui lòng chọn yêu cầu dịch vụ đủ điều kiện liên kết."; return; }
+        if (ServiceRequestPickerTaskId is null)
+        {
+            TaskEditor.ServiceRequestId = request.Id;
+            SelectedCreateServiceRequest = request;
+            IsServiceRequestPickerOpen = false;
+            return;
+        }
+        RequestConfirmation($"Bạn có chắc chắn muốn liên kết công việc bảo trì này với yêu cầu dịch vụ {request.RequestNumber} không?", () => ConfirmLinkTaskServiceRequest(ServiceRequestPickerTaskId.Value, request.Id));
+    }
+    private async Task ConfirmLinkTaskServiceRequest(Guid taskId, Guid serviceRequestId)
+    {
+        IsServiceRequestPickerLoading = true;
+        var result = await MaintenanceApi.LinkTaskServiceRequestAsync(taskId, new() { ServiceRequestId = serviceRequestId }, cts.Token);
+        IsServiceRequestPickerLoading = false;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            ServiceRequestPickerError = result.Message ?? "Không thể liên kết yêu cầu dịch vụ.";
+            return;
+        }
+        TaskDetail = result.Data;
+        IsServiceRequestPickerOpen = false;
+        ServiceRequestPickerTaskId = null;
+        SuccessMessage = "Đã liên kết yêu cầu dịch vụ với công việc bảo trì.";
+        if (!IsScheduleWorkspace && !IsHistoryWorkspace) await LoadTasks();
+    }
+    private void ClearCreateServiceRequest()
+    {
+        TaskEditor.ServiceRequestId = null;
+        SelectedCreateServiceRequest = null;
     }
     private void OpenAssetAssociationDialog()
     {
@@ -1189,7 +1459,11 @@
     private async Task OpenAssignment(MaintenanceTaskModel task, bool returnToDetail = false)
     {
         TaskForAssignment = task;
-        AssignmentEditor = new AssignMaintenanceTaskModel();
+        AssignmentEditor = new AssignMaintenanceTaskModel
+        {
+            StaffUserIds = CurrentAssigneeIds(task).ToList()
+        };
+        AssignmentStaffSearch = string.Empty;
         ReturnToTaskDetailAfterAssignment = returnToDetail;
         IsAssignmentDialogOpen = true;
         if (returnToDetail) IsTaskDetailOpen = false;
@@ -1207,11 +1481,17 @@
         TaskForAssignment = null;
         ReturnToTaskDetailAfterAssignment = false;
     }
-    private async Task SaveAssignment()
+    private void SaveAssignment()
     {
-        if (TaskForAssignment is null || AssignmentEditor.StaffUserId is null) return;
+        if (TaskForAssignment is null || AssignmentEditor.StaffUserIds.Count == 0) return;
+        RequestConfirmation(HasCurrentAssignees(TaskForAssignment) ? "Bạn có muốn cập nhật nhóm nhân viên xử lý công việc này không?" : "Bạn có muốn phân công công việc này không?", ConfirmSaveAssignment);
+    }
+    private async Task ConfirmSaveAssignment()
+    {
+        if (TaskForAssignment is null) return;
+        var task = TaskForAssignment;
         IsAssignmentSaving = true;
-        var result = await MaintenanceApi.AssignTaskAsync(TaskForAssignment.Id, AssignmentEditor, cts.Token);
+        var result = await MaintenanceApi.AssignTaskAsync(task.Id, AssignmentEditor, cts.Token);
         IsAssignmentSaving = false;
         if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể phân công công việc."; return; }
         var assignedTask = result.Data!;
@@ -1236,6 +1516,16 @@
         else { IsTaskDetailOpen = false; ErrorMessage = result.Message ?? "Không thể tải chi tiết công việc."; }
     }
     private void CloseTaskDetail() { if (!IsTaskDetailLoading) IsTaskDetailOpen = false; }
+    private void NavigateToTask(Guid taskId) => Navigation.NavigateTo($"/maintenance/tasks/{taskId}");
+    private void NavigateTaskOnKey(KeyboardEventArgs args, Guid taskId)
+    {
+        if (args.Key is "Enter" or " ") NavigateToTask(taskId);
+    }
+    private static string ServiceRequestStatusLabel(string status) => status switch
+    {
+        "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công",
+        "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status
+    };
     private async Task OpenHistoryDetail(Guid taskId)
     {
         IsHistoryDetailLoading = true;
@@ -1256,8 +1546,8 @@
         else { IsProgressMonitorOpen = false; ErrorMessage = result.Message ?? "Không thể tải thông tin theo dõi tiến độ."; }
     }
     private void CloseProgressMonitor() { if (!IsProgressMonitorLoading) IsProgressMonitorOpen = false; }
-    private async Task ApproveAndClose() => await ReviewResult("approve");
-    private async Task RequestRevision() => await ReviewResult("request-revision");
+    private void ApproveAndClose() => RequestConfirmation("Bạn có muốn chấp nhận kết quả và đóng công việc này không?", () => ReviewResult("approve"));
+    private void RequestRevision() => RequestConfirmation("Bạn có muốn yêu cầu nhân viên xử lý thêm không?", () => ReviewResult("request-revision"));
     private async Task ReviewResult(string decision)
     {
         if (ProgressMonitor?.LatestResult is null) return;
@@ -1286,7 +1576,7 @@
         IsTaskDetailOpen = false;
         OpenAssetAssociationDialog();
     }
-    private async Task SaveAssetAssociation()
+    private void SaveAssetAssociation()
     {
         if (TaskForAssetAssociation is null) return;
         if (AssetAssociationEditor.FacilityId is null && AssetAssociationEditor.EquipmentId is null)
@@ -1294,8 +1584,14 @@
             ErrorMessage = "Vui lòng chọn cơ sở vật chất hoặc thiết bị.";
             return;
         }
+        RequestConfirmation("Bạn có muốn lưu liên kết tài sản cho công việc này không?", ConfirmSaveAssetAssociation);
+    }
+    private async Task ConfirmSaveAssetAssociation()
+    {
+        if (TaskForAssetAssociation is null) return;
+        var task = TaskForAssetAssociation;
         IsAssetAssociationSaving = true;
-        var result = await MaintenanceApi.AssociateTaskAssetAsync(TaskForAssetAssociation.Id, AssetAssociationEditor, cts.Token);
+        var result = await MaintenanceApi.AssociateTaskAssetAsync(task.Id, AssetAssociationEditor, cts.Token);
         IsAssetAssociationSaving = false;
         if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể gắn tài sản cho công việc bảo trì."; return; }
         TaskForAssetAssociation = result.Data!;
@@ -1309,7 +1605,6 @@
         EditingSchedule = schedule;
         Editor = new CreateScheduleModel
         {
-            ScheduleCode = schedule.ScheduleCode,
             Title = schedule.Title,
             PlannedStartAt = schedule.PlannedStartAt,
             PlannedEndAt = schedule.PlannedEndAt,
@@ -1317,26 +1612,29 @@
             EquipmentId = schedule.EquipmentId,
             Description = schedule.Description
         };
+        SetScheduleDateTimeInputs(schedule.PlannedStartAt, schedule.PlannedEndAt);
+        ScheduleTimeError = null;
         IsDialogOpen = true;
         ErrorMessage = null;
     }
     private void CloseDialog() { if (!IsSaving) IsDialogOpen = false; }
 
-    private async Task SaveSchedule()
+    private void SaveSchedule()
     {
-        if (Editor.PlannedEndAt is not null && Editor.PlannedEndAt < Editor.PlannedStartAt)
-        {
-            ErrorMessage = "Thời điểm kết thúc phải sau thời điểm bắt đầu.";
-            return;
-        }
+        if (!TryGetScheduleRange(out _, out _)) return;
+        RequestConfirmation(EditingSchedule is null ? "Bạn có muốn tạo lịch bảo trì này không?" : "Bạn có muốn cập nhật lịch bảo trì này không?", ConfirmSaveSchedule);
+    }
+    private async Task ConfirmSaveSchedule()
+    {
+        if (!TryGetScheduleRange(out var start, out var end)) return;
         IsSaving = true;
         var result = EditingSchedule is null
             ? await MaintenanceApi.CreateScheduleAsync(Editor, cts.Token)
             : await MaintenanceApi.UpdateScheduleAsync(EditingSchedule.Id, new UpdateScheduleModel
             {
                 Title = Editor.Title,
-                PlannedStartAt = Editor.PlannedStartAt,
-                PlannedEndAt = Editor.PlannedEndAt,
+                PlannedStartAt = start,
+                PlannedEndAt = end,
                 FacilityId = Editor.FacilityId,
                 EquipmentId = Editor.EquipmentId,
                 Description = Editor.Description
@@ -1348,7 +1646,9 @@
         await LoadSchedules();
     }
 
-    private async Task ChangeStatus(ScheduleModel schedule, string action)
+    private void ChangeStatus(ScheduleModel schedule, string action)
+        => RequestConfirmation(action == "complete" ? "Bạn có muốn hoàn tất lịch bảo trì này không?" : "Bạn có muốn hủy lịch bảo trì này không?", () => ConfirmChangeStatus(schedule, action));
+    private async Task ConfirmChangeStatus(ScheduleModel schedule, string action)
     {
         ErrorMessage = null;
         var result = await MaintenanceApi.SetScheduleStatusAsync(schedule.Id, action, cts.Token);
@@ -1357,8 +1657,8 @@
         await LoadSchedules();
     }
 
-    private Task CompleteSchedule(ScheduleModel schedule) => ChangeStatus(schedule, "complete");
-    private Task CancelSchedule(ScheduleModel schedule) => ChangeStatus(schedule, "cancel");
+    private void CompleteSchedule(ScheduleModel schedule) => ChangeStatus(schedule, "complete");
+    private void CancelSchedule(ScheduleModel schedule) => ChangeStatus(schedule, "cancel");
     private bool CanExtendSchedule(ScheduleModel schedule) => schedule.Status == MaintenanceScheduleStatus.ACTIVE &&
         schedule.PlannedEndAt is not null && schedule.PlannedStartAt <= DateTimeOffset.UtcNow;
     private void OpenExtendSchedule(ScheduleModel schedule)
@@ -1374,7 +1674,9 @@
         IsExtendScheduleDialogOpen = false;
         ScheduleToExtend = null;
     }
-    private async Task SaveScheduleExtension()
+    private void SaveScheduleExtension()
+        => RequestConfirmation("Bạn có muốn gia hạn lịch bảo trì này không?", ConfirmSaveScheduleExtension);
+    private async Task ConfirmSaveScheduleExtension()
     {
         if (ScheduleToExtend is null) return;
         IsExtendingSchedule = true;
@@ -1387,19 +1689,31 @@
         await LoadSchedules();
     }
 
+    private void RequestConfirmation(string message, Func<Task> action)
+    {
+        if (IsConfirmationBusy) return;
+        ConfirmationMessage = message;
+        PendingConfirmation = action;
+    }
+    private void CancelPendingAction()
+    {
+        if (!IsConfirmationBusy) PendingConfirmation = null;
+    }
+    private async Task ConfirmPendingAction()
+    {
+        var action = PendingConfirmation;
+        if (action is null || IsConfirmationBusy) return;
+        await action();
+        if (!IsConfirmationBusy) PendingConfirmation = null;
+    }
+
     private async Task PreviousWeek() { WeekStart = WeekStart.AddDays(-7); SelectedDate = WeekStart; Filter.PageIndex = 1; await LoadSchedules(); }
     private async Task NextWeek() { WeekStart = WeekStart.AddDays(7); SelectedDate = WeekStart; Filter.PageIndex = 1; await LoadSchedules(); }
     private async Task GoToToday() { WeekStart = StartOfWeek(Today); SelectedDate = Today; Filter.PageIndex = 1; await LoadSchedules(); }
     private void SelectDay(DateOnly day) => SelectedDate = day;
-    private void ShowTimeline() => ViewMode = "timeline";
-    private void ShowList() => ViewMode = "list";
     private void OpenCreateForSelectedDay()
     {
         OpenCreateDialog();
-        // Prefill selected date at current building-timezone time (no hard-coded 07:00)
-        var now = CurrentTime;
-        var local = SelectedDate.ToDateTime(new TimeOnly(now.Hour, now.Minute));
-        Editor.PlannedStartAt = new DateTimeOffset(local, CurrentZone().GetUtcOffset(local));
     }
 
     private IReadOnlyList<ScheduleModel> DaySchedules(DateOnly day) => Schedules.Items
@@ -1487,16 +1801,78 @@
         var equipment = task.EquipmentId is { } equipmentId ? AssetName(equipmentId) : null;
         return facility is null && equipment is null ? "Chưa gắn tài sản" : string.Join(" · ", new[] { facility, equipment }.Where(value => value is not null));
     }
-    private static string AssigneeLabel(MaintenanceTaskModel task) => task.AssignedStaffUserId is null
-        ? "Chưa phân công"
-        : string.IsNullOrWhiteSpace(task.AssignedStaffDisplayName)
-            ? "Nhân viên không còn hoạt động"
-            : string.IsNullOrWhiteSpace(task.AssignedStaffUsername)
-                ? task.AssignedStaffDisplayName
-                : $"{task.AssignedStaffDisplayName} ({task.AssignedStaffUsername})";
-    private IReadOnlyList<AssignableMaintenanceStaffModel> SelectableStaff => TaskForAssignment?.AssignedStaffUserId is { } current
-        ? AssignableStaff.Where(staff => staff.UserId != current).ToArray()
-        : AssignableStaff;
+    private LinkCandidateContext CandidateContext(ServiceRequestMaintenanceReference request)
+    {
+        var (taskFacility, taskEquipment, taskLocation) = ServiceRequestPickerTaskId is not null && TaskDetail is not null
+            ? (TaskDetail.FacilityId, TaskDetail.EquipmentId, TaskAssetContext(TaskDetail))
+            : (TaskSourceSchedule?.FacilityId ?? TaskEditor.FacilityId,
+               TaskSourceSchedule?.EquipmentId ?? TaskEditor.EquipmentId,
+               PickerTaskLocation());
+        var taskEffectiveFacility = taskFacility ?? AssetById(taskEquipment)?.FacilityId;
+        var requestEffectiveFacility = request.FacilityId ?? AssetById(request.EquipmentId)?.FacilityId;
+        var match = taskEquipment is { } taskEquipmentId && request.EquipmentId is { } requestEquipmentId
+            ? taskEquipmentId == requestEquipmentId ? "MATCHED" : "DIFFERENT_CONTEXT"
+            : taskEffectiveFacility is { } taskFacilityId && requestEffectiveFacility is { } requestFacilityId
+                ? taskFacilityId == requestFacilityId ? "MATCHED" : "DIFFERENT_CONTEXT"
+                : "INSUFFICIENT_DATA";
+        var message = match switch
+        {
+            "MATCHED" => "Bối cảnh tài sản phù hợp.",
+            "DIFFERENT_CONTEXT" => "Vị trí hoặc tài sản của yêu cầu dịch vụ khác với công việc bảo trì. Vui lòng kiểm tra và giải thích lý do liên kết.",
+            _ => "Chưa đủ dữ liệu để xác định sự phù hợp giữa yêu cầu dịch vụ và công việc bảo trì."
+        };
+        return new LinkCandidateContext(match, taskLocation, message);
+    }
+    private string PickerTaskLocation()
+    {
+        var facilityId = TaskSourceSchedule?.FacilityId ?? TaskEditor.FacilityId;
+        var equipmentId = TaskSourceSchedule?.EquipmentId ?? TaskEditor.EquipmentId;
+        var facility = facilityId is { } selectedFacilityId ? AssetName(selectedFacilityId) : null;
+        var equipment = equipmentId is { } selectedEquipmentId ? AssetName(selectedEquipmentId) : null;
+        return facility is null && equipment is null ? "Chưa gắn tài sản" : string.Join(" · ", new[] { facility, equipment }.Where(value => value is not null));
+    }
+    private string RequestLocation(ServiceRequestMaintenanceReference request)
+    {
+        var parts = new List<string>();
+        if (request.ApartmentUnitId is not null) parts.Add("Căn hộ liên quan");
+        if (request.FacilityId is { } facilityId) parts.Add($"Cơ sở: {AssetName(facilityId)}");
+        if (request.EquipmentId is { } equipmentId) parts.Add($"Thiết bị: {AssetName(equipmentId)}");
+        return parts.Count == 0 ? "Chưa xác định" : string.Join(" · ", parts);
+    }
+    private sealed record LinkCandidateContext(string Match, string TaskLocation, string Message);
+    private static IReadOnlyList<Guid> CurrentAssigneeIds(MaintenanceTaskModel task) => task.CurrentAssignees?.Select(staff => staff.UserId).ToArray()
+        ?? (task.AssignedStaffUserId is { } legacyId ? [legacyId] : []);
+    private static bool HasCurrentAssignees(MaintenanceTaskModel task) => CurrentAssigneeIds(task).Count != 0;
+    private static string AssigneeLabel(MaintenanceTaskModel task)
+    {
+        var assignees = task.CurrentAssignees;
+        if (assignees is { Count: > 0 })
+            return string.Join(", ", assignees.Select(staff => string.IsNullOrWhiteSpace(staff.Username)
+                ? staff.DisplayName
+                : $"{staff.DisplayName} ({staff.Username})"));
+        return task.AssignedStaffUserId is null
+            ? "Chưa phân công"
+            : string.IsNullOrWhiteSpace(task.AssignedStaffDisplayName)
+                ? "Nhân viên không còn hoạt động"
+                : string.IsNullOrWhiteSpace(task.AssignedStaffUsername)
+                    ? task.AssignedStaffDisplayName
+                    : $"{task.AssignedStaffDisplayName} ({task.AssignedStaffUsername})";
+    }
+    private IReadOnlyList<AssignableMaintenanceStaffModel> SelectableStaff => string.IsNullOrWhiteSpace(AssignmentStaffSearch)
+        ? AssignableStaff
+        : AssignableStaff.Where(staff => staff.DisplayName.Contains(AssignmentStaffSearch.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                                        staff.Username.Contains(AssignmentStaffSearch.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
+    private void SetAssignmentStaff(Guid staffUserId, bool selected)
+    {
+        if (selected)
+        {
+            if (!AssignmentEditor.StaffUserIds.Contains(staffUserId)) AssignmentEditor.StaffUserIds.Add(staffUserId);
+        }
+        else
+        {
+            AssignmentEditor.StaffUserIds.Remove(staffUserId);
+        }
+    }
     private string FormatDateTime(DateTimeOffset value) => InCurrentTimeZone(value).ToString("dd/MM/yyyy HH:mm");
     private string OptionalDateTime(DateTimeOffset? value) => value is { } timestamp ? FormatDateTime(timestamp) : "Chưa xác định";
     private string ProgressUpdateLabel(MaintenanceTaskModel task) => task.LastProgressAt is { } at
@@ -1541,10 +1917,10 @@
         (1, "Đã phân công"), (2, "Bắt đầu xử lý"), (3, "Đang thực hiện"),
         (4, "Chờ nghiệm thu"), (5, "Đóng công việc")
     ];
-    private static string ProgressStepClass(int index, int current) => index < current ? "is-complete" : index == current ? "is-current" : string.Empty;
+    private static string ProgressStepClass(int index, MaintenanceProgressLifecycle lifecycle) => lifecycle.IsStepCompleted(index) ? "is-complete" : lifecycle.IsStepCurrent(index) ? "is-current" : string.Empty;
     private string ScheduleTimeRange(ScheduleModel schedule) => schedule.PlannedEndAt is { } end
-        ? $"{InCurrentTimeZone(schedule.PlannedStartAt):dd/MM/yyyy HH:mm} → {InCurrentTimeZone(end):dd/MM/yyyy HH:mm}"
-        : $"Bắt đầu {InCurrentTimeZone(schedule.PlannedStartAt):dd/MM/yyyy HH:mm}";
+        ? $"{InCurrentTimeZone(schedule.PlannedStartAt):dd/MM/yyyy} → {InCurrentTimeZone(end):dd/MM/yyyy}"
+        : $"Bắt đầu {InCurrentTimeZone(schedule.PlannedStartAt):dd/MM/yyyy}";
     private static string TaskStatusLabel(MaintenanceTaskStatus status) => status switch
     {
         MaintenanceTaskStatus.OPEN => "Mở", MaintenanceTaskStatus.ASSIGNED => "Đã giao", MaintenanceTaskStatus.IN_PROGRESS => "Đang thực hiện", MaintenanceTaskStatus.COMPLETED => "Hoàn thành", MaintenanceTaskStatus.CLOSED => "Đã đóng", MaintenanceTaskStatus.CANCELLED => "Đã hủy", _ => status.ToString()
@@ -1572,7 +1948,7 @@
     private static string StatusLabel(MaintenanceScheduleStatus status) => status switch
     {
         MaintenanceScheduleStatus.ACTIVE => "Đang hoạt động",
-        MaintenanceScheduleStatus.COMPLETED => "Đã hoàn tất",
+        MaintenanceScheduleStatus.COMPLETED => "Đã bảo trì xong",
         MaintenanceScheduleStatus.CANCELLED => "Đã hủy",
         _ => status.ToString()
     };
@@ -1596,5 +1972,12 @@
         MaintenanceScheduleStatus.CANCELLED => "is-cancelled",
         _ => string.Empty
     };
-    public void Dispose() => cts.Dispose();
+    public async ValueTask DisposeAsync()
+    {
+        cts.Dispose();
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
 }

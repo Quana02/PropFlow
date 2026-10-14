@@ -14,6 +14,7 @@ public class MaintenanceDbContext(DbContextOptions<MaintenanceDbContext> options
     public DbSet<MaintenanceAssignment> MaintenanceAssignments => Set<MaintenanceAssignment>();
     public DbSet<MaintenanceTaskActivity> MaintenanceTaskActivities => Set<MaintenanceTaskActivity>();
     public DbSet<MaintenanceResult> MaintenanceResults => Set<MaintenanceResult>();
+    public DbSet<MaintenanceResultAttachment> MaintenanceResultAttachments => Set<MaintenanceResultAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

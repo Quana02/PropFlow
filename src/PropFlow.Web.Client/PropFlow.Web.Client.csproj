@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.27" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.27" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
     <ProjectReference Include="../Modules/Authentication.Contracts/PropFlow.Modules.Authentication.Contracts.csproj" />
     <ProjectReference Include="../Modules/ServiceRequests.Contracts/PropFlow.Modules.ServiceRequests.Contracts.csproj" />
   </ItemGroup>

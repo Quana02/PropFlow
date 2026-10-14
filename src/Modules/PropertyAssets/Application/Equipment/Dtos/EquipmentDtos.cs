@@ -21,6 +21,7 @@ public record EquipmentDto(
     string? FacilityName,
     [property: Required(ErrorMessage = "Mã thiết bị là bắt buộc."), StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")] string Code,
     [property: Required(ErrorMessage = "Tên thiết bị là bắt buộc."), StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")] string Name,
+    Guid? EquipmentTypeId,
     string? EquipmentType,
     string? Manufacturer,
     string? Model,
@@ -41,6 +42,7 @@ public record EquipmentDetailDto(
     string? FacilityName,
     string Code,
     string Name,
+    Guid? EquipmentTypeId,
     string? EquipmentType,
     string? Manufacturer,
     string? Model,
@@ -56,10 +58,10 @@ public record EquipmentDetailDto(
     DateTimeOffset UpdatedAt);
 
 public record CreateEquipmentCommand(
-    [Required(ErrorMessage = "Mã thiết bị là bắt buộc."), StringLength(50, ErrorMessage = "Mã thiết bị không được vượt quá 50 ký tự.")] string Code,
+    [StringLength(512)] string? Code,
     [Required(ErrorMessage = "Tên thiết bị là bắt buộc."), StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")] string Name,
     Guid? FacilityId = null,
-    [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc."), StringLength(100, ErrorMessage = "Phân loại thiết bị không được vượt quá 100 ký tự.")] string? EquipmentType = null,
+    Guid? EquipmentTypeId = null,
     string? Manufacturer = null,
     string? Model = null,
     string? SerialNumber = null,
@@ -72,7 +74,7 @@ public record CreateEquipmentCommand(
 public record UpdateEquipmentCommand(
     [Required(ErrorMessage = "Tên thiết bị là bắt buộc."), StringLength(150, ErrorMessage = "Tên thiết bị không được vượt quá 150 ký tự.")] string Name,
     Guid? FacilityId = null,
-    [Required(ErrorMessage = "Phân loại thiết bị là bắt buộc."), StringLength(100, ErrorMessage = "Phân loại thiết bị không được vượt quá 100 ký tự.")] string? EquipmentType = null,
+    Guid? EquipmentTypeId = null,
     string? Manufacturer = null,
     string? Model = null,
     string? SerialNumber = null,
@@ -90,7 +92,10 @@ public record EquipmentFilterQuery(
     Guid? FacilityId = null,
     string? SearchKeyword = null,
     EquipmentStatus? Status = null,
-    string? EquipmentType = null,
+    Guid? EquipmentTypeId = null,
     int PageIndex = 1,
     int PageSize = 10,
     bool BuildingLevelOnly = false);
+
+public record EquipmentTypeDto(Guid Id, string Name, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public record CreateEquipmentTypeCommand([Required, StringLength(100, MinimumLength = 1)] string Name, [property: JsonIgnore] Guid? CreatedBy = null);

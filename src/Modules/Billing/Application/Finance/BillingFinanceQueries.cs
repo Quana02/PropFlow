@@ -1,14 +1,16 @@
 using PropFlow.Modules.Billing.Contracts;
 using PropFlow.Modules.Payments.Contracts;
+using PropFlow.Modules.PropertyAssets.Contracts;
 
 namespace PropFlow.Modules.Billing.Application.Finance;
 
 public sealed record PagedResult<T>(int Total, int Page, int PageSize, IReadOnlyList<T> Items);
 public sealed record InvoiceBalance(Guid Id, string InvoiceNumber, Guid ApartmentUnitId, DateOnly BillingPeriodStart,
     DateOnly BillingPeriodEnd, DateOnly? IssueDate, DateOnly? DueDate, decimal TotalAmount,
-    decimal ConfirmedPaidAmount, decimal OutstandingAmount, string Status, bool IsOverdue, int DaysOverdue);
+    decimal ConfirmedPaidAmount, decimal OutstandingAmount, string Status, bool IsOverdue, int DaysOverdue, string? InvoiceType = null);
 
-public sealed class BillingFinanceQueries(IInvoiceFinancialSource invoices, IConfirmedPaymentSource payments)
+public sealed class BillingFinanceQueries(IInvoiceFinancialSource invoices, IConfirmedPaymentSource payments,
+    ICurrentBuildingTimeZone buildingTimeZone, TimeProvider? clock = null)
 {
     public async Task<PagedResult<InvoiceBalance>> UnpaidAsync(string? search, int page, int pageSize, string sortDirection, CancellationToken ct)
     {
@@ -35,15 +37,21 @@ public sealed class BillingFinanceQueries(IInvoiceFinancialSource invoices, ICon
     {
         var invoice = await invoices.FindAsync(id, ct);
         if (invoice is null) return null;
-        return Balance(invoice, await payments.TotalAsync(id, ct), DateOnly.FromDateTime(DateTime.UtcNow));
+        return Balance(invoice, await payments.TotalAsync(id, ct), await TodayAsync(ct));
     }
 
     private async Task<IReadOnlyList<InvoiceBalance>> BalancesAsync(CancellationToken ct)
     {
         var rows = await invoices.ListIssuedAsync(ct);
         var totals = await payments.TotalsAsync(rows.Select(x => x.Id).ToArray(), ct);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = await TodayAsync(ct);
         return rows.Select(x => Balance(x, totals.GetValueOrDefault(x.Id), today)).ToArray();
+    }
+
+    private async Task<DateOnly> TodayAsync(CancellationToken ct)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(await buildingTimeZone.GetAsync(ct));
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime((clock ?? TimeProvider.System).GetUtcNow(), zone).DateTime);
     }
 
     private static InvoiceBalance Balance(InvoiceFinancialSnapshot x, decimal paid, DateOnly today)
@@ -51,7 +59,7 @@ public sealed class BillingFinanceQueries(IInvoiceFinancialSource invoices, ICon
         var outstanding = Math.Max(0, x.TotalAmount - paid);
         var overdue = x.DueDate is { } due && due < today && outstanding > 0;
         return new(x.Id, x.InvoiceNumber, x.ApartmentUnitId, x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate,
-            x.TotalAmount, paid, outstanding, x.Status, overdue, overdue ? today.DayNumber - x.DueDate!.Value.DayNumber : 0);
+            x.TotalAmount, paid, outstanding, x.Status, overdue, overdue ? today.DayNumber - x.DueDate!.Value.DayNumber : 0, x.InvoiceType);
     }
 
     private static PagedResult<InvoiceBalance> Page(IEnumerable<InvoiceBalance> query, int page, int size)

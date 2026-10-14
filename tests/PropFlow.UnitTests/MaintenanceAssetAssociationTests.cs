@@ -54,12 +54,58 @@ public sealed class MaintenanceAssetAssociationTests
         await using var db = CreateDb();
         var service = new MaintenanceService(db, new AssetSource(), new StaffDirectory());
 
-        var result = await service.CreateTaskAsync(new("MT-ASSOC-001", "Kiểm tra bơm"), Guid.NewGuid(), CancellationToken.None);
+        var result = await service.CreateTaskAsync(new("CVBT-MAYBOM-01-011026", "Kiểm tra bơm", Description: "Kiểm tra bơm"), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Null(result.FacilityId);
         Assert.Null(result.EquipmentId);
         Assert.Equal(MaintenanceTaskStatus.OPEN, result.Status);
         Assert.Empty((await db.MaintenanceAssignments.ToListAsync()));
+    }
+
+    [Theory]
+    [InlineData("ACTIVE", "ACTIVE")]
+    [InlineData("UNDER_MAINTENANCE", "UNDER_MAINTENANCE")]
+    [InlineData("INACTIVE", "INACTIVE")]
+    [InlineData("UNAVAILABLE", "OUT_OF_SERVICE")]
+    [InlineData("OUT_OF_SERVICE", "ACTIVE")]
+    public async Task CreateTaskAsync_ManualTaskAcceptsAssetsInAnyStatusWithoutChangingThem(string facilityStatus, string equipmentStatus)
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY", status: facilityStatus);
+        var equipment = Asset("EQUIPMENT", facility.Id, equipmentStatus);
+        var source = new AssetSource(facility, equipment);
+        var service = new MaintenanceService(db, source, new StaffDirectory());
+
+        var created = await service.CreateTaskAsync(
+            new("CLIENT-SUPPLIED", "Bảo trì tài sản", Description: "Kiểm tra", FacilityId: facility.Id, EquipmentId: equipment.Id),
+            Guid.NewGuid(), CancellationToken.None);
+
+        var persisted = await db.MaintenanceTasks.SingleAsync(task => task.Id == created.Id);
+        Assert.Equal(facility.Id, created.FacilityId);
+        Assert.Equal(equipment.Id, created.EquipmentId);
+        Assert.StartsWith("CVBT-", created.TaskNumber);
+        Assert.NotEqual("CLIENT-SUPPLIED", created.TaskNumber);
+        Assert.Equal(created.TaskNumber, persisted.TaskNumber);
+        Assert.Equal(facilityStatus, facility.Status);
+        Assert.Equal(equipmentStatus, equipment.Status);
+        Assert.Equal(0, source.MarkUnderMaintenanceCalls);
+    }
+
+    [Fact]
+    public async Task CreateTaskAsync_ManualTaskStillRejectsMissingAssetsAndMismatchedFacilityEquipment()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY");
+        var otherFacilityId = Guid.NewGuid();
+        var equipment = Asset("EQUIPMENT", otherFacilityId);
+        var service = new MaintenanceService(db, new AssetSource(facility, equipment), new StaffDirectory());
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.CreateTaskAsync(
+            new("CLIENT", "Thiếu CSVC", Description: "Kiểm tra", FacilityId: Guid.NewGuid()), Guid.NewGuid(), CancellationToken.None));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.CreateTaskAsync(
+            new("CLIENT", "Thiếu thiết bị", Description: "Kiểm tra", EquipmentId: Guid.NewGuid()), Guid.NewGuid(), CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateTaskAsync(
+            new("CLIENT", "Sai quan hệ", Description: "Kiểm tra", FacilityId: facility.Id, EquipmentId: equipment.Id), Guid.NewGuid(), CancellationToken.None));
     }
 
     [Fact]
@@ -73,7 +119,7 @@ public sealed class MaintenanceAssetAssociationTests
         var schedule = AddSchedule(db, facility.Id, equipment.Id, start, end);
         var service = new MaintenanceService(db, new AssetSource(facility, equipment), new StaffDirectory());
 
-        var result = await service.CreateTaskAsync(new("MT-INHERIT-001", "Bảo trì theo lịch", schedule.Id, PlannedStartAt: start.AddDays(3), DueAt: end.AddDays(3), FacilityId: Guid.NewGuid(), EquipmentId: Guid.NewGuid()), Guid.NewGuid(), CancellationToken.None);
+        var result = await service.CreateTaskAsync(new("CVBT-MAYBOM-02-011026", "Bảo trì theo lịch", schedule.Id, PlannedStartAt: start.AddDays(3), DueAt: end.AddDays(3), FacilityId: Guid.NewGuid(), EquipmentId: Guid.NewGuid()), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal(schedule.Id, result.ScheduleId);
         Assert.Equal(facility.Id, result.FacilityId);
@@ -91,7 +137,7 @@ public sealed class MaintenanceAssetAssociationTests
         var schedule = AddSchedule(db, facility.Id, null);
         var service = new MaintenanceService(db, new AssetSource(facility), new StaffDirectory());
 
-        var result = await service.CreateTaskAsync(new("MT-INHERIT-002", "Bảo trì khu vực", schedule.Id), Guid.NewGuid(), CancellationToken.None);
+        var result = await service.CreateTaskAsync(new("CVBT-GYM-01-021026", "Bảo trì khu vực", schedule.Id), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal(facility.Id, result.FacilityId);
         Assert.Null(result.EquipmentId);
@@ -104,7 +150,7 @@ public sealed class MaintenanceAssetAssociationTests
         var schedule = AddSchedule(db, null, null);
         var service = new MaintenanceService(db, new AssetSource(), new StaffDirectory());
 
-        var result = await service.CreateTaskAsync(new("MT-INHERIT-EMPTY", "Bảo trì", schedule.Id), Guid.NewGuid(), CancellationToken.None);
+        var result = await service.CreateTaskAsync(new("CVBT-HOBOI-01-031026", "Bảo trì", schedule.Id), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal(schedule.Id, result.ScheduleId);
         Assert.Null(result.FacilityId);
@@ -119,14 +165,14 @@ public sealed class MaintenanceAssetAssociationTests
         var manualStart = new DateTimeOffset(2026, 10, 2, 8, 0, 0, TimeSpan.Zero);
         var manualDue = manualStart.AddHours(3);
 
-        var manual = await service.CreateTaskAsync(new("MT-MANUAL-TIME", "Kiểm tra", PlannedStartAt: manualStart, DueAt: manualDue), Guid.NewGuid(), CancellationToken.None);
+        var manual = await service.CreateTaskAsync(new("CVBT-MAYBOM-03-021026", "Kiểm tra", Description: "Kiểm tra máy bơm", PlannedStartAt: manualStart, DueAt: manualDue), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal(manualStart, manual.PlannedStartAt);
         Assert.Equal(manualDue, manual.DueAt);
 
         var scheduleStart = manualStart.AddDays(1);
         var schedule = AddSchedule(db, null, null, scheduleStart, scheduleStart.AddHours(1));
-        var scheduled = await service.CreateTaskAsync(new("MT-SNAPSHOT-TIME", "Theo lịch", schedule.Id), Guid.NewGuid(), CancellationToken.None);
+        var scheduled = await service.CreateTaskAsync(new("CVBT-MAYBOM-04-031026", "Theo lịch", schedule.Id), Guid.NewGuid(), CancellationToken.None);
         schedule.UpdatePlan("Lịch đã đổi", scheduleStart.AddHours(2), Guid.NewGuid(), DateTimeOffset.UtcNow, plannedEndAt: scheduleStart.AddHours(4));
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
@@ -145,7 +191,7 @@ public sealed class MaintenanceAssetAssociationTests
         var schedule = AddSchedule(db, facility.Id, equipment.Id);
         var service = new MaintenanceService(db, new AssetSource(facility, equipment), new StaffDirectory());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateTaskAsync(new("MT-INHERIT-003", "Bảo trì", schedule.Id), Guid.NewGuid(), CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.CreateTaskAsync(new("CVBT-MAYBOM-05-041026", "Bảo trì", schedule.Id), Guid.NewGuid(), CancellationToken.None));
     }
 
     [Fact]
@@ -180,21 +226,27 @@ public sealed class MaintenanceAssetAssociationTests
     private static MaintenanceSchedule AddSchedule(MaintenanceDbContext db, Guid? facilityId, Guid? equipmentId, DateTimeOffset? plannedStartAt = null, DateTimeOffset? plannedEndAt = null)
     {
         var start = plannedStartAt ?? DateTimeOffset.UtcNow.AddDays(1);
-        var schedule = new MaintenanceSchedule($"MS-{Guid.NewGuid():N}", "Lịch kiểm thử", start, Guid.NewGuid(), DateTimeOffset.UtcNow, facilityId, equipmentId, plannedEndAt: plannedEndAt);
+        var schedule = new MaintenanceSchedule($"LBT-TEST-{Guid.NewGuid():N}"[..30], "Lịch kiểm thử", start, Guid.NewGuid(), DateTimeOffset.UtcNow, facilityId, equipmentId, description: "Mô tả lịch kiểm thử", plannedEndAt: plannedEndAt);
         db.MaintenanceSchedules.Add(schedule);
         db.SaveChanges();
         return schedule;
     }
 
-    private static MaintenanceAssetReference Asset(string type, Guid? facilityId = null) =>
-        new(Guid.NewGuid(), $"{type}-001", "Tài sản kiểm thử", type, "ACTIVE", null, facilityId);
+    private static MaintenanceAssetReference Asset(string type, Guid? facilityId = null, string status = "ACTIVE") =>
+        new(Guid.NewGuid(), $"{type}-001", "Tài sản kiểm thử", type, status, null, facilityId);
 
     private sealed class AssetSource(params MaintenanceAssetReference[] assets) : IMaintenanceAssetSource
     {
+        public int MarkUnderMaintenanceCalls { get; private set; }
         public Task<IReadOnlyList<MaintenanceAssetReference>> GetAvailableAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<MaintenanceAssetReference>>(assets);
         public Task<MaintenanceAssetReference?> GetFacilityAsync(Guid facilityId, CancellationToken ct) => Task.FromResult(assets.SingleOrDefault(x => x.AssetType == "FACILITY" && x.Id == facilityId));
         public Task<MaintenanceAssetReference?> GetEquipmentAsync(Guid equipmentId, CancellationToken ct) => Task.FromResult(assets.SingleOrDefault(x => x.AssetType == "EQUIPMENT" && x.Id == equipmentId));
         public Task<bool> ExistsAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct) => Task.FromResult(true);
+        public Task MarkUnderMaintenanceAsync(Guid facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
+        {
+            MarkUnderMaintenanceCalls++;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StaffDirectory : IMaintenanceStaffDirectory

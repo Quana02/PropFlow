@@ -9,10 +9,10 @@ public sealed class InvoiceFinancialSource(BillingDbContext db) : IInvoiceFinanc
 {
     public Task<InvoiceFinancialSnapshot?> FindAsync(Guid invoiceId, CancellationToken ct) => db.Invoices.AsNoTracking()
         .Where(x => x.Id == invoiceId).Select(x => new InvoiceFinancialSnapshot(x.Id, x.InvoiceNumber, x.ApartmentUnitId,
-            x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString())).SingleOrDefaultAsync(ct);
+            x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString(), x.Type == null ? null : x.Type.ToString())).SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<InvoiceFinancialSnapshot>> ListIssuedAsync(CancellationToken ct) =>
         await db.Invoices.AsNoTracking().Where(x => x.Status == InvoiceStatus.ISSUED)
             .Select(x => new InvoiceFinancialSnapshot(x.Id, x.InvoiceNumber, x.ApartmentUnitId,
-                x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString())).ToArrayAsync(ct);
+                x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString(), x.Type == null ? null : x.Type.ToString())).ToArrayAsync(ct);
 }
