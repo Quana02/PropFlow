@@ -91,11 +91,24 @@
 .form-error .material-symbols-outlined { font-size:1rem; }
 @media (max-width:1050px) { .context-grid { grid-template-columns:1fr; } }
 @media (max-width:720px) { .context-page { padding:.8rem .65rem 4rem; } .context-hero { align-items:flex-start; flex-direction:column; } .hero-tags { justify-content:flex-start; } .context-card { padding:1rem; border-radius:1.2rem; } .summary-grid { grid-template-columns:1fr; } .form-actions { align-items:flex-start; flex-direction:column; } .form-actions > div { width:100%; } .form-actions button { flex:1; justify-content:center; } .source-facts > div { grid-template-columns:1fr; gap:.25rem; } .source-facts dd { text-align:left; } .original-apartment dd { justify-content:flex-start; } .card-title-row { flex-wrap:wrap; } }
-:global(html[data-theme="dark"]) .context-page { color:#e8eef8; }
-:global(html[data-theme="dark"]) .context-hero h1,:global(html[data-theme="dark"]) .card-title-row h2,:global(html[data-theme="dark"]) .source-facts dd { color:#f1f5f9; }
-:global(html[data-theme="dark"]) .context-card,:global(html[data-theme="dark"]) .request-tag { background:rgba(11,20,36,.88); border-color:#27364c; }
-:global(html[data-theme="dark"]) .context-breadcrumb strong { color:#dce7f6; }
-:global(html[data-theme="dark"]) .source-facts > div,:global(html[data-theme="dark"]) .card-title-row,:global(html[data-theme="dark"]) .form-actions { border-color:#253247; }
-:global(html[data-theme="dark"]) .source-facts .original-apartment,:global(html[data-theme="dark"]) .source-description blockquote,:global(html[data-theme="dark"]) .context-summary { background:#111d30; border-color:#2b394e; }
-:global(html[data-theme="dark"]) .summary-grid article { background:#0e192a; border-color:#2a394e; }
-:global(html[data-theme="dark"]) .context-field > span { color:#dbe5f2; }
+/* AppShell changes --app-* variables itself. Keeping this page on those variables
+   makes every surface transition correctly in both light and dark mode. */
+.context-page { color:var(--app-text); }
+.context-breadcrumb,.context-breadcrumb a,.context-hero p,.card-title-row p,.source-facts dt,.source-facts dd small,.source-description>span,.context-field small,.context-field em,.summary-grid small,.context-summary footer,.form-actions>span,.context-state p { color:var(--app-muted); }
+.context-breadcrumb strong,.context-hero h1,.card-title-row h2,.source-facts dd,.context-field>span,.summary-grid strong,.context-summary h3 { color:var(--app-text); }
+.context-card,.request-tag,.context-state { border-color:var(--app-line); background:var(--app-surface); }
+.card-title-row,.source-facts>div,.form-actions,.context-summary header { border-color:var(--app-line); }
+.context-kicker,.card-title-row .title-icon { border-color:color-mix(in srgb,var(--app-accent) 25%,var(--app-line)); background:color-mix(in srgb,var(--app-accent) 10%,var(--app-surface)); color:var(--app-accent); }
+.request-tag { color:var(--app-accent); }
+.request-tag small { color:var(--app-muted); }
+.status-tag { border-color:rgba(245,158,11,.32); background:color-mix(in srgb,#f59e0b 10%,var(--app-surface)); color:#d98a0b; }
+.readonly-chip { background:color-mix(in srgb,var(--app-muted) 13%,transparent); color:var(--app-muted); }
+.standard-chip { border-color:rgba(16,185,129,.3); background:color-mix(in srgb,#10b981 11%,var(--app-surface)); color:#10b981; }
+.source-facts .original-apartment,.source-description blockquote,.context-summary,.summary-grid article { border-color:var(--app-line); background:color-mix(in srgb,var(--app-surface) 88%,var(--app-muted) 12%); }
+.source-description blockquote { color:var(--app-muted); }
+.source-facts .code-value,.context-field b .material-symbols-outlined,.summary-grid article:first-child strong { color:var(--app-accent); }
+.admin-note { border-color:color-mix(in srgb,var(--app-accent) 34%,var(--app-line)); background:color-mix(in srgb,var(--app-accent) 10%,var(--app-surface)); color:color-mix(in srgb,var(--app-accent) 78%,var(--app-text)); }
+.context-summary header>span { color:var(--app-muted); }
+.context-summary footer b { border-color:color-mix(in srgb,var(--app-accent) 34%,var(--app-line)); background:color-mix(in srgb,var(--app-accent) 9%,var(--app-surface)); color:var(--app-accent); }
+.cancel-button { border-color:var(--app-line)!important; background:color-mix(in srgb,var(--app-surface) 92%,var(--app-muted) 8%); color:var(--app-text); }
+.form-error { border-color:rgba(244,63,94,.35); background:color-mix(in srgb,#e11d48 10%,var(--app-surface)); color:#f43f5e; }

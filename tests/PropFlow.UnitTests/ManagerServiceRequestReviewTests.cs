@@ -3,6 +3,7 @@ using PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -218,6 +219,30 @@ public sealed class ManagerServiceRequestReviewTests
     }
 
     [Fact]
+    public async Task ApproveResolution_ReturnsConflict_WhenLatestStaffResultHasNoEvidence()
+    {
+        await using var db = CreateDb();
+        var now = new DateTimeOffset(2026, 10, 13, 4, 0, 0, TimeSpan.Zero);
+        var request = NewRequest(now);
+        request.MarkUnderReview(now.AddMinutes(1));
+        request.MarkAssigned(now.AddMinutes(2));
+        request.MarkInProgress(now.AddMinutes(3));
+        var assignment = new ServiceRequestAssignment(request.Id, Guid.NewGuid(), Guid.NewGuid(), now.AddMinutes(2));
+        assignment.Start(now.AddMinutes(3));
+        var result = new ServiceRequestActivity(request.Id, ServiceActivityType.WORK_RESULT_ADDED,
+            now.AddMinutes(4), assignment.Id, workResult: "Đã xử lý nhưng chưa tải ảnh.", performedBy: assignment.StaffUserId);
+        db.AddRange(request, assignment, result);
+        await db.SaveChangesAsync();
+
+        var outcome = await new ManagerServiceRequestStore(db).ApproveResolutionAsync(
+            request.Id, Guid.NewGuid(), null, now.AddMinutes(5), CancellationToken.None);
+
+        Assert.Equal(ManagerServiceRequestOutcome.Conflict, outcome);
+        Assert.Equal(ServiceRequestStatus.IN_PROGRESS, request.Status);
+        Assert.Equal(AssignmentStatus.IN_PROGRESS, assignment.Status);
+    }
+
+    [Fact]
     public async Task Close_ClosesResolvedRequest_AndWritesManagerAuditActivity()
     {
         await using var db = CreateDb();
@@ -270,7 +295,10 @@ public sealed class ManagerServiceRequestReviewTests
             assignment.Id,
             workResult: "Đã xử lý hoàn tất và kiểm tra vận hành.",
             performedBy: assignment.StaffUserId);
-        db.AddRange(request, assignment, result);
+        var evidence = new ServiceRequestEvidenceFile(
+            request.Id, result.Id, "ket-qua.jpg", "image/jpeg", 1024,
+            $"{request.Id:N}/ket-qua.jpg", assignment.StaffUserId, now.AddMinutes(5));
+        db.AddRange(request, assignment, result, evidence);
         await db.SaveChangesAsync();
         return (request, assignment);
     }

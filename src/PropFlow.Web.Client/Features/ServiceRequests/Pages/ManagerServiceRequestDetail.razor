@@ -12,7 +12,7 @@
 
     <section class="request-hero" aria-labelledby="manager-request-title">
         <div class="hero-copy">
-            <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>FE-05.5 · FE-05.7 · FE-05.8 · Manager workspace</div>
+            <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>Không gian điều phối yêu cầu</div>
             <div class="hero-title-row">
                 <h1 id="manager-request-title">Chi tiết yêu cầu</h1>
                 <span class="status-badge status-progress"><i></i>@StatusLabel(detail?.Status)</span>
@@ -175,12 +175,20 @@
                 </section>
 
                 <section class="result-evidence" aria-labelledby="result-evidence-title">
-                    <header><div><span class="material-symbols-outlined">photo_library</span><strong id="result-evidence-title">Ảnh minh chứng sau xử lý</strong></div><small>0 ảnh</small></header>
-                    <div class="result-evidence-empty">
-                        <span class="material-symbols-outlined">imagesmode</span>
-                        <strong>Chưa có ảnh kết quả</strong>
-                        <p>Ảnh Staff gửi sẽ hiển thị tại đây khi contract tệp đính kèm của Service Request được bổ sung.</p>
-                    </div>
+                    <header><div><span class="material-symbols-outlined">photo_library</span><strong id="result-evidence-title">Ảnh minh chứng sau xử lý</strong></div><small>@SelectedEvidence.Count ảnh</small></header>
+                    @if (SelectedEvidence.Count == 0)
+                    {
+                        <div class="result-evidence-empty"><span class="material-symbols-outlined">imagesmode</span><strong>Chưa có ảnh kết quả</strong><p>Staff cần hoàn thành bước tải ảnh bằng chứng trước khi Manager nghiệm thu.</p></div>
+                    }
+                    else
+                    {
+                        <div class="result-evidence-grid">
+                            @foreach (var evidence in SelectedEvidence)
+                            {
+                                <button type="button" @onclick="() => OpenEvidencePreview(evidence)"><span class="material-symbols-outlined">image</span><strong>@evidence.FileName</strong><small>@FormatBytes(evidence.SizeBytes) · @evidence.UploadedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></button>
+                            }
+                        </div>
+                    }
                 </section>
 
                 <label class="note-field result-note"><span>Ghi chú nghiệm thu</span><textarea rows="3" maxlength="2000" @bind="reviewDecisionNote" placeholder="Nhập nhận xét cho Staff hoặc ghi chú nghiệm thu…"></textarea></label>
@@ -195,6 +203,21 @@
                 <button type="button" class="approve-action" disabled="@(savingResolution || !CanReviewStaffResult)" @onclick="ApproveResultAsync"><span class="material-symbols-outlined">task_alt</span>@(savingResolution ? "Đang lưu…" : "Xác nhận đã hoàn thành")</button>
                 <button type="button" class="close-request-action" disabled="@(savingResolution || detail?.Status != "RESOLVED")" @onclick="OpenClosePanel"><span class="material-symbols-outlined">lock</span>Đóng yêu cầu</button>
             </footer>
+        </section>
+    </div>
+}
+
+@if (showEvidencePreview)
+{
+    <div class="dialog-backdrop evidence-preview-backdrop" @onclick="CloseEvidencePreview">
+        <section class="manager-dialog evidence-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="manager-evidence-preview-title" @onclick:stopPropagation="true">
+            <header><div><span class="dialog-icon"><span class="material-symbols-outlined">image</span></span><div><h2 id="manager-evidence-preview-title">Ảnh bằng chứng xử lý</h2><p>@evidencePreviewName</p></div></div><button type="button" aria-label="Đóng" @onclick="CloseEvidencePreview"><span class="material-symbols-outlined">close</span></button></header>
+            <div class="evidence-preview-body">
+                @if (loadingEvidencePreview) { <div class="evidence-preview-state"><span class="material-symbols-outlined spin">progress_activity</span><strong>Đang tải ảnh…</strong></div> }
+                else if (!string.IsNullOrWhiteSpace(evidencePreviewError)) { <div class="evidence-preview-state is-error"><span class="material-symbols-outlined">broken_image</span><strong>Không tải được ảnh</strong><p>@evidencePreviewError</p></div> }
+                else if (!string.IsNullOrWhiteSpace(evidencePreviewSource)) { <img src="@evidencePreviewSource" alt="Ảnh bằng chứng @evidencePreviewName" /> }
+            </div>
+            <footer><button type="button" class="dialog-cancel" @onclick="CloseEvidencePreview">Đóng</button></footer>
         </section>
     </div>
 }
@@ -266,7 +289,9 @@
     private bool showNotePanel;
     private bool showUiNotice;
     private bool showClosePanel;
+    private bool showEvidencePreview;
     private bool loadingStaff;
+    private bool loadingEvidencePreview;
     private bool savingAssignment;
     private bool savingResolution;
     private bool savingClose;
@@ -277,10 +302,13 @@
     private string? resultActionNotice;
     private string? closeRequestNote;
     private string? closeActionNotice;
+    private string? evidencePreviewName;
+    private string? evidencePreviewSource;
+    private string? evidencePreviewError;
     private Guid? selectedStaffUserId;
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem? selectedActivity;
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption> staffOptions = [];
-    private string noticeMessage = "Chức năng này thuộc FE-05.7/FE-07 và chưa được triển khai trong FE-05.5.";
+    private string noticeMessage = "Chức năng tạo Maintenance Task được triển khai trong luồng bảo trì.";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -297,7 +325,9 @@
     }
 
     private bool CanAssign => detail?.Status is "UNDER_REVIEW" or "ASSIGNED" or "IN_PROGRESS";
-    private bool CanReviewStaffResult => selectedActivity?.ActivityType == "WORK_RESULT_ADDED" && detail?.Status == "IN_PROGRESS";
+    private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestEvidenceItem> SelectedEvidence =>
+        selectedActivity is null ? [] : detail?.Evidence.Where(x => x.ActivityId == selectedActivity.Id).ToArray() ?? [];
+    private bool CanReviewStaffResult => selectedActivity?.ActivityType == "WORK_RESULT_ADDED" && detail?.Status == "IN_PROGRESS" && SelectedEvidence.Count > 0;
     private IEnumerable<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption> FilteredStaff =>
         string.IsNullOrWhiteSpace(staffSearch)
             ? staffOptions
@@ -337,6 +367,22 @@
     }
 
     private void CloseResultPanel() => selectedActivity = null;
+
+    private async Task OpenEvidencePreview(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestEvidenceItem evidence)
+    {
+        showEvidencePreview = true;
+        loadingEvidencePreview = true;
+        evidencePreviewName = evidence.FileName;
+        evidencePreviewSource = null;
+        evidencePreviewError = null;
+        var result = await Api.DownloadEvidenceAsync(evidence.DownloadUrl);
+        loadingEvidencePreview = false;
+        if (!result.IsSuccess || result.Data is null) { evidencePreviewError = result.Message ?? "Không thể tải ảnh bằng chứng."; return; }
+        if (!result.Data.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) { evidencePreviewError = "Tệp bằng chứng không phải định dạng ảnh."; return; }
+        evidencePreviewSource = $"data:{result.Data.ContentType};base64,{Convert.ToBase64String(result.Data.Bytes)}";
+    }
+
+    private void CloseEvidencePreview(){ showEvidencePreview = false; evidencePreviewSource = null; evidencePreviewError = null; }
 
     private async Task RequestReworkAsync()
     {
@@ -445,6 +491,7 @@
     }
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem? LatestActivity() => detail?.Activities.LastOrDefault(x => !string.IsNullOrWhiteSpace(x.Detail));
     private static string ActivityLabel(string type) => type switch { "CREATED" => "Cư dân gửi yêu cầu", "MANAGER_REVIEWED" => "Ban Quản lý tiếp nhận", "PROPERTY_CONTEXT_ASSOCIATED" => "Đã gắn bối cảnh tài sản", "ASSIGNED" => "Đã phân công", "REASSIGNED" => "Đã điều phối lại", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Ghi nhận kết quả", "REWORK_REQUESTED" => "Manager yêu cầu xử lý lại", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", _ => "Cập nhật trạng thái" };
+    private static string FormatBytes(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{bytes / 1024d:0.##} KB";
     private static string StatusTransition(string? from, string? to) => to is null ? "Yêu cầu đã được cập nhật." : $"{StatusLabel(from)} → {StatusLabel(to)}";
     private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));
     private static string StatusLabel(string? status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đã tiếp nhận", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang tiến hành", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", null => "Đang tải…", _ => status };

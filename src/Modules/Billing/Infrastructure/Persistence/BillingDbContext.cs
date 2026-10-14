@@ -12,6 +12,7 @@ public class BillingDbContext(DbContextOptions<BillingDbContext> options) : DbCo
     public DbSet<FeeType> FeeTypes => Set<FeeType>();
     public DbSet<FeeRateRule> FeeRateRules => Set<FeeRateRule>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceRecipient> InvoiceRecipients => Set<InvoiceRecipient>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
     public DbSet<InvoiceStatusHistory> InvoiceStatusHistory => Set<InvoiceStatusHistory>();
 

@@ -12,6 +12,7 @@ public class CommunicationDbContext : DbContext
     }
 
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<FinanceEmail> FinanceEmails => Set<FinanceEmail>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementVersion> AnnouncementVersions => Set<AnnouncementVersion>();
     public DbSet<AnnouncementAudience> AnnouncementAudiences => Set<AnnouncementAudience>();

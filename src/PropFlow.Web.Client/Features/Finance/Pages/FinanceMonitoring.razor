@@ -1,0 +1,6 @@
+@page "/operations/finance"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
+@using PropFlow.Web.Client.Features.Finance.Components
+<PageTitle>Phí, hóa đơn và công nợ — PropFlow</PageTitle>
+<PropFlow.Web.Client.Features.Finance.Pages.ServiceFeeManagement />

@@ -16,7 +16,7 @@
         </div>
         <div class="overdue-actions">
             <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ nợ"><button type="button" disabled><span class="material-symbols-outlined">download</span> Xuất sổ nợ (Excel)</button></span>
-            <span title="Chưa khả dụng: chưa có tích hợp ZNS hoặc quy trình gửi nhắc nợ"><button type="button" disabled><span class="material-symbols-outlined">warning</span> Kích hoạt ZNS / Gửi nhắc nhở (@ApartmentCount căn)</button></span>
+            <FinanceReminderButton InvoiceIds="@((data?.Items ?? []).Select(x => x.Id).ToArray())" />
         </div>
     </header>
 
@@ -42,18 +42,21 @@
     </section>
 
     <section class="overdue-table-card" aria-labelledby="overdue-list-title">
+        @if (debtInfo is not null) { <p role="status">@debtInfo</p> }
         <h2 class="visually-hidden" id="overdue-list-title">Danh sách công nợ quá hạn</h2>
         <div class="overdue-table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ HỒ SƠ &amp;<br />KỲ NỢ</th><th>CĂN HỘ</th><th>KHOẢN PHÍ TỒN ĐỌNG</th><th>NỢ GỐC</th><th>SỐ NGÀY<br />QUÁ HẠN</th><th>CẤP ĐỘ XỬ LÝ</th><th>THAO TÁC</th></tr></thead><tbody>
             @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có công nợ phù hợp" Message="Hãy thay đổi từ khóa hoặc khoảng ngày quá hạn." Icon="inbox" /></td></tr> }
-            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hồ sơ @item.InvoiceNumber" /></td><td><strong>@item.InvoiceNumber</strong><small>Kỳ @Period(item)</small></td><td><strong>Căn hộ @ShortId(item.ApartmentUnitId)</strong><small>Mã căn hộ</small></td><td><strong>Nghĩa vụ kỳ @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>Hạn thanh toán: @Date(item.DueDate)</small></td><td class="debt-cell"><strong>@Money(item.OutstandingAmount)</strong><small>Dư nợ chưa xác nhận thanh toán</small></td><td><span class="days-pill @DaysClass(item.DaysOverdue)">@item.DaysOverdue ngày</span></td><td><span class="level-pill @LevelClass(item.DaysOverdue)">@LevelName(item.DaysOverdue)</span></td><td><button class="process-button @ActionClass(item.DaysOverdue)" type="button" disabled title="Chưa có API quy trình xử lý nợ">Xử lý nợ</button></td></tr> } }
+            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hồ sơ @item.InvoiceNumber" /></td><td><strong>@item.InvoiceNumber</strong><small>Kỳ @Period(item)</small></td><td><strong>Căn hộ @ShortId(item.ApartmentUnitId)</strong><small>Mã căn hộ</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>Hạn thanh toán: @Date(item.DueDate)</small></td><td class="debt-cell"><strong>@Money(item.OutstandingAmount)</strong><small>Dư nợ chưa xác nhận thanh toán</small></td><td><span class="days-pill @DaysClass(item.DaysOverdue)">@item.DaysOverdue ngày</span></td><td><span class="level-pill @LevelClass(item.DaysOverdue)">@LevelName(item.DaysOverdue)</span></td><td><button class="process-button @ActionClass(item.DaysOverdue)" type="button" @onclick="ShowDebtInfo" title="Xem hướng dẫn xử lý">Xử lý nợ</button></td></tr> } }
         </tbody></table></div>
         @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="overdue-pagination"><span>Hiển thị @FilteredItems.Count bản ghi phù hợp trên trang; tổng cộng @data.Total hồ sơ nợ quá hạn</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
 </div>
 
 @code {
+    private string? debtInfo;
+    private void ShowDebtInfo() => debtInfo = "Quy trình xử lý nợ chưa triển khai theo yêu cầu. Bạn có thể gửi nhắc thanh toán hoặc thu tiền tại trang hóa đơn chưa thanh toán.";
     private PagedFinanceResult<InvoiceBalance>? data;
     private bool loading;
     private string? error;

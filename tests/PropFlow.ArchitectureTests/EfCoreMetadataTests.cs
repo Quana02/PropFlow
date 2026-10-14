@@ -43,6 +43,7 @@ using PropFlow.Modules.Complaints.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestCategories;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -437,7 +438,7 @@ public class EfCoreMetadataTests
         var model = context.Model;
 
         Assert.Equal("service_requests", model.GetDefaultSchema());
-        Assert.Equal(5, model.GetEntityTypes().Count());
+        Assert.Equal(6, model.GetEntityTypes().Count());
 
         var categoryEntity = model.FindEntityType(typeof(ServiceRequestCategory));
         Assert.NotNull(categoryEntity);
@@ -484,6 +485,17 @@ public class EfCoreMetadataTests
         Assert.Contains(feedbackEntity.GetForeignKeys(), fk =>
             fk.PrincipalEntityType.ClrType == typeof(ServiceRequest) &&
             fk.Properties.Single().Name == nameof(ServiceRequestFeedback.ServiceRequestId));
+
+        var evidenceEntity = model.FindEntityType(typeof(ServiceRequestEvidenceFile));
+        Assert.NotNull(evidenceEntity);
+        Assert.Equal("service_request_evidence_files", evidenceEntity.GetTableName());
+        Assert.Equal("service_requests", evidenceEntity.GetSchema());
+        Assert.Contains(evidenceEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequest) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestEvidenceFile.ServiceRequestId));
+        Assert.Contains(evidenceEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequestActivity) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestEvidenceFile.ActivityId));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
             fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "ApartmentUnitId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));
@@ -542,7 +554,11 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("maintenance", model.GetDefaultSchema());
-        Assert.Equal(5, model.GetEntityTypes().Count());
+        Assert.Equal(6, model.GetEntityTypes().Count());
+        var attachmentEntity = model.FindEntityType(typeof(MaintenanceResultAttachment));
+        Assert.NotNull(attachmentEntity);
+        Assert.Equal("maintenance_result_attachments", attachmentEntity.GetTableName());
+        Assert.Contains(attachmentEntity.GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(MaintenanceResult));
 
         var scheduleEntity = model.FindEntityType(typeof(MaintenanceSchedule));
         Assert.NotNull(scheduleEntity);
@@ -629,7 +645,11 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("billing", model.GetDefaultSchema());
-        Assert.Equal(5, model.GetEntityTypes().Count());
+        Assert.Equal(6, model.GetEntityTypes().Count());
+        var recipientEntity = model.FindEntityType(typeof(InvoiceRecipient));
+        Assert.NotNull(recipientEntity);
+        Assert.Equal("invoice_recipients", recipientEntity.GetTableName());
+        Assert.Contains(recipientEntity.GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(Invoice));
 
         var feeTypeEntity = model.FindEntityType(typeof(FeeType));
         Assert.NotNull(feeTypeEntity);
@@ -663,7 +683,8 @@ public class EfCoreMetadataTests
             index.Properties.Select(property => property.Name).SequenceEqual([
                 nameof(Invoice.ApartmentUnitId),
                 nameof(Invoice.BillingPeriodStart),
-                nameof(Invoice.BillingPeriodEnd)
+                nameof(Invoice.BillingPeriodEnd),
+                nameof(Invoice.Type)
             ]));
         Assert.Equal("numeric(18,0)", invoiceEntity.FindProperty(nameof(Invoice.Subtotal))!.GetColumnType());
         Assert.Equal("numeric(18,0)", invoiceEntity.FindProperty(nameof(Invoice.TotalAmount))!.GetColumnType());
@@ -889,7 +910,13 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("communication", model.GetDefaultSchema());
-        Assert.Equal(4, model.GetEntityTypes().Count());
+        Assert.Equal(5, model.GetEntityTypes().Count());
+        var emailEntity = model.FindEntityType(typeof(FinanceEmail));
+        Assert.NotNull(emailEntity);
+        Assert.Equal("finance_emails", emailEntity.GetTableName());
+        Assert.Empty(emailEntity.GetForeignKeys());
+        Assert.Contains(emailEntity.GetIndexes(), index => index.IsUnique
+            && index.Properties.Select(property => property.Name).SequenceEqual([nameof(FinanceEmail.EventId), nameof(FinanceEmail.UserId)]));
 
         var notificationEntity = model.FindEntityType(typeof(Notification));
         Assert.NotNull(notificationEntity);
