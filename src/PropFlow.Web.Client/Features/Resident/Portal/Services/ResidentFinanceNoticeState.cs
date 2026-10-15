@@ -11,6 +11,14 @@ public sealed class ResidentFinanceNoticeState(FinanceCycleApi api)
     public string? Error { get; private set; }
     public event Action? Changed;
     private int generation;
+    private int receivedVersion;
+    public void Receive(ResidentNotice notice)
+    {
+        receivedVersion++;
+        Items = Items.Where(x => x.Id != notice.Id).Append(notice).OrderByDescending(x => x.CreatedAt).Take(100).ToArray();
+        Error = null;
+        Changed?.Invoke();
+    }
     public void Reset()
     {
         generation++; Items = []; Error = null; Loading = false; Changed?.Invoke();
@@ -19,11 +27,16 @@ public sealed class ResidentFinanceNoticeState(FinanceCycleApi api)
     {
         if (Loading) return;
         var requestGeneration = generation;
+        var requestVersion = receivedVersion;
         Loading = true;
         try {
             var result = await api.GetAsync<ResidentNotice[]>("api/v1/resident/notifications");
             if (requestGeneration == generation) {
-                if (result.IsSuccess) Items = result.Data ?? [];
+                if (result.IsSuccess) {
+                    var snapshot = result.Data ?? [];
+                    Items = requestVersion == receivedVersion ? snapshot : snapshot.Concat(Items.Where(x => !snapshot.Any(y => y.Id == x.Id)))
+                        .OrderByDescending(x => x.CreatedAt).Take(100).ToArray();
+                }
                 Error = result.IsSuccess ? null : result.Message;
             }
         } catch { if (requestGeneration == generation) Error = "Không thể tải thông báo. Vui lòng thử lại."; }

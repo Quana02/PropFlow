@@ -1,0 +1,54 @@
+@inject FinanceCycleApi Api
+<FinancePricingDialog Title="@($"Điện và nước đã dùng · {UnitNumber}")" Busy="busy" OnClose="Closed">
+    <p>Nhập điện (kWh) và nước (m³) đã dùng theo từng căn hộ. Hóa đơn tháng sau nhân sản lượng với đơn giá có hiệu lực của tháng hóa đơn.</p>
+    <label>Tháng sử dụng<input type="month" value="@month" max="@DateTime.Today.ToString("yyyy-MM")" @onchange="ChangeMonth" disabled="@busy" aria-invalid="@(monthError is not null)" aria-describedby="electricity-month-error" />@if (monthError is not null) { <small id="electricity-month-error" role="alert">@monthError</small> }</label>
+    @if (error is not null) { <p role="alert">@error</p> }
+    @if (notice is not null) { <p role="status">@notice</p> }
+    @if (busy) { <p role="status">Đang xử lý…</p> }
+    @if (data is not null)
+    {
+        <form @onsubmit="Save" @onsubmit:preventDefault novalidate>
+            <FinanceNumberField Label="Điện đã dùng (kWh)" Required="false" ValidChanged="value => kwhValid = value" @bind-Value="kwh" DecimalPlaces="3" ShowErrors="validate" Disabled="@(busy || data.IsLocked)" />
+            <FinanceNumberField Label="Nước đã dùng (m³)" ValidChanged="value => waterValid = value" @bind-Value="waterM3" DecimalPlaces="3" Required="false" ShowErrors="validate" Disabled="@(busy || data.IsLocked)" />
+            <p>Thu trên hóa đơn tháng @data.UsageMonth.AddMonths(1).ToString("MM/yyyy"). Nhập 0 nếu đã kiểm tra và không sử dụng; để trống là chưa có số liệu. Chỉ phát hành khi đủ các sản lượng đã cấu hình.</p>
+            @if (data.IsLocked) { <p role="status">Đã có hóa đơn cho kỳ thu này. Số điện được khóa để giữ nguyên chứng từ.</p> }
+            else { <button type="submit" disabled="@busy">Lưu điện và nước</button> }
+            @if (data.UpdatedAt is { } at) { <small>Lần lưu gần nhất: @at.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small> }
+        </form>
+    }
+</FinancePricingDialog>
+@code {
+    [Parameter] public Guid ApartmentId { get; set; }
+    [Parameter] public string UnitNumber { get; set; } = "";
+    [Parameter] public EventCallback Closed { get; set; }
+    private string month = DateTime.Today.ToString("yyyy-MM");
+    private decimal? kwh, waterM3;
+    private ElectricityUsageView? data;
+    private bool busy, validate;
+    private bool kwhValid = true, waterValid = true;
+    private string? error, notice, monthError;
+    protected override Task OnInitializedAsync() => Load();
+    private async Task ChangeMonth(ChangeEventArgs args) { month = args.Value?.ToString() ?? ""; notice = null; validate = false; await Load(); }
+    private bool TryMonth(out DateOnly date) => DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", out date);
+    private async Task Load()
+    {
+        data = null; kwh = waterM3 = null; kwhValid = waterValid = true; error = monthError = null;
+        if (!TryMonth(out var date)) { monthError = "Vui lòng chọn tháng sử dụng điện hợp lệ."; return; }
+        if (date > new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)) { monthError = "Không được nhập số điện cho tháng tương lai."; return; }
+        busy = true;
+        try { var result = await Api.GetAsync<ElectricityUsageView>($"api/v1/billing/cycle/apartments/{ApartmentId}/electricity?usageMonth={date:yyyy-MM-dd}");
+            if (result.IsSuccess) { data = result.Data; kwh = data?.Kwh; waterM3 = data?.WaterM3; } else error = result.Message;
+        } finally { busy = false; }
+    }
+    private async Task Save()
+    {
+        if (busy || data is null || data.IsLocked) return;
+        validate = true; error = notice = null;
+        if (!TryMonth(out var date) || !kwhValid || !waterValid || kwh is null && waterM3 is null) { error = "Vui lòng kiểm tra tháng và sản lượng điện, nước được báo lỗi."; return; }
+        busy = true; error = notice = null;
+        try { var result = await Api.PutAsync<object>($"api/v1/billing/cycle/apartments/{ApartmentId}/utilities", new UtilityUsageInput(date, kwh, waterM3));
+            if (result.IsSuccess) { await Load(); notice = "Đã lưu điện và nước. Sản lượng tháng này được thu trên hóa đơn tháng sau theo đơn giá đã cấu hình."; }
+            else error = result.Message;
+        } finally { busy = false; }
+    }
+}

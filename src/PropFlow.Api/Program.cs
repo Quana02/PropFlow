@@ -203,6 +203,7 @@ builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
 builder.Services.AddScoped<IBillingCycle, BillingCycle>();
 builder.Services.AddScoped<IRentalPricing, RentalPricing>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationStore, PropFlow.Modules.Communication.Infrastructure.FinanceNoticePublisher>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationRealtime, PropFlow.Modules.Communication.Presentation.FinanceNotificationRealtime>();
 builder.Services.AddScoped<IFinanceNoticePublisher, FinanceNoticePublisherBridge>();
 builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("Authentication:Mail"));
 builder.Services.AddHostedService<BillingCycleWorker>();
@@ -358,6 +359,7 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
+app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

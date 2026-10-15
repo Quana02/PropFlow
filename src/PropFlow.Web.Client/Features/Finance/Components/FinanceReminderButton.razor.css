@@ -1,4 +1,6 @@
-.finance-reminder { display: inline-flex; }
-.finance-reminder button { min-height: 40px; padding: 8px 15px; border: 0; border-radius: 10px; background: var(--overdue-accent, var(--unpaid-accent, #32ac8b)); color: white; font-size: 11px; font-weight: 700; cursor: pointer; }
-.finance-reminder button:disabled { cursor: default; opacity: .6; }
-.material-symbols-outlined { margin-right: 5px; font-size: 15px; vertical-align: -3px; }
+.finance-reminder { display: inline-flex; vertical-align: middle; margin: 3px; }
+button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 12px; border: 0; border-radius: 9px; background: #10a580; color: #fff; font: 700 11px/1.4 Inter, sans-serif; white-space: nowrap; cursor: pointer; }
+button:hover { background: #059669; }
+button:disabled { opacity: .6; cursor: default; }
+.material-symbols-outlined { font-size: 16px; }
+span[role=status] { display: block; max-width: 280px; white-space: normal; font-size: 11px; line-height: 1.5; }
