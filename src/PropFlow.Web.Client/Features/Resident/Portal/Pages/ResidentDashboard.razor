@@ -276,8 +276,11 @@
             await ApplyRequestFiltersAsync();
     }
 
-    private void OpenService(string categoryCode, string title) =>
+    private void OpenService(string categoryCode, string title)
+    {
+        if (categoryCode == "BILLING") { Navigation.NavigateTo("/resident/billing"); return; }
         _serviceRequestModal?.Open(categoryCode, title);
+    }
 
     private IReadOnlyList<ResidentServiceSearchItem> SearchResults
     {

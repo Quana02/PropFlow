@@ -7,9 +7,10 @@
 <div class="collection-backdrop" popover="manual">
 <section @ref="dialog" class="collection-dialog" role="dialog" aria-modal="true" aria-labelledby="collect-title" tabindex="-1">
     <h2 id="collect-title">@ActionLabel — @Invoice.InvoiceNumber</h2>
-    <p>Còn phải thu: <strong>@Invoice.OutstandingAmount.ToString("N0") đ</strong></p>
+    <p>Còn phải thu: <strong>@Invoice.OutstandingAmount.ToString("N0", Vi) đ</strong></p>
     <form @onsubmit="Save" @onsubmit:preventDefault>
-        <label>Số tiền (VND)<input type="number" min="1" max="@Invoice.OutstandingAmount" step="1" required @bind="amount" disabled="@busy" /></label>
+        <label>Số tiền (VND)<input type="text" inputmode="numeric" maxlength="25" value="@amountText" @oninput="AmountChanged" aria-invalid="@(amountError is not null)" aria-describedby="collection-amount-error" disabled="@busy" /></label>
+        @if (amountError is not null) { <p id="collection-amount-error" role="alert">@amountError</p> }
         <label>Phương thức<PropFlowSelect @bind-Value="method" Options="PaymentMethodOptions" AriaLabel="Phương thức thanh toán" Disabled="busy" /></label>
         <label>Mã tham chiếu<input maxlength="100" @bind="reference" disabled="@busy" /></label>
         <label>Ghi chú<input maxlength="1000" @bind="note" disabled="@busy" /></label>
@@ -22,7 +23,7 @@
 </div>
 @if (confirming)
 {
-    <PropFlowConfirmationDialog Title="Xác nhận thu tiền?" Message="@($"Bạn có muốn ghi nhận thu {amount:N0} đ cho hóa đơn {Invoice.InvoiceNumber} không?")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="ConfirmSave" OnCancel="() => confirming = false" />
+    <PropFlowConfirmationDialog Title="Xác nhận thu tiền?" Message="@($"Bạn có muốn ghi nhận thu {amount.ToString("N0", Vi)} đ cho hóa đơn {Invoice.InvoiceNumber} không?")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="ConfirmSave" OnCancel="() => confirming = false" />
 }
 @code {
     private ElementReference dialog;
@@ -50,15 +51,33 @@
     ];
     private decimal amount; private string method = "CASH", reference = "", note = "";
     private string? error; private bool verified, busy, confirming; private string key = Guid.NewGuid().ToString(), lastPayload = "";
-    protected override void OnInitialized() => amount = Invoice.OutstandingAmount;
+    private string amountText = "";
+    private string? amountError;
+    private static readonly System.Globalization.NumberFormatInfo Vi = new() { NumberGroupSeparator = ".", NumberDecimalSeparator = "," };
+    protected override void OnInitialized() { amount = Invoice.OutstandingAmount; amountText = amount.ToString("N0", Vi); }
+    private void AmountChanged(ChangeEventArgs args)
+    {
+        var raw = args.Value?.ToString() ?? "";
+        if (raw.Any(c => !char.IsAsciiDigit(c) && c != '.')) { amountError = "Chỉ nhập số tiền VND nguyên, ví dụ 10.000."; amountText = raw; amount = 0; return; }
+        var digits = raw.Replace(".", "");
+        if (!decimal.TryParse(digits, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out amount)) {
+            amountText = raw; amountError = "Vui lòng nhập số tiền hợp lệ."; return;
+        }
+        amountText = amount.ToString("N0", Vi);
+        amountError = amount <= 0 ? "Số tiền phải lớn hơn 0 đ." : amount > Invoice.OutstandingAmount
+            ? $"Số tiền không được vượt quá số còn phải thu {Invoice.OutstandingAmount.ToString("N0", Vi)} đ." : null;
+        error = null;
+    }
     private Task Save() {
         if (busy || !verified) return Task.CompletedTask;
+        if (amountError is not null) return Task.CompletedTask;
         if (amount <= 0 || amount > Invoice.OutstandingAmount || amount != decimal.Round(amount, 0)) { error = "Số tiền phải là VND nguyên và không vượt dư nợ."; return Task.CompletedTask; }
         confirming = true;
         return Task.CompletedTask;
     }
     private async Task ConfirmSave() {
         if (busy || !verified) return;
+        if (amountError is not null) { confirming = false; return; }
         if (amount <= 0 || amount > Invoice.OutstandingAmount || amount != decimal.Round(amount, 0)) { error = "Số tiền phải là VND nguyên và không vượt dư nợ."; return; }
         var input = new CollectionInput(Invoice.Id, amount, method, reference, note);
         var payload = System.Text.Json.JsonSerializer.Serialize(input);

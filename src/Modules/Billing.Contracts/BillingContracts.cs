@@ -6,6 +6,7 @@ public sealed record InvoiceFinancialSnapshot(Guid Id, string InvoiceNumber, Gui
 
 public interface IInvoiceFinancialSource
 {
+    Task<bool> IsRecipientAsync(Guid invoiceId, Guid userId, CancellationToken ct) => Task.FromResult(false);
     Task<InvoiceFinancialSnapshot?> FindAsync(Guid invoiceId, CancellationToken ct);
     async Task<IReadOnlyList<InvoiceFinancialSnapshot>> FindManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {

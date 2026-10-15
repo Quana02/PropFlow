@@ -13,7 +13,7 @@ public static class FinanceDocuments
         .Replace("; không thu phí xe riêng.", ";", StringComparison.Ordinal);
     public static string Money(decimal amount) => amount.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) + " đ";
     public static Guid EventId(string key) => new(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
-    public static string Invoice(Invoice invoice, InvoiceRecipient recipient, decimal paid)
+    public static string Invoice(Invoice invoice, InvoiceRecipient recipient, decimal paid, string? noticeTitle = null, string? noticeMessage = null)
     {
         var visible = recipient.Capacity == "OWNER" ? invoice.Items.Where(x => x.FeeCodeSnapshot != RentalPricing.FeeCode).ToArray() : invoice.Items.ToArray();
         var lines = string.Join("", visible.Select(x => $"<tr><td>{Encode(x.FeeNameSnapshot)}<br><small>{Encode(InvoiceDescription(x.Description))}</small></td><td>{x.Quantity:N2} {Encode(x.UnitName)}</td><td>{Money(x.UnitRate)}{(x.AmountDivisor > 1 ? $" / {x.AmountDivisor} ngày" : "")}</td><td>{Money(x.LineAmount)}</td></tr>"));
@@ -23,6 +23,8 @@ public static class FinanceDocuments
         var breakdown = hasRental ? $"<p>Phí dịch vụ: {Money(service)}<br>Tiền thuê: {Money(rental)}</p>" : "";
         var total = service + rental;
         var correction = invoice.Note?.StartsWith("[ĐIỀU CHỈNH]") == true ? "<p><b>BẢN HÓA ĐƠN</b></p>" : "";
+        if (noticeTitle is not null)
+            correction = $"<section style='padding:16px;margin:20px 0;border-left:4px solid #e11d48;background:#fff1f2'><h2 style='margin:0 0 8px;color:#be123c;font-size:18px'>{Encode(noticeTitle)}</h2><p style='margin:0'>{Encode(noticeMessage)}</p></section>" + correction;
         return Wrap(invoice.Type == InvoiceType.MONTHLY_RENTAL ? "HÓA ĐƠN TIỀN THUÊ THÁNG" : "HÓA ĐƠN PHÍ DỊCH VỤ", recipient, $"{correction}<p>Số hóa đơn: <b>{Encode(invoice.InvoiceNumber)}</b> · Ngày: {invoice.IssueDate:dd/MM/yyyy}</p><p>Kỳ phí: {invoice.BillingPeriodStart:MM/yyyy} · Hạn thanh toán: <b>{invoice.DueDate:dd/MM/yyyy}</b></p><table><thead><tr><th>Khoản phí</th><th>Số lượng</th><th>Đơn giá (VND)</th><th>Thành tiền</th></tr></thead><tbody>{lines}</tbody></table>{breakdown}<p class='total'>Tổng cộng: {Money(total)}</p><p>Đã xác nhận: {Money(paid)} · Còn phải trả: <b>{Money(Math.Max(0, total - paid))}</b></p>");
     }
     public static string Receipt(Invoice invoice, InvoiceRecipient recipient, PaymentNoticeSnapshot payment, decimal paid) =>

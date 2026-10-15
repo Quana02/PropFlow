@@ -1,0 +1,52 @@
+@using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Features.Finance.Models
+@using PropFlow.Web.Client.Shared.Feedback
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject FinanceCycleApi Api
+<div class="payment-backdrop" popover="manual">
+<section @ref="dialog" class="payment-dialog" role="dialog" aria-modal="true" aria-labelledby="submit-payment-title" tabindex="-1">
+    <h2 id="submit-payment-title">Xác nhận đã thanh toán</h2>
+    <p>@Invoice.Number · Còn phải trả: <strong>@Money(Invoice.Outstanding) đ</strong></p>
+    <p>Chỉ gửi sau khi bạn đã chuyển khoản. Kế toán sẽ kiểm tra trước khi xác nhận khoản thu.</p>
+    <form @onsubmit="Ask" @onsubmit:preventDefault>
+        <label>Số tiền đã chuyển (VND)<input aria-label="Số tiền đã chuyển" inputmode="numeric" maxlength="25" value="@amountText" @oninput="AmountChanged" disabled="@busy" /></label>
+        <label>Mã giao dịch chuyển khoản<input aria-label="Mã giao dịch chuyển khoản" maxlength="100" @bind="reference" disabled="@busy" /></label>
+        <label>Ghi chú<input maxlength="1000" @bind="note" disabled="@busy" /></label>
+        @if (error is not null) { <p role="alert">@error</p> }
+        <div class="dialog-actions"><button type="button" disabled="@busy" @onclick="() => Closed.InvokeAsync()">Hủy</button><button class="primary" type="submit" disabled="@busy">Gửi kế toán kiểm tra</button></div>
+    </form>
+</section>
+</div>
+@if (confirming) { <PropFlowConfirmationDialog Title="Gửi xác nhận thanh toán?" Message="@($"Gửi khoản {Money(amount)} đ của hóa đơn {Invoice.Number} cho kế toán kiểm tra?")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="busy" OnConfirm="Submit" OnCancel="() => confirming = false" /> }
+@code {
+    [Parameter, EditorRequired] public HouseholdInvoice Invoice { get; set; } = default!;
+    [Parameter] public EventCallback Saved { get; set; }
+    [Parameter] public EventCallback Closed { get; set; }
+    private ElementReference dialog; private IJSObjectReference? module;
+    private decimal amount; private string amountText = "", reference = "", note = "";
+    private string? error; private bool busy, confirming;
+    private string key = Guid.NewGuid().ToString("N"), previousPayload = "";
+    private static readonly System.Globalization.NumberFormatInfo Format = new() { NumberGroupSeparator = ".", NumberDecimalSeparator = "," };
+    private static string Money(decimal value) => value.ToString("N0", Format);
+    protected override void OnInitialized() { amount = Invoice.Outstanding; amountText = Money(amount); }
+    private void AmountChanged(ChangeEventArgs args) {
+        var raw = args.Value?.ToString() ?? ""; amountText = raw;
+        if (raw.Any(c => !char.IsAsciiDigit(c) && c != '.') || !decimal.TryParse(raw.Replace(".", ""), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out amount)) { amount = 0; error = "Vui lòng nhập số tiền VND nguyên hợp lệ."; return; }
+        amountText = Money(amount); error = amount <= 0 ? "Số tiền phải lớn hơn 0 đ." : amount > Invoice.Outstanding ? $"Số tiền không được vượt quá {Money(Invoice.Outstanding)} đ." : null;
+    }
+    private void Ask() { if (busy) return; AmountChanged(new ChangeEventArgs { Value = amountText }); if (error is not null) return; if (string.IsNullOrWhiteSpace(reference)) { error = "Vui lòng nhập mã giao dịch chuyển khoản."; return; } confirming = true; }
+    private async Task Submit() {
+        if (busy) return; busy = true;
+        try {
+            var input = new CollectionInput(Invoice.Id, amount, "BANK_TRANSFER", reference.Trim(), note.Trim());
+            var payload = System.Text.Json.JsonSerializer.Serialize(input);
+            if (previousPayload != payload) { key = Guid.NewGuid().ToString("N"); previousPayload = payload; }
+            var result = await Api.SubmitPaymentAsync(input, key);
+            confirming = false;
+            if (result.IsSuccess) await Saved.InvokeAsync(); else error = result.Message ?? "Không thể gửi xác nhận thanh toán.";
+        } finally { busy = false; }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2"); await module.InvokeVoidAsync("open", dialog); }
+    public async ValueTask DisposeAsync() { if (module is null) return; try { await module.InvokeVoidAsync("close", dialog); await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

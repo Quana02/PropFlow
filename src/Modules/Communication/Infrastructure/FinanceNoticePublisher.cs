@@ -11,13 +11,13 @@ public sealed class FinanceNoticePublisher(CommunicationDbContext db, IFinanceNo
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({n.EventId.ToString() + n.UserId.ToString()}, 1))", ct);
-        if (await db.Notifications.AnyAsync(x => x.RecipientUserId == n.UserId && x.SourceEventId == n.EventId, ct)
-            || await db.FinanceEmails.AnyAsync(x => x.EventId == n.EventId && x.UserId == n.UserId && x.Address == n.Email, ct)) return;
+        var existingNotification = n.UserId is not null && await db.Notifications.AnyAsync(
+            x => x.RecipientUserId == n.UserId && x.SourceEventId == n.EventId, ct);
         var emailEvent = n.PreviousRecipientEventId ?? n.EventId;
         if (!string.IsNullOrWhiteSpace(n.Email))
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({emailEvent.ToString() + n.Email.ToUpperInvariant()}, 2))", ct);
         Notification? notification = null;
-        if (n.UserId is Guid userId) {
+        if (n.UserId is Guid userId && !existingNotification) {
             notification = new Notification(userId, n.SourceType == "PAYMENT" ? NotificationType.PAYMENT : NotificationType.INVOICE,
                 n.Title, n.Message, DateTimeOffset.UtcNow, n.EventId, n.SourceType, n.SourceId, n.ActionPath);
             db.Notifications.Add(notification);
