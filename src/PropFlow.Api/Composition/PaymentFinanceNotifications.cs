@@ -8,7 +8,8 @@ namespace PropFlow.Api.Composition;
 // A delivery failure never undoes a recorded collection; the existing worker retries it.
 public sealed class PaymentFinanceNotifications(PaymentFinanceStore store, IBillingCycle cycle, ILogger<PaymentFinanceNotifications> logger) : IPaymentFinanceStore
 {
-    public Task<PagedPayments> ListAsync(string status,string? search,int page,int pageSize,string sort,CancellationToken ct) => store.ListAsync(status,search,page,pageSize,sort,ct);
+    public Task<IReadOnlyList<PaymentRow>> ByInvoiceAsync(Guid invoiceId, CancellationToken ct) => store.ByInvoiceAsync(invoiceId, ct);
+    public Task<PagedPayments> ListAsync(string status,string? search,int page,int pageSize,string sort,CancellationToken ct,string? filter = null) => store.ListAsync(status,search,page,pageSize,sort,ct,filter);
     public Task<PaymentRow?> FindAsync(Guid id,CancellationToken ct) => store.FindAsync(id,ct);
     public async Task<MutationResult> ChangeAsync(Guid id,string action,string? reason,string key,Guid actor,CancellationToken ct) => await Notify(await store.ChangeAsync(id,action,reason,key,actor,ct),ct);
     public async Task<MutationResult> CollectAsync(CollectPaymentRequest request,string key,Guid actor,CancellationToken ct) => await Notify(await store.CollectAsync(request,key,actor,ct),ct);

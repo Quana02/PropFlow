@@ -82,7 +82,8 @@ public static class AuthRegistration
             {
                 OnMessageReceived = context =>
                 {
-                    if (context.HttpContext.Request.Path.StartsWithSegments("/hubs/maintenance") &&
+                    if ((context.HttpContext.Request.Path.StartsWithSegments("/hubs/maintenance") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/resident-notifications")) &&
                         context.Request.Query.TryGetValue("access_token", out var accessToken))
                     {
                         context.Token = accessToken;

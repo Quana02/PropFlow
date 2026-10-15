@@ -1,0 +1,36 @@
+<label>@Label
+    <input type="text" inputmode="@(DecimalPlaces == 0 ? "numeric" : "decimal")" value="@raw" @oninput="Change" disabled="@Disabled" maxlength="32" aria-label="@Label" aria-required="@Required" aria-invalid="@Invalid" aria-describedby="@(Invalid ? errorId : hintId)" />
+    <small id="@hintId">@(DecimalPlaces == 0 ? "Nhập số nguyên, không dùng dấu phân cách hàng nghìn." : $"Tối đa {DecimalPlaces} chữ số thập phân; dùng dấu phẩy hoặc dấu chấm.")</small>
+    @if (Invalid) { <small id="@errorId" class="field-error" role="alert">@Error</small> }
+</label>
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public decimal? Value { get; set; }
+    [Parameter] public EventCallback<decimal?> ValueChanged { get; set; }
+    [Parameter] public decimal Min { get; set; }
+    [Parameter] public decimal Max { get; set; } = 1000000;
+    [Parameter] public int DecimalPlaces { get; set; }
+    [Parameter] public bool Required { get; set; } = true;
+    [Parameter] public EventCallback<bool> ValidChanged { get; set; }
+    [Parameter] public bool ShowErrors { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    private readonly string errorId = $"finance-error-{Guid.NewGuid():N}", hintId = $"finance-hint-{Guid.NewGuid():N}";
+    private string raw = "";
+    private decimal? lastValue;
+    private bool initialized, touched;
+    private string? Error => !Required && string.IsNullOrWhiteSpace(raw) ? null : FinanceInputValidation.Number(raw, Label, Min, Max, DecimalPlaces, out _);
+    private bool Invalid => !Disabled && (touched || ShowErrors) && Error is not null;
+    protected override void OnParametersSet()
+    {
+        if (!initialized || Value != lastValue) { raw = Value?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? ""; lastValue = Value; initialized = true; }
+    }
+    private async Task Change(ChangeEventArgs args)
+    {
+        raw = args.Value?.ToString() ?? "";
+        touched = true;
+        FinanceInputValidation.Number(raw, Label, Min, Max, DecimalPlaces, out var parsed);
+        lastValue = parsed;
+        await ValueChanged.InvokeAsync(parsed);
+        await ValidChanged.InvokeAsync(Error is null);
+    }
+}

@@ -16,13 +16,13 @@ public sealed record CancelInput([Required] string Reason);
 public sealed record InvoiceFilter(string? Search = null, string? Status = null, Guid? ApartmentId = null,
     DateOnly? From = null, DateOnly? To = null, string? Settlement = null);
 public sealed record InvoiceLineView(Guid Id, Guid? FeeTypeId, Guid? RateId, string FeeCode, string FeeName,
-    string CalculationMethod, decimal Quantity, string? UnitName, decimal UnitRate, decimal Amount, string? Description);
+    string CalculationMethod, decimal Quantity, string? UnitName, decimal UnitRate, decimal Amount, string? Description, int AmountDivisor = 1);
 public sealed record InvoiceHistoryView(string? FromStatus, string ToStatus, Guid ChangedBy, DateTimeOffset ChangedAt, string? Reason);
 public sealed record InvoiceView(Guid Id, string InvoiceNumber, Guid ApartmentUnitId, string ApartmentNumber,
     DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly? IssueDate, DateOnly? DueDate, string Status,
     decimal TotalAmount, decimal ConfirmedPaidAmount, decimal OutstandingAmount, string SettlementStatus,
     DateTimeOffset CreatedAt, Guid CreatedBy, DateTimeOffset? IssuedAt, Guid? IssuedBy, string? Note,
-    IReadOnlyList<InvoiceLineView> Lines, IReadOnlyList<InvoiceHistoryView> History);
+    IReadOnlyList<InvoiceLineView> Lines, IReadOnlyList<InvoiceHistoryView> History, string? ResidentName = null, string? InvoiceType = null);
 public sealed record InvoicePage(int Total, int Page, int PageSize, decimal TotalAmount, decimal ConfirmedPaidAmount,
     decimal OutstandingAmount, IReadOnlyList<InvoiceView> Items);
 public sealed record BillingApartment(Guid Id, string UnitNumber);

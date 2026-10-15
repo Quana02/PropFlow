@@ -3,6 +3,8 @@ const states = new WeakMap();
 export function open(dialog) {
     close(dialog);
     const previous = document.activeElement;
+    const overlay = dialog.closest('[popover]');
+    overlay?.showPopover();
     const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const keydown = event => {
         if (event.key !== 'Tab') return;
@@ -14,7 +16,7 @@ export function open(dialog) {
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
     dialog.addEventListener('keydown', keydown);
-    states.set(dialog, { previous, keydown });
+    states.set(dialog, { previous, keydown, overlay });
     requestAnimationFrame(() => (dialog.querySelector('[data-autofocus]') ?? dialog).focus());
 }
 
@@ -22,6 +24,7 @@ export function close(dialog) {
     const state = states.get(dialog);
     if (!state) return;
     dialog.removeEventListener('keydown', state.keydown);
+    state.overlay?.hidePopover();
     if (state.previous instanceof HTMLElement && document.contains(state.previous)) state.previous.focus();
     states.delete(dialog);
 }

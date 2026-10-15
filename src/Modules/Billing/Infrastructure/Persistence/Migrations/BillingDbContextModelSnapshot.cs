@@ -23,6 +23,60 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PropFlow.Modules.Billing.Domain.ElectricityUsages.ElectricityUsage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ApartmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("apartment_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<decimal?>("Kwh")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("kwh");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<DateOnly>("UsageMonth")
+                        .HasColumnType("date")
+                        .HasColumnName("usage_month");
+
+                    b.Property<decimal?>("WaterM3")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("water_m3");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApartmentId", "UsageMonth")
+                        .IsUnique();
+
+                    b.ToTable("electricity_usages", "billing", t =>
+                        {
+                            t.HasCheckConstraint("ck_electricity_usage_kwh", "kwh >= 0 AND kwh <= 1000000");
+
+                            t.HasCheckConstraint("ck_utility_usage_water", "water_m3 >= 0 AND water_m3 <= 1000000");
+                        });
+                });
+
             modelBuilder.Entity("PropFlow.Modules.Billing.Domain.FeeRateRules.FeeRateRule", b =>
                 {
                     b.Property<Guid>("Id")

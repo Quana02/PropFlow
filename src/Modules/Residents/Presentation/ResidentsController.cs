@@ -61,14 +61,17 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
             query = query.Where(r => !currentOwnerIds.Contains(r.Id) && db.ResidentApartments.Any(a => a.ResidentId == r.Id && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value) && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate)));
         else if (relationshipKind == ResidentApartmentRelationshipKind.OWNER_AND_RESIDENT)
             query = query.Where(r => currentOwnerIds.Contains(r.Id) && db.ResidentApartments.Any(a => a.ResidentId == r.Id && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value) && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate)));
-        if (residencyType.HasValue)
-            query = query.Where(r => db.ResidentApartments.Any(a => a.ResidentId == r.Id && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value) && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate) && a.ResidencyType == residencyType));
-        if (householdRole.HasValue)
-            query = query.Where(r => db.ResidentApartments.Any(a => a.ResidentId == r.Id && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value) && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate) && a.HouseholdRole == householdRole));
+        if (residencyType.HasValue || householdRole.HasValue)
+            query = query.Where(r => db.ResidentApartments.Any(a => a.ResidentId == r.Id
+                && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value)
+                && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate)
+                && (!residencyType.HasValue || a.ResidencyType == residencyType)
+                && (!householdRole.HasValue || a.HouseholdRole == householdRole)));
         var total = await query.CountAsync(ct);
-        var residents = await query.OrderBy(r => r.FullName).Skip((pageIndex - 1) * pageSize).Take(pageSize)
+        pageIndex = Math.Min(pageIndex, Math.Max(1, (int)Math.Ceiling(total / (double)pageSize)));
+        var residents = await query.OrderBy(r => r.FullName).ThenBy(r => r.Id).Skip((pageIndex - 1) * pageSize).Take(pageSize)
             .Select(r => new ResidentListProjection(r.Id, r.ResidentCode, r.FullName, r.PhoneNumber, r.Email, r.Status, r.UserId != null,
-                db.ResidentApartments.Where(a => a.ResidentId == r.Id && a.Status == ResidencyStatus.ACTIVE && a.EndDate == null)
+                db.ResidentApartments.Where(a => a.ResidentId == r.Id && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate))
                     .OrderByDescending(a => a.HouseholdRole == HouseholdRole.HOUSEHOLD_HEAD).Select(a => (Guid?)a.ApartmentUnitId).FirstOrDefault()))
             .ToListAsync(ct);
         var residentIds = residents.Select(r => r.Id).ToArray();
