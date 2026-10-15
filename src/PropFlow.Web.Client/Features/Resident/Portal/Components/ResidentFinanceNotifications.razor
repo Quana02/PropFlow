@@ -3,7 +3,7 @@
 @inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState NoticeState
 @inject NavigationManager Navigation
 @if (Compact) {
-    <button class="glass-inner notice-list-item" type="button" @onclick='() => Navigation.NavigateTo("/resident/billing")'>
+    <button class="glass-inner notice-list-item" type="button" @onclick="OpenLatest">
         <span><em class="notice-kind finance"><i></i>[Tài chính]</em><small>@(notices.FirstOrDefault()?.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy") ?? "Hóa đơn")</small></span>
         <strong>@(notices.FirstOrDefault()?.Title ?? "Hóa đơn và thanh toán của tôi")</strong><p>@(notices.FirstOrDefault()?.Message ?? "Xem hóa đơn, trạng thái thanh toán và phiếu xác nhận.")</p>
     </button>
@@ -39,5 +39,11 @@
     private void Refresh() => _ = InvokeAsync(StateHasChanged);
     private Task Load() => NoticeState.ReloadAsync();
     private Task Read(Guid id) => NoticeState.ReadAsync(id);
+    private async Task OpenLatest()
+    {
+        var latest = notices.FirstOrDefault();
+        if (latest is not null) await Read(latest.Id);
+        Navigation.NavigateTo(latest?.ActionPath?.StartsWith("/resident/billing", StringComparison.Ordinal) == true ? latest.ActionPath : "/resident/billing");
+    }
     public void Dispose() => NoticeState.Changed -= Refresh;
 }

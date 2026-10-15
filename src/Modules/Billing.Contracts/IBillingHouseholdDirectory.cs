@@ -6,6 +6,8 @@ public sealed record BillingHousehold(Guid ApartmentId, string UnitNumber, decim
 
 public interface IBillingHouseholdDirectory
 {
+    Task<IReadOnlyDictionary<Guid, int>> ResidentCountsAsync(IReadOnlyCollection<Guid> apartmentIds, DateOnly date, CancellationToken ct) =>
+        throw new NotSupportedException("The household directory must provide residency counts for water billing.");
     Task<IReadOnlyDictionary<Guid, Guid>> LinkedAccountsAsync(IReadOnlyCollection<Guid> residentIds, CancellationToken ct) =>
         Task.FromResult<IReadOnlyDictionary<Guid, Guid>>(new Dictionary<Guid, Guid>());
     Task<string?> RecipientEmailAsync(Guid? userId, string? snapshotEmail, CancellationToken ct) => Task.FromResult(snapshotEmail);

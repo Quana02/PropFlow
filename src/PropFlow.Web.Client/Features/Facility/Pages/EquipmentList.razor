@@ -164,8 +164,8 @@
             </div>
 
             <!-- Lọc theo Loại thiết bị -->
-            <div class="w-full sm:w-48 relative">
-                <PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="Filter.EquipmentType" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" />
+            <div class="w-full sm:w-48 relative fe04-light-select">
+                <PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="EquipmentTypeFilterString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" />
             </div>
 
             
@@ -602,7 +602,11 @@
 @if (IsManager && IsFormOpen)
 {
     <div class="fe04-modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-        <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+        <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden"
+             role="dialog"
+             aria-modal="@(!IsEquipmentTypeDialogOpen)"
+             aria-hidden="@(IsEquipmentTypeDialogOpen ? "true" : null)"
+             inert="@(IsEquipmentTypeDialogOpen ? "inert" : null)">
             <div class="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
@@ -636,8 +640,14 @@
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
                             Phân Loại Thiết Bị <span class="text-rose-500">*</span>
                         </label>
-                        <div class="relative">
-                            <PropFlowSelect Options="EquipmentTypeCreateOptions" @bind-Value="FormModel.EquipmentType"  />
+                        <div class="flex gap-2">
+                            <div class="relative flex-1 fe04-light-select">
+                                <PropFlowSelect Options="EquipmentTypeCreateOptions" @bind-Value="EquipmentTypeFormString" AriaLabel="Chọn loại thiết bị" />
+                            </div>
+                            @if (IsManager)
+                            {
+                                <button type="button" class="px-3 rounded-xl border border-sky-300 text-sky-700 text-xs font-bold" @ref="EquipmentTypeTrigger" @onclick="OpenEquipmentTypeDialog">+ Thêm loại</button>
+                            }
                         </div>
                     </div>
 
@@ -756,6 +766,25 @@
     <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedEquipmentToEdit is null ? "Bạn có muốn tạo thiết bị này không?" : "Bạn có muốn cập nhật thiết bị này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveEquipment" OnCancel="CloseSaveConfirmation" />
 }
 
+@if (IsManager && IsEquipmentTypeDialogOpen)
+{
+    <div class="fe04-nested-modal-backdrop fixed inset-0 flex items-center justify-center p-4" @onclick="CloseEquipmentTypeDialog">
+        <section class="fe04-nested-modal w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="equipment-type-dialog-title"
+                 @onclick:stopPropagation="true"
+                 @onkeydown="HandleEquipmentTypeDialogKeyDown"
+                 @onkeydown:stopPropagation="true">
+            <h3 id="equipment-type-dialog-title" class="text-lg font-bold">Thêm loại thiết bị</h3>
+            <label class="mt-4 block text-sm font-medium" for="equipment-type-name">Tên loại</label>
+            <input id="equipment-type-name" @ref="EquipmentTypeNameInput" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" @bind="NewEquipmentType.Name" @onkeydown="HandleEquipmentTypeNameKeyDown" />
+            @if (!string.IsNullOrWhiteSpace(EquipmentTypeDialogError)) { <p class="mt-2 text-sm text-rose-700" role="alert">@EquipmentTypeDialogError</p> }
+            <div class="mt-5 flex justify-end gap-2"><button type="button" class="px-4 py-2" @onclick="CloseEquipmentTypeDialog">Hủy</button><button type="button" @ref="EquipmentTypeSaveButton" disabled="@IsCreatingEquipmentType" class="rounded-xl bg-sky-600 px-4 py-2 text-white" @onclick="CreateEquipmentType" @onkeydown="HandleEquipmentTypeSaveKeyDown">@(IsCreatingEquipmentType ? "Đang lưu..." : "Lưu")</button></div>
+        </section>
+    </div>
+}
+
 @code {
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
         new("", "Tất cả trạng thái"),
@@ -765,25 +794,8 @@
         new("OUT_OF_SERVICE", "● Ngừng phục vụ")
     ];
 
-    private static readonly IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions = [
-        new("", "Tất cả loại thiết bị"),
-        new("Máy lạnh", "Máy lạnh"),
-        new("Máy phát điện", "Máy phát điện"),
-        new("Thang máy", "Thang máy"),
-        new("Bơm nước", "Bơm nước"),
-        new("Hệ thống điện", "Hệ thống điện"),
-        new("Khác", "Khác")
-    ];
-
-    private static readonly IReadOnlyList<PropFlowSelectOption> EquipmentTypeCreateOptions = [
-        new("", "Chọn phân loại"),
-        new("Máy lạnh", "Máy lạnh"),
-        new("Máy phát điện", "Máy phát điện"),
-        new("Thang máy", "Thang máy"),
-        new("Bơm nước", "Bơm nước"),
-        new("Hệ thống điện", "Hệ thống điện"),
-        new("Khác", "Khác")
-    ];
+    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions => [new("", "Tất cả loại thiết bị"), .. EquipmentTypes.Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Name))];
+    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeCreateOptions => [new("", "Chọn phân loại"), .. EquipmentTypes.Where(x => x.IsActive).Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Name))];
 
     private IReadOnlyList<PropFlowSelectOption> FacilityOptions =>
         new[] { new PropFlowSelectOption("", "Tất cả CSVT"), new PropFlowSelectOption("building-level", "Thiết bị cấp chung cư") }
@@ -812,6 +824,16 @@
     private List<FacilityModel> FacilityList { get; set; } = new();
 
     private bool IsManager { get; set; }
+    private IReadOnlyList<EquipmentTypeModel> EquipmentTypes { get; set; } = [];
+    private bool IsEquipmentTypeDialogOpen { get; set; }
+    private bool IsCreatingEquipmentType { get; set; }
+    private string? EquipmentTypeDialogError { get; set; }
+    private CreateEquipmentTypeModel NewEquipmentType { get; set; } = new();
+    private ElementReference EquipmentTypeTrigger;
+    private ElementReference EquipmentTypeNameInput;
+    private ElementReference EquipmentTypeSaveButton;
+    private bool FocusEquipmentTypeNameInput;
+    private bool RestoreEquipmentTypeTriggerFocus;
     [SupplyParameterFromQuery(Name = "equipmentId")] public Guid? EquipmentId { get; set; }
     private Guid? LoadedEquipmentId;
 
@@ -850,13 +872,24 @@
         set => FormModel.FacilityId = Guid.TryParse(value, out var g) ? g : null;
     }
 
+    private string EquipmentTypeFilterString
+    {
+        get => Filter.EquipmentTypeId?.ToString() ?? "";
+        set => Filter.EquipmentTypeId = Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private string EquipmentTypeFormString
+    {
+        get => FormModel.EquipmentTypeId?.ToString() ?? "";
+        set => FormModel.EquipmentTypeId = Guid.TryParse(value, out var id) ? id : null;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
         IsManager = AssetPermissions.CanManage(user);
 
-        await LoadFacilitiesAsync();
-        await Task.WhenAll(LoadData(), LoadSummaryAsync());
+        await Task.WhenAll(LoadFacilitiesAsync(), LoadEquipmentTypesAsync(), LoadData(), LoadSummaryAsync());
         _ = RefreshStatusAsync(StatusRefreshCancellation.Token);
     }
 
@@ -948,6 +981,13 @@
         FacilityList = facilities;
     }
 
+    private async Task LoadEquipmentTypesAsync()
+    {
+        var result = await EquipmentApiClient.GetEquipmentTypesAsync(activeOnly: false);
+        if (result.IsSuccess && result.Data is not null) EquipmentTypes = result.Data;
+        else ErrorMessage ??= result.Message ?? "Không thể tải loại thiết bị.";
+    }
+
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
     {
         if (e.Key == "Enter") await ApplyFilter();
@@ -991,7 +1031,7 @@
         {
             Name = item.Name,
             FacilityId = item.FacilityId,
-            EquipmentType = item.EquipmentType,
+            EquipmentTypeId = item.EquipmentTypeId,
             Manufacturer = item.Manufacturer,
             Model = item.Model,
             SerialNumber = item.SerialNumber,
@@ -1015,7 +1055,7 @@
             {
                 Name = FormModel.Name,
                 FacilityId = FormModel.FacilityId,
-                EquipmentType = FormModel.EquipmentType,
+                EquipmentTypeId = FormModel.EquipmentTypeId,
                 Manufacturer = FormModel.Manufacturer,
                 Model = FormModel.Model,
                 SerialNumber = FormModel.SerialNumber,
@@ -1056,7 +1096,7 @@
                 {
                     Name = FormModel.Name,
                     FacilityId = FormModel.FacilityId,
-                    EquipmentType = FormModel.EquipmentType,
+                    EquipmentTypeId = FormModel.EquipmentTypeId,
                     Manufacturer = FormModel.Manufacturer,
                     Model = FormModel.Model,
                     SerialNumber = FormModel.SerialNumber,
@@ -1074,6 +1114,81 @@
             await Task.WhenAll(LoadData(), LoadSummaryAsync());
         }
         finally { IsSaving = false; }
+    }
+
+    private void OpenEquipmentTypeDialog()
+    {
+        if (!IsManager) return;
+        NewEquipmentType = new();
+        EquipmentTypeDialogError = null;
+        FocusEquipmentTypeNameInput = true;
+        IsEquipmentTypeDialogOpen = true;
+    }
+
+    private void CloseEquipmentTypeDialog()
+    {
+        if (IsCreatingEquipmentType) return;
+        IsEquipmentTypeDialogOpen = false;
+        RestoreEquipmentTypeTriggerFocus = true;
+    }
+
+    private Task HandleEquipmentTypeDialogKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CloseEquipmentTypeDialog();
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleEquipmentTypeNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Tab" && e.ShiftKey) await EquipmentTypeSaveButton.FocusAsync();
+    }
+
+    private async Task HandleEquipmentTypeSaveKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Tab" && !e.ShiftKey) await EquipmentTypeNameInput.FocusAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (FocusEquipmentTypeNameInput && IsEquipmentTypeDialogOpen)
+        {
+            FocusEquipmentTypeNameInput = false;
+            await EquipmentTypeNameInput.FocusAsync();
+        }
+
+        if (RestoreEquipmentTypeTriggerFocus && !IsEquipmentTypeDialogOpen)
+        {
+            RestoreEquipmentTypeTriggerFocus = false;
+            await EquipmentTypeTrigger.FocusAsync();
+        }
+    }
+
+    private async Task CreateEquipmentType()
+    {
+        if (!IsManager) return;
+        if (!TryValidate(NewEquipmentType, out var validationMessage))
+        {
+            EquipmentTypeDialogError = validationMessage;
+            return;
+        }
+
+        IsCreatingEquipmentType = true;
+        EquipmentTypeDialogError = null;
+        try
+        {
+            var result = await EquipmentApiClient.CreateEquipmentTypeAsync(NewEquipmentType);
+            if (!result.IsSuccess || result.Data is null)
+            {
+                EquipmentTypeDialogError = result.Message ?? "Không thể tạo loại thiết bị.";
+                return;
+            }
+
+            EquipmentTypes = EquipmentTypes.Append(result.Data).OrderBy(x => x.Name).ToArray();
+            FormModel.EquipmentTypeId = result.Data.Id;
+            IsEquipmentTypeDialogOpen = false;
+            RestoreEquipmentTypeTriggerFocus = true;
+        }
+        finally { IsCreatingEquipmentType = false; }
     }
 
     private static bool TryValidate(object model, out string? message)

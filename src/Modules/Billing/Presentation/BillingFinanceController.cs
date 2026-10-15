@@ -10,11 +10,11 @@ public sealed class BillingFinanceController(BillingFinanceQueries queries) : Co
 {
     [HttpGet("invoices/unpaid")]
     public Task<PagedResult<InvoiceBalance>> Unpaid(string? search, int page = 1, int pageSize = 20,
-        string sortDirection = "desc", CancellationToken ct = default) => queries.UnpaidAsync(search, page, pageSize, sortDirection, ct);
+        string sortDirection = "desc", CancellationToken ct = default, string? filter = null) => queries.UnpaidAsync(search, page, pageSize, sortDirection, ct, filter);
 
     [HttpGet("debts/overdue")]
     public Task<PagedResult<InvoiceBalance>> Overdue(string? search, int page = 1, int pageSize = 20,
-        string sortDirection = "desc", CancellationToken ct = default) => queries.OverdueAsync(search, page, pageSize, sortDirection, ct);
+        string sortDirection = "desc", CancellationToken ct = default, string? filter = null) => queries.OverdueAsync(search, page, pageSize, sortDirection, ct, filter);
 
     [HttpGet("invoices/{id:guid}")]
     public async Task<ActionResult<InvoiceBalance>> Detail(Guid id, CancellationToken ct) =>

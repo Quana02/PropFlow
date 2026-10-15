@@ -10,16 +10,44 @@ namespace PropFlow.Modules.Payments.Infrastructure.Finance;
 
 public sealed class PaymentFinanceStore(PaymentsDbContext db, IInvoiceFinancialSource invoices) : IPaymentFinanceStore
 {
-    public async Task<PagedPayments> ListAsync(string status, string? search, int page, int pageSize, string sortDirection, CancellationToken ct)
+    public async Task<IReadOnlyList<PaymentRow>> ByInvoiceAsync(Guid invoiceId, CancellationToken ct)
+    {
+        var rows = await db.Payments.AsNoTracking().Where(x => x.InvoiceId == invoiceId).OrderByDescending(x => x.PaymentDate).ThenBy(x => x.Id)
+            .Select(x => new PaymentRow(x.Id, x.PaymentNumber, x.InvoiceId, x.Amount, x.PaymentMethodCode, x.PaymentDate,
+                x.ReferenceNumber, x.Note, x.Status.ToString(), x.ConfirmedAt, null, null, null)).ToArrayAsync(ct);
+        return await WithInvoiceIdentityAsync(rows, ct);
+    }
+    public async Task<PagedPayments> ListAsync(string status, string? search, int page, int pageSize, string sortDirection, CancellationToken ct, string? filter = null)
     {
         var parsed = Enum.Parse<PaymentStatus>(status, true); var q = db.Payments.AsNoTracking().Where(x => x.Status == parsed);
-        if (!string.IsNullOrWhiteSpace(search)) { var s = search.Trim().ToUpper(); q = q.Where(x => x.PaymentNumber.Contains(s) || (x.ReferenceNumber != null && x.ReferenceNumber.Contains(s))); }
-        var total = await q.CountAsync(ct); q = sortDirection.Equals("asc", StringComparison.OrdinalIgnoreCase) ? q.OrderBy(x => x.PaymentDate) : q.OrderByDescending(x => x.PaymentDate);
-        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).Select(x => new PaymentRow(x.Id, x.PaymentNumber, x.InvoiceId, x.Amount, x.PaymentMethodCode, x.PaymentDate, x.ReferenceNumber, x.Note, x.Status.ToString(), x.ConfirmedAt)).ToArrayAsync(ct);
-        return new(total, page, pageSize, items);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim(); var s = term.ToUpperInvariant();
+            var matchedInvoices = (await invoices.ListIssuedAsync(ct)).Where(x => x.InvoiceNumber.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || x.ResidentName?.Contains(term, StringComparison.OrdinalIgnoreCase) == true || x.ApartmentNumber?.Contains(term, StringComparison.OrdinalIgnoreCase) == true).Select(x => x.Id).ToArray();
+            q = q.Where(x => x.PaymentNumber.ToUpper().Contains(s) || x.ReferenceNumber != null && x.ReferenceNumber.ToUpper().Contains(s) || matchedInvoices.Contains(x.InvoiceId));
+        }
+        var counts = await q.GroupBy(x => x.PaymentMethodCode).Select(g => new { Method = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Method, x => x.Count, ct);
+        counts["ALL"] = counts.Values.Sum();
+        if (!string.IsNullOrWhiteSpace(filter) && filter != "ALL") q = q.Where(x => x.PaymentMethodCode == filter);
+        var total = await q.CountAsync(ct);
+        page = Math.Min(Math.Max(1, page), Math.Max(1, (int)Math.Ceiling(total / (double)pageSize))); q = sortDirection.Equals("asc", StringComparison.OrdinalIgnoreCase) ? q.OrderBy(x => x.PaymentDate).ThenBy(x => x.Id) : q.OrderByDescending(x => x.PaymentDate).ThenBy(x => x.Id);
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).Select(x => new PaymentRow(x.Id, x.PaymentNumber, x.InvoiceId, x.Amount, x.PaymentMethodCode, x.PaymentDate, x.ReferenceNumber, x.Note, x.Status.ToString(), x.ConfirmedAt, null, null, null)).ToArrayAsync(ct);
+        return new(total, page, pageSize, await WithInvoiceIdentityAsync(items, ct), counts);
     }
-    public Task<PaymentRow?> FindAsync(Guid id, CancellationToken ct) => db.Payments.AsNoTracking().Where(x => x.Id == id)
-        .Select(x => new PaymentRow(x.Id, x.PaymentNumber, x.InvoiceId, x.Amount, x.PaymentMethodCode, x.PaymentDate, x.ReferenceNumber, x.Note, x.Status.ToString(), x.ConfirmedAt)).SingleOrDefaultAsync(ct);
+    public async Task<PaymentRow?> FindAsync(Guid id, CancellationToken ct)
+    {
+        var row = await db.Payments.AsNoTracking().Where(x => x.Id == id)
+            .Select(x => new PaymentRow(x.Id, x.PaymentNumber, x.InvoiceId, x.Amount, x.PaymentMethodCode, x.PaymentDate, x.ReferenceNumber, x.Note, x.Status.ToString(), x.ConfirmedAt, null, null, null)).SingleOrDefaultAsync(ct);
+        return row is null ? null : (await WithInvoiceIdentityAsync([row], ct))[0];
+    }
+    private async Task<PaymentRow[]> WithInvoiceIdentityAsync(IReadOnlyList<PaymentRow> rows, CancellationToken ct)
+    {
+        var identities = (await invoices.FindManyAsync(rows.Select(x => x.InvoiceId).Distinct().ToArray(), ct)).ToDictionary(x => x.Id);
+        return rows.Select(row => identities.TryGetValue(row.InvoiceId, out var identity)
+            ? row with { InvoiceNumber = identity.InvoiceNumber, ApartmentNumber = identity.ApartmentNumber, ResidentName = identity.ResidentName }
+            : row).ToArray();
+    }
     public async Task<MutationResult> ChangeAsync(Guid id, string action, string? reason, string key, Guid actorId, CancellationToken ct)
     {
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{id}|{action}|{reason}")));

@@ -9,7 +9,7 @@ public sealed class MaintenanceAssetSource(PropertyAssetsDbContext db) : IMainte
 {
     public async Task<IReadOnlyList<MaintenanceAssetReference>> GetAvailableAsync(CancellationToken ct)
     {
-        var facilities = await db.Facilities.AsNoTracking().Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null, x.FacilityType)).ToListAsync(ct);
+        var facilities = await db.Facilities.AsNoTracking().Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null, x.FacilityType == null ? null : x.FacilityType.Name)).ToListAsync(ct);
         var equipment = await db.Equipment.AsNoTracking().Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "EQUIPMENT", x.Status.ToString(), x.LocationDescription, x.FacilityId, null)).ToListAsync(ct);
         return facilities.Concat(equipment).OrderBy(x => x.AssetType).ThenBy(x => x.Code).ToArray();
     }
@@ -17,7 +17,7 @@ public sealed class MaintenanceAssetSource(PropertyAssetsDbContext db) : IMainte
     public Task<MaintenanceAssetReference?> GetFacilityAsync(Guid facilityId, CancellationToken ct) =>
         db.Facilities.AsNoTracking()
             .Where(x => x.Id == facilityId)
-            .Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null, x.FacilityType))
+            .Select(x => new MaintenanceAssetReference(x.Id, x.Code, x.Name, "FACILITY", x.Status.ToString(), x.LocationDescription, null, x.FacilityType == null ? null : x.FacilityType.Name))
             .SingleOrDefaultAsync(ct);
 
     public Task<MaintenanceAssetReference?> GetEquipmentAsync(Guid equipmentId, CancellationToken ct) =>

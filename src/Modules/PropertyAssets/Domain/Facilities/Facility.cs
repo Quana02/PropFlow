@@ -16,7 +16,7 @@ public class Facility
         string code,
         string name,
         DateTimeOffset now,
-        string? facilityType = null,
+        Guid? facilityTypeId = null,
         string? locationDescription = null,
         string? description = null,
         Guid? createdBy = null,
@@ -28,7 +28,7 @@ public class Facility
         Id = Guid.NewGuid();
         Code = code.Trim();
         Name = name.Trim();
-        FacilityType = facilityType?.Trim();
+        FacilityTypeId = facilityTypeId;
         LocationDescription = locationDescription?.Trim();
         Description = description?.Trim();
         Status = initialStatus;
@@ -41,7 +41,8 @@ public class Facility
     public Guid Id { get; private set; }
     public string Code { get; private set; } = null!;
     public string Name { get; private set; } = null!;
-    public string? FacilityType { get; private set; }
+    public Guid? FacilityTypeId { get; private set; }
+    public FacilityType? FacilityType { get; private set; }
     public string? LocationDescription { get; private set; }
     public string? Description { get; private set; }
     public MasterDataStatus Status { get; private set; } = MasterDataStatus.ACTIVE;
@@ -55,7 +56,7 @@ public class Facility
 
     public void Update(
         string name,
-        string? facilityType,
+        Guid? facilityTypeId,
         string? locationDescription,
         string? description,
         MasterDataStatus? status,
@@ -65,7 +66,7 @@ public class Facility
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Name = name.Trim();
-        FacilityType = facilityType?.Trim();
+        FacilityTypeId = facilityTypeId;
         LocationDescription = locationDescription?.Trim();
         Description = description?.Trim();
         if (status.HasValue)

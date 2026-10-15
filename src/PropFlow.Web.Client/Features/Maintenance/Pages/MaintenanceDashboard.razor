@@ -1147,7 +1147,7 @@
         try
         {
             var hub = MaintenanceHubConnectionFactory.Create();
-            hub.On<Guid>("TaskUpdated", taskId =>
+            hub.On<Guid>("MaintenanceTaskUpdated", taskId =>
             {
                 return InvokeAsync(async () =>
                 {

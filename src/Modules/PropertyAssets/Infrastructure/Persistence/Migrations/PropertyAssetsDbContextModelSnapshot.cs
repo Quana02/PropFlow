@@ -126,6 +126,10 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("equipment_type");
 
+                    b.Property<Guid?>("EquipmentTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("equipment_type_id");
+
                     b.Property<Guid?>("FacilityId")
                         .HasColumnType("uuid")
                         .HasColumnName("facility_id");
@@ -163,8 +167,8 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
                         .HasDefaultValue("ACTIVE")
                         .HasColumnName("status");
 
@@ -189,11 +193,55 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EquipmentType");
 
+                    b.HasIndex("EquipmentTypeId");
+
                     b.HasIndex("FacilityId");
 
                     b.HasIndex("Status");
 
                     b.ToTable("equipment", "property_assets");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("equipment_types", "property_assets");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", b =>
@@ -205,8 +253,8 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
                         .HasColumnName("code");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -223,10 +271,9 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<string>("FacilityType")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)")
-                        .HasColumnName("facility_type");
+                    b.Property<Guid?>("FacilityTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("facility_type_id");
 
                     b.Property<string>("LocationDescription")
                         .HasMaxLength(255)
@@ -262,21 +309,80 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.HasIndex("FacilityType");
+                    b.HasIndex("FacilityTypeId");
 
                     b.HasIndex("Status");
 
                     b.ToTable("facilities", "property_assets");
                 });
 
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("facility_types", "property_assets");
+                });
+
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Equipment.Equipment", b =>
                 {
+                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType", "Type")
+                        .WithMany()
+                        .HasForeignKey("EquipmentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", "Facility")
                         .WithMany("Equipment")
                         .HasForeignKey("FacilityId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Facility");
+
+                    b.Navigation("Type");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", b =>
+                {
+                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityType", "FacilityType")
+                        .WithMany()
+                        .HasForeignKey("FacilityTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("FacilityType");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", b =>

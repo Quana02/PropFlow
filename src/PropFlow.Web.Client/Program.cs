@@ -45,6 +45,7 @@ builder.Services.AddScoped<IStaffServiceRequestApiClient, StaffServiceRequestApi
 builder.Services.AddScoped<IFinanceApiClient, FinanceApiClient>();
 builder.Services.AddScoped<FinanceCycleApi>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState>();
+builder.Services.AddScoped<ResidentNotificationConnectionFactory>();
 builder.Services.AddScoped<BillingWorkspaceApi>();
 builder.Services.AddScoped<IResidentApiClient, ResidentApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Apartment.Services.IApartmentApiClient, PropFlow.Web.Client.Features.Apartment.Services.ApartmentApiClient>();

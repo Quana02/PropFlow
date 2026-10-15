@@ -13,6 +13,16 @@ namespace PropFlow.Api.Composition;
 public sealed class BillingHouseholdDirectory(ResidentsDbContext residents,
     ApartmentsDbContext apartments, AuthenticationDbContext accounts) : IBillingHouseholdDirectory
 {
+    public async Task<IReadOnlyDictionary<Guid, int>> ResidentCountsAsync(IReadOnlyCollection<Guid> apartmentIds, DateOnly date, CancellationToken ct)
+    {
+        // Count people, not accounts or household heads. Ended rows preserve who lived here on the closing date.
+        var rows = await residents.ResidentApartments.AsNoTracking()
+            .Where(x => apartmentIds.Contains(x.ApartmentUnitId) && x.StartDate <= date
+                && (x.EndDate == null || x.EndDate >= date))
+            .Select(x => new { x.ApartmentUnitId, x.ResidentId }).Distinct().ToArrayAsync(ct);
+        return rows.GroupBy(x => x.ApartmentUnitId).ToDictionary(x => x.Key, x => x.Count());
+    }
+
     public async Task<IReadOnlyDictionary<Guid, Guid>> LinkedAccountsAsync(IReadOnlyCollection<Guid> residentIds, CancellationToken ct)
     {
         var linked = await residents.Residents.AsNoTracking().Where(x => residentIds.Contains(x.Id) && x.UserId != null)

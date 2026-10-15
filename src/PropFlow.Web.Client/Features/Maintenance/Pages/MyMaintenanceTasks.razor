@@ -193,7 +193,7 @@
 @* ── DETAIL MODAL ── *@
 @if (Detail is not null)
 {
-    <div class="smt-backdrop" @onclick="Close" role="presentation">
+    <div class="smt-backdrop" @onclick="CloseAsync" role="presentation">
         <div class="smt-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-label="Chi tiết công việc bảo trì">
 
             <div class="smt-modal-header">
@@ -204,7 +204,7 @@
                         <span class="smt-badge @StatusClass(Detail.Status)">@Status(Detail.Status)</span>
                     </div>
                 </div>
-                <button type="button" class="smt-close-btn" @onclick="Close" aria-label="Đóng">
+                <button type="button" class="smt-close-btn" @onclick="CloseAsync" aria-label="Đóng">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -474,6 +474,9 @@
     string? Error, Validation, ResultValidation;
     int Assigned, Progress, Done;
     private HubConnection? _hubConnection;
+    private Guid? _joinedTaskId;
+    private readonly SemaphoreSlim _realtimeRefreshGate = new(1, 1);
+    private bool _disposed;
 
     private static readonly IReadOnlyList<PropFlowSelectOption> MyTaskStatusOptions = [
         new("", "Tất cả trạng thái"), new("ASSIGNED", "Đã phân công"), new("IN_PROGRESS", "Đang thực hiện")];
@@ -531,21 +534,16 @@
         try
         {
             var hub = MaintenanceHubConnectionFactory.Create();
-            hub.On<Guid>("TaskUpdated", taskId =>
-            {
-                return InvokeAsync(async () =>
-                {
-                    await RefreshForRealtimeAsync(taskId);
-                    StateHasChanged();
-                });
-            });
+            hub.On<Guid>("MaintenanceTaskUpdated", HandleMaintenanceTaskUpdatedAsync);
             hub.Reconnected += _ => InvokeAsync(async () =>
             {
-                await RefreshForRealtimeAsync();
+                await JoinTaskGroupAsync(Detail?.Id);
+                await RefreshForRealtimeAsync(Detail?.Id);
                 StateHasChanged();
             });
             await hub.StartAsync();
             _hubConnection = hub;
+            await JoinTaskGroupAsync(Detail?.Id);
         }
         catch
         {
@@ -571,7 +569,7 @@
             }
             else
             {
-                Close();
+                await CloseAsync();
             }
         }
     }
@@ -625,6 +623,7 @@
         if (r.Data is null) { Error = r.Message ?? "Không thể tải chi tiết."; return; }
         Detail = r.Data;
         await LoadActivities();
+        await JoinTaskGroupAsync(id);
     }
 
     async Task LoadActivities()
@@ -780,7 +779,39 @@
         : MaintenanceProgressLifecycleMapper.Map(Detail);
     bool IsStepCompleted(int step) => Lifecycle.IsStepCompleted(step);
     string StepClass(int step) => Lifecycle.IsStepCompleted(step) ? "is-complete" : Lifecycle.IsStepCurrent(step) ? "is-current" : "is-future";
-    void Close() { Detail = null; Activities = []; }
+    private async Task JoinTaskGroupAsync(Guid? taskId)
+    {
+        if (_hubConnection is null || _hubConnection.State != HubConnectionState.Connected) return;
+        if (_joinedTaskId == taskId) return;
+        if (_joinedTaskId is { } previous) await _hubConnection.InvokeAsync("LeaveTask", previous);
+        if (taskId is { } current) await _hubConnection.InvokeAsync("JoinTask", current);
+        _joinedTaskId = taskId;
+    }
+
+    private async Task HandleMaintenanceTaskUpdatedAsync(Guid taskId)
+    {
+        if (_disposed || !await _realtimeRefreshGate.WaitAsync(0)) return;
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_disposed) return;
+                await RefreshForRealtimeAsync(taskId);
+                StateHasChanged();
+            });
+        }
+        finally
+        {
+            _realtimeRefreshGate.Release();
+        }
+    }
+
+    async Task CloseAsync()
+    {
+        await JoinTaskGroupAsync(null);
+        Detail = null;
+        Activities = [];
+    }
 
     string Asset(MaintenanceTaskModel x) => string.Join(" / ", Assets.Where(a => a.Id == x.FacilityId || a.Id == x.EquipmentId).Select(a => $"{a.Code} · {a.Name}")) is { Length: > 0 } v ? v : "Chưa gắn tài sản";
     string Asset(Guid? facilityId, Guid? equipmentId) => string.Join(" / ", Assets.Where(a => a.Id == facilityId || a.Id == equipmentId).Select(a => $"{a.Code} · {a.Name}")) is { Length: > 0 } v ? v : "Chưa gắn tài sản";
@@ -826,9 +857,17 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         if (_hubConnection is not null)
         {
+            try
+            {
+                if (_joinedTaskId is { } taskId && _hubConnection.State == HubConnectionState.Connected)
+                    await _hubConnection.InvokeAsync("LeaveTask", taskId);
+            }
+            catch { }
             await _hubConnection.DisposeAsync();
         }
+        _realtimeRefreshGate.Dispose();
     }
 }

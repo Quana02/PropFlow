@@ -14,7 +14,9 @@ public class PropertyAssetsDbContext : DbContext
 
     public DbSet<Building> Buildings => Set<Building>();
     public DbSet<Facility> Facilities => Set<Facility>();
+    public DbSet<FacilityType> FacilityTypes => Set<FacilityType>();
     public DbSet<EquipmentEntity> Equipment => Set<EquipmentEntity>();
+    public DbSet<PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType> EquipmentTypes => Set<PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

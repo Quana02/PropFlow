@@ -1,3 +1,4 @@
+@implements IDisposable
 @page "/finance/invoices/unpaid"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
 @attribute [Authorize(Roles = "ACCOUNTANT")]
@@ -29,15 +30,15 @@
 
     <section class="unpaid-toolbar" aria-label="Bộ lọc hóa đơn">
         <div class="unpaid-filters">
-            <label class="unpaid-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm hóa đơn</span><input type="search" placeholder="Tìm theo mã hóa đơn..." @bind="search" @bind:event="oninput" @onkeyup="HandleSearchKey" /></label>
+            <label class="unpaid-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm hóa đơn</span><input type="search" placeholder="Tìm theo mã hóa đơn..." @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
             <button class="unpaid-field" type="button" disabled title="Chưa có API lọc kỳ hóa đơn"><span class="material-symbols-outlined">calendar_month</span>Kỳ hóa đơn hiện tại<span class="material-symbols-outlined">expand_more</span></button>
             <button class="unpaid-field" type="button" disabled title="Dữ liệu thuộc phạm vi được phân quyền">Tất cả phạm vi<span class="material-symbols-outlined">expand_more</span></button>
         </div>
         <div class="status-filters" aria-label="Lọc trạng thái hóa đơn">
-            <button class="@(filter == "ALL" ? "active" : null)" type="button" @onclick='() => SetFilter("ALL")'>Tất cả (@(data?.Total ?? 0))</button>
-            <button class="@(filter == "UNPAID" ? "active" : null)" type="button" @onclick='() => SetFilter("UNPAID")'>Chưa thanh toán (@UnpaidCount)</button>
-            <button class="@(filter == "DUE_SOON" ? "active due" : "due")" type="button" @onclick='() => SetFilter("DUE_SOON")'>Sắp tới hạn 3 ngày (@DueSoonCount)</button>
-            <button class="@(filter == "PARTIAL" ? "active partial" : "partial")" type="button" @onclick='() => SetFilter("PARTIAL")'>Thanh toán một phần (@PartialCount)</button>
+            <button class="@(filter == "ALL" ? "active" : null)" type="button" @onclick='() => SetFilter("ALL")'>Tất cả (@(data?.Counts?.GetValueOrDefault("ALL") ?? data?.Total ?? 0))</button>
+            <button class="@(filter == "UNPAID" ? "active" : null)" type="button" @onclick='() => SetFilter("UNPAID")'>Chưa thanh toán (@(data?.Counts?.GetValueOrDefault("UNPAID") ?? 0))</button>
+            <button class="@(filter == "DUE_SOON" ? "active due" : "due")" type="button" @onclick='() => SetFilter("DUE_SOON")'>Sắp tới hạn 3 ngày (@(data?.Counts?.GetValueOrDefault("DUE_SOON") ?? 0))</button>
+            <button class="@(filter == "PARTIAL" ? "active partial" : "partial")" type="button" @onclick='() => SetFilter("PARTIAL")'>Thanh toán một phần (@(data?.Counts?.GetValueOrDefault("PARTIAL") ?? 0))</button>
             <span title="Chưa có API liên kết giao dịch chờ xác nhận"><button type="button" disabled>Chờ xác nhận giao dịch (—)</button></span>
         </div>
     </section>
@@ -48,16 +49,18 @@
             @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có hóa đơn phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc trạng thái." Icon="inbox" /></td></tr> }
-            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong>@item.InvoiceNumber</strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @ShortId(item.ApartmentUnitId)</strong><small>Mã căn hộ</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><button class="collect-button" type="button" @onclick="() => collecting = item"><span aria-hidden="true">＋</span> Thu tiền</button></td></tr> } }
+            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong><a href="@($"/finance/invoices/{item.Id}")" aria-label="Chi tiết hóa đơn @item.InvoiceNumber">@item.InvoiceNumber</a></strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @(item.ApartmentNumber ?? ShortId(item.ApartmentUnitId))</strong><small>@(item.ResidentName ?? "Chưa có người nhận")</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><div class="invoice-row-actions"><button class="collect-button" type="button" @onclick="() => collecting = item"><span aria-hidden="true">＋</span> Thu tiền</button><FinanceSendInvoiceButton @key="item.Id" InvoiceId="item.Id" /></div></td></tr> } }
         </tbody></table></div>
         @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="unpaid-pagination"><span>Hiển thị @FilteredItems.Count bản ghi phù hợp trên trang; tổng cộng @data.Total hóa đơn chưa thanh toán</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
 </div>
 
 @if (collecting is not null) { <CollectPaymentDialog @key="collecting.Id" Invoice="collecting" Saved="CollectionSaved" Closed="() => collecting = null" /> }
+@if (collectionNotice is not null) { <PropFlow.Web.Client.Shared.Feedback.PropFlowToast Message="@collectionNotice" Severity="success" DurationMs="2000" OnDismiss="() => collectionNotice = null" /> }
 @code {
+    private string? collectionNotice;
     private InvoiceBalance? collecting;
-    private async Task CollectionSaved() { collecting = null; await ReloadAsync(); }
+    private async Task CollectionSaved() { collecting = null; collectionNotice = "Đã ghi nhận thu tiền thành công."; await ReloadAsync(); }
     private PagedFinanceResult<InvoiceBalance>? data;
     private bool loading;
     private string? error;
@@ -66,7 +69,7 @@
     private int page = 1;
     private const int PageSize = 20;
     private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
-    private IReadOnlyList<InvoiceBalance> FilteredItems => (data?.Items ?? []).Where(MatchesFilter).ToArray();
+    private IReadOnlyList<InvoiceBalance> FilteredItems => data?.Items ?? [];
     private int ApartmentCount => data?.Items.Select(x => x.ApartmentUnitId).Distinct().Count() ?? 0;
     private decimal OutstandingTotal => data?.Items.Sum(x => x.OutstandingAmount) ?? 0;
     private int UnpaidCount => data?.Items.Count(x => x.ConfirmedPaidAmount <= 0) ?? 0;
@@ -77,16 +80,42 @@
     private int TotalPages => Math.Max(1, (int)Math.Ceiling((data?.Total ?? 0) / (double)PageSize));
 
     protected override Task OnInitializedAsync() => LoadAsync(1);
-    private async Task LoadAsync(int target) { page = target; loading = true; error = null; var result = await Finance.GetUnpaidInvoicesAsync(page, search); data = result.Data; if (!result.IsSuccess) error = result.Message; loading = false; }
+    private readonly LatestRequest requests = new();
+    private async Task LoadAsync(int target, int delayMs = 0)
+    {
+        page = Math.Max(1, target); loading = true; error = null;
+        await requests.RunAsync(ct => Finance.GetUnpaidInvoicesAsync(page, search, ct, filter), result =>
+        {
+            data = result.IsSuccess ? result.Data : null;
+            page = data?.Page ?? 1;
+            error = result.IsSuccess ? null : result.Message;
+            loading = false;
+        }, delayMs);
+    }
+    private Task SearchChanged() => LoadAsync(1, 350);
+    public void Dispose() => requests.Dispose();
     private Task ReloadAsync() => LoadAsync(page);
     private Task PreviousPage() => LoadAsync(page - 1);
     private Task NextPage() => LoadAsync(page + 1);
-    private async Task HandleSearchKey(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(1); }
-    private void SetFilter(string value) => filter = value;
+    private async Task SetFilter(string value) { filter = value; await LoadAsync(1); }
     private bool MatchesFilter(InvoiceBalance item) => filter switch { "UNPAID" => item.ConfirmedPaidAmount <= 0, "DUE_SOON" => IsDueSoon(item), "PARTIAL" => IsPartial(item), _ => true };
     private bool IsDueSoon(InvoiceBalance item) => item.DueDate is { } due && due.DayNumber >= Today.DayNumber && due.DayNumber - Today.DayNumber <= 3;
     private static bool IsPartial(InvoiceBalance item) => item.ConfirmedPaidAmount > 0 && item.OutstandingAmount > 0;
-    private string DueText(InvoiceBalance item) { if (item.DueDate is not { } due) return "Chưa có hạn"; var days = due.DayNumber - Today.DayNumber; return days switch { < 0 => $"Quá hạn {-days} ngày", 0 => "Đến hạn hôm nay", _ => $"Còn {days} ngày" }; }
+    private string DueText(InvoiceBalance item)
+    {
+        if (item.DueDate is not { } due)
+        {
+            return "Chưa có hạn";
+        }
+
+        var days = due.DayNumber - Today.DayNumber;
+        if (days < 0)
+        {
+            return $"Quá hạn {-days} ngày";
+        }
+
+        return days == 0 ? "Đến hạn hôm nay" : $"Còn {days} ngày";
+    }
     private string DueClass(InvoiceBalance item) => item.DueDate is { } due && due.CompareTo(Today) == -1 ? "due-cell overdue" : "due-cell";
     private static string StatusName(InvoiceBalance item) => IsPartial(item) ? "Đóng một phần" : "Chưa nộp";
     private static string StatusClass(InvoiceBalance item) => IsPartial(item) ? "status-partial" : "status-unpaid";
