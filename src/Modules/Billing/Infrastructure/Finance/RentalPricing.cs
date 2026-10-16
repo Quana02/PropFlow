@@ -37,6 +37,7 @@ public sealed class RentalPricing(BillingDbContext db, IBillingHouseholdDirector
             throw new ArgumentException("Không dùng đồng thời giá tháng và giá ngày trong cùng kỳ. Đổi cơ sở tính từ đầu tháng tiếp theo.");
         if (versions.Any(x => x.EffectiveFrom > input.EffectiveFrom)) throw new ArgumentException("Không chèn đơn giá trước phiên bản tương lai đã có; hãy cập nhật đúng phiên bản hoặc thêm phiên bản sau.");
         var same = versions.SingleOrDefault(x => x.EffectiveFrom == input.EffectiveFrom);
+        if (same is not null && same.UnitRate == input.UnitRate && same.BillingFrequencyCode == input.Basis) return;
         var versionIds = versions.Select(v => v.Id).ToArray();
         var issued = await db.InvoiceItems.AnyAsync(x => x.FeeRateRuleId != null && versionIds.Contains(x.FeeRateRuleId.Value)
             && db.Invoices.Any(i => i.Id == x.InvoiceId && i.Status != PropFlow.Modules.Billing.Domain.Invoices.InvoiceStatus.DRAFT
@@ -51,6 +52,10 @@ public sealed class RentalPricing(BillingDbContext db, IBillingHouseholdDirector
             var rule = new FeeRateRule(fee.Id, "Tiền thuê căn hộ", "FIXED", input.Basis, input.UnitRate, input.EffectiveFrom, actor, now, unitName: input.Basis == "DAILY" ? "ngày" : "tháng");
             if (input.ApartmentTypeId is Guid typeId) rule.AssignApartmentType(typeId); else rule.AssignApartment(input.ApartmentUnitId); db.FeeRateRules.Add(rule);
         }
+        var scope = input.ApartmentTypeId is Guid scopeType
+            ? managed.First(x => x.ApartmentTypeId == scopeType).ApartmentTypeName ?? "loại căn hộ đã chọn"
+            : "căn " + managed.First(x => x.Id == input.ApartmentUnitId).UnitNumber;
+        db.PricingChanges.Add(PricingChangeMessages.Rental(input, scope, actor));
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
 }

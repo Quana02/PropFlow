@@ -11,7 +11,7 @@ public sealed record HouseholdInvoice(Guid Id, string Number, string Apartment, 
     decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null);
 public sealed record ResidentPayment(Guid Id, Guid InvoiceId, string Number, decimal Amount, string Method,
     string Status, DateTimeOffset Date, DateTimeOffset? ConfirmedAt, string? RejectionReason);
-public sealed record ResidentNotice(Guid Id, string Title, string Message, string? ActionPath, bool IsRead, DateTimeOffset CreatedAt);
+public sealed record ResidentNotice(Guid Id, string Title, string Message, string? ActionPath, bool IsRead, DateTimeOffset CreatedAt, string? SourceType = null);
 public sealed record CollectionInput(Guid InvoiceId, decimal Amount, string PaymentMethodCode, string? ReferenceNumber, string? Note);
 public sealed record ReminderResult(int Recipients);
 public sealed class FinanceCycleApi(AuthenticatedApiClient api)

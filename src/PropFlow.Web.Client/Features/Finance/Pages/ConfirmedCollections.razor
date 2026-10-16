@@ -86,7 +86,7 @@
     private async Task SetMethod(string value) { method = value; await LoadAsync(1); }
     private int CountMethod(string value) => data?.Counts?.GetValueOrDefault(value) ?? 0;
     private static string Value(int? value) => value?.ToString("N0") ?? "…";
-    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
     private static string MethodName(string value) => value switch { "BANK_TRANSFER" => "Chuyển khoản", "CASH" => "Tiền mặt", "VIETQR" => "VietQR", "POS" => "POS", _ => value };
 }

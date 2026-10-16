@@ -8,8 +8,8 @@
     @if (data is not null)
     {
         <form @onsubmit="Save" @onsubmit:preventDefault novalidate>
-            <FinanceNumberField Label="Điện đã dùng (kWh)" Required="false" ValidChanged="value => kwhValid = value" @bind-Value="kwh" DecimalPlaces="3" ShowErrors="validate" Disabled="@(busy || data.IsLocked)" />
-            <FinanceNumberField Label="Nước đã dùng (m³)" ValidChanged="value => waterValid = value" @bind-Value="waterM3" DecimalPlaces="3" Required="false" ShowErrors="validate" Disabled="@(busy || data.IsLocked)" />
+            <FinanceNumberField Label="Điện đã dùng (kWh)" Placeholder="Nhập số điện đã dùng" Required="false" ValidChanged="value => kwhValid = value" @bind-Value="kwh" DecimalPlaces="3" ShowErrors="validate" Disabled="@(busy || data.IsLocked)" />
+            <FinanceNumberField Label="Nước đã dùng (m³)" Placeholder="Nhập số nước đã dùng" ValidChanged="value => waterValid = value" @bind-Value="waterM3" DecimalPlaces="3" Required="false" ShowErrors="validate" Disabled="@(busy || data.IsLocked)" />
             <p>Thu trên hóa đơn tháng @data.UsageMonth.AddMonths(1).ToString("MM/yyyy"). Nhập 0 nếu đã kiểm tra và không sử dụng; để trống là chưa có số liệu. Chỉ phát hành khi đủ các sản lượng đã cấu hình.</p>
             @if (data.IsLocked) { <p role="status">Đã có hóa đơn cho kỳ thu này. Số điện được khóa để giữ nguyên chứng từ.</p> }
             else { <button type="submit" disabled="@busy">Lưu điện và nước</button> }

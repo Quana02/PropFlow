@@ -92,7 +92,7 @@
     private async Task SetRange(string value) { range = value; await LoadAsync(1); }
     private bool MatchesRange(InvoiceBalance item) => range switch { "30_60" => item.DaysOverdue is >= 31 and <= 60, "60_90" => item.DaysOverdue is >= 61 and <= 90, "OVER_90" => item.DaysOverdue > 90, _ => true };
     private int CountRange(int min, int max) => data?.Items.Count(x => x.DaysOverdue >= min && x.DaysOverdue <= max) ?? 0;
-    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy") ?? "—";
     private static string Period(InvoiceBalance item) => $"{item.BillingPeriodStart:MM/yyyy} – {item.BillingPeriodEnd:MM/yyyy}";
     private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
@@ -101,4 +101,3 @@
     private static string DaysClass(int days) => days > 90 ? "days-critical" : days > 60 ? "days-warning" : "days-normal";
     private static string ActionClass(int days) => days > 90 ? "action-critical" : "action-normal";
 }
-

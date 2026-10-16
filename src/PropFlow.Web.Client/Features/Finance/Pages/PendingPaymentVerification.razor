@@ -96,7 +96,7 @@
     private void CancelReject() { rejecting = null; rejectReason = string.Empty; }
     private async Task RejectAsync(Guid id) { processing = id; notice = null; error = null; var result = await Finance.RejectPaymentAsync(id, rejectReason, Guid.NewGuid().ToString("N")); if (result.IsSuccess) { notice = "Đã từ chối khoản thanh toán."; rejecting = null; await LoadAsync(page); } else error = result.Message; processing = null; }
     private static string Value(int? value) => value?.ToString("N0") ?? "…";
-    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
     private static string Method(string value) => value switch { "BANK_TRANSFER" => "Chuyển khoản", "CASH" => "Tiền mặt", "VIETQR" => "VietQR", "POS" => "POS", _ => value };
 }

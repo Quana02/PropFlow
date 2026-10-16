@@ -98,6 +98,7 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
             db.FeeRateRules.Add(new FeeRateRule(electricity.Id, $"Điện từ {input.EffectiveFrom:MM/yyyy}", "KWH", "MONTHLY",
                 electricityAmount, input.EffectiveFrom, actor, DateTimeOffset.UtcNow, unitName: "kWh"));
         }
+        db.PricingChanges.Add(PricingChangeMessages.Service(input, actor));
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
     public async Task RunAsync(CancellationToken ct)

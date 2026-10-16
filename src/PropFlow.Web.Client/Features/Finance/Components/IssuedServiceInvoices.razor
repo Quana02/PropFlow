@@ -47,7 +47,7 @@
     private static readonly PropFlowSelectOption[] SettlementOptions = [new("", "Tất cả thanh toán"), new("UNPAID", "Chưa thanh toán"), new("PARTIAL", "Thanh toán một phần"), new("PAID", "Đã thanh toán"), new("OVERDUE", "Quá hạn")];
     private static readonly PropFlowSelectOption[] PageSizeOptions = [new("10", "10 dòng"), new("20", "20 dòng"), new("50", "50 dòng")];
     private static readonly System.Globalization.NumberFormatInfo Vn = new() { NumberGroupSeparator = ".", NumberDecimalSeparator = "," };
-    private static string Money(decimal value) => value.ToString("N0", Vn) + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string OptionalMoney(decimal? value) => value.HasValue ? Money(value.Value) : "Chưa cấu hình";
     private static bool IsOverdue(HouseholdInvoice i) => i.Outstanding > 0 && i.DueDate is { } due && due < DateOnly.FromDateTime(DateTime.Today);
     private static string StatusName(HouseholdInvoice i) => i.Outstanding == 0 ? "Đã thanh toán" : IsOverdue(i) ? "Quá hạn" : i.Paid > 0 ? "Thanh toán một phần" : "Chưa thanh toán";

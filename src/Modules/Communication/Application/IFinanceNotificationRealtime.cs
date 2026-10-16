@@ -1,7 +1,7 @@
 namespace PropFlow.Modules.Communication.Application;
 
 public sealed record FinanceNotificationUpdate(Guid Id, string Title, string Message, string? ActionPath,
-    bool IsRead, DateTimeOffset CreatedAt);
+    bool IsRead, DateTimeOffset CreatedAt, string? SourceType = null);
 
 public interface IFinanceNotificationRealtime
 {

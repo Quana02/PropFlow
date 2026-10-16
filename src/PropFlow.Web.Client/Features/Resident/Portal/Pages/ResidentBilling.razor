@@ -17,12 +17,12 @@
         <h2>@i.Number · Căn hộ @i.Apartment · @(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</h2>
         <p>Kỳ: @i.Period.ToString("MM/yyyy") · Hạn: @i.DueDate?.ToString("dd/MM/yyyy")</p>
         <p class="invoice-status">@(i.Outstanding == 0 ? "Đã thanh toán" : HasPending(i) ? "Chờ kế toán xác minh" : "Chưa thanh toán")</p>
-        <p>Tổng: <strong>@i.Total.ToString("N0") đ</strong> · Đã nhận: @i.Paid.ToString("N0") đ · Còn nợ: <strong>@i.Outstanding.ToString("N0") đ</strong></p>
+        <p>Tổng: <strong>@PropFlowMoneyText.Format(i.Total) đ</strong> · Đã nhận: @PropFlowMoneyText.Format(i.Paid) đ · Còn nợ: <strong>@PropFlowMoneyText.Format(i.Outstanding) đ</strong></p>
         <FinanceDocumentButton Path="@($"api/v1/resident/billing/invoices/{i.Id}/print")" Label="In hóa đơn" />
         <FinanceDocumentButton Path="@($"api/v1/resident/billing/invoices/{i.Id}/print")" Label="Tải hóa đơn" Print="false" />
         @if (i.Outstanding > 0 && !HasPending(i)) { <button type="button" @onclick="() => selected = i">Tôi đã thanh toán</button> }
         @foreach (var p in payments.Where(x => x.InvoiceId == i.Id)) { <div class="payment-row">
-            <p>@p.Number · @p.Amount.ToString("N0") đ · @Status(p.Status)</p>
+            <p>@p.Number · @PropFlowMoneyText.Format(p.Amount) đ · @Status(p.Status)</p>
             @if (p.Status == "CONFIRMED") { <FinanceDocumentButton Path="@($"api/v1/resident/billing/payments/{p.Id}/receipt")" Label="In phiếu xác nhận" /> <FinanceDocumentButton Path="@($"api/v1/resident/billing/payments/{p.Id}/receipt")" Label="Tải phiếu xác nhận" Print="false" /> }
             @if (p.Status == "REJECTED") { <p>Lý do: @p.RejectionReason</p> }
         </div> }
@@ -45,4 +45,3 @@
     } finally { loading = false; } }
     private static string Status(string value) => value switch { "CONFIRMED" => "Đã xác nhận", "PENDING" => "Chờ xác minh", "REJECTED" => "Bị từ chối", _ => value };
 }
-

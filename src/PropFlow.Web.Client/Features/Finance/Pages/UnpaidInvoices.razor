@@ -119,7 +119,7 @@
     private string DueClass(InvoiceBalance item) => item.DueDate is { } due && due.CompareTo(Today) == -1 ? "due-cell overdue" : "due-cell";
     private static string StatusName(InvoiceBalance item) => IsPartial(item) ? "Đóng một phần" : "Chưa nộp";
     private static string StatusClass(InvoiceBalance item) => IsPartial(item) ? "status-partial" : "status-unpaid";
-    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy") ?? "—";
     private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
 }
