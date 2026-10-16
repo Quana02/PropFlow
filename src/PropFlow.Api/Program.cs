@@ -289,6 +289,7 @@ builder.Services.AddScoped<IApartmentOwnershipCommand, PropFlow.Modules.Apartmen
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatusCommand, PropFlow.Modules.Apartments.Application.ApartmentStatusCommand>();
 builder.Services.AddScoped<IResidentApartmentReadSource, ResidentApartmentReadSource>();
 builder.Services.AddScoped<ICurrentBuildingTimeZone, CurrentBuildingTimeZone>();
+builder.Services.AddScoped<ICurrentBuildingFloorLimit, CurrentBuildingFloorLimit>();
 builder.Services.AddScoped<IResidentOverviewSource, ResidentOverviewSource>();
 builder.Services.AddScoped<IServiceRequestOverviewSource, ServiceRequestOverviewSource>();
 builder.Services.AddScoped<AdministrationOverviewQuery>();

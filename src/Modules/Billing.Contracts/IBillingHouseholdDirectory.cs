@@ -6,6 +6,10 @@ public sealed record BillingHousehold(Guid ApartmentId, string UnitNumber, decim
 
 public interface IBillingHouseholdDirectory
 {
+    async Task<IReadOnlyList<BillingApartmentType>> ApartmentTypesAsync(CancellationToken ct) =>
+        (await ManagedApartmentsAsync(ct)).Where(x => x.ApartmentTypeId != null)
+            .Select(x => new BillingApartmentType(x.ApartmentTypeId!.Value, x.ApartmentTypeName ?? "Loại căn hộ"))
+            .DistinctBy(x => x.Id).ToArray();
     Task<IReadOnlyDictionary<Guid, int>> ResidentCountsAsync(IReadOnlyCollection<Guid> apartmentIds, DateOnly date, CancellationToken ct) =>
         throw new NotSupportedException("The household directory must provide residency counts for water billing.");
     Task<IReadOnlyDictionary<Guid, Guid>> LinkedAccountsAsync(IReadOnlyCollection<Guid> residentIds, CancellationToken ct) =>
@@ -22,6 +26,7 @@ public interface IBillingHouseholdDirectory
     }
 }
 public sealed record BillingApartment(Guid Id, string UnitNumber, Guid? ApartmentTypeId = null, string? ApartmentTypeName = null);
+public sealed record BillingApartmentType(Guid Id, string Name);
 
 public sealed record FinanceNotice(Guid EventId, Guid? UserId, string? Email, string Title,
     string Message, string Html, string SourceType, Guid SourceId, string ActionPath, string? AttachmentFileName = null, Guid? PreviousRecipientEventId = null);

@@ -24,7 +24,9 @@ public sealed class RentalPricing(BillingDbContext db, IBillingHouseholdDirector
             throw new ArgumentException("Chọn MONTHLY hoặc DAILY và nhập số tiền VND nguyên không âm, trong giới hạn numeric(18,0).");
         var managed = await directory.ManagedApartmentsAsync(ct);
         if (input.ApartmentTypeId is not null && input.ApartmentUnitId != Guid.Empty) throw new ArgumentException("Chỉ chọn một phạm vi giá thuê.");
-        if (!managed.Any(x => input.ApartmentTypeId is Guid typeId ? x.ApartmentTypeId == typeId : x.Id == input.ApartmentUnitId))
+        if (input.ApartmentTypeId is Guid selectedTypeId
+            ? !(await directory.ApartmentTypesAsync(ct)).Any(x => x.Id == selectedTypeId)
+            : !managed.Any(x => x.Id == input.ApartmentUnitId))
             throw new ArgumentException("Căn hộ không thuộc phạm vi quản lý đang hoạt động của hệ thống.");
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71241002)", ct);
@@ -53,7 +55,7 @@ public sealed class RentalPricing(BillingDbContext db, IBillingHouseholdDirector
             if (input.ApartmentTypeId is Guid typeId) rule.AssignApartmentType(typeId); else rule.AssignApartment(input.ApartmentUnitId); db.FeeRateRules.Add(rule);
         }
         var scope = input.ApartmentTypeId is Guid scopeType
-            ? managed.First(x => x.ApartmentTypeId == scopeType).ApartmentTypeName ?? "loại căn hộ đã chọn"
+            ? (await directory.ApartmentTypesAsync(ct)).First(x => x.Id == scopeType).Name
             : "căn " + managed.First(x => x.Id == input.ApartmentUnitId).UnitNumber;
         db.PricingChanges.Add(PricingChangeMessages.Rental(input, scope, actor));
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);

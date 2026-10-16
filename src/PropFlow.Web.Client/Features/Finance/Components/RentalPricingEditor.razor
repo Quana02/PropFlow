@@ -3,7 +3,7 @@
 <section class="rental-pricing">
     <button type="button" @onclick="() => open = true">Thiết lập giá thuê tháng</button>
     @if (open) {
-    <FinancePricingDialog Title="Thiết lập giá thuê trọ theo tháng" Busy="busy" OnClose="() => open = false">
+    <FinancePricingDialog Title="Thiết lập giá thuê theo tháng" Busy="busy" OnClose="() => open = false">
     <p>Các căn cùng loại dùng chung giá thuê tháng. Chỉ chủ hộ thuê căn chưa có chủ sở hữu chịu tiền thuê. Tháng lẻ tính theo ngày cư trú thực tế, gồm cả ngày bắt đầu và kết thúc. Dịch vụ và nước nằm trên hóa đơn dịch vụ riêng.</p>
     <form @onsubmit="Save" @onsubmit:preventDefault novalidate>
         <label>Loại căn hộ<PropFlowSelect @bind-Value="ApartmentIdValue" @bind-Value:after="LoadVersions" Options="ApartmentTypeOptions" Placeholder="Chọn loại căn hộ" AriaLabel="Loại căn hộ" Disabled="busy" />@if (validate && apartmentId == Guid.Empty) { <small role="alert">Vui lòng chọn loại căn hộ.</small> }</label>
@@ -31,7 +31,7 @@
         get => apartmentId == Guid.Empty ? string.Empty : apartmentId.ToString();
         set => apartmentId = Guid.TryParse(value, out var id) ? id : Guid.Empty;
     }
-    protected override async Task OnInitializedAsync() { var r = await Api.GetAsync<Apartment[]>("api/v1/billing/rental-pricing/apartments"); apartmentTypes = (r.Data ?? []).Where(x => x.ApartmentTypeId != null).Select(x => new ApartmentType(x.ApartmentTypeId!.Value, x.ApartmentTypeName ?? "Loại căn hộ")).DistinctBy(x => x.Id).OrderBy(x => x.Name).ToArray(); if(!r.IsSuccess) message = r.Message; }
+    protected override async Task OnInitializedAsync() { var r = await Api.GetAsync<ApartmentType[]>("api/v1/apartment-unit-types"); apartmentTypes = r.Data ?? []; if(!r.IsSuccess) message = r.Message; }
     private async Task LoadVersions() {
         versions = []; amount = null; effectiveFrom = DateOnly.FromDateTime(DateTime.Today); effectiveFromValid = true; validate = false; message = null;
         if(apartmentId == Guid.Empty) return;
