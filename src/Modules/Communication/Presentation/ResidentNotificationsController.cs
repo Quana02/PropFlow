@@ -11,7 +11,7 @@ public sealed class ResidentNotificationsController(CommunicationDbContext db) :
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken ct) => Ok(await db.Notifications.AsNoTracking()
         .Where(x => x.RecipientUserId == Actor).OrderByDescending(x => x.CreatedAt).Take(100)
-        .Select(x => new { x.Id, x.Title, x.Message, x.ActionPath, x.IsRead, x.CreatedAt }).ToArrayAsync(ct));
+        .Select(x => new { x.Id, x.Title, x.Message, x.ActionPath, x.IsRead, x.CreatedAt, x.SourceType }).ToArrayAsync(ct));
     [HttpPost("{id:guid}/read")]
     public async Task<IActionResult> Read(Guid id, CancellationToken ct)
     {

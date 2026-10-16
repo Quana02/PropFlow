@@ -91,7 +91,7 @@
     private async Task<string?> LoadUnpaid() { var r = await Finance.GetUnpaidInvoicesAsync(1); unpaidData = r.Data; unpaid = r.Data?.Total ?? 0; return r.IsSuccess ? null : r.Message; }
     private async Task<string?> LoadOverdue() { var r = await Finance.GetOverdueDebtsAsync(1); overdueData = r.Data; overdue = r.Data?.Total ?? 0; return r.IsSuccess ? null : r.Message; }
     private async Task<string?> LoadConfirmed() { var r = await Finance.GetConfirmedPaymentsAsync(1); confirmedData = r.Data; confirmed = r.Data?.Total ?? 0; return r.IsSuccess ? null : r.Message; }
-    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string Method(string value) => value switch { "BANK_TRANSFER" => "Chuyển khoản", "CASH" => "Tiền mặt", _ => value };
     private static string Initial(string value) => value.Length >= 2 ? value[^2..].ToUpperInvariant() : value.ToUpperInvariant();
 }

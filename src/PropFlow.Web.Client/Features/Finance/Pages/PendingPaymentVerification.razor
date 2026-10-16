@@ -1,8 +1,10 @@
+@implements IDisposable
 @page "/finance/payments/pending"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
 @attribute [Authorize(Roles = "ACCOUNTANT")]
 @using PropFlow.Web.Client.Features.Finance.Models
 @using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Shared.Feedback
 @inject IFinanceApiClient Finance
 
 <PageTitle>Thanh toán chờ xác minh — PropFlow</PageTitle>
@@ -20,7 +22,7 @@
         </div>
     </header>
 
-    @if (!string.IsNullOrWhiteSpace(notice)) { <div class="pending-notice" role="status"><span class="material-symbols-outlined">check_circle</span>@notice</div> }
+    @if (!string.IsNullOrWhiteSpace(notice)) { <PropFlowToast @key="toastVersion" Message="notice" Severity="success" DurationMs="2000" OnDismiss="() => notice = null" /> }
 
     <section class="pending-summary" aria-label="Tổng quan thanh toán chờ xác minh">
         <article class="pending-card"><div class="pending-card-label"><span>TỔNG GIAO DỊCH CHỜ</span><span class="material-symbols-outlined">receipt_long</span></div><strong>@Value(data?.Total) <small>giao dịch</small></strong><p>Giao dịch đang chờ kế toán xử lý</p></article>
@@ -31,7 +33,7 @@
 
     <section class="pending-toolbar" aria-label="Bộ lọc giao dịch chờ">
         <div class="pending-filters">
-            <label class="pending-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm giao dịch</span><input type="search" placeholder="Tìm theo mã giao dịch hoặc số tham chiếu..." @bind="search" @bind:event="oninput" @onkeyup="HandleSearchKey" /></label>
+            <label class="pending-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm giao dịch</span><input type="search" placeholder="Mã giao dịch, hóa đơn, chủ hóa đơn, căn hộ…" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
             <button class="pending-field" type="button" disabled title="Chưa có API lọc khoảng thời gian"><span class="material-symbols-outlined">calendar_month</span>Khoảng thời gian<span class="material-symbols-outlined">expand_more</span></button>
             <div class="pending-status-filters" aria-label="Trạng thái đối soát">
                 <button class="active" type="button">Tất cả (@(data?.Total ?? 0))</button>
@@ -47,13 +49,16 @@
             @if (loading) { <tr><td colspan="7"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="7"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (data is null || data.Items.Length == 0) { <tr><td colspan="7"><FinanceUnavailableState Title="Không có giao dịch chờ xác minh" Message="Không tìm thấy giao dịch phù hợp với từ khóa hiện tại." Icon="inbox" /></td></tr> }
-            else { @foreach (var item in data.Items) { <tr class="@(processing == item.Id ? "processing" : null)"><td><input type="checkbox" disabled aria-label="Chọn giao dịch @item.PaymentNumber" /></td><td><strong>@item.PaymentNumber</strong><small>@item.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy · HH:mm")</small></td><td><strong>@(item.Note ?? "Không có nội dung")</strong><small>Tham chiếu: @(item.ReferenceNumber ?? "—")</small></td><td class="money-cell"><strong>+@Money(item.Amount)</strong><small>@Method(item.PaymentMethodCode)</small></td><td><strong>@ShortId(item.InvoiceId)</strong><small>Hóa đơn liên kết</small></td><td><span class="pending-status"><i></i>Chờ xác minh</span></td><td class="action-cell"><button class="confirm-button" disabled="@(processing == item.Id)" @onclick="() => ConfirmAsync(item.Id)">@(processing == item.Id ? "Đang xử lý…" : "Xác nhận")</button><button class="review-button" disabled="@(processing == item.Id)" @onclick="() => BeginReject(item.Id)">Rà soát</button></td></tr>@if (rejecting == item.Id) { <tr class="reject-row"><td colspan="7"><div class="reject-box"><label for="@($"reject-{item.Id}")">Lý do từ chối giao dịch @item.PaymentNumber</label><input id="@($"reject-{item.Id}")" placeholder="Nhập lý do từ chối" @bind="rejectReason" /><button class="cancel-reject" type="button" @onclick="CancelReject">Hủy</button><button class="submit-reject" type="button" disabled="@(string.IsNullOrWhiteSpace(rejectReason) || processing == item.Id)" @onclick="() => RejectAsync(item.Id)">Từ chối giao dịch</button></div></td></tr> } } }
+            else { @foreach (var item in data.Items) { <tr class="@(processing == item.Id ? "processing" : null)"><td><input type="checkbox" disabled aria-label="Chọn giao dịch @item.PaymentNumber" /></td><td><strong>@item.PaymentNumber</strong><small>@item.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy · HH:mm")</small></td><td><strong>@(item.Note ?? "Không có nội dung")</strong><small>Tham chiếu: @(item.ReferenceNumber ?? "—")</small></td><td class="money-cell"><strong>+@Money(item.Amount)</strong><small>@Method(item.PaymentMethodCode)</small></td><td><strong><a href="@($"/finance/invoices/{item.InvoiceId}")">@(item.InvoiceNumber ?? ShortId(item.InvoiceId))</a></strong><small>@(item.ResidentName ?? "Chưa có tên chủ hóa đơn")</small><small>Căn hộ @(item.ApartmentNumber ?? "Chưa xác định")</small></td><td><span class="pending-status"><i></i>Chờ xác minh</span></td><td class="action-cell"><FinanceSendInvoiceButton InvoiceId="item.InvoiceId" /><button class="confirm-button" disabled="@(processing == item.Id)" @onclick="() => confirming = item">@(processing == item.Id ? "Đang xử lý…" : "Xác nhận")</button><button class="review-button" disabled="@(processing == item.Id)" @onclick="() => BeginReject(item.Id)">Rà soát</button></td></tr>@if (rejecting == item.Id) { <tr class="reject-row"><td colspan="7"><div class="reject-box"><label for="@($"reject-{item.Id}")">Lý do từ chối giao dịch @item.PaymentNumber</label><input id="@($"reject-{item.Id}")" placeholder="Nhập lý do từ chối" @bind="rejectReason" /><button class="cancel-reject" type="button" @onclick="CancelReject">Hủy</button><button class="submit-reject" type="button" disabled="@(string.IsNullOrWhiteSpace(rejectReason) || processing == item.Id)" @onclick="() => RejectAsync(item.Id)">Từ chối giao dịch</button></div></td></tr> } } }
         </tbody></table></div>
         @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="pending-pagination"><span>Hiển thị @data.Items.Length bản ghi trên trang; tổng cộng @data.Total giao dịch chờ xác minh</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
 </div>
 
+@if (confirming is not null) { <PropFlowConfirmationDialog Title="Xác nhận khoản thanh toán?" Message="@($"Bạn đã kiểm tra và thực nhận khoản tiền của {confirming.PaymentNumber}? Xác nhận sẽ ghi nhận khoản thu và gửi thông báo cho cư dân.")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@(processing is not null)" OnConfirm="ConfirmSelected" OnCancel="() => confirming = null" /> }
 @code {
+    private PaymentRow? confirming; private int toastVersion;
+    private async Task ConfirmSelected() { if (confirming is null || processing is not null) return; await ConfirmAsync(confirming.Id); confirming = null; }
     private PagedFinanceResult<PaymentRow>? data;
     private bool loading;
     private string? error;
@@ -69,17 +74,29 @@
     private int TotalPages => Math.Max(1, (int)Math.Ceiling((data?.Total ?? 0) / (double)PageSize));
 
     protected override Task OnInitializedAsync() => LoadAsync(1);
-    private async Task LoadAsync(int target) { page = target; loading = true; error = null; var result = await Finance.GetPendingPaymentsAsync(page, search); data = result.Data; if (!result.IsSuccess) error = result.Message; loading = false; }
+    private readonly LatestRequest requests = new();
+    private async Task LoadAsync(int target, int delayMs = 0)
+    {
+        page = Math.Max(1, target); loading = true; error = null;
+        await requests.RunAsync(ct => Finance.GetPendingPaymentsAsync(page, search, ct), result =>
+        {
+            data = result.IsSuccess ? result.Data : null;
+            page = data?.Page ?? 1;
+            error = result.IsSuccess ? null : result.Message;
+            loading = false;
+        }, delayMs);
+    }
+    private Task SearchChanged() => LoadAsync(1, 350);
+    public void Dispose() => requests.Dispose();
     private Task ReloadAsync() => LoadAsync(page);
     private Task PreviousPage() => LoadAsync(page - 1);
     private Task NextPage() => LoadAsync(page + 1);
-    private async Task HandleSearchKey(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(1); }
-    private async Task ConfirmAsync(Guid id) { processing = id; notice = null; error = null; var result = await Finance.ConfirmPaymentAsync(id, Guid.NewGuid().ToString("N")); if (result.IsSuccess) { notice = "Đã xác nhận khoản thanh toán."; await LoadAsync(page); } else error = result.Message; processing = null; }
+    private async Task ConfirmAsync(Guid id) { processing = id; notice = null; error = null; var result = await Finance.ConfirmPaymentAsync(id, Guid.NewGuid().ToString("N")); if (result.IsSuccess) { notice = "Đã xác nhận khoản thanh toán."; toastVersion++; await LoadAsync(page); } else error = result.Message; processing = null; }
     private void BeginReject(Guid id) { rejecting = id; rejectReason = string.Empty; notice = null; }
     private void CancelReject() { rejecting = null; rejectReason = string.Empty; }
     private async Task RejectAsync(Guid id) { processing = id; notice = null; error = null; var result = await Finance.RejectPaymentAsync(id, rejectReason, Guid.NewGuid().ToString("N")); if (result.IsSuccess) { notice = "Đã từ chối khoản thanh toán."; rejecting = null; await LoadAsync(page); } else error = result.Message; processing = null; }
     private static string Value(int? value) => value?.ToString("N0") ?? "…";
-    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
     private static string Method(string value) => value switch { "BANK_TRANSFER" => "Chuyển khoản", "CASH" => "Tiền mặt", "VIETQR" => "VietQR", "POS" => "POS", _ => value };
 }

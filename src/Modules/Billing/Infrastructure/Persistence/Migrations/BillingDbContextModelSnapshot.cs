@@ -23,6 +23,60 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PropFlow.Modules.Billing.Domain.ElectricityUsages.ElectricityUsage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ApartmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("apartment_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<decimal?>("Kwh")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("kwh");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<DateOnly>("UsageMonth")
+                        .HasColumnType("date")
+                        .HasColumnName("usage_month");
+
+                    b.Property<decimal?>("WaterM3")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("water_m3");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApartmentId", "UsageMonth")
+                        .IsUnique();
+
+                    b.ToTable("electricity_usages", "billing", t =>
+                        {
+                            t.HasCheckConstraint("ck_electricity_usage_kwh", "kwh >= 0 AND kwh <= 1000000");
+
+                            t.HasCheckConstraint("ck_utility_usage_water", "water_m3 >= 0 AND water_m3 <= 1000000");
+                        });
+                });
+
             modelBuilder.Entity("PropFlow.Modules.Billing.Domain.FeeRateRules.FeeRateRule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -548,6 +602,76 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
                         .HasFilter("user_id IS NOT NULL");
 
                     b.ToTable("invoice_recipients", "billing");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Billing.Domain.PricingChanges.PricingChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered_at");
+
+                    b.Property<string>("EventName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("event_name");
+
+                    b.Property<string>("LastErrorType")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("last_error_type");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("message");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("pricing_change_outbox", "billing");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Billing.Domain.FeeRateRules.FeeRateRule", b =>

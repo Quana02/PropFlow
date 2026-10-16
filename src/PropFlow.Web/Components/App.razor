@@ -1,3 +1,4 @@
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnvironment
 <!DOCTYPE html>
 <html lang="vi" class="light">
 
@@ -151,8 +152,7 @@
 
     <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="app.css?v=20260927-5" />
-    <link rel="stylesheet" href="PropFlow.Web.styles.css?v=20260927-5" />
-    <link rel="stylesheet" href="PropFlow.Web.Client.bundle.scp.css?v=20261006-2" />
+    <link rel="stylesheet" href="@ScopedStylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
 
     <!-- FE-04.1 Custom Stitch UI -->
@@ -172,3 +172,19 @@
 </body>
 
 </html>
+
+@code {
+    private string ScopedStylesheet
+    {
+        get
+        {
+            const string path = "PropFlow.Web.styles.css";
+            var file = HostEnvironment.WebRootFileProvider.GetFileInfo(path);
+            if (!file.Exists) return path;
+            using var stream = file.CreateReadStream();
+            // The host stylesheet imports the fingerprinted client bundle, so its
+            // content changes whenever any component's isolated CSS changes.
+            return path + "?v=" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+        }
+    }
+}

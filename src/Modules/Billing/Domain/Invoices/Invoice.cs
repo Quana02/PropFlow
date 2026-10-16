@@ -179,6 +179,21 @@ public class Invoice
         UpdatedAt = now;
     }
 
+    // Called only by the audited correction use case after checking payment obligations under its lock.
+    public void CorrectIssuedItems(IReadOnlyList<InvoiceItem> replacement, Guid actor, string summary, DateTimeOffset now)
+    {
+        if (Status != InvoiceStatus.ISSUED || Type == InvoiceType.MONTHLY_RENTAL)
+            throw new InvalidOperationException("Chỉ điều chỉnh hóa đơn dịch vụ đã phát hành.");
+        ThrowIfEmpty(actor, nameof(actor));
+        ArgumentException.ThrowIfNullOrWhiteSpace(summary);
+        if (replacement.Count == 0 || replacement.Any(item => item.InvoiceId != Id))
+            throw new ArgumentException("Chi tiết điều chỉnh không thuộc hóa đơn.");
+        _items.Clear(); _items.AddRange(replacement);
+        RecalculateTotals();
+        Note = "[ĐIỀU CHỈNH] " + summary;
+        UpdatedBy = actor; UpdatedAt = now;
+    }
+
     private void RecalculateTotals()
     {
         Subtotal = _items.Sum(item => item.LineAmount);

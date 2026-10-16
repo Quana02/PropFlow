@@ -4,43 +4,126 @@
 @inject FinanceCycleApi Api
 <PageTitle>Đơn giá phí dịch vụ — PropFlow</PageTitle>
 <section class="service-fee-page">
-    <h1>Phí dịch vụ theo diện tích</h1>
-    <p>Phí tháng = diện tích sử dụng căn hộ × đơn giá VND/m². Hệ thống phát hành vào đầu tháng, hạn thanh toán ngày 10. Chủ sở hữu nhận phí dịch vụ; chủ hộ thuê căn chưa có chủ sở hữu nhận thêm tiền thuê nếu đã cấu hình.</p>
-    <p>Ví dụ: căn hộ 70 m² × 10.000 đ/m² = 700.000 đ/tháng.</p>
-    @if (error is not null) { <p role="alert">@error</p> }
-    @if (notice is not null) { <p role="status">@notice</p> }
-    <form @onsubmit="Save" @onsubmit:preventDefault>
-        <label>Đơn giá VND/m²<input type="number" min="1" max="1000000" step="1" required @bind="rate" disabled="@busy" /></label>
-        <label>Tháng bắt đầu<input type="month" required value="@month" @onchange="e => month = e.Value?.ToString() ?? string.Empty" disabled="@busy" /></label>
-        <button disabled="@busy">Lưu đơn giá mới</button>
+    <header class="pricing-header">
+        <div class="page-title"><span class="material-symbols-outlined title-icon" aria-hidden="true">receipt_long</span><div><h1>Đơn giá và hóa đơn</h1><p>Thiết lập giá thuê, dịch vụ, nước và điện; theo dõi hóa đơn của từng căn hộ.</p></div></div>
+        <div class="pricing-actions"><button class="primary-button" type="button" @onclick="OpenService" disabled="@(busy || loading)"><span class="material-symbols-outlined" aria-hidden="true">tune</span>Thiết lập giá dịch vụ + nước + điện</button><RentalPricingEditor /></div>
+    </header>
+    @if (error is not null) { <p role="alert" class="feedback error">@error</p> }
+    @if (notice is not null) { <p role="status" class="feedback success">@notice</p> }
+    <details class="billing-rules"><summary>Quy tắc tính phí</summary><p>Dịch vụ theo m² đã gồm giữ xe. Nước theo m³ và điện theo kWh đã sử dụng tháng trước, nhập tại danh sách căn hộ. Tiền thuê được lập hóa đơn riêng cho căn thuê chưa có chủ sở hữu.</p></details>
+    @if (serviceDialog) {
+    <FinancePricingDialog Title="Thiết lập giá dịch vụ + nước + điện" Busy="busy" OnClose="() => serviceDialog = false">
+    <p>Nhập số điện và nước tháng trước cho từng căn hộ trước khi phát hành bill. Hóa đơn thiếu số liệu điện hoặc nước sẽ chờ được nhập đầy đủ.</p><p>Ba đơn giá được lưu cùng kỳ. Dịch vụ, nước và điện chung một hóa đơn; không cộng thêm phí xe riêng.</p>
+    <form class="pricing-form" @onsubmit="Save" @onsubmit:preventDefault novalidate>
+        <FinanceNumberField Label="Đơn giá VND/m²" Placeholder="Nhập đơn giá dịch vụ" @bind-Value="rate" Min="1" ShowErrors="validate" Disabled="busy" />
+        <FinanceNumberField Label="Nước VND/m³" Placeholder="Nhập đơn giá nước" @bind-Value="waterRate" Min="1" ShowErrors="validate" Disabled="busy" />
+        <FinanceNumberField Label="Điện VND/kWh" Placeholder="Nhập đơn giá điện" @bind-Value="electricityRate" Min="1" ShowErrors="validate" Disabled="busy" />
+        <label>Tháng bắt đầu<input type="month" value="@month" @onchange="ChangeMonth" disabled="@busy" aria-invalid="@(monthError is not null)" aria-describedby="rate-month-error" />@if (monthError is not null) { <small id="rate-month-error" role="alert">@monthError</small> }</label>
+        <div class="pricing-form-actions"><button type="button" disabled="@busy" @onclick="() => serviceDialog = false">Hủy bỏ</button><button type="submit" disabled="@busy">@(busy ? "Đang lưu…" : "Lưu đơn giá mới")</button></div>
     </form>
-    <h2>Lịch sử đơn giá</h2>
-    <table><thead><tr><th>Hiệu lực từ</th><th>Đơn giá VND/m²</th></tr></thead><tbody>@foreach (var r in rates) { <tr><td>@r.EffectiveFrom.ToString("MM/yyyy")</td><td>@r.UnitRate.ToString("N0") đ</td></tr> }</tbody></table>
-    <h2>Hóa đơn đã phát hành</h2>
-    <button @onclick="Load" disabled="@busy">Tải lại</button>
-    <table><thead><tr><th>Hóa đơn</th><th>Chủ hộ / căn hộ</th><th>Kỳ / hạn</th><th>Tổng</th><th>Còn nợ</th><th>Chứng từ</th></tr></thead><tbody>
-    @foreach (var i in invoices) { <tr><td>@i.Number · @(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</td><td>@i.ResidentName / @i.Apartment</td><td>@i.Period.ToString("MM/yyyy") / @i.DueDate?.ToString("dd/MM/yyyy")</td><td>@i.Total.ToString("N0") đ</td><td>@i.Outstanding.ToString("N0") đ</td><td><FinanceDocumentButton Path="@($"api/v1/billing/cycle/invoices/{i.Id}/print")" Label="In hóa đơn" /></td></tr> }
-    </tbody></table>
-    <RentalPricingEditor />
+    @if (error is not null) { <p role="alert">@error</p> }
+    </FinancePricingDialog>
+    }
+    <section class="pricing-panel" aria-labelledby="rate-history-heading">
+        <header class="panel-header"><div><h2 id="rate-history-heading">Lịch sử đơn giá</h2><p>Đơn giá đã lưu theo kỳ hiệu lực. Hóa đơn đã phát hành giữ nguyên số tiền.</p></div><span class="count-pill">@rates.Length phiên bản</span></header>
+        <div class="table-scroll"><table class="rate-table"><thead><tr><th>HIỆU LỰC TỪ</th><th>DỊCH VỤ / m²</th><th>NƯỚC / m³</th><th>ĐIỆN / kWh</th></tr></thead><tbody>
+        @if (loading) { <tr><td colspan="4" class="empty-state" role="status">Đang tải đơn giá…</td></tr> }
+        else if (rates.Length == 0) { <tr><td colspan="4" class="empty-state">Chưa có đơn giá được thiết lập.</td></tr> }
+        else { @foreach (var r in rates.Skip((ratePage - 1) * 5).Take(5)) { <tr><td><span class="period-pill">@r.EffectiveFrom.ToString("MM/yyyy")</span></td><td><strong>@Money(r.UnitRate)</strong><small>Mỗi m² / tháng</small></td><td>@OptionalMoney(r.WaterM3UnitRate ?? r.WaterUnitRate) @if (r.WaterM3UnitRate is null && r.WaterUnitRate is not null) { <small>Phiên bản cũ: người/tháng</small> }</td><td>@OptionalMoney(r.ElectricityUnitRate)</td></tr> } }
+        </tbody></table></div>
+        @if (rates.Length > 5) { <nav class="pagination" aria-label="Phân trang đơn giá"><span>Trang @ratePage / @RatePages</span><button disabled="@(ratePage == 1)" @onclick="() => ratePage--">Trước</button><button disabled="@(ratePage == RatePages)" @onclick="() => ratePage++">Sau</button></nav> }
+    </section>
+    <section class="invoice-summary" aria-label="Tổng quan kết quả hóa đơn">
+        <article><span class="material-symbols-outlined" aria-hidden="true">description</span><div><small>Hóa đơn phù hợp</small><strong>@Filtered.Length</strong></div></article>
+        <article><span class="material-symbols-outlined" aria-hidden="true">payments</span><div><small>Tổng hóa đơn</small><strong>@Money(Filtered.Sum(x => x.Total))</strong></div></article>
+        <article class="collected"><span class="material-symbols-outlined" aria-hidden="true">task_alt</span><div><small>Đã xác nhận thu</small><strong>@Money(Filtered.Sum(x => x.Paid))</strong></div></article>
+        <article class="outstanding"><span class="material-symbols-outlined" aria-hidden="true">schedule</span><div><small>Còn phải thu</small><strong>@Money(Filtered.Sum(x => x.Outstanding))</strong></div></article>
+    </section>
+    <section class="pricing-panel" aria-labelledby="invoice-list-heading" aria-busy="@loading">
+        <header class="panel-header"><div><h2 id="invoice-list-heading">Hóa đơn đã phát hành</h2><p>Tra cứu theo mã hóa đơn, tên cư dân hoặc căn hộ.</p></div><button class="refresh-button" type="button" @onclick="Load" disabled="@(busy || loading)" aria-label="Tải lại hóa đơn"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Tải lại</button></header>
+        <div class="invoice-toolbar">
+            <label class="invoice-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" aria-label="Tìm hóa đơn" placeholder="Mã hóa đơn, cư dân, căn hộ…" @bind="Search" @bind:event="oninput" /></label>
+            <PropFlowSelect @bind-Value="PeriodFilter" Options="PeriodOptions" AriaLabel="Lọc kỳ hóa đơn" Variant="Filter" />
+            <PropFlowSelect @bind-Value="TypeFilter" Options="TypeOptions" AriaLabel="Lọc loại hóa đơn" Variant="Filter" />
+            <PropFlowSelect @bind-Value="SettlementFilter" Options="SettlementOptions" AriaLabel="Lọc thanh toán" Variant="Filter" />
+            <button class="reset-button" type="button" @onclick="ResetFilters" disabled="@(!HasFilters)">Xóa bộ lọc</button>
+        </div>
+        <div class="table-scroll"><table class="invoice-table"><thead><tr><th>MÃ HÓA ĐƠN / LOẠI</th><th>CƯ DÂN / CĂN HỘ</th><th>KỲ THU / HẠN TRẢ</th><th class="money">TỔNG TIỀN</th><th class="money">CÒN PHẢI THU</th><th>TRẠNG THÁI</th><th class="document-cell">CHỨNG TỪ</th></tr></thead><tbody>
+        @if (loading) { <tr><td colspan="7" class="empty-state" role="status">Đang tải hóa đơn…</td></tr> }
+        else if (Filtered.Length == 0) { <tr><td colspan="7" class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">search_off</span><strong>Không có hóa đơn phù hợp</strong><p>Thử từ khóa khác hoặc xóa bộ lọc.</p></td></tr> }
+        else { @foreach (var i in PageItems) { <tr @key="i.Id"><td><strong>@i.Number</strong><small>@(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</small></td><td><strong>@i.ResidentName</strong><small>Căn hộ @i.Apartment</small></td><td><span class="period-pill">@i.Period.ToString("MM/yyyy")</span><small class="@(IsOverdue(i) ? "overdue-text" : null)">Hạn: @(i.DueDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</small></td><td class="money">@Money(i.Total)</td><td class="money"><strong>@Money(i.Outstanding)</strong>@if (i.Paid > 0) { <small>Đã thu @Money(i.Paid)</small> }</td><td><span class="status-pill @StatusClass(i)">@StatusName(i)</span></td><td class="document-cell"><FinanceDocumentButton @key="i.Id" Path="@($"api/v1/billing/cycle/invoices/{i.Id}/print")" Label="In hóa đơn" /></td></tr> } }
+        </tbody></table></div>
+        <nav class="pagination" aria-label="Phân trang hóa đơn">
+            <span>@(Filtered.Length == 0 ? "Không có kết quả" : $"Hiển thị {(CurrentPage - 1) * pageSize + 1}–{Math.Min(CurrentPage * pageSize, Filtered.Length)} / {Filtered.Length} hóa đơn")</span>
+            <label>Số dòng<PropFlowSelect Value="@pageSize.ToString()" ValueChanged="ChangePageSize" Options="PageSizeOptions" AriaLabel="Số dòng mỗi trang" Variant="Filter" /></label>
+            <div class="page-buttons"><button type="button" aria-label="Trang hóa đơn trước" disabled="@(loading || CurrentPage <= 1)" @onclick="() => page = CurrentPage - 1"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><strong>Trang @CurrentPage / @TotalPages</strong><button type="button" aria-label="Trang hóa đơn sau" disabled="@(loading || CurrentPage >= TotalPages)" @onclick="() => page = CurrentPage + 1"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div>
+        </nav>
+    </section>
 </section>
 @code {
-    private decimal rate; private string month = DateTime.Today.ToString("yyyy-MM");
+    private ManagerInvoiceFilter filter = new();
+    private int page = 1, pageSize = 10, ratePage = 1;
+    private string Search { get => filter.Search; set { filter = filter with { Search = value }; page = 1; } }
+    private string PeriodFilter { get => filter.Period; set { filter = filter with { Period = value }; page = 1; } }
+    private string TypeFilter { get => filter.Type; set { filter = filter with { Type = value }; page = 1; } }
+    private string SettlementFilter { get => filter.Settlement; set { filter = filter with { Settlement = value }; page = 1; } }
+    private HouseholdInvoice[] Filtered => ManagerInvoiceList.Filter(invoices, filter, DateOnly.FromDateTime(DateTime.Today));
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(Filtered.Length / (double)pageSize));
+    private int CurrentPage => Math.Clamp(page, 1, TotalPages);
+    private int RatePages => Math.Max(1, (int)Math.Ceiling(rates.Length / 5d));
+    private IEnumerable<HouseholdInvoice> PageItems => Filtered.Skip((CurrentPage - 1) * pageSize).Take(pageSize);
+    private bool HasFilters => filter != new ManagerInvoiceFilter();
+    private void ResetFilters() { filter = new(); page = 1; }
+    private void ChangePageSize(string value) { if (int.TryParse(value, out var size) && size is 10 or 20 or 50) pageSize = size; page = 1; }
+    private IReadOnlyList<PropFlowSelectOption> PeriodOptions => [new("", "Tất cả kỳ thu"), .. invoices.Select(i => i.Period).Distinct().OrderDescending().Select(p => new PropFlowSelectOption(p.ToString("yyyy-MM"), p.ToString("MM/yyyy")))];
+    private static readonly PropFlowSelectOption[] TypeOptions = [new("", "Tất cả loại hóa đơn"), new("SERVICE_FEE", "Phí dịch vụ"), new("MONTHLY_RENTAL", "Tiền thuê tháng")];
+    private static readonly PropFlowSelectOption[] SettlementOptions = [new("", "Tất cả thanh toán"), new("UNPAID", "Chưa thanh toán"), new("PARTIAL", "Thanh toán một phần"), new("PAID", "Đã thanh toán"), new("OVERDUE", "Quá hạn")];
+    private static readonly PropFlowSelectOption[] PageSizeOptions = [new("10", "10 dòng"), new("20", "20 dòng"), new("50", "50 dòng")];
+    private static readonly System.Globalization.NumberFormatInfo Vn = new() { NumberGroupSeparator = ".", NumberDecimalSeparator = "," };
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
+    private static string OptionalMoney(decimal? value) => value.HasValue ? Money(value.Value) : "Chưa cấu hình";
+    private static bool IsOverdue(HouseholdInvoice i) => i.Outstanding > 0 && i.DueDate is { } due && due < DateOnly.FromDateTime(DateTime.Today);
+    private static string StatusName(HouseholdInvoice i) => i.Outstanding == 0 ? "Đã thanh toán" : IsOverdue(i) ? "Quá hạn" : i.Paid > 0 ? "Thanh toán một phần" : "Chưa thanh toán";
+    private static string StatusClass(HouseholdInvoice i) => i.Outstanding == 0 ? "paid" : IsOverdue(i) ? "overdue" : i.Paid > 0 ? "partial" : "unpaid";
+    private decimal? electricityRate = 3000, rate, waterRate; private string month = DateTime.Today.ToString("yyyy-MM");
     private ServiceRateRow[] rates = []; private HouseholdInvoice[] invoices = [];
-    private bool busy; private string? error, notice;
+    private bool busy, serviceDialog, validate, loading; private string? error, notice, monthError;
+    private void ChangeMonth(ChangeEventArgs e) { month = e.Value?.ToString() ?? ""; monthError = null; error = null; }
     protected override Task OnInitializedAsync() => Load();
     private async Task Load() {
-        var r = await Api.GetAsync<ServiceRateRow[]>("api/v1/billing/cycle/rates");
-        var i = await Api.GetAsync<HouseholdInvoice[]>("api/v1/billing/cycle/invoices");
-        rates = r.Data ?? []; invoices = i.Data ?? [];
-        if (rate == 0 && rates.FirstOrDefault(x => x.EffectiveFrom <= DateOnly.FromDateTime(DateTime.Today)) is { } currentRate) rate = currentRate.UnitRate; error = r.IsSuccess && i.IsSuccess ? null : r.Message ?? i.Message;
+        if (loading) return;
+        loading = true;
+        try {
+            var rateTask = Api.GetAsync<ServiceRateRow[]>("api/v1/billing/cycle/rates");
+            var invoiceTask = Api.GetAsync<HouseholdInvoice[]>("api/v1/billing/cycle/invoices");
+            await Task.WhenAll(rateTask, invoiceTask);
+            var r = await rateTask; var i = await invoiceTask;
+            rates = r.IsSuccess ? (r.Data ?? []).OrderByDescending(x => x.EffectiveFrom).ToArray() : [];
+            invoices = i.IsSuccess ? i.Data ?? [] : [];
+            page = Math.Clamp(page, 1, TotalPages); ratePage = Math.Clamp(ratePage, 1, RatePages);
+            if (rate is null && rates.FirstOrDefault(x => x.EffectiveFrom <= DateOnly.FromDateTime(DateTime.Today)) is { } currentRate) rate = currentRate.UnitRate;
+            error = !r.IsSuccess ? r.Message : !i.IsSuccess ? i.Message : null;
+        } finally { loading = false; }
     }
     private async Task Save() {
         if (busy) return;
-        if (!DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", out var start)) { error = "Vui lòng chọn tháng hợp lệ."; return; }
+        validate = true; error = notice = monthError = null;
+        if (!DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", out var start)) monthError = "Vui lòng chọn tháng bắt đầu hợp lệ.";
+        else if (start < new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)) monthError = "Không được đặt đơn giá cho tháng đã qua.";
+        if (rate is null || waterRate is null || electricityRate is null || monthError is not null) { error = "Vui lòng kiểm tra các ô được báo lỗi."; return; }
         busy = true; notice = null;
-        try { var r = await Api.PostAsync<object>("api/v1/billing/cycle/rates", new ServiceRate(rate, start));
-            if (r.IsSuccess) { await Load(); notice = "Đã lưu đơn giá. Hóa đơn còn thiếu được phát hành và gửi đúng bên chịu phí; chứng từ đã phát hành được giữ nguyên."; } else error = r.Message;
+        try { var r = await Api.PostAsync<object>("api/v1/billing/cycle/rates", new ServiceRate(rate.Value, start, null, electricityRate, waterRate));
+            if (r.IsSuccess) { await Load(); serviceDialog = false; notice = "Đã lưu giá dịch vụ, nước và điện. Chứng từ đã phát hành được giữ nguyên; kỳ mới áp dụng sản lượng điện kWh và nước m³ tháng trước."; } else error = r.Message;
         } finally { busy = false; }
     }
+    private void OpenService()
+    {
+        error = notice = monthError = null; validate = false;
+        var currentMonth = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1);
+        var latest = rates.OrderByDescending(x => x.EffectiveFrom).FirstOrDefault();
+        var nextMonth = latest is not null && latest.EffectiveFrom >= currentMonth ? latest.EffectiveFrom.AddMonths(1) : currentMonth;
+        month = nextMonth.ToString("yyyy-MM");
+        if (latest is not null) { rate = latest.UnitRate; waterRate = latest.WaterM3UnitRate; electricityRate = latest.ElectricityUnitRate ?? 3000; }
+        serviceDialog = true;
+    }
 }
-

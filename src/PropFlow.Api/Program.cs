@@ -203,7 +203,13 @@ builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
 builder.Services.AddScoped<IBillingCycle, BillingCycle>();
 builder.Services.AddScoped<IRentalPricing, RentalPricing>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationStore, PropFlow.Modules.Communication.Infrastructure.FinanceNoticePublisher>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationRealtime, PropFlow.Modules.Communication.Presentation.FinanceNotificationRealtime>();
 builder.Services.AddScoped<IFinanceNoticePublisher, FinanceNoticePublisherBridge>();
+builder.Services.AddScoped<IPricingChangePublisher, PricingChangePublisher>();
+builder.Services.AddScoped<PricingChangeDispatcher>();
+builder.Services.AddHostedService<PricingChangeWorker>();
+builder.Services.AddScoped<OperationalNoticeDispatcher>();
+builder.Services.AddHostedService<OperationalNoticeWorker>();
 builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("Authentication:Mail"));
 builder.Services.AddHostedService<BillingCycleWorker>();
 builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
@@ -283,6 +289,7 @@ builder.Services.AddScoped<IApartmentOwnershipCommand, PropFlow.Modules.Apartmen
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatusCommand, PropFlow.Modules.Apartments.Application.ApartmentStatusCommand>();
 builder.Services.AddScoped<IResidentApartmentReadSource, ResidentApartmentReadSource>();
 builder.Services.AddScoped<ICurrentBuildingTimeZone, CurrentBuildingTimeZone>();
+builder.Services.AddScoped<ICurrentBuildingFloorLimit, CurrentBuildingFloorLimit>();
 builder.Services.AddScoped<IResidentOverviewSource, ResidentOverviewSource>();
 builder.Services.AddScoped<IServiceRequestOverviewSource, ServiceRequestOverviewSource>();
 builder.Services.AddScoped<AdministrationOverviewQuery>();
@@ -358,6 +365,7 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
+app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

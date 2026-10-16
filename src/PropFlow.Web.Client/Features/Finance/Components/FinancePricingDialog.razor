@@ -1,0 +1,31 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<div class="pricing-backdrop" @onclick="Close">
+    <section @ref="dialog" class="pricing-dialog" role="dialog" aria-modal="true" aria-labelledby="@titleId" tabindex="-1" @onclick:stopPropagation="true" @onkeydown="KeyDown">
+        <header class="pricing-dialog-header"><div class="pricing-dialog-title"><span class="material-symbols-outlined pricing-dialog-icon" aria-hidden="true">tune</span><h2 id="@titleId">@Title</h2></div><button class="pricing-dialog-close" type="button" aria-label="Đóng cấu hình giá" disabled="@Busy" @onclick="Close">×</button></header>
+        <div class="pricing-dialog-body">@ChildContent</div>
+    </section>
+</div>
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    private readonly string titleId = $"pricing-title-{Guid.NewGuid():N}";
+    private ElementReference dialog;
+    private IJSObjectReference? module;
+    private Task Close() => Busy ? Task.CompletedTask : OnClose.InvokeAsync();
+    private Task KeyDown(KeyboardEventArgs args) => args.Key == "Escape" ? Close() : Task.CompletedTask;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261002.1");
+        await module.InvokeVoidAsync("open", dialog);
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (module is null) return;
+        await module.InvokeVoidAsync("close", dialog);
+        await module.DisposeAsync();
+    }
+}

@@ -1,8 +1,8 @@
 @inject FinanceCycleApi Api
 <section class="billing-workspace">
-    <h1>Đơn giá phí dịch vụ</h1><p>Đơn giá theo m² do manager quy định. Hóa đơn phát hành đầu tháng, hạn thanh toán ngày 10.</p>
+    <h1>Đơn giá dịch vụ, nước và điện</h1><p>Dịch vụ theo m² đã gồm giữ xe. Nước theo m³ và điện theo kWh tháng trước do manager nhập tại danh sách căn hộ. Đơn giá do manager quy định; hạn thanh toán ngày 10.</p>
     @if (error is not null) { <p role="alert">@error</p> }
-    <table><thead><tr><th>Hiệu lực từ</th><th>VND/m²/tháng</th></tr></thead><tbody>@foreach(var r in rates) { <tr><td>@r.EffectiveFrom.ToString("MM/yyyy")</td><td>@r.UnitRate.ToString("N0") đ</td></tr> }</tbody></table>
+    <table><thead><tr><th>Hiệu lực từ</th><th>Dịch vụ VND/m²/tháng</th><th>Đơn giá nước</th><th>Điện VND/kWh</th></tr></thead><tbody>@foreach(var r in rates) { <tr><td>@r.EffectiveFrom.ToString("MM/yyyy")</td><td>@PropFlowMoneyText.Format(r.UnitRate) đ</td><td>@(r.WaterM3UnitRate is { } waterM3 ? PropFlowMoneyText.Format(waterM3) + " đ/m³" : r.WaterUnitRate is { } water ? PropFlowMoneyText.Format(water) + " đ/người/tháng (phiên bản cũ)" : "Chưa cấu hình")</td><td>@(r.ElectricityUnitRate is { } electric ? PropFlowMoneyText.Format(electric) + " đ" : "Chưa cấu hình")</td></tr> }</tbody></table>
     @if(rates.Length == 0 && error is null) { <p>Manager chưa cấu hình đơn giá.</p> }
 </section>
 @code {

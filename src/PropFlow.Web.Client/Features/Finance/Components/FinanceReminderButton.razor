@@ -1,12 +1,39 @@
 @using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Shared.Feedback
 @inject FinanceCycleApi Api
-<span class="finance-reminder"><button type="button" disabled="@(busy || InvoiceIds.Length == 0)" @onclick="Send"><span class="material-symbols-outlined">mail</span> Gửi nhắc thanh toán (@InvoiceIds.Length hóa đơn)</button></span>
-@if (message is not null) { <span role="status">@message</span> }
+<span class="finance-reminder"><button type="button" disabled="@(busy || InvoiceIds.Length == 0)" @onclick="BeginSend"><span class="material-symbols-outlined">mail</span> @(Label ?? $"Gửi nhắc thanh toán ({InvoiceIds.Length} hóa đơn)")</button></span>
+@if (confirming)
+{
+    <PropFlowConfirmationDialog Title="Gửi nhắc thanh toán?" Message="Bạn có muốn gửi nhắc thanh toán cho cư dân của các hóa đơn đã chọn không?" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
+}
+@if (message is not null)
+{
+    <PropFlowToast @key="toastVersion" Message="@message" Severity="@(failed ? "error" : "success")" DurationMs="@(failed ? 5000 : 2000)" OnDismiss="Dismiss" />
+}
 @code {
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool OverdueOnly { get; set; }
     [Parameter] public Guid[] InvoiceIds { get; set; } = [];
-    private bool busy; private string? message;
-    private async Task Send() { busy = true; try {
-        var r = await Api.PostAsync<ReminderResult>("api/v1/billing/cycle/reminders", new { invoiceIds = InvoiceIds });
-        message = r.IsSuccess ? $"Đã xử lý nhắc thanh toán cho {r.Data!.Recipients} chủ hộ; nhắc thủ công tối đa một lần/ngày cho mỗi hóa đơn." : r.Message;
-    } finally { busy = false; } }
+    private bool busy, confirming, failed;
+    private string? message;
+    private int toastVersion;
+    private Guid[] selectedIds = [];
+    private Guid? requestId;
+    private void BeginSend() { if (!busy && InvoiceIds.Length > 0) { selectedIds = InvoiceIds.ToArray(); confirming = true; } }
+    private void Cancel() { if (!busy) confirming = false; }
+    private void Dismiss() => message = null;
+    private async Task Send()
+    {
+        if (busy) return;
+        busy = true; message = null;
+        requestId ??= Guid.NewGuid();
+        try {
+            var r = await Api.PostAsync<ReminderResult>("api/v1/billing/cycle/reminders", new { invoiceIds = selectedIds, overdueOnly = OverdueOnly, requestId });
+            failed = !r.IsSuccess || r.Data?.Recipients is not > 0;
+            message = !r.IsSuccess ? r.Message : failed ? "Không có hóa đơn hoặc người nhận phù hợp để nhắc." : "Đã gửi nhắc thanh toán.";
+            if (r.IsSuccess) requestId = null;
+        }
+        catch (Exception) { failed = true; message = "Không thể gửi nhắc thanh toán. Vui lòng thử lại."; }
+        finally { busy = false; confirming = false; toastVersion++; }
+    }
 }

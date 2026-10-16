@@ -1,0 +1,101 @@
+@page "/finance/invoices/{InvoiceId:guid}"
+@layout PropFlow.Web.Client.Layout.AccountantLayout
+@attribute [Authorize(Roles = "ACCOUNTANT")]
+@inject BillingWorkspaceApi Workspace
+@inject FinanceCycleApi Cycle
+
+<PageTitle>Chi tiết hóa đơn — PropFlow</PageTitle>
+<section class="invoice-details">
+    <nav aria-label="Đường dẫn trang"><a href="/finance/invoices/unpaid">Hóa đơn chưa thanh toán</a><span>›</span><span>Chi tiết hóa đơn</span></nav>
+    @if (loading) { <p role="status">Đang tải chi tiết hóa đơn…</p> }
+    else if (invoice is null) { <p role="alert">@(error ?? "Không tìm thấy hóa đơn.")</p><button @onclick="Load">Thử lại</button> }
+    else
+    {
+        <header class="detail-heading">
+            <div><h1>Chi tiết hóa đơn · @invoice.InvoiceNumber</h1><div class="badges"><span>@InvoiceStatus(invoice.Status)</span><span class="@(Overdue ? "overdue" : "")">@(Overdue ? "Quá hạn" : Settlement(invoice.SettlementStatus))</span></div></div>
+            <div class="detail-actions">
+                @if (invoice.Status == "ISSUED") { <FinanceSendInvoiceButton InvoiceId="InvoiceId" /><FinanceDocumentButton @key="InvoiceId" Path="@($"api/v1/billing/cycle/invoices/{InvoiceId}/print")" Label="In / Lưu PDF" /> }
+                @if (invoice.Status == "ISSUED" && invoice.OutstandingAmount > 0) { <FinanceReminderButton @key="InvoiceId" InvoiceIds="@(new[] { InvoiceId })" /> }
+            </div>
+        </header>
+        <div class="detail-grid">
+            <div class="main-column">
+                <div class="context-grid">
+                    <article class="detail-card"><h2>Thông tin hóa đơn</h2><dl>
+                        <dt>Người nhận</dt><dd>@(invoice.ResidentName ?? "Chưa có thông tin người nhận")</dd>
+                        <dt>Ngày phát hành</dt><dd>@Date(invoice.IssueDate)</dd>
+                        <dt>Hạn thanh toán</dt><dd class="@(Overdue ? "overdue-text" : "")">@Date(invoice.DueDate)</dd>
+                        <dt>Kỳ thu</dt><dd>@Date(invoice.PeriodStart) – @Date(invoice.PeriodEnd)</dd>
+                    </dl></article>
+                    <article class="detail-card"><h2>Căn hộ và khoản thu</h2><dl>
+                        <dt>Căn hộ</dt><dd>@invoice.ApartmentNumber</dd>
+                        <dt>Loại hóa đơn</dt><dd>@(invoice.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : invoice.Lines.Any(x => x.FeeCode == "ELECTRICITY_KWH_MONTHLY") ? "Dịch vụ, nước và điện" : invoice.InvoiceType == "SERVICE_FEE" ? "Phí dịch vụ và nước" : "Theo các khoản phí bên dưới")</dd>
+                        <dt>Ngày lập</dt><dd>@Time(invoice.CreatedAt)</dd>
+                    </dl>@if (!string.IsNullOrWhiteSpace(invoice.Note)) { <p class="invoice-note">@invoice.Note</p> }
+                    </article>
+                </div>
+                <article class="detail-card"><h2>Chi tiết các khoản phí</h2><div class="table-scroll"><table><thead><tr><th>Khoản phí / diễn giải</th><th>Số lượng</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>
+                    @foreach (var line in invoice.Lines) { <tr><td><strong>@line.FeeName</strong>@if (!string.IsNullOrWhiteSpace(line.Description)) { <small>@line.Description</small> }</td><td>@line.Quantity.ToString("0.####", Vi) @line.UnitName @if (line.AmountDivisor > 1) { <small>Chia theo @line.AmountDivisor ngày/tháng</small> }</td><td class="money">@Money(line.UnitRate)</td><td class="money">@Money(line.Amount)</td></tr> }
+                    @if (invoice.Lines.Count == 0) { <tr><td colspan="4">Hóa đơn chưa có khoản phí.</td></tr> }
+                </tbody></table></div></article>
+                <article class="detail-card"><h2>Lịch sử thanh toán</h2>
+                    @if (paymentError is not null) { <p role="alert">@paymentError</p> }
+                    else if (payments.Length == 0) { <p>Chưa có giao dịch thanh toán.</p> }
+                    else { <div class="table-scroll"><table><thead><tr><th>Phiếu / thời gian</th><th>Phương thức</th><th>Số tiền</th><th>Trạng thái / chứng từ</th></tr></thead><tbody>
+                        @foreach (var payment in payments.OrderByDescending(x => x.PaymentDate)) { <tr><td><strong>@payment.PaymentNumber</strong><small>@Time(payment.PaymentDate)</small>@if (!string.IsNullOrWhiteSpace(payment.ReferenceNumber)) { <small>Tham chiếu: @payment.ReferenceNumber</small> }</td><td>@Method(payment.PaymentMethodCode)</td><td class="money">@Money(payment.Amount)</td><td>@PaymentStatus(payment.Status)@if (payment.ConfirmedAt is { } at) { <small>Xác nhận: @Time(at)</small> }@if (payment.Status == "CONFIRMED") { <FinanceDocumentButton Path="@($"api/v1/billing/cycle/payments/{payment.Id}/receipt")" Label="In phiếu thu" /> }</td></tr> }
+                    </tbody></table></div> }
+                </article>
+            </div>
+            <aside class="side-column">
+                <article class="detail-card"><h2>Tổng hợp tài chính</h2><dl class="totals"><dt>Tổng hóa đơn</dt><dd>@Money(invoice.TotalAmount)</dd><dt>Đã xác nhận thu</dt><dd class="paid">@Money(invoice.ConfirmedPaidAmount)</dd><dt>Còn phải thu</dt><dd class="balance">@Money(invoice.OutstandingAmount)</dd></dl>
+                    <label for="payment-progress">Tiến độ thanh toán</label><progress id="payment-progress" max="100" value="@Progress"></progress>
+                    <small>Chỉ khoản thu đã xác nhận mới làm giảm dư nợ.</small>
+                </article>
+                <article class="detail-card"><h2>Lịch sử hóa đơn</h2><ol class="timeline">
+                    @foreach (var entry in invoice.History.OrderByDescending(x => x.ChangedAt)) { <li><strong>@(entry.FromStatus == "ISSUED" && entry.ToStatus == "ISSUED" ? "Điều chỉnh hóa đơn" : InvoiceStatus(entry.ToStatus))</strong><small>@Time(entry.ChangedAt)</small>@if (!string.IsNullOrWhiteSpace(entry.Reason)) { <p>@HistoryReason(entry.Reason)</p> }</li> }
+                    @if (invoice.IssueDate is { } issued && !invoice.History.Any(x => x.ToStatus == "ISSUED" && x.FromStatus != "ISSUED")) { <li><strong>Đã phát hành</strong><small>@Date(issued)</small></li> }
+                    <li><strong>Lập hóa đơn</strong><small>@Time(invoice.CreatedAt)</small></li>
+                </ol></article>
+            </aside>
+        </div>
+    }
+</section>
+@code {
+    [Parameter] public Guid InvoiceId { get; set; }
+    private InvoiceView? invoice;
+
+    private PaymentRow[] payments = [];
+    private bool loading;
+    private string? error, paymentError;
+    private static readonly System.Globalization.NumberFormatInfo Vi = new() { NumberGroupSeparator = ".", NumberDecimalSeparator = "," };
+    private bool Overdue => invoice is { Status: "ISSUED", OutstandingAmount: > 0, DueDate: { } due } && due < DateOnly.FromDateTime(DateTime.Today);
+    private decimal Progress => invoice is { TotalAmount: > 0 } ? Math.Clamp(invoice.ConfirmedPaidAmount / invoice.TotalAmount * 100, 0, 100) : 0;
+    protected override Task OnParametersSetAsync() => Load();
+    private async Task Load()
+    {
+        var requestedId = InvoiceId;
+        loading = true; error = paymentError = null; invoice = null; payments = [];
+        var detailTask = Cycle.GetAsync<InvoiceView>($"api/v1/billing/cycle/invoices/{requestedId}");
+        var paymentTask = Workspace.PaymentsAsync(requestedId);
+
+        await Task.WhenAll(detailTask, paymentTask);
+        if (requestedId != InvoiceId) return;
+        var result = await detailTask; var paymentResult = await paymentTask;
+        invoice = result.IsSuccess ? result.Data : null; error = result.Message;
+        payments = paymentResult.IsSuccess ? paymentResult.Data ?? [] : []; paymentError = paymentResult.IsSuccess ? null : paymentResult.Message;
+        loading = false;
+    }
+    private static string HistoryReason(string reason)
+    {
+        try { using var json = System.Text.Json.JsonDocument.Parse(reason); if (json.RootElement.TryGetProperty("AuditKind", out var kind) && kind.GetString() == "SERVICE_INVOICE_CORRECTION") return json.RootElement.GetProperty("Summary").GetString() ?? reason; }
+        catch (System.Text.Json.JsonException) { }
+        return reason;
+    }
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
+    private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy") ?? "Chưa có";
+    private static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    private static string InvoiceStatus(string value) => value switch { "DRAFT" => "Hóa đơn nháp", "ISSUED" => "Đã phát hành", "CANCELLED" => "Đã hủy", _ => "Chưa xác định" };
+    private static string Settlement(string value) => value switch { "PAID" => "Đã thanh toán", "PARTIAL" => "Thanh toán một phần", "UNPAID" => "Chưa thanh toán", "OVERDUE" => "Quá hạn", _ => "Chưa thanh toán" };
+    private static string PaymentStatus(string value) => value switch { "CONFIRMED" => "Đã xác nhận", "PENDING" => "Chờ xác minh", "REJECTED" => "Đã từ chối", _ => "Chưa xác định" };
+    private static string Method(string value) => value switch { "CASH" => "Tiền mặt", "BANK_TRANSFER" => "Chuyển khoản", _ => "Phương thức khác" };
+}

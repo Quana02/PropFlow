@@ -36,6 +36,8 @@ An FE-01 account-onboarding flow that matches one ACTIVE, unlinked Resident by t
 
 The single active Residency with the Household Head role for an apartment household. It is not a permanent property of a Resident record.
 
+Household Head does not by itself mean owner: an apartment owner is exempt from apartment rent, while a non-owning tenant household head is responsible for rent only when the apartment has no owner. Authorized occupancy is a separate residency basis and must not be treated as tenancy merely because the resident has a household role.
+
 ## Apartment Ownership
 
 A time-bounded FE-03 relationship between an Apartment and an owner represented by a Resident business record. An Apartment may have multiple current owners. Ownership is distinct from residency and is retained as history when an ownership ends. An Apartment may be INACTIVE only when it has neither an active residency nor a current ownership (`EndDate == null`); an INACTIVE Apartment cannot receive a new current ownership.

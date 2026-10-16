@@ -4,31 +4,39 @@
 @using PropFlow.Web.Client.Features.Finance.Services
 @using PropFlow.Web.Client.Features.Finance.Components
 @using PropFlow.Web.Client.Features.Resident.Portal.Components
+@using PropFlow.Web.Client.Shared.Feedback
 @inject FinanceCycleApi Api
 <PageTitle>Hóa đơn và phiếu thu của tôi — PropFlow</PageTitle>
 <section class="glass-panel resident-billing">
-    <h1>Hóa đơn và thanh toán</h1><p>Chủ sở hữu chịu phí dịch vụ; chủ hộ thuê căn hộ chưa có chủ sở hữu chịu thêm tiền thuê theo cấu hình. Chỉ khoản đã được kế toán xác nhận mới làm giảm dư nợ.</p>
+    <h1>Hóa đơn của tôi</h1><p>Xem hóa đơn, gửi xác nhận đã thanh toán và theo dõi kết quả kiểm tra của kế toán.</p>
+    <div class="billing-tabs"><button class="@(filter == "ALL" ? "active" : null)" @onclick='() => filter = "ALL"'>Tất cả (@invoices.Length)</button><button class="@(filter == "UNPAID" ? "active" : null)" @onclick='() => filter = "UNPAID"'>Chưa thanh toán (@invoices.Count(x => x.Outstanding > 0))</button><button class="@(filter == "PENDING" ? "active" : null)" @onclick='() => filter = "PENDING"'>Chờ xác minh (@invoices.Count(HasPending))</button><button class="@(filter == "PAID" ? "active" : null)" @onclick='() => filter = "PAID"'>Đã thanh toán (@invoices.Count(x => x.Outstanding == 0))</button></div>
     <button @onclick="Load" disabled="@loading">Tải lại</button>
     @if (error is not null) { <p role="alert">@error</p> }
     @if (!loading && invoices.Length == 0 && error is null) { <p>Chưa có hóa đơn được gửi cho bạn.</p> }
-    @foreach (var i in invoices) { <article class="glass-inner" id="@($"invoice-{i.Id}")">
+    @foreach (var i in FilteredInvoices) { <article class="glass-inner" id="@($"invoice-{i.Id}")">
         <h2>@i.Number · Căn hộ @i.Apartment · @(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</h2>
         <p>Kỳ: @i.Period.ToString("MM/yyyy") · Hạn: @i.DueDate?.ToString("dd/MM/yyyy")</p>
-        <p>Phí dịch vụ: @i.ServiceTotal.ToString("N0") đ @if(i.Capacity == "RENTAL") { <span>· Tiền thuê: @i.RentalTotal.ToString("N0") đ</span> }</p>
-        <p>Tổng: <strong>@i.Total.ToString("N0") đ</strong> · Đã nhận: @i.Paid.ToString("N0") đ · Còn nợ: <strong>@i.Outstanding.ToString("N0") đ</strong></p>
+        <p class="invoice-status">@(i.Outstanding == 0 ? "Đã thanh toán" : HasPending(i) ? "Chờ kế toán xác minh" : "Chưa thanh toán")</p>
+        <p>Tổng: <strong>@PropFlowMoneyText.Format(i.Total) đ</strong> · Đã nhận: @PropFlowMoneyText.Format(i.Paid) đ · Còn nợ: <strong>@PropFlowMoneyText.Format(i.Outstanding) đ</strong></p>
         <FinanceDocumentButton Path="@($"api/v1/resident/billing/invoices/{i.Id}/print")" Label="In hóa đơn" />
         <FinanceDocumentButton Path="@($"api/v1/resident/billing/invoices/{i.Id}/print")" Label="Tải hóa đơn" Print="false" />
+        @if (i.Outstanding > 0 && !HasPending(i)) { <button type="button" @onclick="() => selected = i">Tôi đã thanh toán</button> }
         @foreach (var p in payments.Where(x => x.InvoiceId == i.Id)) { <div class="payment-row">
-            <p>@p.Number · @p.Amount.ToString("N0") đ · @Status(p.Status)</p>
+            <p>@p.Number · @PropFlowMoneyText.Format(p.Amount) đ · @Status(p.Status)</p>
             @if (p.Status == "CONFIRMED") { <FinanceDocumentButton Path="@($"api/v1/resident/billing/payments/{p.Id}/receipt")" Label="In phiếu xác nhận" /> <FinanceDocumentButton Path="@($"api/v1/resident/billing/payments/{p.Id}/receipt")" Label="Tải phiếu xác nhận" Print="false" /> }
             @if (p.Status == "REJECTED") { <p>Lý do: @p.RejectionReason</p> }
         </div> }
     </article> }
 </section>
-<ResidentFinanceNotifications />
+@if (selected is not null) { <ResidentPaymentDialog Invoice="selected" Saved="PaymentSubmitted" Closed="() => selected = null" /> }
+@if (toast is not null) { <PropFlowToast @key="toastVersion" Message="toast" Severity="success" DurationMs="2000" OnDismiss="() => toast = null" /> }
 @code {
     private HouseholdInvoice[] invoices = []; private ResidentPayment[] payments = [];
     private bool loading; private string? error;
+    private HouseholdInvoice? selected; private string filter = "ALL"; private string? toast; private int toastVersion;
+    private bool HasPending(HouseholdInvoice invoice) => payments.Any(x => x.InvoiceId == invoice.Id && x.Status == "PENDING");
+    private IEnumerable<HouseholdInvoice> FilteredInvoices => invoices.Where(i => filter switch { "UNPAID" => i.Outstanding > 0, "PENDING" => HasPending(i), "PAID" => i.Outstanding == 0, _ => true });
+    private async Task PaymentSubmitted() { selected = null; filter = "PENDING"; await Load(); toast = "Đã gửi xác nhận thanh toán. Vui lòng chờ kế toán kiểm tra."; toastVersion++; }
     protected override Task OnInitializedAsync() => Load();
     private async Task Load() { loading = true; try {
         var i = await Api.GetAsync<HouseholdInvoice[]>("api/v1/resident/billing/invoices");
@@ -37,4 +45,3 @@
     } finally { loading = false; } }
     private static string Status(string value) => value switch { "CONFIRMED" => "Đã xác nhận", "PENDING" => "Chờ xác minh", "REJECTED" => "Bị từ chối", _ => value };
 }
-

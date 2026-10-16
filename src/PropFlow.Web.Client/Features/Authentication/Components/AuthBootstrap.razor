@@ -1,7 +1,7 @@
 @inject AuthSession Session
 @inject NavigationManager Navigation
 @implements IDisposable
-@if (ready || IsPublicRoute) { @ChildContent }
+@if (ready || (IsPublicRoute && !RoleHomeNavigation.IsEntryRoute(Navigation.ToBaseRelativePath(Navigation.Uri)))) { @ChildContent }
 else { <p role="status" style="padding:2rem">Đang kiểm tra phiên đăng nhập…</p> }
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
@@ -25,12 +25,26 @@ else { <p role="status" style="padding:2rem">Đang kiểm tra phiên đăng nh�
         finally
         {
             ready = true;
-            await InvokeAsync(StateHasChanged);
+            await InvokeAsync(() =>
+            {
+                RedirectEntryRoute();
+                StateHasChanged();
+            });
         }
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
-        => _ = InvokeAsync(StateHasChanged);
+        => _ = InvokeAsync(() =>
+        {
+            if (ready) RedirectEntryRoute();
+            StateHasChanged();
+        });
+
+    private void RedirectEntryRoute()
+    {
+        var destination = RoleHomeNavigation.EntryRedirect(Session.User?.Role, Navigation.ToBaseRelativePath(Navigation.Uri));
+        if (destination is not null) Navigation.NavigateTo(destination, replace: true);
+    }
 
     public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
 }

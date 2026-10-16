@@ -1,3 +1,4 @@
+@implements IDisposable
 @page "/finance/payments/confirmed"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
 @attribute [Authorize(Roles = "ACCOUNTANT")]
@@ -29,12 +30,12 @@
 
     <section class="collections-toolbar" aria-label="Bộ lọc khoản thu">
         <div class="collections-filters">
-            <label class="search-field"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm khoản thu</span><input type="search" placeholder="Tìm theo mã phiếu thu hoặc số tham chiếu..." @bind="search" @bind:event="oninput" @onkeyup="HandleSearchKey" /></label>
+            <label class="search-field"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm khoản thu</span><input type="search" placeholder="Mã phiếu thu, hóa đơn, chủ hóa đơn, căn hộ…" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
             <button class="period-filter" type="button" disabled title="Chưa có API lọc kỳ hạch toán"><span class="material-symbols-outlined">calendar_month</span>Kỳ hạch toán hiện tại<span class="material-symbols-outlined">expand_more</span></button>
             <button class="scope-filter" type="button" disabled title="Dữ liệu thuộc tòa nhà hiện tại">Tất cả phạm vi<span class="material-symbols-outlined">expand_more</span></button>
         </div>
         <div class="method-filters" aria-label="Lọc theo phương thức thanh toán">
-            <button class="@(method == "ALL" ? "active" : null)" type="button" @onclick='() => SetMethod("ALL")'>Tất cả phiếu thu (@(data?.Total ?? 0))</button>
+            <button class="@(method == "ALL" ? "active" : null)" type="button" @onclick='() => SetMethod("ALL")'>Tất cả phiếu thu (@(data?.Counts?.GetValueOrDefault("ALL") ?? data?.Total ?? 0))</button>
             <button class="@(method == "BANK_TRANSFER" ? "active" : null)" type="button" @onclick='() => SetMethod("BANK_TRANSFER")'>Chuyển khoản (@CountMethod("BANK_TRANSFER"))</button>
             <button class="@(method == "CASH" ? "active" : null)" type="button" @onclick='() => SetMethod("CASH")'>Tiền mặt (@CountMethod("CASH"))</button>
         </div>
@@ -42,11 +43,11 @@
 
     <section class="collections-table-card" aria-labelledby="collections-list-title">
         <h2 class="visually-hidden" id="collections-list-title">Danh sách khoản thu đã xác nhận</h2>
-        <div class="table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ PHIẾU THU &amp;<br />THỜI GIAN</th><th>MÃ HÓA ĐƠN</th><th>KHOẢN PHÍ HẠCH TOÁN</th><th>PHƯƠNG THỨC</th><th>SỐ TIỀN ĐÃ THU</th><th>TRẠNG THÁI SỔ CÁI</th><th>THAO TÁC</th></tr></thead><tbody>
+        <div class="table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ PHIẾU THU &amp;<br />THỜI GIAN</th><th>HÓA ĐƠN / CHỦ HÓA ĐƠN / CĂN HỘ</th><th>KHOẢN PHÍ HẠCH TOÁN</th><th>PHƯƠNG THỨC</th><th>SỐ TIỀN ĐÃ THU</th><th>TRẠNG THÁI SỔ CÁI</th><th>THAO TÁC</th></tr></thead><tbody>
             @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có khoản thu phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc phương thức." Icon="inbox" /></td></tr> }
-            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" checked disabled aria-label="Đã chọn @item.PaymentNumber" /></td><td><strong>@item.PaymentNumber</strong><small>@item.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy · HH:mm")</small></td><td><strong>@ShortId(item.InvoiceId)</strong><small>Hóa đơn liên kết</small></td><td><strong>@(item.Note ?? "Khoản thu hóa đơn")</strong><small>Tham chiếu: @(item.ReferenceNumber ?? "—")</small></td><td><span class="method-pill"><i></i>@MethodName(item.PaymentMethodCode)</span></td><td class="money-cell"><strong>+@Money(item.Amount)</strong><small>Mã GD: @(item.ReferenceNumber ?? ShortId(item.Id))</small></td><td><span class="ledger-status"><i></i>Đã vào sổ cái</span></td><td><FinanceDocumentButton Path="@($"api/v1/billing/cycle/payments/{item.Id}/receipt")" /><span class="more-action" aria-hidden="true">⋮</span></td></tr> } }
+            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" checked disabled aria-label="Đã chọn @item.PaymentNumber" /></td><td><strong>@item.PaymentNumber</strong><small>@item.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy · HH:mm")</small></td><td><strong><a href="@($"/finance/invoices/{item.InvoiceId}")" aria-label="Chi tiết hóa đơn của phiếu @item.PaymentNumber">@(item.InvoiceNumber ?? ShortId(item.InvoiceId))</a></strong><small>@(item.ResidentName ?? "Chưa có tên chủ hóa đơn")</small><small>Căn hộ @(item.ApartmentNumber ?? "Chưa xác định")</small></td><td><strong>@(item.Note ?? "Khoản thu hóa đơn")</strong><small>Tham chiếu: @(item.ReferenceNumber ?? "—")</small></td><td><span class="method-pill"><i></i>@MethodName(item.PaymentMethodCode)</span></td><td class="money-cell"><strong>+@Money(item.Amount)</strong><small>Mã GD: @(item.ReferenceNumber ?? ShortId(item.Id))</small></td><td><span class="ledger-status"><i></i>Đã vào sổ cái</span></td><td><FinanceSendInvoiceButton InvoiceId="item.InvoiceId" /><FinanceDocumentButton Path="@($"api/v1/billing/cycle/payments/{item.Id}/receipt")" /><span class="more-action" aria-hidden="true">⋮</span></td></tr> } }
         </tbody></table></div>
         @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="collections-pagination"><span>Hiển thị @FilteredItems.Count bản ghi trên tổng số @data.Total phiếu thu đã hạch toán</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
     </section>
@@ -60,20 +61,32 @@
     private string method = "ALL";
     private int page = 1;
     private const int PageSize = 20;
-    private IReadOnlyList<PaymentRow> FilteredItems => (data?.Items ?? []).Where(x => method == "ALL" || x.PaymentMethodCode == method).ToArray();
+    private IReadOnlyList<PaymentRow> FilteredItems => data?.Items ?? [];
     private decimal Revenue => data?.Items.Sum(x => x.Amount) ?? 0;
     private string ConfirmedRate => data is { Items.Length: > 0 } ? $"{data.Items.Count(x => x.Status == "CONFIRMED") * 100m / data.Items.Length:N0}%" : "—";
     private int TotalPages => Math.Max(1, (int)Math.Ceiling((data?.Total ?? 0) / (double)PageSize));
     protected override Task OnInitializedAsync() => LoadAsync(1);
-    private async Task LoadAsync(int target) { page = target; loading = true; error = null; var result = await Finance.GetConfirmedPaymentsAsync(page, search); data = result.Data; if (!result.IsSuccess) error = result.Message; loading = false; }
+    private readonly LatestRequest requests = new();
+    private async Task LoadAsync(int target, int delayMs = 0)
+    {
+        page = Math.Max(1, target); loading = true; error = null;
+        await requests.RunAsync(ct => Finance.GetConfirmedPaymentsAsync(page, search, ct, method), result =>
+        {
+            data = result.IsSuccess ? result.Data : null;
+            page = data?.Page ?? 1;
+            error = result.IsSuccess ? null : result.Message;
+            loading = false;
+        }, delayMs);
+    }
+    private Task SearchChanged() => LoadAsync(1, 350);
+    public void Dispose() => requests.Dispose();
     private Task ReloadAsync() => LoadAsync(page);
     private Task PreviousPage() => LoadAsync(page - 1);
     private Task NextPage() => LoadAsync(page + 1);
-    private async Task HandleSearchKey(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(1); }
-    private void SetMethod(string value) => method = value;
-    private int CountMethod(string value) => data?.Items.Count(x => x.PaymentMethodCode == value) ?? 0;
+    private async Task SetMethod(string value) { method = value; await LoadAsync(1); }
+    private int CountMethod(string value) => data?.Counts?.GetValueOrDefault(value) ?? 0;
     private static string Value(int? value) => value?.ToString("N0") ?? "…";
-    private static string Money(decimal value) => value.ToString("N0") + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string ShortId(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
     private static string MethodName(string value) => value switch { "BANK_TRANSFER" => "Chuyển khoản", "CASH" => "Tiền mặt", "VIETQR" => "VietQR", "POS" => "POS", _ => value };
 }

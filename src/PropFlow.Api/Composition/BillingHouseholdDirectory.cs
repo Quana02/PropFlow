@@ -13,6 +13,16 @@ namespace PropFlow.Api.Composition;
 public sealed class BillingHouseholdDirectory(ResidentsDbContext residents,
     ApartmentsDbContext apartments, AuthenticationDbContext accounts) : IBillingHouseholdDirectory
 {
+    public async Task<IReadOnlyDictionary<Guid, int>> ResidentCountsAsync(IReadOnlyCollection<Guid> apartmentIds, DateOnly date, CancellationToken ct)
+    {
+        // Count people, not accounts or household heads. Ended rows preserve who lived here on the closing date.
+        var rows = await residents.ResidentApartments.AsNoTracking()
+            .Where(x => apartmentIds.Contains(x.ApartmentUnitId) && x.StartDate <= date
+                && (x.EndDate == null || x.EndDate >= date))
+            .Select(x => new { x.ApartmentUnitId, x.ResidentId }).Distinct().ToArrayAsync(ct);
+        return rows.GroupBy(x => x.ApartmentUnitId).ToDictionary(x => x.Key, x => x.Count());
+    }
+
     public async Task<IReadOnlyDictionary<Guid, Guid>> LinkedAccountsAsync(IReadOnlyCollection<Guid> residentIds, CancellationToken ct)
     {
         var linked = await residents.Residents.AsNoTracking().Where(x => residentIds.Contains(x.Id) && x.UserId != null)
@@ -25,6 +35,9 @@ public sealed class BillingHouseholdDirectory(ResidentsDbContext residents,
     public Task<string?> RecipientEmailAsync(Guid? userId, string? snapshotEmail, CancellationToken ct) => userId is null
         ? Task.FromResult(snapshotEmail)
         : accounts.UserAccounts.AsNoTracking().Where(x => x.Id == userId && x.Status == AccountStatus.ACTIVE).Select(x => x.Email).SingleOrDefaultAsync(ct);
+    public async Task<IReadOnlyList<BillingApartmentType>> ApartmentTypesAsync(CancellationToken ct) =>
+        await apartments.ApartmentUnitTypes.AsNoTracking().OrderBy(x => x.Name)
+            .Select(x => new BillingApartmentType(x.Id, x.Name)).ToArrayAsync(ct);
     public async Task<IReadOnlyList<BillingApartment>> ManagedApartmentsAsync(CancellationToken ct) =>
         await apartments.ApartmentUnits.AsNoTracking().Where(x => x.Status == PropFlow.Modules.Apartments.Domain.ApartmentUnits.MasterDataStatus.ACTIVE)
             .OrderBy(x => x.UnitNumber).Select(x => new BillingApartment(x.Id, x.UnitNumber, x.ApartmentUnitTypeId, x.ApartmentUnitType.Name)).ToArrayAsync(ct);

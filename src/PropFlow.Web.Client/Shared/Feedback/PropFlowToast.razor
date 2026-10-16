@@ -1,6 +1,7 @@
-@implements IDisposable
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
-<aside class="pf-toast pf-toast--@Severity.ToLowerInvariant()" role="@(Severity is "error" or "warning" ? "alert" : "status")" aria-live="@(Severity is "error" or "warning" ? "assertive" : "polite")">
+<aside @ref="toast" popover="manual" class="pf-toast pf-toast--@Severity.ToLowerInvariant()" role="@(Severity is "error" or "warning" ? "alert" : "status")" aria-live="@(Severity is "error" or "warning" ? "assertive" : "polite")">
     <span class="material-symbols-outlined" aria-hidden="true">@Icon</span>
     <span>@Message</span>
     <button type="button" title="Đóng thông báo" aria-label="Đóng thông báo" @onclick="DismissAsync"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
@@ -13,6 +14,8 @@
     [Parameter] public EventCallback OnDismiss { get; set; }
 
     private CancellationTokenSource? dismissCancellation;
+    private ElementReference toast;
+    private IJSObjectReference? module;
     private string Icon => Severity switch
     {
         "success" => "check_circle",
@@ -21,8 +24,11 @@
         _ => "info"
     };
 
-    protected override void OnInitialized()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowToast.razor.js?v=20261015.1");
+        await module.InvokeVoidAsync("show", toast);
         dismissCancellation = new CancellationTokenSource();
         _ = DismissLaterAsync(dismissCancellation.Token);
     }
@@ -43,9 +49,14 @@
         return OnDismiss.InvokeAsync();
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         dismissCancellation?.Cancel();
         dismissCancellation?.Dispose();
+        if (module is not null)
+        {
+            try { await module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
     }
 }
