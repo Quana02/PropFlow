@@ -120,6 +120,7 @@ public sealed class CreateMaintenanceTaskModel
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? FacilityId { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? EquipmentId { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Guid? ServiceRequestId { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsEmergency { get; set; }
 }
 public static class MaintenancePriority
 {
