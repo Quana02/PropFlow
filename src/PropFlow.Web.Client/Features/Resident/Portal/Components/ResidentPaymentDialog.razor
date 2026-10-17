@@ -6,9 +6,10 @@
 @inject FinanceCycleApi Api
 <div class="payment-backdrop" popover="manual">
 <section @ref="dialog" class="payment-dialog" role="dialog" aria-modal="true" aria-labelledby="submit-payment-title" tabindex="-1">
-    <h2 id="submit-payment-title">Xác nhận đã thanh toán</h2>
+    <h2 id="submit-payment-title">Bạn đã thanh toán bao nhiêu?</h2>
     <p>@Invoice.Number · Còn phải trả: <strong>@Money(Invoice.Outstanding) đ</strong></p>
     <p>Chỉ gửi sau khi bạn đã chuyển khoản. Kế toán sẽ kiểm tra trước khi xác nhận khoản thu.</p>
+    <p>Số tiền được điền sẵn theo số còn phải trả. Bạn có thể sửa nếu chỉ thanh toán một phần.</p>
     <form @onsubmit="Ask" @onsubmit:preventDefault>
         <label>Số tiền đã chuyển (VND)<input @ref="moneyInput" aria-label="Số tiền đã chuyển" placeholder="Nhập số tiền đã chuyển" inputmode="numeric" maxlength="25" @bind:get="amountText" @bind:set="SetAmount" @bind:event="oninput" disabled="@busy" /><PropFlowMoneyBehavior Input="@(() => moneyInput)" /></label>
         <label>Mã giao dịch chuyển khoản<input aria-label="Mã giao dịch chuyển khoản" maxlength="100" @bind="reference" disabled="@busy" /></label>

@@ -207,6 +207,7 @@ builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNo
 builder.Services.AddScoped<IFinanceNoticePublisher, FinanceNoticePublisherBridge>();
 builder.Services.AddScoped<IPricingChangePublisher, PricingChangePublisher>();
 builder.Services.AddScoped<PricingChangeDispatcher>();
+builder.Services.AddScoped<IPricingChangeDelivery>(sp => sp.GetRequiredService<PricingChangeDispatcher>());
 builder.Services.AddHostedService<PricingChangeWorker>();
 builder.Services.AddScoped<OperationalNoticeDispatcher>();
 builder.Services.AddHostedService<OperationalNoticeWorker>();

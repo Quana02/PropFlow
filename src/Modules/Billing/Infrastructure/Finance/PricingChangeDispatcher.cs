@@ -1,13 +1,22 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PropFlow.Modules.Billing.Contracts;
+using PropFlow.Modules.Billing.Application.Finance;
 using PropFlow.Modules.Billing.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.Billing.Infrastructure.Finance;
 public sealed class PricingChangeDispatcher(BillingDbContext db, IPricingChangePublisher publisher,
-    ILogger<PricingChangeDispatcher> logger, TimeProvider? clock = null)
+    ILogger<PricingChangeDispatcher> logger, TimeProvider? clock = null) : IPricingChangeDelivery
 {
     private DateTimeOffset Now => (clock ?? TimeProvider.System).GetUtcNow();
+    public async Task TryDispatchAsync(CancellationToken ct)
+    {
+        try { await DispatchAsync(ct); }
+        catch (Exception ex) {
+            logger.LogWarning("Committed pricing notification awaits worker retry ({ErrorType}).", ex.GetType().Name);
+        }
+    }
+
     public async Task DispatchAsync(CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);

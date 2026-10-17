@@ -59,7 +59,7 @@
 @code {
     private InvoiceBalance? collecting;
     private string? collectionNotice;
-    private async Task CollectionSaved() { collecting = null; collectionNotice = "Đã thanh toán hóa đơn thành công."; await ReloadAsync(); }
+    private async Task CollectionSaved() { collecting = null; await ReloadAsync(); collectionNotice = "Đã ghi nhận khoản thu vào tổng thu. Hóa đơn còn dư nợ tiếp tục nằm trong danh sách thu nợ."; }
     private PagedFinanceResult<InvoiceBalance>? data;
     private bool loading;
     private string? error;

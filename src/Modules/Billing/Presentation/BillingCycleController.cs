@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using PropFlow.Modules.Billing.Application.Finance;
 namespace PropFlow.Modules.Billing.Presentation;
 [ApiController, Route("api/v1/billing/cycle"), Authorize]
-public sealed class BillingCycleController(IBillingCycle cycle) : ControllerBase
+public sealed class BillingCycleController(IBillingCycle cycle, IPricingChangeDelivery delivery) : ControllerBase
 {
     private Guid Actor => Guid.Parse(User.FindFirstValue("sub")!);
     [HttpGet("apartments/{id:guid}/electricity"), Authorize(Roles = "MANAGER", Policy = "billing.configure")]
@@ -35,7 +35,7 @@ public sealed class BillingCycleController(IBillingCycle cycle) : ControllerBase
     [HttpPost("rates"), Authorize(Policy = "billing.configure")]
     public async Task<IActionResult> Save(ServiceRateInput input, CancellationToken ct)
     {
-        try { await cycle.SaveRateAsync(input, Actor, ct); await cycle.RunAsync(ct); return Ok(new { saved = true }); }
+        try { await cycle.SaveRateAsync(input, Actor, ct); await delivery.TryDispatchAsync(ct); await cycle.RunAsync(ct); return Ok(new { saved = true }); }
         catch (ArgumentException ex) { return BadRequest(new ProblemDetails { Status = 400, Title = ex.Message }); }
     }
     [HttpGet("invoices"), Authorize(Policy = "billing.read")]

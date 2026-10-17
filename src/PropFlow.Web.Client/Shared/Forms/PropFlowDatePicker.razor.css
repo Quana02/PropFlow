@@ -16,7 +16,7 @@
 .pf-date__calendar header,.pf-date__calendar footer { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
 .pf-date__calendar header { padding-bottom:.55rem; }
 .pf-date__calendar header strong { font-size:.78rem; }
-.pf-date__heading { display:flex; align-items:center; justify-content:center; gap:.25rem; }
+.pf-date__heading { display:flex; align-items:center; justify-content:center; gap:.25rem; white-space:nowrap; }
 .pf-date__calendar header .pf-date__year-trigger { display:flex; width:auto; height:2rem; padding:0 .35rem; gap:.1rem; color:#17243a; font-weight:800; }
 .pf-date__calendar header .pf-date__year-trigger .material-symbols-outlined { font-size:1rem; transition:transform .15s ease; }
 .pf-date__calendar header .pf-date__year-trigger[aria-expanded="true"] .material-symbols-outlined { transform:rotate(180deg); }
