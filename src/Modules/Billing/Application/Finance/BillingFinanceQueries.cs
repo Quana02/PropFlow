@@ -15,7 +15,7 @@ public sealed class BillingFinanceQueries(IInvoiceFinancialSource invoices, ICon
     public async Task<PagedResult<InvoiceBalance>> UnpaidAsync(string? search, int page, int pageSize, string sortDirection, CancellationToken ct, string? filter = null)
     {
         var rows = await BalancesAsync(ct);
-        var query = rows.Where(x => x.OutstandingAmount > 0);
+        var query = rows.Where(x => x.OutstandingAmount > 0 && !x.IsOverdue);
         query = await SearchAsync(query, search, ct);
         var today = await TodayAsync(ct);
         var counts = new Dictionary<string,int> { ["ALL"] = query.Count(), ["UNPAID"] = query.Count(x => x.ConfirmedPaidAmount == 0), ["PARTIAL"] = query.Count(x => x.ConfirmedPaidAmount > 0), ["DUE_SOON"] = query.Count(x => x.DueDate >= today && x.DueDate <= today.AddDays(3)) };

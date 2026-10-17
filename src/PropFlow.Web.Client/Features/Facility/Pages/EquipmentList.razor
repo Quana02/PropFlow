@@ -239,7 +239,7 @@
                                 </td>
                                 <td class="py-4 px-4">
                                     <span class="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60">
-                                        @(string.IsNullOrEmpty(item.EquipmentType) ? "-" : item.EquipmentType)
+                                        @EquipmentTypeText.Display(item.EquipmentType)
                                     </span>
                                 </td>
                                 <td class="py-4 px-4">
@@ -516,7 +516,7 @@
                     <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                         <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Phân Loại Kỹ Thuật</dt>
                         <dd class="mt-1.5 text-sm font-semibold text-slate-800">
-                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.EquipmentType) ? "-" : SelectedEquipmentToEdit.EquipmentType)
+                            @EquipmentTypeText.Display(SelectedEquipmentToEdit.EquipmentType)
                         </dd>
                     </div>
 
@@ -794,8 +794,8 @@
         new("OUT_OF_SERVICE", "● Ngừng phục vụ")
     ];
 
-    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions => [new("", "Tất cả loại thiết bị"), .. EquipmentTypes.Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Name))];
-    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeCreateOptions => [new("", "Chọn phân loại"), .. EquipmentTypes.Where(x => x.IsActive).Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Name))];
+    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions => [new("", "Tất cả loại thiết bị"), .. EquipmentTypes.OrderBy(x => EquipmentTypeText.Display(x.Name)).Select(x => new PropFlowSelectOption(x.Id.ToString(), EquipmentTypeText.Display(x.Name)))];
+    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeCreateOptions => [new("", "Chọn phân loại"), .. EquipmentTypes.Where(x => x.IsActive).OrderBy(x => EquipmentTypeText.Display(x.Name)).Select(x => new PropFlowSelectOption(x.Id.ToString(), EquipmentTypeText.Display(x.Name)))];
 
     private IReadOnlyList<PropFlowSelectOption> FacilityOptions =>
         new[] { new PropFlowSelectOption("", "Tất cả CSVT"), new PropFlowSelectOption("building-level", "Thiết bị cấp chung cư") }
