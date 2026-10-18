@@ -547,7 +547,7 @@
             }
             @if (TaskSourceSchedule is null)
             {
-                <div class="fe07-field"><label>Cơ sở vật chất <b>*</b></label><PropFlowSelect Options="MaintenanceFacilityOptions" @bind-Value="TaskFacilityIdString" AriaLabel="Cơ sở vật chất bảo trì" Searchable="true" />@if (TaskFacilityError is not null) { <span class="validation-message" role="alert">@TaskFacilityError</span> }</div>
+                <div class="fe07-field"><label>Cơ sở vật chất</label><PropFlowSelect Options="MaintenanceFacilityOptions" @bind-Value="TaskFacilityIdString" AriaLabel="Cơ sở vật chất bảo trì" Searchable="true" />@if (TaskFacilityError is not null) { <span class="validation-message" role="alert">@TaskFacilityError</span> }</div>
                 <div class="fe07-field"><label>Thiết bị</label><PropFlowSelect Options="ManualTaskEquipmentOptions" @bind-Value="TaskEquipmentIdString" AriaLabel="Thiết bị bảo trì" Searchable="true" /></div>
                 <div class="fe07-field"><label>Thời điểm dự kiến <b>*</b></label><div class="fe07-date-time-controls"><PropFlowDatePicker Value="TaskStartDate" ValueChanged="OnTaskStartDateChanged" AriaLabel="Ngày dự kiến thực hiện" /><input type="time" value="@TaskStartTimeString" @onchange="OnTaskStartTimeChanged" disabled="@(TaskStartDate is null)" aria-label="Giờ dự kiến thực hiện" /></div>@if (TaskPlannedStartError is not null) { <span class="validation-message" role="alert">@TaskPlannedStartError</span> }</div>
                 <div class="fe07-field"><label>Hạn hoàn thành <b>*</b></label><div class="fe07-date-time-controls"><PropFlowDatePicker Value="TaskDueDate" ValueChanged="OnTaskDueDateChanged" AriaLabel="Ngày hạn hoàn thành" /><input type="time" value="@TaskDueTimeString" @onchange="OnTaskDueTimeChanged" disabled="@(TaskDueDate is null)" aria-label="Giờ hạn hoàn thành" /></div>@if (TaskDueError is not null) { <span class="validation-message" role="alert">@TaskDueError</span> }</div>
@@ -1093,7 +1093,7 @@
     private IReadOnlyList<PropFlowSelectOption> MaintenanceFacilityOptions => AssetOptions(IncludeSelected(MaintenanceFacilities, TaskEditor.FacilityId), "Chọn cơ sở vật chất");
     private static readonly IReadOnlyList<PropFlowSelectOption> TaskPriorityOptions = [new("", "Chọn mức ưu tiên"), new("HIGH", "Cao"), new("MEDIUM", "Trung bình"), new("LOW", "Thấp")];
     private IReadOnlyList<PropFlowSelectOption> ScheduleEquipmentOptions => AssetOptions(IncludeSelected(EquipmentFor(Editor.FacilityId), Editor.EquipmentId), "Không chọn");
-    private IReadOnlyList<PropFlowSelectOption> ManualTaskEquipmentOptions => AssetOptions(EquipmentForManualTask, "Không chọn");
+    private IReadOnlyList<PropFlowSelectOption> ManualTaskEquipmentOptions => AssetOptions(TaskEditor.FacilityId is null ? Equipment : EquipmentForManualTask, "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> AllFacilityOptions => AssetOptions(Facilities, "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> AssociationEquipmentOptions => AssetOptions(EquipmentForSelectedFacility, "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> AssetOptions(IEnumerable<AssetModel> items, string emptyLabel) => [new("", emptyLabel), .. items.Select(asset => new PropFlowSelectOption(asset.Id.ToString(), AssetLabel(asset)))];
@@ -1142,6 +1142,13 @@
         _ = ConnectMaintenanceHubAsync();
     }
 
+    private async Task RefreshAssetsAsync()
+    {
+        var assets = await MaintenanceApi.AssetsAsync(cts.Token);
+        if (assets.IsSuccess && assets.Data is not null) Assets = assets.Data;
+        else ErrorMessage ??= assets.Message ?? "Không thể tải lại danh sách tài sản.";
+    }
+
     private async Task ConnectMaintenanceHubAsync()
     {
         try
@@ -1155,12 +1162,22 @@
                     StateHasChanged();
                 });
             });
+            hub.On("AssetStatusChanged", () => InvokeAsync(async () =>
+            {
+                await RefreshAssetsAsync();
+                StateHasChanged();
+            }));
             hub.Reconnected += _ => InvokeAsync(async () =>
             {
+                await hub.InvokeAsync("JoinMaintenanceUpdates", cts.Token);
+                await hub.InvokeAsync("JoinAssetStatus", cts.Token);
                 await RefreshTasksForRealtimeAsync();
+                await RefreshAssetsAsync();
                 StateHasChanged();
             });
             await hub.StartAsync(cts.Token);
+            await hub.InvokeAsync("JoinMaintenanceUpdates", cts.Token);
+            await hub.InvokeAsync("JoinAssetStatus", cts.Token);
             _hubConnection = hub;
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -1330,7 +1347,7 @@
         IsDialogOpen = true;
         ErrorMessage = null;
     }
-    private void OpenManualTask() { TaskEditor = new CreateMaintenanceTaskModel(); SetTaskDateTimeInputs(null, null); ClearTaskValidationErrors(); SelectedCreateServiceRequest = null; TaskSourceLabel = null; TaskSourceSchedule = null; IsTaskDialogOpen = true; ErrorMessage = null; }
+    private void OpenManualTask() { TaskEditor = new CreateMaintenanceTaskModel { IsEmergency = true }; SetTaskDateTimeInputs(null, null); ClearTaskValidationErrors(); SelectedCreateServiceRequest = null; TaskSourceLabel = null; TaskSourceSchedule = null; IsTaskDialogOpen = true; ErrorMessage = null; }
     private void OpenTaskForSchedule(ScheduleModel schedule) { TaskEditor = new CreateMaintenanceTaskModel { ScheduleId = schedule.Id, Title = schedule.Title, Description = schedule.Description }; SetTaskDateTimeInputs(null, null); ClearTaskValidationErrors(); SelectedCreateServiceRequest = null; TaskSourceLabel = $"{schedule.ScheduleCode} · {schedule.Title}"; TaskSourceSchedule = schedule; IsTaskDialogOpen = true; ErrorMessage = null; }
     private void CloseTaskDialog() { if (!IsTaskSaving) IsTaskDialogOpen = false; }
     private void SaveTask()
@@ -1341,7 +1358,9 @@
     private bool ValidateManualTask()
     {
         ClearTaskValidationErrors();
-        if (TaskEditor.FacilityId is not { } facilityId || facilityId == Guid.Empty) TaskFacilityError = "Vui lòng chọn cơ sở vật chất.";
+        if ((TaskEditor.FacilityId is not { } facilityId || facilityId == Guid.Empty) &&
+            (TaskEditor.EquipmentId is not { } equipmentId || equipmentId == Guid.Empty))
+            TaskFacilityError = "Vui lòng chọn cơ sở vật chất hoặc thiết bị.";
         if (TaskEditor.PlannedStartAt is null) TaskPlannedStartError = "Vui lòng chọn thời điểm dự kiến.";
         if (TaskEditor.DueAt is null) TaskDueError = "Vui lòng chọn hạn hoàn thành.";
         else if (TaskEditor.PlannedStartAt is { } plannedStart && TaskEditor.DueAt <= plannedStart) TaskDueError = "Hạn hoàn thành phải sau thời điểm dự kiến.";
@@ -1367,6 +1386,8 @@
         {
             TaskForAssetAssociation = null;
         }
+        if (TaskEditor.IsEmergency)
+            await RefreshAssetsAsync();
         if (!IsScheduleWorkspace && !IsHistoryWorkspace) await LoadTasks();
     }
     private void OpenCreateServiceRequestPicker()
