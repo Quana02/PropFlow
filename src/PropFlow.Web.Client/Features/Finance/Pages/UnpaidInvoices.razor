@@ -13,7 +13,7 @@
         <div>
             <nav class="unpaid-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Hóa đơn &amp; Công nợ</span></nav>
             <div class="title-row"><h1>Hóa đơn chưa thanh toán</h1>@if (NearestDueDate is not null) { <span class="due-badge">Hạn gần nhất @NearestDueDate.Value.ToString("dd/MM/yyyy")</span> }</div>
-            <p>Theo dõi các kỳ phí sinh hoạt, dịch vụ và tiện ích chưa được thanh toán hoặc thanh toán dở dang.</p>
+            <p>Theo dõi hóa đơn còn hạn thanh toán, bao gồm hóa đơn chưa thanh toán và thanh toán một phần. Hóa đơn qua hạn được theo dõi tại <a href="/finance/payments/overdue">Nợ quá hạn</a>.</p>
         </div>
         <div class="unpaid-actions">
             <span title="Chưa khả dụng: chưa có dịch vụ xuất danh sách hóa đơn"><button type="button" disabled><span class="material-symbols-outlined">description</span> Xuất danh sách (Excel)</button></span>
@@ -60,7 +60,7 @@
 @code {
     private string? collectionNotice;
     private InvoiceBalance? collecting;
-    private async Task CollectionSaved() { collecting = null; collectionNotice = "Đã ghi nhận thu tiền thành công."; await ReloadAsync(); }
+    private async Task CollectionSaved() { collecting = null; await ReloadAsync(); collectionNotice = "Đã ghi nhận khoản thu vào tổng thu. Hóa đơn còn dư nợ tiếp tục nằm trong danh sách chưa thu hoặc nợ quá hạn."; }
     private PagedFinanceResult<InvoiceBalance>? data;
     private bool loading;
     private string? error;

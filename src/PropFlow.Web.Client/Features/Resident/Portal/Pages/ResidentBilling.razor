@@ -28,7 +28,7 @@
         </div> }
     </article> }
 </section>
-@if (selected is not null) { <ResidentPaymentDialog Invoice="selected" Saved="PaymentSubmitted" Closed="() => selected = null" /> }
+@if (selected is not null) { <ResidentPaymentDialog @key="selected.Id" Invoice="selected" Saved="PaymentSubmitted" Closed="() => selected = null" /> }
 @if (toast is not null) { <PropFlowToast @key="toastVersion" Message="toast" Severity="success" DurationMs="2000" OnDismiss="() => toast = null" /> }
 @code {
     private HouseholdInvoice[] invoices = []; private ResidentPayment[] payments = [];

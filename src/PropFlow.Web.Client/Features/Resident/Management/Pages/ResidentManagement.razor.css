@@ -56,3 +56,11 @@
 .resident-form-grid ::deep .pf-date__input{margin-top:0}
 .resident-row-action{display:inline-flex;align-items:center;justify-content:center;width:2.35rem;height:2.35rem;padding:0;border:1px solid #cfe0ee;border-radius:.65rem;background:#fff;color:#0284c7;cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease}.resident-row-action:hover{border-color:#7dd3fc;background:#eff9ff;color:#0369a1;box-shadow:0 .2rem .55rem #0284c71a}.resident-row-action:focus-visible{outline:0;border-color:#38bdf8;box-shadow:0 0 0 3px #38bdf82b}.resident-row-action .material-symbols-outlined{font-size:1.18rem}
 .resident-field-note{display:block;margin-top:.35rem;color:#64748b;font-size:.68rem;font-weight:500;line-height:1.35}
+.resident-pagination{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.4rem;padding:1rem 1.25rem;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:.8rem}
+.resident-pagination>span{margin-right:auto;color:#64748b;padding:.45rem 0}
+.resident-pagination button{display:inline-flex;align-items:center;justify-content:center;min-width:2.25rem;min-height:2.25rem;padding:.4rem .7rem;border:1px solid #d8e6f1;border-radius:.6rem;background:#fff;color:#475569;font:inherit;cursor:pointer}
+.resident-pagination button:hover:not(:disabled){border-color:#7dd3fc;background:#f0f9ff;color:#0369a1}
+.resident-pagination button.current{border-color:#0284c7;background:#0284c7;color:#fff;font-weight:700}
+.resident-pagination button:focus-visible{outline:2px solid #0284c7;outline-offset:2px}
+.resident-pagination button:disabled{opacity:.45;cursor:default}
+@media(max-width:480px){.resident-pagination{justify-content:center;padding:.8rem}.resident-pagination>span{flex-basis:100%;margin:0;text-align:center}}
