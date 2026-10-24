@@ -1,5 +1,6 @@
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.PropertyAssets.Contracts;
+using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Contracts;
 
 namespace PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
@@ -78,7 +79,8 @@ public sealed class StaffServiceRequestHandler(
     IServiceRequestEvidenceStorage storage,
     IApartmentResidentRelationshipSource apartments,
     IMaintenanceAssetSource assets,
-    TimeProvider clock)
+    TimeProvider clock,
+    IServiceRequestRealtimeNotifier? realtime = null)
 {
     public async Task<StaffServiceRequestResult<StaffServiceRequestListResponse>> ListAsync(
         Guid staffUserId, StaffServiceRequestListQuery query, CancellationToken ct)
@@ -174,8 +176,11 @@ public sealed class StaffServiceRequestHandler(
             throw;
         }
 
+        if (realtime is not null)
+            await realtime.NotifyChangedAsync(id, ct: CancellationToken.None);
         var core = await store.GetByIdAsync(staffUserId, id, ct);
-        return core is null ? NotFound<StaffServiceRequestDetailResponse>() : await DetailAsync(staffUserId, core, ct);
+        if (core is null) return NotFound<StaffServiceRequestDetailResponse>();
+        return await DetailAsync(staffUserId, core, ct);
     }
 
     public async Task<StaffServiceRequestResult<StaffEvidenceDownload>> DownloadEvidenceAsync(
@@ -197,8 +202,11 @@ public sealed class StaffServiceRequestHandler(
         if (outcome == StaffServiceRequestOutcome.NotFound) return NotFound<StaffServiceRequestDetailResponse>();
         if (outcome == StaffServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: conflictCode, Message: conflictMessage);
+        if (realtime is not null)
+            await realtime.NotifyChangedAsync(id, ct: CancellationToken.None);
         var item = await store.GetByIdAsync(staffUserId, id, ct);
-        return item is null ? NotFound<StaffServiceRequestDetailResponse>() : await DetailAsync(staffUserId, item, ct);
+        if (item is null) return NotFound<StaffServiceRequestDetailResponse>();
+        return await DetailAsync(staffUserId, item, ct);
     }
 
     private async Task<StaffServiceRequestResult<StaffServiceRequestDetailResponse>> DetailAsync(

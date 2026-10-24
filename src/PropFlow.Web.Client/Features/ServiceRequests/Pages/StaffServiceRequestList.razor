@@ -1,8 +1,10 @@
 @page "/staff/service-requests"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "STAFF")]
+@implements IDisposable
 @inject NavigationManager Navigation
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IStaffServiceRequestApiClient Api
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
 
 <PageTitle>Yêu cầu được phân công - PropFlow</PageTitle>
 
@@ -145,7 +147,10 @@
     private string statusFilter = "ALL";
     private string? requestCodeSearch;
     private bool loading;
+    private bool disposed;
     private string? loadError;
+    private readonly SemaphoreSlim loadGate = new(1, 1);
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? realtimeRefresh;
     private int currentPage = 1;
     private const int PageSize = 3;
     private int totalCount;
@@ -161,14 +166,24 @@
 
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestListItem> Requests { get; set; } = [];
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task OnInitializedAsync()
     {
-        loading = true;
-        loadError = null;
+        realtimeRefresh = new(
+            () => InvokeAsync(LoadCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += HandleRealtimeChangedAsync;
+        await Task.WhenAll(LoadAsync(), Realtime.EnsureStartedAsync());
+    }
+
+    private Task LoadAsync() => realtimeRefresh?.RefreshNowAsync() ?? LoadCoreAsync();
+
+    private async Task LoadCoreAsync()
+    {
+        await loadGate.WaitAsync();
         try
         {
+            loading = true;
+            loadError = null;
             var result = await Api.ListAsync(new(requestCodeSearch, statusFilter == "ALL" ? null : statusFilter, currentPage, PageSize));
             if (!result.IsSuccess || result.Data is null)
             {
@@ -192,8 +207,13 @@
         finally
         {
             loading = false;
+            loadGate.Release();
         }
     }
+
+    private Task HandleRealtimeChangedAsync(Guid _) =>
+        disposed ? Task.CompletedTask : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+    public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private void OpenDetail(PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestListItem request) => Navigation.NavigateTo($"/staff/service-requests/{request.RequestNumber}");
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(totalCount / (double)PageSize));

@@ -9,6 +9,7 @@ namespace PropFlow.Modules.ServiceRequests.Presentation;
 
 [ApiController]
 [Authorize(Policy = ServiceRequestsAuthorizationPolicies.Manage)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Route("api/v1/manager/service-requests")]
 [Produces("application/json")]
 public sealed class ManagerServiceRequestsController(

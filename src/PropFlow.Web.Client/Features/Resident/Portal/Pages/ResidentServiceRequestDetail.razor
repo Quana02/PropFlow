@@ -1,9 +1,11 @@
 @page "/resident/service-requests/{Id:guid}"
 @attribute [Authorize(Roles = "RESIDENT")]
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
+@implements IDisposable
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @inject IResidentServiceRequestApiClient Api
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
 
 <PageTitle>Chi tiết yêu cầu dịch vụ - PropFlow</PageTitle>
 
@@ -98,11 +100,24 @@ else if (_detail is not null)
 
     private ResidentServiceRequestDetailResponse? _detail;
     private bool _loading;
+    private bool _disposed;
     private string? _error;
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _realtimeRefresh;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _realtimeRefresh = new(
+            () => InvokeAsync(LoadCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += HandleRealtimeChangedAsync;
+        await Realtime.EnsureStartedAsync();
+    }
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
-    private async Task LoadAsync()
+    private Task LoadAsync() => _realtimeRefresh?.RefreshNowAsync() ?? LoadCoreAsync();
+
+    private async Task LoadCoreAsync()
     {
         _loading = true;
         _error = null;
@@ -125,6 +140,13 @@ else if (_detail is not null)
         }
         finally { _loading = false; }
     }
+
+    private Task HandleRealtimeChangedAsync(Guid requestId) =>
+        _disposed || requestId != Guid.Empty && requestId != Id
+            ? Task.CompletedTask
+            : _realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+
+    public void Dispose() { _disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; _realtimeRefresh?.Dispose(); }
 
     private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     private static string PreferredSchedule(ResidentServiceRequestDetailResponse request) => request.PreferredDate is null

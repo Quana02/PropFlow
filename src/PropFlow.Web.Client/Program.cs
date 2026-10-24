@@ -42,6 +42,7 @@ builder.Services.AddScoped<MaintenanceHubConnectionFactory>();
 builder.Services.AddScoped<IResidentServiceRequestApiClient, ResidentServiceRequestApiClient>();
 builder.Services.AddScoped<IManagerServiceRequestApiClient, ManagerServiceRequestApiClient>();
 builder.Services.AddScoped<IStaffServiceRequestApiClient, StaffServiceRequestApiClient>();
+builder.Services.AddScoped<ServiceRequestRealtimeClient>();
 builder.Services.AddScoped<IFinanceApiClient, FinanceApiClient>();
 builder.Services.AddScoped<FinanceCycleApi>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState>();
