@@ -39,6 +39,7 @@ using PropFlow.Modules.Apartments.Infrastructure;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.PropertyAssets.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.ListResidentServiceRequests;
 using PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
@@ -247,7 +248,14 @@ builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewMa
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
 builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRequestInsightSource>();
 builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
-builder.Services.AddScoped<IServiceRequestEvidenceStorage, LocalServiceRequestEvidenceStorage>();
+builder.Services.Configure<CloudinaryEvidenceOptions>(
+    builder.Configuration.GetSection(CloudinaryEvidenceOptions.SectionName));
+builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
+builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
+    client.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<IServiceRequestEvidenceStorage>(services =>
+    services.GetRequiredService<CloudinaryServiceRequestEvidenceStorage>());
+builder.Services.AddScoped<IServiceRequestRealtimeNotifier, ServiceRequestRealtimeNotifier>();
 builder.Services.AddScoped<StaffServiceRequestHandler>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentOnboardingService>();
@@ -383,6 +391,7 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
+app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();

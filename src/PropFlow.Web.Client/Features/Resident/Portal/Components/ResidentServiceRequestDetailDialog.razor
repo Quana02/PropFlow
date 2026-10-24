@@ -1,6 +1,7 @@
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @inject IResidentServiceRequestApiClient Api
+@implements IDisposable
 
 @if (_open)
 {
@@ -117,7 +118,13 @@
     private string? _feedbackError;
     private bool _saving;
     private bool _saved;
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _refreshQueue;
     private bool IsCompleted => _request?.Status is "RESOLVED" or "CLOSED";
+
+    protected override void OnInitialized() =>
+        _refreshQueue = new(
+            () => InvokeAsync(LoadCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
 
     public async Task OpenAsync(Guid requestId)
     {
@@ -127,7 +134,14 @@
         await LoadAsync();
     }
 
-    private async Task LoadAsync()
+    public Task RefreshIfOpenAsync(Guid requestId) =>
+        !_open || requestId != Guid.Empty && requestId != _requestId
+            ? Task.CompletedTask
+            : _refreshQueue?.RequestAsync() ?? Task.CompletedTask;
+
+    private Task LoadAsync() => _refreshQueue?.RefreshNowAsync() ?? LoadCoreAsync();
+
+    private async Task LoadCoreAsync()
     {
         _loading = true;
         _loadError = null;
@@ -185,6 +199,8 @@
     {
         if (!_saving) _open = false;
     }
+
+    public void Dispose() => _refreshQueue?.Dispose();
 
     private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     private static string PreferredSchedule(ResidentServiceRequestDetailResponse request) => request.PreferredDate is null

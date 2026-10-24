@@ -5,6 +5,7 @@
 @implements IDisposable
 @inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState NoticeState
 @inject PropFlow.Web.Client.Features.Resident.Portal.Services.IResidentServiceRequestApiClient ServiceRequests
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient ServiceRequestRealtime
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @using PropFlow.Web.Client.Features.Resident.Portal.Components
@@ -189,9 +190,22 @@
 </div>
 
 @code {
-    protected override void OnInitialized() => NoticeState.Changed += Refresh;
+    protected override void OnInitialized()
+    {
+        _requestRefresh = new(
+            () => InvokeAsync(LoadRequestsCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
+        NoticeState.Changed += Refresh;
+        ServiceRequestRealtime.Changed += HandleServiceRequestChangedAsync;
+    }
     private void Refresh() => _ = InvokeAsync(StateHasChanged);
-    public void Dispose() => NoticeState.Changed -= Refresh;
+    public void Dispose()
+    {
+        _disposed = true;
+        NoticeState.Changed -= Refresh;
+        ServiceRequestRealtime.Changed -= HandleServiceRequestChangedAsync;
+        _requestRefresh?.Dispose();
+    }
     [CascadingParameter]
     private ResidentPortalProfileContext ProfileContext { get; set; } = ResidentPortalProfileContext.Loading;
 
@@ -200,6 +214,9 @@
     private IReadOnlyList<ResidentServiceRequestListItem> _requests = [];
     private string? _requestError;
     private bool _loadingRequests = true;
+    private readonly SemaphoreSlim _requestLoadGate = new(1, 1);
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _requestRefresh;
+    private bool _disposed;
     private RequestFilter _requestFilter = RequestFilter.All;
     private string? _requestSearch;
     private DateOnly? _requestFromDate;
@@ -220,7 +237,8 @@
         new("OTHER", "Yêu cầu hỗ trợ Ban Quản Lý", "Hotline BQL", "Gửi yêu cầu hỗ trợ khác đến Ban Quản Lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "khác"])
     ];
 
-    protected override async Task OnInitializedAsync() => await LoadRequestsAsync();
+    protected override async Task OnInitializedAsync() =>
+        await Task.WhenAll(LoadRequestsAsync(), ServiceRequestRealtime.EnsureStartedAsync());
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -233,19 +251,37 @@
             await JS.InvokeVoidAsync("propFlowResident.switchTab", "notifications", false);
     }
 
-    private async Task LoadRequestsAsync()
+    private Task LoadRequestsAsync() => _requestRefresh?.RefreshNowAsync() ?? LoadRequestsCoreAsync();
+
+    private async Task LoadRequestsCoreAsync()
     {
-        _loadingRequests = true;
-        _requestError = null;
-        var result = await ServiceRequests.ListAsync(new ResidentServiceRequestListQuery(
-            _requestSearch,
-            FromDate: _requestFromDate,
-            ToDate: _requestToDate));
-        if (result.IsSuccess)
-            _requests = result.Data ?? [];
-        else
-            _requestError = result.Message ?? "Không thể tải danh sách yêu cầu.";
-        _loadingRequests = false;
+        await _requestLoadGate.WaitAsync();
+        try
+        {
+            _loadingRequests = true;
+            _requestError = null;
+            var result = await ServiceRequests.ListAsync(new ResidentServiceRequestListQuery(
+                _requestSearch,
+                FromDate: _requestFromDate,
+                ToDate: _requestToDate));
+            if (result.IsSuccess)
+                _requests = result.Data ?? [];
+            else
+                _requestError = result.Message ?? "Không thể tải danh sách yêu cầu.";
+        }
+        finally
+        {
+            _loadingRequests = false;
+            _requestLoadGate.Release();
+        }
+    }
+
+    private async Task HandleServiceRequestChangedAsync(Guid requestId)
+    {
+        if (_disposed) return;
+        await (_requestRefresh?.RequestAsync() ?? Task.CompletedTask);
+        if (_requestDetailModal is not null)
+            await InvokeAsync(() => _requestDetailModal.RefreshIfOpenAsync(requestId));
     }
 
     private async Task HandleRequestCreatedAsync(ResidentServiceRequestCreatedResponse _) => await LoadRequestsAsync();

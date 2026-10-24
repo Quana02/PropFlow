@@ -1,5 +1,6 @@
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.Residents.Contracts;
+using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
@@ -34,7 +35,8 @@ public sealed class SubmitServiceRequestHandler(
     IServiceRequestSubmissionStore store,
     IResidentResidenceSource residences,
     ICurrentBuildingTimeZone buildingTimeZone,
-    TimeProvider clock)
+    TimeProvider clock,
+    IServiceRequestRealtimeNotifier? realtime = null)
 {
     private static readonly IReadOnlySet<string> ServiceAreaCodes =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -128,6 +130,8 @@ public sealed class SubmitServiceRequestHandler(
             performedBy: userId);
 
         await store.AddAsync(request, activity, ct);
+        if (realtime is not null)
+            await realtime.NotifyChangedAsync(request.Id, userId, CancellationToken.None);
 
         return new(
             SubmitServiceRequestOutcome.Created,

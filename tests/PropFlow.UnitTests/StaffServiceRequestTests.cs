@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
@@ -118,6 +119,42 @@ public sealed class StaffServiceRequestTests
         }
     }
 
+    [Fact]
+    public async Task CloudinaryEvidenceStorage_UploadsToCloudWithoutCreatingProjectFile()
+    {
+        var contentRoot = Path.Combine(Path.GetTempPath(), $"propflow-cloud-evidence-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(contentRoot);
+        try
+        {
+            var handler = new CloudinaryUploadHandler();
+            var legacy = new LocalServiceRequestEvidenceStorage(new TestWebHostEnvironment(contentRoot));
+            var storage = new CloudinaryServiceRequestEvidenceStorage(
+                new HttpClient(handler),
+                Options.Create(new CloudinaryEvidenceOptions
+                {
+                    CloudName = "propflow-test",
+                    ApiKey = "test-key",
+                    ApiSecret = "test-secret"
+                }),
+                legacy);
+            var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01 };
+            await using var content = new MemoryStream(jpeg);
+
+            var saved = await storage.SaveAsync(
+                Guid.NewGuid(), "evidence.jpg", "image/jpeg", jpeg.Length, content, CancellationToken.None);
+
+            Assert.StartsWith("cloudinary:propflow/service-request-evidence/", saved.StorageKey);
+            Assert.Equal(jpeg.Length, saved.SizeBytes);
+            Assert.Equal("https://api.cloudinary.com/v1_1/propflow-test/image/upload", handler.RequestUri?.AbsoluteUri);
+            Assert.Contains("name=\"signature\"", handler.RequestBody);
+            Assert.False(Directory.Exists(Path.Combine(contentRoot, "App_Data", "service-request-evidence")));
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot)) Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
     private static ServiceRequestsDbContext CreateDb() => new(new DbContextOptionsBuilder<ServiceRequestsDbContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
@@ -148,6 +185,25 @@ public sealed class StaffServiceRequestTests
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json")
             });
+        }
+    }
+
+    private sealed class CloudinaryUploadHandler : HttpMessageHandler
+    {
+        public Uri? RequestUri { get; private set; }
+        public string RequestBody { get; private set; } = string.Empty;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestUri = request.RequestUri;
+            RequestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"public_id\":\"propflow/service-request-evidence/request/image\",\"bytes\":12}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
         }
     }
 

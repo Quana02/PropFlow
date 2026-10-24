@@ -1,7 +1,9 @@
 @page "/staff/service-requests/{Code}"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "STAFF")]
+@implements IDisposable
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IStaffServiceRequestApiClient Api
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
 
 <PageTitle>Xử lý yêu cầu @Code - PropFlow</PageTitle>
 
@@ -29,11 +31,10 @@ else
         <div class="progress-steps">
             <article class="done"><b><span class="material-symbols-outlined">check</span></b><strong>1. Đã phân công</strong><small>@AssignedAtLabel · Ban Quản lý</small><em>@ServiceArea</em></article>
             <article class="@StepClass(2)"><b><span class="material-symbols-outlined">@StepIcon(2, "handshake")</span></b><strong>2. Tiếp nhận yêu cầu</strong><small>@(IsStepComplete(2) ? "Đã ký nhận bởi KTV Staff" : "Chờ Staff ký nhận")</small><button type="button" disabled="@(!CanConfirmStep(2))" @onclick="ConfirmReception">@(IsStepComplete(2) ? "Đã xác nhận" : IsStepLocked(2) ? "Chưa mở" : "Xác nhận tiếp nhận")</button></article>
-            <article class="@StepClass(3)"><b><span class="material-symbols-outlined">@StepIcon(3, "construction")</span></b><strong>3. Thực hiện công việc</strong><small>@(IsStepComplete(3) ? "Đã hoàn thành xử lý" : IsStepLocked(3) ? "Hoàn thành bước 2 trước" : Location)</small><button type="button" disabled="@(!CanConfirmStep(3))" @onclick="ConfirmWorkCompleted">@(IsStepComplete(3) ? "Đã xác nhận" : IsStepLocked(3) ? "Chưa mở" : "Xác nhận hoàn thành")</button></article>
-            <article class="@StepClass(4)"><b><span class="material-symbols-outlined">@StepIcon(4, "add_photo_alternate")</span></b><strong>4. Tải ảnh bằng chứng</strong><small>@EvidenceStepDescription</small><button type="button" class="step-evidence-button" disabled="@(!CanConfirmStep(4))" @onclick="OpenEvidenceDialog">@(IsStepComplete(4) ? "Đã tải bằng chứng" : IsStepLocked(4) ? "Chưa mở" : "Chọn ảnh hoàn thành")</button></article>
-            <article class="@StepClass(5)"><b><span class="material-symbols-outlined">@StepIcon(5, "fact_check")</span></b><strong>5. Manager nghiệm thu</strong><small>@(IsStepComplete(5) ? detail.Status == "CLOSED" ? "Manager đã nghiệm thu và đóng yêu cầu" : "Manager đã xác nhận hoàn thành" : currentStep >= 5 ? "Đã gửi hồ sơ, chờ Manager xử lý" : "Chờ Staff tải ảnh bằng chứng")</small><em>@(IsStepComplete(5) ? "Quy trình xử lý đã hoàn tất" : "Staff không có quyền đóng yêu cầu")</em></article>
+            <article class="@CombinedWorkStepClass"><b><span class="material-symbols-outlined">@CombinedWorkStepIcon</span></b><strong>3. Thực hiện và báo cáo</strong><small>@CombinedWorkStepDescription</small><button type="button" disabled="@(!CanSubmitCombinedWork)" @onclick="OpenSubmitDialog">@(CombinedWorkCompleted ? "Đã gửi kết quả" : IsStepLocked(3) ? "Chưa mở" : currentStep == 4 ? "Bổ sung ảnh bằng chứng" : "Ghi kết quả và tải ảnh")</button></article>
+            <article class="@ManagerReviewStepClass"><b><span class="material-symbols-outlined">@ManagerReviewStepIcon</span></b><strong>4. Manager nghiệm thu</strong><small>@(ManagerReviewCompleted ? detail.Status == "CLOSED" ? "Manager đã nghiệm thu và đóng yêu cầu" : "Manager đã xác nhận hoàn thành" : SubmittedForReview ? "Đã gửi hồ sơ, chờ Manager xử lý" : "Chờ Staff gửi kết quả và ảnh")</small><em>@(ManagerReviewCompleted ? "Quy trình xử lý đã hoàn tất" : "Staff không có quyền đóng yêu cầu")</em></article>
         </div>
-        <p class="permission-note"><span class="material-symbols-outlined">info</span><span><strong>Quy tắc tuần tự:</strong> Staff xác nhận bước 2, hoàn thành bước 3 và tải ảnh ở bước 4. Bước 5 chỉ do Manager nghiệm thu hoặc đóng yêu cầu.</span></p>
+        <p class="permission-note"><span class="material-symbols-outlined">info</span><span><strong>Quy tắc tuần tự:</strong> Staff xác nhận bước 2, sau đó nhập tóm tắt và tải ảnh cùng lúc tại bước 3. Bước 4 chỉ do Manager nghiệm thu hoặc đóng yêu cầu.</span></p>
     </section>
 
     <section class="work-metrics" aria-label="Mốc thời gian xử lý">
@@ -58,9 +59,9 @@ else
     <div class="work-columns">
         <div class="work-main-column">
             <section class="work-card result-card">
-                <header><div><span class="card-icon green"><span class="material-symbols-outlined">task_alt</span></span><div><h2>Kết quả xử lý gửi BQL nghiệm thu</h2><p>Hồ sơ kỹ thuật do Staff ghi nhận tại hiện trường</p></div></div><span class="ready-chip">@(SubmittedForReview ? "Đã gửi BQL" : WorkCompleted ? "Chờ tải ảnh" : "Bản nháp")</span></header>
+                <header><div><span class="card-icon green"><span class="material-symbols-outlined">task_alt</span></span><div><h2>Kết quả xử lý gửi BQL nghiệm thu</h2><p>Hồ sơ kỹ thuật do Staff ghi nhận tại hiện trường</p></div></div><span class="ready-chip">@(SubmittedForReview ? "Đã gửi BQL" : currentStep == 4 ? "Thiếu ảnh bằng chứng" : "Bản nháp")</span></header>
                 <div class="result-summary"><small>Tóm tắt kết quả hiện trường</small><p>@ResultSummary</p></div>
-                <div class="evidence-block"><header><strong>Hình ảnh nghiệm thu hiện trường</strong><small>@(Evidence.Count > 0 ? $"{Evidence.Count} ảnh đã tải" : "Chưa tải ảnh bằng chứng")</small></header><div class="evidence-grid">@if (Evidence.Count == 0){<article><span class="material-symbols-outlined">image</span><div><b>Chưa có bằng chứng</b><strong>Hoàn thành bước 3 để tải ảnh</strong><small>JPEG, PNG hoặc WebP · tối đa 10 MB/ảnh</small></div></article>}@foreach (var evidence in Evidence){<button type="button" class="evidence-link" @onclick="() => OpenEvidencePreview(evidence)"><article class="after"><span class="material-symbols-outlined">verified</span><div><b>Ảnh hoàn thành</b><strong>@evidence.FileName</strong><small>@evidence.UploadedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm") · @FormatBytes(evidence.SizeBytes)</small></div></article></button>}</div></div>
+                <div class="evidence-block"><header><strong>Hình ảnh nghiệm thu hiện trường</strong><small>@(Evidence.Count > 0 ? $"{Evidence.Count} ảnh đã tải" : "Chưa tải ảnh bằng chứng")</small></header><div class="evidence-grid">@if (Evidence.Count == 0){<article><span class="material-symbols-outlined">image</span><div><b>Chưa có bằng chứng</b><strong>Nhập kết quả và chọn ảnh tại bước 3</strong><small>JPEG, PNG hoặc WebP · tối đa 10 MB/ảnh</small></div></article>}@foreach (var evidence in Evidence){<button type="button" class="evidence-link" @onclick="() => OpenEvidencePreview(evidence)"><article class="after"><span class="material-symbols-outlined">verified</span><div><b>Ảnh hoàn thành</b><strong>@evidence.FileName</strong><small>@evidence.UploadedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm") · @FormatBytes(evidence.SizeBytes)</small></div></article></button>}</div></div>
             </section>
 
             <section class="work-card activity-card">
@@ -84,18 +85,14 @@ else
 
 @if (showSubmitDialog)
 {
-    <div class="work-dialog-backdrop" @onclick="CloseSubmitDialog"><section class="work-dialog submit-dialog" role="dialog" aria-modal="true" aria-labelledby="submit-dialog-title" @onclick:stopPropagation="true"><header><div><span class="card-icon green"><span class="material-symbols-outlined">task_alt</span></span><div><h2 id="submit-dialog-title">Xác nhận hoàn thành công việc</h2><p>Sau khi xác nhận, bước tải ảnh bằng chứng sẽ được mở</p></div></div><button type="button" aria-label="Đóng" @onclick="CloseSubmitDialog"><span class="material-symbols-outlined">close</span></button></header><label><span>Tóm tắt kết quả xử lý</span><textarea rows="5" maxlength="4000" @bind="resultDraft"></textarea></label><footer><button type="button" class="cancel" @onclick="CloseSubmitDialog">Thoát</button><button type="button" class="confirm green-confirm" disabled="@(string.IsNullOrWhiteSpace(resultDraft))" @onclick="SubmitForReview">Xác nhận hoàn thành</button></footer></section></div>
-}
-
-@if (showEvidenceDialog)
-{
-    <div class="work-dialog-backdrop" @onclick="CloseEvidenceDialog">
+    <div class="work-dialog-backdrop" @onclick="CloseSubmitDialog">
         <section class="work-dialog evidence-dialog" role="dialog" aria-modal="true" aria-labelledby="evidence-dialog-title" @onclick:stopPropagation="true">
             <header>
-                <div><span class="card-icon"><span class="material-symbols-outlined">add_photo_alternate</span></span><div><h2 id="evidence-dialog-title">Tải ảnh bằng chứng</h2><p>#@Code · Chọn tối đa 5 ảnh hoàn thành công việc</p></div></div>
-                <button type="button" aria-label="Đóng" disabled="@uploadingEvidence" @onclick="CloseEvidenceDialog"><span class="material-symbols-outlined">close</span></button>
+                <div><span class="card-icon green"><span class="material-symbols-outlined">task_alt</span></span><div><h2 id="evidence-dialog-title">Hoàn thành và gửi kết quả</h2><p>#@Code · Nhập tóm tắt và chọn tối đa 5 ảnh</p></div></div>
+                <button type="button" aria-label="Đóng" disabled="@uploadingEvidence" @onclick="CloseSubmitDialog"><span class="material-symbols-outlined">close</span></button>
             </header>
             <div class="evidence-dialog-body">
+                <label><span>Tóm tắt kết quả xử lý</span><textarea rows="5" minlength="10" maxlength="4000" disabled="@(uploadingEvidence || currentStep == 4)" @bind="resultDraft" placeholder="Mô tả công việc đã xử lý và kết quả kiểm tra sau khi hoàn thành…"></textarea><small>Từ 10 đến 4000 ký tự.@(currentStep == 4 ? " Tóm tắt đã được lưu, vui lòng bổ sung ảnh để hoàn tất." : null)</small></label>
                 <label class="evidence-picker">
                     <InputFile OnChange="SelectEvidence" accept="image/jpeg,image/png,image/webp" multiple disabled="@uploadingEvidence" />
                     <span class="material-symbols-outlined">cloud_upload</span>
@@ -117,7 +114,7 @@ else
                     <p class="evidence-error" role="alert"><span class="material-symbols-outlined">error</span>@evidenceError</p>
                 }
             </div>
-            <footer><button type="button" class="cancel" disabled="@uploadingEvidence" @onclick="CloseEvidenceDialog">Thoát</button><button type="button" class="confirm green-confirm" disabled="@(uploadingEvidence || selectedEvidence.Count == 0)" @onclick="SaveEvidence">@(uploadingEvidence ? "Đang lưu…" : "Lưu ảnh")</button></footer>
+            <footer><button type="button" class="cancel" disabled="@uploadingEvidence" @onclick="CloseSubmitDialog">Thoát</button><button type="button" class="confirm green-confirm" disabled="@(uploadingEvidence || resultDraft.Trim().Length is < 10 or > 4000 || selectedEvidence.Count == 0)" @onclick="SubmitForReview">@(uploadingEvidence ? "Đang lưu…" : "Lưu kết quả và ảnh")</button></footer>
         </section>
     </div>
 }
@@ -144,7 +141,6 @@ else
     private string? loadError;
     private bool showProgressDialog;
     private bool showSubmitDialog;
-    private bool showEvidenceDialog;
     private bool showEvidencePreview;
     private bool uploadingEvidence;
     private bool loadingEvidencePreview;
@@ -157,10 +153,23 @@ else
     private string resultDraft = string.Empty;
     private readonly List<IBrowserFile> selectedEvidence = [];
     private PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse? detail;
+    private bool disposed;
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? realtimeRefresh;
+
+    protected override async Task OnInitializedAsync()
+    {
+        realtimeRefresh = new(
+            () => InvokeAsync(LoadCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += HandleRealtimeChangedAsync;
+        await Realtime.EnsureStartedAsync();
+    }
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
-    private async Task LoadAsync()
+    private Task LoadAsync() => realtimeRefresh?.RefreshNowAsync() ?? LoadCoreAsync();
+
+    private async Task LoadCoreAsync()
     {
         loading = true;
         loadError = null;
@@ -176,9 +185,19 @@ else
         Apply(result.Data);
     }
 
+    private Task HandleRealtimeChangedAsync(Guid requestId) =>
+        disposed || detail is { } current && requestId != Guid.Empty && requestId != current.Id
+            ? Task.CompletedTask
+            : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+
+    public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
+
     private bool WorkStarted => currentStep >= 3;
     private bool WorkCompleted => currentStep >= 4;
     private bool SubmittedForReview => currentStep >= 5;
+    private bool CombinedWorkCompleted => currentStep >= 5;
+    private bool ManagerReviewCompleted => currentStep >= 6;
+    private bool CanSubmitCombinedWork => currentStep is 3 or 4;
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestActivityItem> Activities => detail?.Activities ?? [];
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestEvidenceItem> Evidence => detail?.Evidence ?? [];
     private string RequestTitle => detail?.Title ?? "Yêu cầu dịch vụ";
@@ -190,11 +209,15 @@ else
     private string AssignedAtLabel => detail is null ? "Chưa xác định" : detail.AssignedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string UpdatedAtLabel => detail is null ? "Chưa xác định" : detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string PreferredSchedule => detail?.PreferredDate is null ? "Chưa đăng ký" : $"{detail.PreferredDate:dd/MM/yyyy} · {detail.PreferredTimeCode ?? "Chưa chọn khung giờ"}";
-    private string CurrentProgressLabel => currentStep switch { 2 => "Chờ tiếp nhận · Bước 2/5", 3 => "Đang thực hiện · Bước 3/5", 4 => "Chờ tải bằng chứng · Bước 4/5", 5 => "Chờ Manager nghiệm thu · Bước 5/5", 6 => "Đã hoàn tất · Bước 5/5", _ => "Đã phân công · Bước 1/5" };
+    private string CurrentProgressLabel => currentStep switch { 2 => "Chờ tiếp nhận · Bước 2/4", 3 => "Đang thực hiện · Bước 3/4", 4 => "Thiếu ảnh bằng chứng · Bước 3/4", 5 => "Chờ Manager nghiệm thu · Bước 4/4", 6 => "Đã hoàn tất · Bước 4/4", _ => "Đã phân công · Bước 1/4" };
     private string LatestProgressTime => Activities.FirstOrDefault() is { } activity ? $"{activity.CreatedAt.ToLocalTime():HH:mm} hôm nay" : "Chưa cập nhật";
     private string LatestProgressSummary => Activities.FirstOrDefault()?.Title ?? "Chưa có tiến độ";
     private string ResultSummary => LatestWorkResult()?.WorkResult ?? "Bản nháp kết quả đang được Staff hoàn thiện trước khi gửi Ban Quản lý nghiệm thu.";
-    private string EvidenceStepDescription => IsStepComplete(4) ? $"Đã tải {Evidence.Count} ảnh hoàn thành" : IsStepLocked(4) ? "Hoàn thành bước 3 trước" : "Chọn tối đa 5 ảnh bằng chứng";
+    private string CombinedWorkStepClass => CombinedWorkCompleted ? "done" : CanSubmitCombinedWork ? "active" : "locked";
+    private string CombinedWorkStepIcon => CombinedWorkCompleted ? "check" : IsStepLocked(3) ? "lock" : "construction";
+    private string CombinedWorkStepDescription => CombinedWorkCompleted ? $"Đã gửi tóm tắt và {Evidence.Count} ảnh" : IsStepLocked(3) ? "Hoàn thành bước 2 trước" : currentStep == 4 ? "Tóm tắt đã lưu, cần bổ sung ảnh" : "Ghi tóm tắt kết quả kèm ảnh";
+    private string ManagerReviewStepClass => ManagerReviewCompleted ? "done" : SubmittedForReview ? "active" : "locked";
+    private string ManagerReviewStepIcon => ManagerReviewCompleted ? "check" : SubmittedForReview ? "fact_check" : "lock";
 
     private bool IsStepComplete(int step) => currentStep > step;
     private bool IsStepLocked(int step) => currentStep < step;
@@ -209,20 +232,6 @@ else
         if (!ApplyResult(result, "Đã xác nhận bước 2. Bước 3 đã được mở.")) return;
     }
 
-    private void ConfirmWorkCompleted()
-    {
-        if (!CanConfirmStep(3)) return;
-        OpenSubmitDialog();
-    }
-
-    private void OpenEvidenceDialog()
-    {
-        if (!CanConfirmStep(4) || detail is null) return;
-        selectedEvidence.Clear();
-        evidenceError = null;
-        showEvidenceDialog = true;
-    }
-    private void CloseEvidenceDialog(){ if (uploadingEvidence) return; showEvidenceDialog = false; selectedEvidence.Clear(); evidenceError = null; }
     private void SelectEvidence(InputFileChangeEventArgs args)
     {
         evidenceError = null;
@@ -235,19 +244,6 @@ else
         selectedEvidence.AddRange(files);
     }
     private void RemoveEvidence(IBrowserFile file) => selectedEvidence.Remove(file);
-    private async Task SaveEvidence()
-    {
-        if (selectedEvidence.Count == 0 || !CanConfirmStep(4) || detail is null || uploadingEvidence) return;
-        uploadingEvidence = true;
-        evidenceError = null;
-        var result = await Api.UploadEvidenceAsync(detail.Id, selectedEvidence);
-        uploadingEvidence = false;
-        if (!result.IsSuccess || result.Data is null) { evidenceError = result.Message ?? "Không thể lưu ảnh bằng chứng."; return; }
-        Apply(result.Data);
-        uiNotice = "Đã lưu ảnh bằng chứng. Hồ sơ đang chờ Manager nghiệm thu.";
-        showEvidenceDialog = false;
-        selectedEvidence.Clear();
-    }
     private async Task OpenEvidencePreview(PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestEvidenceItem evidence)
     {
         showEvidencePreview = true;
@@ -265,9 +261,35 @@ else
     private void OpenProgressDialog(){ progressNote = null; showProgressDialog = true; }
     private void CloseProgressDialog() => showProgressDialog = false;
     private async Task SaveProgress(){ if(string.IsNullOrWhiteSpace(progressNote) || detail is null) return; var result = await Api.ProgressAsync(detail.Id, new(progressNote.Trim())); if (ApplyResult(result, "Đã lưu cập nhật tiến độ.")) showProgressDialog = false; }
-    private void OpenSubmitDialog(){ resultDraft = currentStep >= 4 ? LatestWorkResult()?.WorkResult ?? string.Empty : string.Empty; showSubmitDialog = true; }
-    private void CloseSubmitDialog() => showSubmitDialog = false;
-    private async Task SubmitForReview(){ if(string.IsNullOrWhiteSpace(resultDraft) || !CanConfirmStep(3) || detail is null) return; var result = await Api.CompleteAsync(detail.Id, new(resultDraft.Trim())); if (ApplyResult(result, "Đã xác nhận bước 3. Hãy tải ảnh bằng chứng tại bước 4.")) showSubmitDialog = false; }
+    private void OpenSubmitDialog(){ if (!CanSubmitCombinedWork || detail is null) return; resultDraft = currentStep == 4 ? LatestWorkResult()?.WorkResult ?? string.Empty : string.Empty; selectedEvidence.Clear(); evidenceError = null; showSubmitDialog = true; }
+    private void CloseSubmitDialog(){ if (uploadingEvidence) return; showSubmitDialog = false; selectedEvidence.Clear(); evidenceError = null; }
+    private async Task SubmitForReview()
+    {
+        var normalizedResult = resultDraft.Trim();
+        if (normalizedResult.Length is < 10 or > 4000 || selectedEvidence.Count == 0 || !CanSubmitCombinedWork || detail is null || uploadingEvidence) return;
+        uploadingEvidence = true;
+        evidenceError = null;
+        try
+        {
+            if (currentStep == 3)
+            {
+                var completion = await Api.CompleteAsync(detail.Id, new(normalizedResult));
+                if (!completion.IsSuccess || completion.Data is null) { evidenceError = completion.Message ?? "Không thể lưu tóm tắt kết quả."; return; }
+                Apply(completion.Data);
+            }
+
+            var evidence = await Api.UploadEvidenceAsync(detail.Id, selectedEvidence);
+            if (!evidence.IsSuccess || evidence.Data is null) { evidenceError = evidence.Message ?? "Không thể lưu ảnh bằng chứng."; return; }
+            Apply(evidence.Data);
+            uiNotice = "Đã lưu kết quả và ảnh bằng chứng. Hồ sơ đang chờ Manager nghiệm thu.";
+            showSubmitDialog = false;
+            selectedEvidence.Clear();
+        }
+        finally
+        {
+            uploadingEvidence = false;
+        }
+    }
 
     private bool ApplyResult(PropFlow.Web.Client.Services.Api.ApiResult<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse> result, string success)
     {

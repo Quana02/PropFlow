@@ -1,5 +1,6 @@
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.Residents.Contracts;
+using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Contracts;
 
 namespace PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
@@ -23,7 +24,8 @@ public sealed class RateResidentServiceRequestHandler(
     IResidentServiceRequestFeedbackStore store,
     IResidentResidenceSource residences,
     ICurrentBuildingTimeZone buildingTimeZone,
-    TimeProvider clock)
+    TimeProvider clock,
+    IServiceRequestRealtimeNotifier? realtime = null)
 {
     public async Task<RateResidentServiceRequestResult> HandleAsync(
         Guid userId, Guid serviceRequestId, RateResidentServiceRequestRequest command, CancellationToken ct)
@@ -41,6 +43,8 @@ public sealed class RateResidentServiceRequestHandler(
             return new(RateResidentServiceRequestOutcome.ResidentResidenceNotFound, ErrorCode: "active_residence_not_found", Message: "Tài khoản chưa được liên kết với căn hộ đang cư trú.");
 
         var saved = await store.SaveAsync(residence.ResidentId, serviceRequestId, command.Rating, comment, now, ct);
+        if (saved.Outcome == SaveResidentServiceRequestFeedbackOutcome.Saved && realtime is not null)
+            await realtime.NotifyChangedAsync(serviceRequestId, userId, CancellationToken.None);
         return saved.Outcome switch
         {
             SaveResidentServiceRequestFeedbackOutcome.Saved => new(RateResidentServiceRequestOutcome.Saved, saved.Response),

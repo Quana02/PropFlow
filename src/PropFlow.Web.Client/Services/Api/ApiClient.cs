@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Http;
 using PropFlow.Modules.Authentication.Contracts;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace PropFlow.Web.Client.Services.Api;
@@ -28,6 +29,16 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
                 csrfToken = protection.Data!.Token;
             }
             using var request = new HttpRequestMessage(method, path);
+            if (method == HttpMethod.Get)
+            {
+                // FE workspaces are refreshed by SignalR. Never let the browser or a proxy satisfy
+                // that refresh with a stale snapshot from before the realtime event.
+                request.Headers.CacheControl = new CacheControlHeaderValue
+                {
+                    NoCache = true,
+                    NoStore = true
+                };
+            }
             if (headers is not null) foreach (var header in headers) request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             request.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
             if (body != null) request.Content = JsonContent.Create(body, body.GetType());

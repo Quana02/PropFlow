@@ -51,6 +51,7 @@ coverage.cobertura.xml
 ## Logs and temporary files
 .codex-runtime/
 logs/
+**/App_Data/
 *.log
 *.tmp
 *.temp

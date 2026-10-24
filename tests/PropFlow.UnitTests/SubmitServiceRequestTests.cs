@@ -1,5 +1,6 @@
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.Residents.Contracts;
+using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
@@ -43,6 +44,28 @@ public sealed class SubmitServiceRequestTests
         Assert.NotNull(store.Activity);
         Assert.Equal(ServiceActivityType.CREATED, store.Activity.ActivityType);
         Assert.Equal(userId, store.Activity.PerformedBy);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PublishesRealtimeInvalidationAfterRequestIsStored()
+    {
+        var userId = Guid.NewGuid();
+        var store = new FakeStore(Guid.NewGuid());
+        var realtime = new RecordingRealtimeNotifier();
+        var handler = Handler(
+            store,
+            new ActiveResidentResidence(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()),
+            realtime: realtime);
+
+        var result = await handler.HandleAsync(
+            userId,
+            ValidRequest(new DateOnly(2026, 10, 3)),
+            CancellationToken.None);
+
+        Assert.Equal(SubmitServiceRequestOutcome.Created, result.Outcome);
+        Assert.Equal(result.Response!.Id, realtime.ServiceRequestId);
+        Assert.Equal(userId, realtime.ResidentUserId);
+        Assert.True(realtime.StoreWasCommitted);
     }
 
     [Fact]
@@ -96,12 +119,14 @@ public sealed class SubmitServiceRequestTests
     private static SubmitServiceRequestHandler Handler(
         FakeStore store,
         ActiveResidentResidence? residence,
-        DateTimeOffset? now = null) =>
+        DateTimeOffset? now = null,
+        RecordingRealtimeNotifier? realtime = null) =>
         new(
             store,
             new FakeResidenceSource(residence),
             new FakeBuildingTimeZone(),
-            new FixedTimeProvider(now ?? Now));
+            new FixedTimeProvider(now ?? Now),
+            realtime?.Track(store));
 
     private static CreateResidentServiceRequestRequest ValidRequest(DateOnly preferredDate) =>
         new(
@@ -141,6 +166,28 @@ public sealed class SubmitServiceRequestTests
     private sealed class FakeBuildingTimeZone : ICurrentBuildingTimeZone
     {
         public Task<string> GetAsync(CancellationToken ct) => Task.FromResult("Asia/Ho_Chi_Minh");
+    }
+
+    private sealed class RecordingRealtimeNotifier : IServiceRequestRealtimeNotifier
+    {
+        private FakeStore? _store;
+        public Guid? ServiceRequestId { get; private set; }
+        public Guid? ResidentUserId { get; private set; }
+        public bool StoreWasCommitted { get; private set; }
+
+        public RecordingRealtimeNotifier Track(FakeStore store)
+        {
+            _store = store;
+            return this;
+        }
+
+        public Task NotifyChangedAsync(Guid serviceRequestId, Guid? residentUserId = null, CancellationToken ct = default)
+        {
+            ServiceRequestId = serviceRequestId;
+            ResidentUserId = residentUserId;
+            StoreWasCommitted = _store?.Request is not null;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

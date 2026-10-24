@@ -1,7 +1,9 @@
 @page "/manager/service-requests/{Id:guid}/property-context"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER")]
+@implements IDisposable
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IManagerServiceRequestApiClient Api
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
 @inject NavigationManager Navigation
 
 <PageTitle>Đơn dịch vụ - PropFlow</PageTitle>
@@ -122,6 +124,8 @@
     private string apartmentValue = string.Empty;
     private string facilityValue = string.Empty;
     private string equipmentValue = string.Empty;
+    private bool disposed;
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? realtimeRefresh;
 
     private IReadOnlyList<PropFlowSelectOption> ApartmentOptions =>
         [new("", "Không chọn / Ngoại vi"), .. (contextOptions?.Apartments ?? []).Select(x => new PropFlowSelectOption(x.Id.ToString(), $"{x.Code} · {x.SecondaryText}"))];
@@ -131,9 +135,20 @@
         [new("", "Chưa gán thiết bị"), .. (contextOptions?.Equipment ?? []).Select(x => new PropFlowSelectOption(x.Id.ToString(), $"{x.Code} · {x.Name}"))];
     private bool CanConfirm => detail?.Status == "SUBMITTED";
 
+    protected override async Task OnInitializedAsync()
+    {
+        realtimeRefresh = new(
+            () => InvokeAsync(LoadCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += HandleRealtimeChangedAsync;
+        await Realtime.EnsureStartedAsync();
+    }
+
     protected override Task OnParametersSetAsync() => LoadAsync();
 
-    private async Task LoadAsync()
+    private Task LoadAsync() => realtimeRefresh?.RefreshNowAsync() ?? LoadCoreAsync();
+
+    private async Task LoadCoreAsync()
     {
         loading = true; errorMessage = null; showToast = false;
         var detailTask = Api.GetAsync(Id);
@@ -148,6 +163,13 @@
         contextOptions = optionResult.Data;
         ResetForm();
     }
+
+    private Task HandleRealtimeChangedAsync(Guid requestId) =>
+        disposed || requestId != Guid.Empty && requestId != Id
+            ? Task.CompletedTask
+            : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+
+    public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private void ResetForm()
     {
