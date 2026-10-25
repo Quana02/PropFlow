@@ -12,6 +12,7 @@ using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
+using PropFlow.Shared;
 using PropFlow.Web.Client.Features.ServiceRequests.Services;
 using PropFlow.Web.Client.Services.Api;
 
@@ -130,7 +131,7 @@ public sealed class StaffServiceRequestTests
             var legacy = new LocalServiceRequestEvidenceStorage(new TestWebHostEnvironment(contentRoot));
             var storage = new CloudinaryServiceRequestEvidenceStorage(
                 new HttpClient(handler),
-                Options.Create(new CloudinaryEvidenceOptions
+                Options.Create(new CloudinaryOptions
                 {
                     CloudName = "propflow-test",
                     ApiKey = "test-key",

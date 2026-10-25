@@ -52,6 +52,7 @@ using PropFlow.Api.Serialization;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 using Npgsql;
 using PropFlow.Api.Composition;
+using PropFlow.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
@@ -174,7 +175,11 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
-builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage, LocalMaintenanceEvidenceStorage>();
+builder.Services.AddScoped<LocalMaintenanceEvidenceStorage>();
+builder.Services.AddHttpClient<CloudinaryMaintenanceEvidenceStorage>(client =>
+    client.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage>(services =>
+    services.GetRequiredService<CloudinaryMaintenanceEvidenceStorage>());
 builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceNotifier, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceNotifier>();
 builder.Services.AddSingleton<IUserIdProvider, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceUserIdProvider>();
 builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
@@ -225,8 +230,15 @@ builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewMa
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
 builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRequestInsightSource>();
 builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
-builder.Services.Configure<CloudinaryEvidenceOptions>(
-    builder.Configuration.GetSection(CloudinaryEvidenceOptions.SectionName));
+var cloudinaryOptions = builder.Services.AddOptions<CloudinaryOptions>()
+    .BindConfiguration(CloudinaryOptions.SectionName)
+    .Validate(options =>
+        !string.IsNullOrWhiteSpace(options.CloudName) &&
+        !string.IsNullOrWhiteSpace(options.ApiKey) &&
+        !string.IsNullOrWhiteSpace(options.ApiSecret),
+        "Cloudinary:CloudName, Cloudinary:ApiKey and Cloudinary:ApiSecret must be configured through User Secrets or environment variables.");
+if (!builder.Environment.IsEnvironment("Testing"))
+    cloudinaryOptions.ValidateOnStart();
 builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
 builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
     client.Timeout = TimeSpan.FromSeconds(90));
