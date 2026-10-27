@@ -1,7 +1,9 @@
 @page "/manager/service-requests/{Id:guid}"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER")]
+@implements IDisposable
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IManagerServiceRequestApiClient Api
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
 
 <PageTitle>Chi tiết yêu cầu - PropFlow</PageTitle>
 
@@ -309,8 +311,22 @@
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem? selectedActivity;
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption> staffOptions = [];
     private string noticeMessage = "Chức năng tạo Maintenance Task được triển khai trong luồng bảo trì.";
+    private bool disposed;
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? realtimeRefresh;
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
+    {
+        realtimeRefresh = new(
+            () => InvokeAsync(LoadPageCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += HandleRealtimeChangedAsync;
+        await Realtime.EnsureStartedAsync();
+    }
+
+    protected override Task OnParametersSetAsync() =>
+        realtimeRefresh?.RefreshNowAsync() ?? LoadPageCoreAsync();
+
+    private async Task LoadPageCoreAsync()
     {
         if (Id is not { } id) return;
         var detailTask = Api.GetAsync(id);
@@ -323,6 +339,13 @@
         if (staffResult.IsSuccess && staffResult.Data is not null)
             staffOptions = staffResult.Data.Staff;
     }
+
+    private Task HandleRealtimeChangedAsync(Guid requestId) =>
+        disposed || Id is not { } id || requestId != Guid.Empty && requestId != id
+            ? Task.CompletedTask
+            : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+
+    public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private bool CanAssign => detail?.Status is "UNDER_REVIEW" or "ASSIGNED" or "IN_PROGRESS";
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestEvidenceItem> SelectedEvidence =>

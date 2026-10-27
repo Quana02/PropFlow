@@ -2,6 +2,7 @@ using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.Administration.Contracts;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.Residents.Contracts;
+using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 
@@ -60,7 +61,8 @@ public sealed class ManagerServiceRequestReviewHandler(
     IMaintenanceStaffDirectory staffDirectory,
     IManagerServiceRequestInsightSource insights,
     IServiceRequestEvidenceStorage evidenceStorage,
-    TimeProvider clock)
+    TimeProvider clock,
+    IServiceRequestRealtimeNotifier? realtime = null)
 {
     public async Task<ManagerServiceRequestResult<ManagerServiceRequestListResponse>> ListAsync(
         ManagerServiceRequestListQuery query, CancellationToken ct)
@@ -134,7 +136,7 @@ public sealed class ManagerServiceRequestReviewHandler(
         if (outcome == ManagerServiceRequestOutcome.NotFound) return NotFound<ManagerServiceRequestDetailResponse>();
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "service_request_not_submitted", Message: "Chỉ yêu cầu đang chờ tiếp nhận mới có thể chuyển sang xem xét.");
-        return await GetAsync(id, ct);
+        return await ChangedDetailAsync(id, ct);
     }
 
     public async Task<ManagerServiceRequestResult<ManagerPropertyContextOptionsResponse>> PropertyContextOptionsAsync(
@@ -184,7 +186,7 @@ public sealed class ManagerServiceRequestReviewHandler(
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "service_request_assignment_conflict",
                 Message: "Yêu cầu chưa được tiếp nhận, đã hoàn tất hoặc nhân sự này đang được phân công.");
-        return await GetAsync(id, ct);
+        return await ChangedDetailAsync(id, ct);
     }
 
     public Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> RequestReworkAsync(
@@ -213,7 +215,7 @@ public sealed class ManagerServiceRequestReviewHandler(
         if (outcome == ManagerServiceRequestOutcome.NotFound) return NotFound<ManagerServiceRequestDetailResponse>();
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "service_request_close_conflict", Message: "Trạng thái yêu cầu vừa thay đổi nên không thể đóng.");
-        return await GetAsync(id, ct);
+        return await ChangedDetailAsync(id, ct);
     }
 
     private async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ReviewResolutionAsync(
@@ -237,7 +239,7 @@ public sealed class ManagerServiceRequestReviewHandler(
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "staff_work_result_not_available",
                 Message: "Không có kết quả Staff mới kèm ảnh bằng chứng đang chờ nghiệm thu hoặc trạng thái yêu cầu vừa thay đổi.");
-        return await GetAsync(id, ct);
+        return await ChangedDetailAsync(id, ct);
     }
 
     public async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ConfirmPropertyContextAsync(
@@ -280,6 +282,14 @@ public sealed class ManagerServiceRequestReviewHandler(
         if (outcome == ManagerServiceRequestOutcome.NotFound) return NotFound<ManagerServiceRequestDetailResponse>();
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "service_request_not_submitted", Message: "Yêu cầu đã được người khác tiếp nhận hoặc trạng thái vừa thay đổi.");
+        return await ChangedDetailAsync(id, ct);
+    }
+
+    private async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ChangedDetailAsync(
+        Guid id, CancellationToken ct)
+    {
+        if (realtime is not null)
+            await realtime.NotifyChangedAsync(id, ct: CancellationToken.None);
         return await GetAsync(id, ct);
     }
 

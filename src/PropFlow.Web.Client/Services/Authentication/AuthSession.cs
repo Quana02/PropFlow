@@ -11,6 +11,7 @@ public sealed class AuthSession(ApiClient api) : AuthenticationStateProvider
     private Task? initialization;
     private int epoch;
     public string? AccessToken { get; private set; }
+    public DateTimeOffset? AccessTokenExpiresAt { get; private set; }
     public AccountResponse? User { get; private set; }
     public string? Notice { get; private set; }
     public Task InitializeAsync() => initialization ??= RestoreAsync();
@@ -29,6 +30,7 @@ public sealed class AuthSession(ApiClient api) : AuthenticationStateProvider
     {
         epoch++;
         AccessToken = response.AccessToken;
+        AccessTokenExpiresAt = response.ExpiresAt;
         User = response.User;
         Notice = null;
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
@@ -37,8 +39,22 @@ public sealed class AuthSession(ApiClient api) : AuthenticationStateProvider
     public void Clear(string? notice = null)
     {
         epoch++;
-        AccessToken = null; User = null; Notice = notice;
+        AccessToken = null; AccessTokenExpiresAt = null; User = null; Notice = notice;
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    }
+    public async Task<string?> GetValidAccessTokenAsync()
+    {
+        await InitializeAsync();
+        var token = AccessToken;
+        if (token is null) return null;
+
+        // SignalR can ask for the token more than once while negotiating transports.
+        // Rotating a healthy token on every call races the refresh cookie and can tear down
+        // an otherwise valid Hub connection. Refresh only when the token is nearly expired.
+        if (AccessTokenExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow.AddSeconds(30))
+            await RefreshAsync(token);
+
+        return AccessToken;
     }
     public async Task<bool> RefreshAsync(string? rejectedToken)
     {
