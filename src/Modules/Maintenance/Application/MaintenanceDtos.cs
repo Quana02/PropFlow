@@ -9,6 +9,14 @@ namespace PropFlow.Modules.Maintenance.Application;
 
 public record Page<T>(IReadOnlyList<T> Items, int TotalCount, int PageIndex, int PageSize);
 public record ScheduleDto(Guid Id, string ScheduleCode, Guid? FacilityId, Guid? EquipmentId, string Title, string? Description, DateTimeOffset PlannedStartAt, DateTimeOffset? PlannedEndAt, MaintenanceScheduleStatus Status);
+public record MaintenanceOverviewScheduleDto(Guid Id, string Title, DateTimeOffset PlannedStartAt);
+public enum MaintenanceOverviewItemType { SCHEDULE, TASK }
+public record MaintenanceOverviewItemDto(Guid Id, MaintenanceOverviewItemType Type, string Title, DateTimeOffset OccurredAt, string? PriorityCode = null);
+public record MaintenanceOverviewDto(
+    int UpcomingScheduleCount,
+    int CompletedTaskCount,
+    MaintenanceOverviewScheduleDto? NextSchedule,
+    IReadOnlyList<MaintenanceOverviewItemDto> RecentAndUpcomingItems);
 
 public record ScheduleQuery(string? SearchKeyword = null, Guid? FacilityId = null, Guid? EquipmentId = null, MaintenanceScheduleStatus? Status = null, DateTimeOffset? From = null, DateTimeOffset? To = null, int PageIndex = 1, int PageSize = 20);
 public record CreateScheduleCommand([StringLength(512)] string? ScheduleCode, [Required, StringLength(200)] string Title, DateTimeOffset PlannedStartAt, DateTimeOffset? PlannedEndAt = null, Guid? FacilityId = null, Guid? EquipmentId = null, [Required(ErrorMessage = "Mô tả là bắt buộc.")] string? Description = null);

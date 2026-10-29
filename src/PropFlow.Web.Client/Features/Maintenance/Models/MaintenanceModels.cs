@@ -6,6 +6,10 @@ namespace PropFlow.Web.Client.Features.Maintenance.Models;
 public record Page<T>(IReadOnlyList<T> Items, int TotalCount, int PageIndex, int PageSize);
 public enum MaintenanceScheduleStatus { ACTIVE, COMPLETED, CANCELLED }
 public enum MaintenanceTaskStatus { OPEN, ASSIGNED, IN_PROGRESS, COMPLETED, CLOSED, CANCELLED }
+public enum MaintenanceOverviewItemType { SCHEDULE, TASK }
+public record MaintenanceOverviewScheduleModel(Guid Id, string Title, DateTimeOffset PlannedStartAt);
+public record MaintenanceOverviewItemModel(Guid Id, MaintenanceOverviewItemType Type, string Title, DateTimeOffset OccurredAt, string? PriorityCode = null);
+public record MaintenanceOverviewModel(int UpcomingScheduleCount, int CompletedTaskCount, MaintenanceOverviewScheduleModel? NextSchedule, IReadOnlyList<MaintenanceOverviewItemModel> RecentAndUpcomingItems);
 public enum MaintenanceActivityType { CREATED, ASSIGNED, REASSIGNED, STATUS_CHANGED, PROGRESS_UPDATED, WORK_LOG_ADDED, RESULT_SUBMITTED, MANAGER_REVIEWED, SERVICE_REQUEST_LINKED, COMPLETED, CLOSED }
 public enum MaintenanceResultStatus { SUBMITTED, APPROVED, REVISION_REQUIRED }
 public enum MaintenanceAssignmentStatus { ASSIGNED, IN_PROGRESS, COMPLETED, REASSIGNED, CANCELLED }

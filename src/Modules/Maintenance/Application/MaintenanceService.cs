@@ -565,6 +565,55 @@ public sealed class MaintenanceService(
         return new(items, total, page, size);
     }
 
+    public async Task<MaintenanceOverviewDto> OverviewAsync(CancellationToken ct)
+    {
+        var now = timeProvider.GetUtcNow();
+        var (monthStart, monthEnd) = await CurrentBuildingMonthBoundsAsync(now, ct);
+        var schedules = db.MaintenanceSchedules.AsNoTracking();
+        var tasks = db.MaintenanceTasks.AsNoTracking();
+
+        var upcomingScheduleCount = await schedules.CountAsync(schedule =>
+            schedule.Status == MaintenanceScheduleStatus.ACTIVE &&
+            schedule.PlannedStartAt >= now &&
+            schedule.PlannedStartAt >= monthStart &&
+            schedule.PlannedStartAt < monthEnd, ct);
+
+        var completedTaskCount = await tasks.CountAsync(task =>
+            (task.Status == MaintenanceTaskStatus.COMPLETED || task.Status == MaintenanceTaskStatus.CLOSED) &&
+            task.CompletedAt != null &&
+            task.CompletedAt >= monthStart &&
+            task.CompletedAt < monthEnd, ct);
+
+        var nextSchedule = await schedules
+            .Where(schedule => schedule.Status == MaintenanceScheduleStatus.ACTIVE && schedule.PlannedStartAt >= now)
+            .OrderBy(schedule => schedule.PlannedStartAt)
+            .Select(schedule => new MaintenanceOverviewScheduleDto(schedule.Id, schedule.Title, schedule.PlannedStartAt))
+            .FirstOrDefaultAsync(ct);
+
+        var upcomingItems = await schedules
+            .Where(schedule => schedule.Status == MaintenanceScheduleStatus.ACTIVE && schedule.PlannedStartAt >= now)
+            .OrderBy(schedule => schedule.PlannedStartAt)
+            .Take(3)
+            .Select(schedule => new MaintenanceOverviewItemDto(schedule.Id, MaintenanceOverviewItemType.SCHEDULE, schedule.Title, schedule.PlannedStartAt, null))
+            .ToListAsync(ct);
+
+        var remaining = 3 - upcomingItems.Count;
+        if (remaining > 0)
+        {
+            var completedItems = await tasks
+                .Where(task =>
+                    (task.Status == MaintenanceTaskStatus.COMPLETED || task.Status == MaintenanceTaskStatus.CLOSED) &&
+                    task.CompletedAt != null)
+                .OrderByDescending(task => task.CompletedAt)
+                .Take(remaining)
+                .Select(task => new MaintenanceOverviewItemDto(task.Id, MaintenanceOverviewItemType.TASK, task.Title, task.CompletedAt!.Value, task.PriorityCode))
+                .ToListAsync(ct);
+            upcomingItems.AddRange(completedItems);
+        }
+
+        return new MaintenanceOverviewDto(upcomingScheduleCount, completedTaskCount, nextSchedule, upcomingItems);
+    }
+
     public async Task<ScheduleDto> CreateScheduleAsync(CreateScheduleCommand command, Guid actor, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(command.Description)) throw new ArgumentException("Mô tả là bắt buộc.");
@@ -768,6 +817,20 @@ public sealed class MaintenanceService(
         try { zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
         catch (TimeZoneNotFoundException) { zone = TimeZoneInfo.Utc; }
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
+    }
+
+    private async Task<(DateTimeOffset Start, DateTimeOffset End)> CurrentBuildingMonthBoundsAsync(DateTimeOffset instant, CancellationToken ct)
+    {
+        var timeZoneId = buildingTimeZone is null ? "Asia/Ho_Chi_Minh" : await buildingTimeZone.GetAsync(ct);
+        TimeZoneInfo zone;
+        try { zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
+        catch (TimeZoneNotFoundException) { zone = TimeZoneInfo.Utc; }
+        var local = TimeZoneInfo.ConvertTime(instant, zone);
+        var localMonthStart = new DateTime(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var localMonthEnd = localMonthStart.AddMonths(1);
+        return (
+            new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localMonthStart, zone)),
+            new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localMonthEnd, zone)));
     }
 
     private async Task<T> WithAdvisoryLockAsync<T>(string scope, Func<CancellationToken, Task<T>> action, CancellationToken ct)
