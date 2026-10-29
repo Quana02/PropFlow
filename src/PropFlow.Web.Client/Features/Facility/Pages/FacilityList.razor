@@ -336,7 +336,7 @@
             </div>
 
             <!-- Pagination Footer -->
-            <div class="p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
+            <div class="fe04-pagination p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
                 <!-- Page size info -->
                 <div class="flex items-center gap-2">
                     <span>Bản ghi <strong class="text-[#0f172a]">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> - <strong class="text-[#0f172a]">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong> trong tổng số <strong class="text-[#0f172a]">@PagedResult.TotalCount</strong> CSVT</span>
