@@ -1,12 +1,6 @@
-.summary { overflow:hidden; border:1px solid var(--admin-line,#dce8f1); border-radius:.85rem; }
-header { display:flex; align-items:center; justify-content:space-between; padding:.8rem .9rem; background:rgba(148,163,184,.06); }
-h3 { margin:0; font-size:.78rem; }
-header strong { color:#0284c7; font-size:1.25rem; }
-dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; margin:0; padding:.85rem .9rem; }
-dl div { display:flex; align-items:center; justify-content:space-between; gap:.5rem; min-width:0; }
-dt { color:var(--admin-muted,#64748b); font-size:.67rem; }
-dd { margin:0; font-size:.74rem; font-weight:800; }
-dd.active { color:#059669; }
-dd.maintenance { color:#d97706; }
-dd.unavailable { color:#e11d48; }
+.summary { overflow:hidden; border:1px solid var(--admin-line,#dce8f1); border-radius:.9rem; background:rgba(248,250,252,.56); }
+header { display:flex; align-items:center; justify-content:space-between; padding:.8rem .9rem; } h3 { margin:0; font-size:.82rem; } header strong { color:#0284c7; font-size:1.35rem; }
+dl { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.45rem; margin:0; padding:.3rem .75rem .8rem; } dl div { min-width:0; padding:.55rem .38rem; border-radius:.55rem; text-align:center; } dt { font-size:.58rem; font-weight:700; white-space:nowrap; } dd { margin:.15rem 0 0; font-size:.78rem; font-weight:800; }.active { background:#eafbf3; color:#047857; }.maintenance { background:#fff8e7; color:#b45309; }.inactive,.unavailable { background:#fff0f2; color:#be123c; }.neutral { background:#f1f5f9; color:#64748b; }
 @media (max-width:28rem) { dl { grid-template-columns:1fr; } }
+
+.app-shell-dark .summary { border-color:rgba(34,211,238,.13); background:#111f33; }.app-shell-dark .summary h3 { color:#f1f5f9; }.app-shell-dark .summary header strong { color:#38bdf8; }.app-shell-dark .summary .active { background:rgba(6,78,59,.62); color:#6ee7b7; }.app-shell-dark .summary .maintenance { background:rgba(120,53,15,.52); color:#fcd34d; }.app-shell-dark .summary .inactive,.app-shell-dark .summary .unavailable { background:rgba(136,19,55,.38); color:#fda4af; }.app-shell-dark .summary .neutral { background:rgba(30,41,59,.9); color:#cbd5e1; }
