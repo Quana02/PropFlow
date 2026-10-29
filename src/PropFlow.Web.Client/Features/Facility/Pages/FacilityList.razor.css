@@ -58,9 +58,9 @@
 .fe04-panel td .material-symbols-outlined { font-size: .85rem; }
 .fe04-panel td button { padding: .25rem; }
 
-.fe04-panel > div:last-child { min-height: 3rem; padding: .55rem .75rem; gap: .55rem; font-size: .6rem; }
-.fe04-panel > div:last-child button { width: 1.45rem; height: 1.45rem; padding: .18rem; border-radius: .45rem; font-size: .6rem; }
-.fe04-panel > div:last-child .material-symbols-outlined { font-size: .85rem; }
+.fe04-panel > .fe04-pagination { min-height: 3rem; padding: .55rem .75rem; gap: .55rem; font-size: .6rem; }
+.fe04-panel > .fe04-pagination button { width: 1.45rem; height: 1.45rem; padding: .18rem; border-radius: .45rem; font-size: .6rem; }
+.fe04-panel > .fe04-pagination .material-symbols-outlined { font-size: .85rem; }
 .fe04-empty { min-height: 12rem; padding: 1.5rem; text-align: center; }
 .fe04-empty .material-symbols-outlined { font-size: 2.5rem; }
 .fe04-empty button { min-width: 10rem; justify-content: center; }
@@ -79,27 +79,69 @@
 
 /* Dark mode follows the existing AppShell theme; it deliberately does not use a second theme switch. */
 .app-shell-dark .fe04-page { color: var(--admin-text, #edf6ff); }
-.app-shell-dark .fe04-header, .app-shell-dark .fe04-panel, .app-shell-dark .fe04-legend, .app-shell-dark .fe04-metric-card, .app-shell-dark .fe04-modal { background: rgba(19, 28, 43, .94); border-color: rgba(126, 195, 232, .16); box-shadow: 0 .45rem 1.3rem rgba(0, 0, 0, .2); }
-.app-shell-dark .fe04-page .bg-white, .app-shell-dark .fe04-page .bg-slate-50, .app-shell-dark .fe04-page .bg-slate-50\/50, .app-shell-dark .fe04-page .bg-slate-50\/70, .app-shell-dark .fe04-page .bg-white\/80 { background-color: #111b2a; }
-.app-shell-dark .fe04-page .border-slate-100, .app-shell-dark .fe04-page .border-slate-200, .app-shell-dark .fe04-page .border-slate-200\/80, .app-shell-dark .fe04-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(126, 195, 232, .13); }
-.app-shell-dark .fe04-page .text-slate-900, .app-shell-dark .fe04-page .text-\[\#0f172a\], .app-shell-dark .fe04-page .text-slate-800 { color: #edf6ff; }
-.app-shell-dark .fe04-page .text-slate-500, .app-shell-dark .fe04-page .text-slate-600, .app-shell-dark .fe04-page .text-\[\#64748b\], .app-shell-dark .fe04-page .text-slate-400 { color: #a9bbcc; }
-.app-shell-dark .fe04-toolbar { background: linear-gradient(90deg, rgba(56, 189, 248, .09), rgba(19, 28, 43, 0)); }
-.app-shell-dark .fe04-page input, .app-shell-dark .fe04-page .status-dropdown-menu { background: #0e1725; border-color: rgba(126, 195, 232, .2); color: #edf6ff; }
-.app-shell-dark .fe04-page input::placeholder { color: #73869b; }
+.app-shell-dark .fe04-header, .app-shell-dark .fe04-panel, .app-shell-dark .fe04-legend, .app-shell-dark .fe04-metric-card, .app-shell-dark .fe04-modal { background: #0d1728; border-color: rgba(34, 211, 238, .13); box-shadow: 0 1rem 2.25rem -1rem rgba(0, 0, 0, .58); }
+.app-shell-dark .fe04-page .bg-white, .app-shell-dark .fe04-page .bg-slate-50, .app-shell-dark .fe04-page .bg-slate-50\/50, .app-shell-dark .fe04-page .bg-slate-50\/70, .app-shell-dark .fe04-page .bg-white\/80 { background-color: #0d1728; }
+.app-shell-dark .fe04-page .border-slate-100, .app-shell-dark .fe04-page .border-slate-200, .app-shell-dark .fe04-page .border-slate-200\/80, .app-shell-dark .fe04-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(34, 211, 238, .13); }
+.app-shell-dark .fe04-page .text-slate-900, .app-shell-dark .fe04-page .text-\[\#0f172a\], .app-shell-dark .fe04-page .text-slate-800 { color: #f1f5f9; }
+.app-shell-dark .fe04-page .text-slate-500, .app-shell-dark .fe04-page .text-slate-600, .app-shell-dark .fe04-page .text-\[\#64748b\], .app-shell-dark .fe04-page .text-slate-400 { color: #94a3b8; }
+.app-shell-dark .fe04-toolbar { background: linear-gradient(90deg, rgba(8, 47, 73, .72), #0d1728 70%); }
+.app-shell-dark .fe04-page input, .app-shell-dark .fe04-page .status-dropdown-menu { background: #111f33; border-color: rgba(34, 211, 238, .16); color: #f1f5f9; }
+.app-shell-dark .fe04-page input::placeholder { color: #71839a; }
 .app-shell-dark .fe04-page tbody tr:hover { background: rgba(56, 189, 248, .07); }
-.app-shell-dark .fe04-page .hover\:bg-sky-50:hover { background: rgba(56, 189, 248, .12); }
-.app-shell-dark .fe04-page .hover\:bg-slate-50:hover, .app-shell-dark .fe04-page .hover\:bg-slate-100:hover { background: rgba(148, 163, 184, .13); }
+.app-shell-dark .fe04-page .hover\:bg-sky-50:hover { background: rgba(8, 47, 73, .75); }
+.app-shell-dark .fe04-page .hover\:bg-slate-50:hover, .app-shell-dark .fe04-page .hover\:bg-slate-100:hover { background: rgba(30, 41, 59, .85); }
 .app-shell-dark .fe04-page .bg-emerald-50 { background: rgba(6, 95, 70, .28); }
 .app-shell-dark .fe04-page .bg-amber-50 { background: rgba(146, 64, 14, .28); }
 .app-shell-dark .fe04-page .bg-indigo-50 { background: rgba(67, 56, 202, .25); }
 .app-shell-dark .fe04-page .bg-rose-50 { background: rgba(159, 18, 57, .25); }
 .app-shell-dark .fe04-page .bg-slate-100 { background: rgba(71, 85, 105, .36); }
 .app-shell-dark .fe04-page .bg-blue-50\/70, .app-shell-dark .fe04-page .bg-sky-50 { background: rgba(3, 105, 161, .2); }
-.app-shell-dark .fe04-light-select ::deep .pf-select, .app-shell-dark .fe04-light-select ::deep .pf-select__trigger, .app-shell-dark .fe04-light-select ::deep .pf-select__menu { background: #0e1725; border-color: rgba(126, 195, 232, .2); color: #edf6ff; }
-.app-shell-dark .fe04-light-select ::deep .pf-select__option { color: #d9e7f4; }
-.app-shell-dark .fe04-light-select ::deep .pf-select__option:hover, .app-shell-dark .fe04-light-select ::deep .pf-select__option.is-active { background: rgba(56, 189, 248, .14); }
-.app-shell-dark .fe04-light-select ::deep .pf-select__option.is-selected { background: rgba(56, 189, 248, .2); color: #7dd3fc; }
+.app-shell-dark .fe04-light-select ::deep .pf-select, .app-shell-dark .fe04-light-select ::deep .pf-select__trigger, .app-shell-dark .fe04-light-select ::deep .pf-select__menu { background: #111f33; border-color: rgba(34, 211, 238, .16); color: #f1f5f9; }
+.app-shell-dark .fe04-light-select ::deep .pf-select__option { color: #cbd5e1; }
+.app-shell-dark .fe04-light-select ::deep .pf-select__option:hover, .app-shell-dark .fe04-light-select ::deep .pf-select__option.is-active { background: rgba(8, 47, 73, .75); }
+.app-shell-dark .fe04-light-select ::deep .pf-select__option.is-selected { background: rgba(8, 47, 73, .95); color: #67e8f9; }
+
+/* Tailwind CDN is loaded after the isolated stylesheet. These are limited to
+   surfaces that also carry Tailwind's light-only background utility. */
+.app-shell-dark .fe04-header,
+.app-shell-dark .fe04-metric-card,
+.app-shell-dark .fe04-panel,
+.app-shell-dark .fe04-panel > .fe04-pagination,
+.app-shell-dark .fe04-legend,
+.app-shell-dark .fe04-panel table,
+.app-shell-dark .fe04-panel tbody,
+.app-shell-dark .fe04-panel tbody tr,
+.app-shell-dark .fe04-panel tbody td {
+    background-color: #0d1728 !important;
+}
+.app-shell-dark .fe04-panel thead,
+.app-shell-dark .fe04-panel thead tr {
+    background-color: #0a1627 !important;
+}
+.app-shell-dark .fe04-panel tbody td,
+.app-shell-dark .fe04-panel tbody td .font-semibold {
+    color: #f1f5f9 !important;
+}
+.app-shell-dark .fe04-panel tbody td .text-xs,
+.app-shell-dark .fe04-panel tbody td .text-slate-600,
+.app-shell-dark .fe04-panel tbody td .text-slate-500 {
+    color: #94a3b8 !important;
+}
+.app-shell-dark .fe04-toolbar input {
+    background-color: #111f33 !important;
+    border-color: rgba(34, 211, 238, .22) !important;
+    color: #f1f5f9 !important;
+}
+.app-shell-dark .fe04-toolbar input::placeholder { color: #94a3b8 !important; }
+.app-shell-dark .fe04-toolbar > div:last-child button {
+    background-color: #111f33 !important;
+    border-color: rgba(34, 211, 238, .22) !important;
+    color: #cbd5e1 !important;
+}
+.app-shell-dark .fe04-toolbar > div:last-child button:hover {
+    background-color: rgba(8, 47, 73, .9) !important;
+    color: #67e8f9 !important;
+}
 
 @media (max-width: 64rem) { .fe04-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 40rem) {
