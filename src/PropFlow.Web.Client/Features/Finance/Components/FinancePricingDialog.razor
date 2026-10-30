@@ -2,8 +2,8 @@
 @inject IJSRuntime JS
 <div class="pricing-backdrop" @onclick="Close">
     <section @ref="dialog" class="pricing-dialog" role="dialog" aria-modal="true" aria-labelledby="@titleId" tabindex="-1" @onclick:stopPropagation="true" @onkeydown="KeyDown">
-        <header><h2 id="@titleId">@Title</h2><button type="button" aria-label="Đóng cấu hình giá" disabled="@Busy" @onclick="Close">×</button></header>
-        @ChildContent
+        <header class="pricing-dialog-header"><div class="pricing-dialog-title"><span class="material-symbols-outlined pricing-dialog-icon" aria-hidden="true">tune</span><h2 id="@titleId">@Title</h2></div><button class="pricing-dialog-close" type="button" aria-label="Đóng cấu hình giá" disabled="@Busy" @onclick="Close">×</button></header>
+        <div class="pricing-dialog-body">@ChildContent</div>
     </section>
 </div>
 @code {

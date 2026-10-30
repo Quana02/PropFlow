@@ -1,0 +1,20 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@code {
+    [Parameter, EditorRequired] public Func<ElementReference> Input { get; set; } = default!;
+    private ElementReference element;
+    private IJSObjectReference? module;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        element = Input();
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowMoneyBehavior.razor.js?v=20261016-1");
+        await module.InvokeVoidAsync("attach", element);
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (module is null) return;
+        try { await module.InvokeVoidAsync("detach", element); await module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

@@ -112,7 +112,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if(!positionAfterRender&&!scrollYearAfterRender)return;
-        module??=await JS.InvokeAsync<IJSObjectReference>("import","./Shared/Forms/PropFlowDatePicker.razor.js?v=20261003.1");
+        module??=await JS.InvokeAsync<IJSObjectReference>("import","./Shared/Forms/PropFlowDatePicker.razor.js?v=20261016.1");
         reference??=DotNetObjectReference.Create(this);
         if(positionAfterRender){positionAfterRender=false;await module.InvokeVoidAsync("open",root,reference);}
         if(scrollYearAfterRender){scrollYearAfterRender=false;await module.InvokeVoidAsync("scrollSelectedYear",root);}

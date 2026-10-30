@@ -11,11 +11,13 @@ public sealed record HouseholdInvoice(Guid Id, string Number, string Apartment, 
     decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null, string PaymentEnvironment = "LIVE");
 public sealed record ResidentPayment(Guid Id, Guid InvoiceId, string Number, decimal Amount, string Method,
     string Status, DateTimeOffset Date, DateTimeOffset? ConfirmedAt, string? RejectionReason);
-public sealed record ResidentNotice(Guid Id, string Title, string Message, string? ActionPath, bool IsRead, DateTimeOffset CreatedAt);
+public sealed record ResidentNotice(Guid Id, string Title, string Message, string? ActionPath, bool IsRead, DateTimeOffset CreatedAt, string? SourceType = null);
 public sealed record CollectionInput(Guid InvoiceId, decimal Amount, string PaymentMethodCode, string? ReferenceNumber, string? Note);
 public sealed record ReminderResult(int Recipients);
 public sealed class FinanceCycleApi(AuthenticatedApiClient api)
 {
+    public Task<ApiResult<PaymentRow>> SubmitPaymentAsync(CollectionInput input, string key) =>
+        api.SendAsync<PaymentRow>(HttpMethod.Post, "api/v1/resident/payments", input, headers: new Dictionary<string,string> { ["Idempotency-Key"] = key });
     public Task<ApiResult<T>> GetAsync<T>(string path) => api.SendAsync<T>(HttpMethod.Get, path);
     public Task<ApiResult<T>> PostAsync<T>(string path, object body) => api.SendAsync<T>(HttpMethod.Post, path, body);
     public Task<ApiResult<T>> PutAsync<T>(string path, object body) => api.SendAsync<T>(HttpMethod.Put, path, body);

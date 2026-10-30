@@ -21,3 +21,5 @@ footer button { padding:.6rem .85rem; border-radius:.65rem; font-size:.72rem; fo
 .secondary { border:1px solid var(--admin-line,#dce8f1); background:transparent; color:inherit; } .primary { border:1px solid #0284c7; background:#0284c7; color:#fff; }
 button:disabled { cursor:not-allowed; opacity:.62; }
 @media (max-width:36rem) { .form-grid { grid-template-columns:1fr; } .field.wide { grid-column:auto; } footer button { flex:1; } }
+
+.app-shell-dark .dialog { border-color:rgba(34,211,238,.16); background:#0d1728; color:#f1f5f9; box-shadow:0 1.2rem 3rem rgba(0,0,0,.62); }.app-shell-dark .dialog header,.app-shell-dark .dialog footer { border-color:rgba(34,211,238,.13); }.app-shell-dark .dialog ::deep input,.app-shell-dark .dialog ::deep textarea { border-color:rgba(34,211,238,.14); background:#111f33; color:#f1f5f9; }.app-shell-dark .dialog ::deep input:disabled { background:rgba(30,41,59,.85); color:#94a3b8; }.app-shell-dark .dialog-error { border-color:rgba(251,113,133,.28); background:rgba(136,19,55,.3); color:#fda4af; }

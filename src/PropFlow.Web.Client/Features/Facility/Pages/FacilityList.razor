@@ -5,15 +5,18 @@
 @using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using PropFlow.Web.Client.Features.Maintenance.Services
 @using System.ComponentModel.DataAnnotations
 @inject IFacilityApiClient FacilityApiClient
 @inject IBuildingApiClient BuildingApiClient
 @inject NavigationManager Navigation
 @inject IAuthorizationService AuthorizationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject MaintenanceHubConnectionFactory MaintenanceHubConnectionFactory
 @using PropFlow.Web.Client.Shared.Forms
 @using PropFlow.Web.Client.Shared.Feedback
-@implements IDisposable
+@implements IAsyncDisposable
 
 <PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
 @if (!IsManager)
@@ -333,7 +336,7 @@
             </div>
 
             <!-- Pagination Footer -->
-            <div class="p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
+            <div class="fe04-pagination p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
                 <!-- Page size info -->
                 <div class="flex items-center gap-2">
                     <span>Bản ghi <strong class="text-[#0f172a]">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> - <strong class="text-[#0f172a]">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong> trong tổng số <strong class="text-[#0f172a]">@PagedResult.TotalCount</strong> CSVT</span>
@@ -606,6 +609,7 @@
     private bool FocusFacilityTypeNameInput;
     private bool RestoreFacilityTypeTriggerFocus;
     private readonly CancellationTokenSource StatusRefreshCancellation = new();
+    private HubConnection? AssetStatusHub;
 
     private string StatusFilterString
     {
@@ -621,32 +625,49 @@
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
         IsManager = AssetPermissions.CanManage(user);
         await Task.WhenAll(LoadData(), LoadSummaryAsync(), LoadFacilityTypesAsync());
-        _ = RefreshStatusAsync(StatusRefreshCancellation.Token);
+        _ = ConnectAssetStatusHubAsync();
     }
 
-    private async Task RefreshStatusAsync(CancellationToken ct)
+    private async Task ConnectAssetStatusHubAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        HubConnection? hub = null;
         try
         {
-            while (await timer.WaitForNextTickAsync(ct))
+            hub = MaintenanceHubConnectionFactory.Create();
+            hub.On("AssetStatusChanged", () => RefreshAssetStatusForRealtimeAsync());
+            hub.Reconnected += _ => InvokeAsync(async () =>
             {
-                if (IsFormOpen || IsSaving || IsLoading) continue;
-                await InvokeAsync(async () =>
-                {
-                    if (ct.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
-                    if (IsDetailOpen)
-                        await RefreshDetailAsync(ct);
-                    else
-                        await Task.WhenAll(LoadData(), LoadSummaryAsync());
-                    if (!ct.IsCancellationRequested) StateHasChanged();
-                });
-            }
+                await hub.InvokeAsync("JoinAssetStatus", StatusRefreshCancellation.Token);
+                await RefreshAssetStatusForRealtimeAsync();
+            });
+            await hub.StartAsync(StatusRefreshCancellation.Token);
+            await hub.InvokeAsync("JoinAssetStatus", StatusRefreshCancellation.Token);
+            AssetStatusHub = hub;
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (StatusRefreshCancellation.IsCancellationRequested) { }
+        catch
+        {
+            // A realtime outage must not block the FE-04 page.
+            if (AssetStatusHub is null && hub is not null) await hub.DisposeAsync();
+        }
     }
 
-    public void Dispose() => StatusRefreshCancellation.Cancel();
+    private Task RefreshAssetStatusForRealtimeAsync() => InvokeAsync(async () =>
+    {
+        if (StatusRefreshCancellation.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
+        if (IsDetailOpen)
+            await RefreshDetailAsync(StatusRefreshCancellation.Token);
+        else
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
+        if (!StatusRefreshCancellation.IsCancellationRequested) StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        StatusRefreshCancellation.Cancel();
+        if (AssetStatusHub is not null) await AssetStatusHub.DisposeAsync();
+        StatusRefreshCancellation.Dispose();
+    }
 
     private async Task RefreshDetailAsync(CancellationToken ct)
     {

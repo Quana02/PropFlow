@@ -58,6 +58,7 @@ using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 using Npgsql;
 using PropFlow.Api.Composition;
 using PropFlow.Shared;
+using CloudinaryDotNet;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDataProtection().SetApplicationName("PropFlow");
@@ -70,6 +71,21 @@ builder.Services.AddOptions<DatabaseConnectionOptions>()
         "Connection string 'PropFlowDatabase' must be configured through the environment or secret provider.")
     .ValidateOnStart();
 
+builder.Services.AddOptions<CloudinaryOptions>()
+    .BindConfiguration("Cloudinary")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.CloudName)
+                        && !string.IsNullOrWhiteSpace(options.ApiKey)
+                        && !string.IsNullOrWhiteSpace(options.ApiSecret),
+        "Cloudinary phải được cấu hình bằng User Secrets hoặc secret provider.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton(services =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CloudinaryOptions>>().Value;
+    return new Cloudinary(new Account(options.CloudName, options.ApiKey, options.ApiSecret));
+});
+builder.Services.AddHttpClient("MaintenanceEvidenceCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+
 // Authentication and Administration share one scoped connection so their
 // account-provisioning workflow can commit atomically across module DbContexts.
 builder.Services.AddScoped(services => new NpgsqlConnection(
@@ -78,7 +94,7 @@ builder.Services.AddScoped(services => new NpgsqlConnection(
 // Register Batch 1 DbContexts with schema-specific migration history tables
 builder.Services.AddDbContext<PropertyAssetsDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "property_assets")));
@@ -127,7 +143,7 @@ builder.Services.AddDbContext<ComplaintsDbContext>((services, options) =>
 
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "maintenance")));
@@ -186,6 +202,8 @@ builder.Services.AddHttpClient<CloudinaryMaintenanceEvidenceStorage>(client =>
     client.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage>(services =>
     services.GetRequiredService<CloudinaryMaintenanceEvidenceStorage>());
+builder.Services.AddScoped<IMaintenanceAssetTransactionCoordinator, MaintenanceAssetTransactionCoordinator>();
+builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage, CloudinaryMaintenanceEvidenceStorage>();
 builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceNotifier, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceNotifier>();
 builder.Services.AddSingleton<IUserIdProvider, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceUserIdProvider>();
 builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
@@ -248,6 +266,12 @@ builder.Services.AddScoped<IRentalPricing, RentalPricing>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationStore, PropFlow.Modules.Communication.Infrastructure.FinanceNoticePublisher>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationRealtime, PropFlow.Modules.Communication.Presentation.FinanceNotificationRealtime>();
 builder.Services.AddScoped<IFinanceNoticePublisher, FinanceNoticePublisherBridge>();
+builder.Services.AddScoped<IPricingChangePublisher, PricingChangePublisher>();
+builder.Services.AddScoped<PricingChangeDispatcher>();
+builder.Services.AddScoped<IPricingChangeDelivery>(sp => sp.GetRequiredService<PricingChangeDispatcher>());
+builder.Services.AddHostedService<PricingChangeWorker>();
+builder.Services.AddScoped<OperationalNoticeDispatcher>();
+builder.Services.AddHostedService<OperationalNoticeWorker>();
 builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("Authentication:Mail"));
 builder.Services.AddHostedService<BillingCycleWorker>();
 builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
@@ -343,6 +367,7 @@ builder.Services.AddScoped<IApartmentOwnershipCommand, PropFlow.Modules.Apartmen
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatusCommand, PropFlow.Modules.Apartments.Application.ApartmentStatusCommand>();
 builder.Services.AddScoped<IResidentApartmentReadSource, ResidentApartmentReadSource>();
 builder.Services.AddScoped<ICurrentBuildingTimeZone, CurrentBuildingTimeZone>();
+builder.Services.AddScoped<ICurrentBuildingFloorLimit, CurrentBuildingFloorLimit>();
 builder.Services.AddScoped<IResidentOverviewSource, ResidentOverviewSource>();
 builder.Services.AddScoped<IServiceRequestOverviewSource, ServiceRequestOverviewSource>();
 builder.Services.AddScoped<AdministrationOverviewQuery>();
@@ -441,4 +466,11 @@ public partial class Program { }
 public sealed class DatabaseConnectionOptions
 {
     public string PropFlowDatabase { get; set; } = "";
+}
+
+public sealed class CloudinaryOptions
+{
+    public string CloudName { get; set; } = "";
+    public string ApiKey { get; set; } = "";
+    public string ApiSecret { get; set; } = "";
 }

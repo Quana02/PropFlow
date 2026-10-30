@@ -105,6 +105,7 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
             db.FeeRateRules.Add(new FeeRateRule(electricity.Id, $"Điện từ {input.EffectiveFrom:MM/yyyy}", "KWH", "MONTHLY",
                 electricityAmount, input.EffectiveFrom, actor, DateTimeOffset.UtcNow, unitName: "kWh"));
         }
+        db.PricingChanges.Add(PricingChangeMessages.Service(input, actor));
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
     public async Task RunAsync(CancellationToken ct)
@@ -141,8 +142,9 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
         foreach (var p in events.Where(x => x.Status is "PENDING" or "CONFIRMED" or "REJECTED")) {
             var invoice = invoices.Single(x => x.Id == p.InvoiceId);
             foreach (var r in recipients.Where(x => x.InvoiceId == p.InvoiceId)) {
-                var title = p.Status switch { "CONFIRMED" => "Xác nhận thanh toán hóa đơn", "PENDING" => "Thanh toán đang chờ xác minh", _ => "Khoản thanh toán chưa được chấp nhận" };
-                var message = p.Status switch { "CONFIRMED" => $"Đã nhận {FinanceDocuments.Money(p.Amount)} cho hóa đơn {invoice.InvoiceNumber}. Phiếu {p.Number}.", "PENDING" => $"Khoản thanh toán {p.Number} cho hóa đơn {invoice.InvoiceNumber} đang chờ kế toán xác minh.", _ => $"Khoản thanh toán {p.Number} bị từ chối: {p.RejectionReason}" };
+                var title = p.Status switch { "CONFIRMED" => "Thanh toán hóa đơn thành công", "PENDING" => "Thanh toán đang chờ xác minh", _ => "Khoản thanh toán chưa được chấp nhận" };
+                var remaining = Math.Max(0, invoice.TotalAmount - paid.GetValueOrDefault(invoice.Id));
+                var message = p.Status switch { "CONFIRMED" => $"Bạn đã thanh toán thành công {FinanceDocuments.Money(p.Amount)} cho hóa đơn {invoice.InvoiceNumber}, căn hộ {r.UnitNumber}. Phiếu {p.Number}. " + (remaining == 0 ? "Hóa đơn đã thanh toán đầy đủ, không còn dư nợ." : $"Dư nợ còn lại: {FinanceDocuments.Money(remaining)}."), "PENDING" => $"Khoản thanh toán {p.Number} cho hóa đơn {invoice.InvoiceNumber} đang chờ kế toán xác minh.", _ => $"Khoản thanh toán {p.Number} bị từ chối: {p.RejectionReason}" };
                 var html = p.Status == "CONFIRMED" ? FinanceDocuments.Receipt(invoice, r, p, paid.GetValueOrDefault(invoice.Id)) : FinanceDocuments.Wrap(title, r, $"<p>{FinanceDocuments.Encode(message)}</p>");
                 var email = p.Status == "CONFIRMED" ? await directory.RecipientEmailAsync(r.UserId, r.Email, ct) : null;
                 await notices.PublishAsync(new(FinanceDocuments.EventId(RecipientEventKey($"payment:{p.Id}:{p.Status}", r)), r.UserId, email, title, message, html, "PAYMENT", p.Id, $"/resident/billing?invoice={invoice.Id}", p.Status == "CONFIRMED" ? p.Number + ".html" : null, PreviousRecipientEventId($"payment:{p.Id}:{p.Status}", r)), ct);
@@ -330,8 +332,14 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
                 FinanceDocuments.Invoice(invoice, recipient, paid), ct);
         return recipients.Length;
     }
-    private Task RemindOneAsync(Invoice i, InvoiceRecipient r, decimal paid, string key, CancellationToken ct) =>
-        PublishAsync(i, r, key, i.Type == InvoiceType.MONTHLY_RENTAL ? "Nhắc thanh toán tiền thuê tháng" : "Nhắc thanh toán phí dịch vụ", $"Hóa đơn {i.InvoiceNumber} còn {FinanceDocuments.Money(i.TotalAmount - paid)}. Hạn {i.DueDate:dd/MM/yyyy}.", FinanceDocuments.Invoice(i, r, paid), ct);
+    private Task RemindOneAsync(Invoice i, InvoiceRecipient r, decimal paid, string key, CancellationToken ct)
+    {
+        var overdue = i.DueDate is { } due && Today > due;
+        var title = overdue ? "Thông báo công nợ quá hạn" : "Thông báo nhắc thanh toán hóa đơn";
+        var message = $"Căn hộ {r.UnitNumber}, hóa đơn {i.InvoiceNumber}, kỳ {i.BillingPeriodStart:MM/yyyy}: còn nợ {FinanceDocuments.Money(Math.Max(0, i.TotalAmount - paid))}. Hạn thanh toán: {i.DueDate:dd/MM/yyyy}. "
+            + (overdue ? $"Đã quá hạn {Today.DayNumber - i.DueDate!.Value.DayNumber} ngày. Vui lòng thanh toán khoản còn nợ." : "Vui lòng thanh toán đúng hạn.");
+        return PublishAsync(i, r, key, title, message, FinanceDocuments.Invoice(i, r, paid, title, message), ct);
+    }
     private async Task PublishAsync(Invoice i, InvoiceRecipient r, string key, string title, string message, string html, CancellationToken ct) =>
         await notices.PublishAsync(new(FinanceDocuments.EventId(RecipientEventKey(key, r)), r.UserId, await directory.RecipientEmailAsync(r.UserId, r.Email, ct), title, message, html, "INVOICE", i.Id, $"/resident/billing?invoice={i.Id}", PreviousRecipientEventId: PreviousRecipientEventId(key, r)), ct);
     private static Guid? PreviousRecipientEventId(string key, InvoiceRecipient r) => r.UserId is not null && r.ResidentId is not null

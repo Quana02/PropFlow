@@ -35,6 +35,9 @@ public sealed class BillingHouseholdDirectory(ResidentsDbContext residents,
     public Task<string?> RecipientEmailAsync(Guid? userId, string? snapshotEmail, CancellationToken ct) => userId is null
         ? Task.FromResult(snapshotEmail)
         : accounts.UserAccounts.AsNoTracking().Where(x => x.Id == userId && x.Status == AccountStatus.ACTIVE).Select(x => x.Email).SingleOrDefaultAsync(ct);
+    public async Task<IReadOnlyList<BillingApartmentType>> ApartmentTypesAsync(CancellationToken ct) =>
+        await apartments.ApartmentUnitTypes.AsNoTracking().OrderBy(x => x.Name)
+            .Select(x => new BillingApartmentType(x.Id, x.Name)).ToArrayAsync(ct);
     public async Task<IReadOnlyList<BillingApartment>> ManagedApartmentsAsync(CancellationToken ct) =>
         await apartments.ApartmentUnits.AsNoTracking().Where(x => x.Status == PropFlow.Modules.Apartments.Domain.ApartmentUnits.MasterDataStatus.ACTIVE)
             .OrderBy(x => x.UnitNumber).Select(x => new BillingApartment(x.Id, x.UnitNumber, x.ApartmentUnitTypeId, x.ApartmentUnitType.Name)).ToArrayAsync(ct);

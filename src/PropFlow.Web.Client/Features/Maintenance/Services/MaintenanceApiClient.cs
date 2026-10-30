@@ -5,6 +5,8 @@ using PropFlow.Web.Client.Services.Api;
 namespace PropFlow.Web.Client.Features.Maintenance.Services;
 public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintenanceApiClient
 {
+    public Task<ApiResult<MaintenanceOverviewModel>> OverviewAsync(CancellationToken ct = default) =>
+        api.SendAsync<MaintenanceOverviewModel>(HttpMethod.Get, "api/v1/maintenance/overview", ct: ct);
     public Task<ApiResult<Page<ScheduleModel>>> SchedulesAsync(ScheduleFilterModel filter, CancellationToken ct = default)
     {
         var query = new List<string> { $"pageIndex={filter.PageIndex}", $"pageSize={filter.PageSize}" };

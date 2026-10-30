@@ -8,4 +8,6 @@ namespace PropFlow.Modules.Maintenance.Application;
 public interface IMaintenanceNotifier
 {
     Task NotifyTaskUpdatedAsync(Guid taskId, IReadOnlyCollection<Guid> recipientStaffUserIds, CancellationToken ct = default);
+
+    Task NotifyAssetStatusChangedAsync(CancellationToken ct = default) => Task.CompletedTask;
 }

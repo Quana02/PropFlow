@@ -10,6 +10,30 @@ namespace PropFlow.Modules.Payments.Infrastructure.Finance;
 
 public sealed class PaymentFinanceStore(PaymentsDbContext db, IInvoiceFinancialSource invoices) : IPaymentFinanceStore
 {
+    public async Task<MutationResult> SubmitAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct)
+    {
+        if (!await invoices.IsRecipientAsync(request.InvoiceId, actorId, ct)) return new(MutationOutcome.NotFound);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{actorId}|{System.Text.Json.JsonSerializer.Serialize(request)}")));
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 2))", ct);
+        await LockInvoiceAsync(request.InvoiceId, ct);
+        var prior = await db.PaymentOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Key == key, ct);
+        if (prior is not null) return prior.PayloadHash == hash && prior.Action == "SUBMIT"
+            ? new(MutationOutcome.Success, await FindAsync(prior.PaymentId, ct)) : new(MutationOutcome.IdempotencyConflict);
+        var invoice = await invoices.FindAsync(request.InvoiceId, ct);
+        if (invoice is null || invoice.Status != "ISSUED") return new(MutationOutcome.NotFound);
+        if (await db.Payments.AnyAsync(x => x.InvoiceId == request.InvoiceId && x.Status == PaymentStatus.PENDING, ct)) return new(MutationOutcome.Conflict);
+        var paid = await db.Payments.Where(x => x.InvoiceId == request.InvoiceId && x.Status == PaymentStatus.CONFIRMED).SumAsync(x => x.Amount, ct);
+        if (request.Amount <= 0 || request.Amount != decimal.Round(request.Amount) || request.Amount > invoice.TotalAmount - paid) return new(MutationOutcome.Overpayment);
+        var now = DateTimeOffset.UtcNow;
+        var payment = new Payment($"PT-{now:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..20]}", request.InvoiceId, request.Amount, "BANK_TRANSFER", now, now, actorId, request.ReferenceNumber, request.Note);
+        db.Payments.Add(payment);
+        db.PaymentStatusHistory.Add(new PaymentStatusHistory(payment.Id, PaymentStatus.PENDING, actorId, now, null, "Cư dân gửi xác nhận đã thanh toán, chờ kế toán kiểm tra"));
+        db.PaymentOperations.Add(new PaymentOperation(key, payment.Id, "SUBMIT", hash, now));
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return new(MutationOutcome.Success, await FindAsync(payment.Id, ct));
+    }
     public async Task<IReadOnlyList<PaymentRow>> ByInvoiceAsync(Guid invoiceId, CancellationToken ct)
     {
         var rows = await db.Payments.AsNoTracking().Where(x => x.InvoiceId == invoiceId).OrderByDescending(x => x.PaymentDate).ThenBy(x => x.Id)

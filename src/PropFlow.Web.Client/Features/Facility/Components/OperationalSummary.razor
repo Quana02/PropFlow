@@ -1,14 +1,11 @@
 <article class="summary" aria-label="@Title">
     <header><h3>@Title</h3><strong>@Total</strong></header>
     <dl>
-        <div><dt>Đang hoạt động</dt><dd class="active">@Active</dd></div>
-        <div><dt>Đang bảo trì</dt><dd class="maintenance">@UnderMaintenance</dd></div>
-        <div><dt>Ngưng hoạt động</dt><dd>@Inactive</dd></div>
-        @if (Unavailable.HasValue)
-        {
-            <div><dt>Không khả dụng</dt><dd>@Unavailable</dd></div>
-        }
-        <div><dt>Hết phục vụ</dt><dd class="unavailable">@OutOfService</dd></div>
+        <div class="active"><dt>Đang hoạt động</dt><dd>@Active</dd></div>
+        <div class="maintenance"><dt>Đang bảo trì</dt><dd>@UnderMaintenance</dd></div>
+        <div class="inactive"><dt>Ngưng hoạt động</dt><dd>@Inactive</dd></div>
+        @if (Unavailable.HasValue) { <div class="neutral"><dt>Không khả dụng</dt><dd>@Unavailable</dd></div> }
+        <div class="unavailable"><dt>Hết phục vụ</dt><dd>@OutOfService</dd></div>
     </dl>
 </article>
 

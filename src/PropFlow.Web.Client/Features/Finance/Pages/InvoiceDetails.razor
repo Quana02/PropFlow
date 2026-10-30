@@ -92,7 +92,7 @@
         catch (System.Text.Json.JsonException) { }
         return reason;
     }
-    private static string Money(decimal value) => value.ToString("N0", Vi) + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy") ?? "Chưa có";
     private static string Time(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     private static string InvoiceStatus(string value) => value switch { "DRAFT" => "Hóa đơn nháp", "ISSUED" => "Đã phát hành", "CANCELLED" => "Đã hủy", _ => "Chưa xác định" };

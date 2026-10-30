@@ -7,6 +7,8 @@ namespace PropFlow.Modules.Billing.Infrastructure.Finance;
 
 public sealed class InvoiceFinancialSource(BillingDbContext db) : IInvoiceFinancialSource
 {
+    public Task<bool> IsRecipientAsync(Guid invoiceId, Guid userId, CancellationToken ct) =>
+        db.InvoiceRecipients.AnyAsync(x => x.InvoiceId == invoiceId && x.UserId == userId, ct);
     public Task<InvoiceFinancialSnapshot?> FindAsync(Guid invoiceId, CancellationToken ct) => db.Invoices.AsNoTracking()
         .Where(x => x.Id == invoiceId).Select(x => new InvoiceFinancialSnapshot(x.Id, x.InvoiceNumber, x.ApartmentUnitId,
             x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString(), x.Type == null ? null : x.Type.ToString(),

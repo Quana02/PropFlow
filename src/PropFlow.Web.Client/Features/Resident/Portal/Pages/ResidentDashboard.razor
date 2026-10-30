@@ -104,7 +104,7 @@
 
             <article class="resident-dashboard-card glass-panel" data-purpose="announcements-card">
                 <div>
-                    <header class="card-heading"><span><h2>Thông báo ban quản lý</h2><small>Bản tin cư dân tòa nhà</small></span><em class="badge badge-rose">@NoticeState.UnreadCount tin tài chính mới</em></header>
+                    <header class="card-heading"><span><h2>Thông báo ban quản lý</h2><small>Bản tin cư dân tòa nhà</small></span><em class="badge badge-rose">@NoticeState.UnreadCount thông báo mới</em></header>
                     <div class="resident-card-list notice-list">
                         <button class="glass-inner notice-list-item" type="button"><span><em class="notice-kind important"><i></i>[Quan trọng]</em><small>20 phút trước</small></span><strong>Bảo trì hệ thống thang máy Tháp B 13:00 – 15:00</strong><p>Kính đề nghị cư dân sử dụng thang hàng hoặc thang Tháp A...</p></button>
                         <ResidentFinanceNotifications Compact="true" />
@@ -312,8 +312,11 @@
             await ApplyRequestFiltersAsync();
     }
 
-    private void OpenService(string categoryCode, string title) =>
+    private void OpenService(string categoryCode, string title)
+    {
+        if (categoryCode == "BILLING") { Navigation.NavigateTo("/resident/billing"); return; }
         _serviceRequestModal?.Open(categoryCode, title);
+    }
 
     private IReadOnlyList<ResidentServiceSearchItem> SearchResults
     {

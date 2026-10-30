@@ -16,11 +16,11 @@
     <FinancePricingDialog Title="Thiết lập giá dịch vụ + nước + điện" Busy="busy" OnClose="() => serviceDialog = false">
     <p>Nhập số điện và nước tháng trước cho từng căn hộ trước khi phát hành bill. Hóa đơn thiếu số liệu điện hoặc nước sẽ chờ được nhập đầy đủ.</p><p>Ba đơn giá được lưu cùng kỳ. Dịch vụ, nước và điện chung một hóa đơn; không cộng thêm phí xe riêng.</p>
     <form class="pricing-form" @onsubmit="Save" @onsubmit:preventDefault novalidate>
-        <FinanceNumberField Label="Đơn giá VND/m²" @bind-Value="rate" Min="1" ShowErrors="validate" Disabled="busy" />
-        <FinanceNumberField Label="Nước VND/m³" @bind-Value="waterRate" Min="1" ShowErrors="validate" Disabled="busy" />
-        <FinanceNumberField Label="Điện VND/kWh" @bind-Value="electricityRate" Min="1" ShowErrors="validate" Disabled="busy" />
+        <FinanceNumberField Label="Đơn giá VND/m²" Placeholder="Nhập đơn giá dịch vụ" @bind-Value="rate" Min="1" ShowErrors="validate" Disabled="busy" />
+        <FinanceNumberField Label="Nước VND/m³" Placeholder="Nhập đơn giá nước" @bind-Value="waterRate" Min="1" ShowErrors="validate" Disabled="busy" />
+        <FinanceNumberField Label="Điện VND/kWh" Placeholder="Nhập đơn giá điện" @bind-Value="electricityRate" Min="1" ShowErrors="validate" Disabled="busy" />
         <label>Tháng bắt đầu<input type="month" value="@month" @onchange="ChangeMonth" disabled="@busy" aria-invalid="@(monthError is not null)" aria-describedby="rate-month-error" />@if (monthError is not null) { <small id="rate-month-error" role="alert">@monthError</small> }</label>
-        <button disabled="@busy">Lưu đơn giá mới</button>
+        <div class="pricing-form-actions"><button type="button" disabled="@busy" @onclick="() => serviceDialog = false">Hủy bỏ</button><button type="submit" disabled="@busy">@(busy ? "Đang lưu…" : "Lưu đơn giá mới")</button></div>
     </form>
     @if (error is not null) { <p role="alert">@error</p> }
     </FinancePricingDialog>
@@ -82,7 +82,7 @@
     private static readonly PropFlowSelectOption[] SettlementOptions = [new("", "Tất cả thanh toán"), new("UNPAID", "Chưa thanh toán"), new("PARTIAL", "Thanh toán một phần"), new("PAID", "Đã thanh toán"), new("OVERDUE", "Quá hạn")];
     private static readonly PropFlowSelectOption[] PageSizeOptions = [new("10", "10 dòng"), new("20", "20 dòng"), new("50", "50 dòng")];
     private static readonly System.Globalization.NumberFormatInfo Vn = new() { NumberGroupSeparator = ".", NumberDecimalSeparator = "," };
-    private static string Money(decimal value) => value.ToString("N0", Vn) + " ₫";
+    private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string OptionalMoney(decimal? value) => value.HasValue ? Money(value.Value) : "Chưa cấu hình";
     private static bool IsOverdue(HouseholdInvoice i) => i.Outstanding > 0 && i.DueDate is { } due && due < DateOnly.FromDateTime(DateTime.Today);
     private static string StatusName(HouseholdInvoice i) => (i.Outstanding == 0 ? "Đã thanh toán" : IsOverdue(i) ? "Quá hạn" : i.Paid > 0 ? "Thanh toán một phần" : "Chưa thanh toán") + (i.PaymentEnvironment == "SANDBOX" ? " (Sandbox)" : "");
@@ -129,4 +129,3 @@
         serviceDialog = true;
     }
 }
-

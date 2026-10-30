@@ -1,10 +1,11 @@
 <label>@Label
-    <input type="text" inputmode="@(DecimalPlaces == 0 ? "numeric" : "decimal")" value="@raw" @oninput="Change" disabled="@Disabled" maxlength="32" aria-label="@Label" aria-required="@Required" aria-invalid="@Invalid" aria-describedby="@(Invalid ? errorId : hintId)" />
-    <small id="@hintId">@(DecimalPlaces == 0 ? "Nhập số nguyên, không dùng dấu phân cách hàng nghìn." : $"Tối đa {DecimalPlaces} chữ số thập phân; dùng dấu phẩy hoặc dấu chấm.")</small>
+    <input @ref="input" type="text" inputmode="@(DecimalPlaces == 0 ? "numeric" : "decimal")" placeholder="@Placeholder" @bind:get="DisplayValue" @bind:set="Change" @bind:event="oninput" disabled="@Disabled" maxlength="39" aria-label="@Label" aria-required="@Required" aria-invalid="@Invalid" aria-describedby="@(Invalid ? errorId : null)" />
+    @if (DecimalPlaces == 0) { <PropFlowMoneyBehavior Input="@(() => input)" /> }
     @if (Invalid) { <small id="@errorId" class="field-error" role="alert">@Error</small> }
 </label>
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string Placeholder { get; set; } = "Nhập số tiền";
     [Parameter] public decimal? Value { get; set; }
     [Parameter] public EventCallback<decimal?> ValueChanged { get; set; }
     [Parameter] public decimal Min { get; set; }
@@ -14,8 +15,10 @@
     [Parameter] public EventCallback<bool> ValidChanged { get; set; }
     [Parameter] public bool ShowErrors { get; set; }
     [Parameter] public bool Disabled { get; set; }
-    private readonly string errorId = $"finance-error-{Guid.NewGuid():N}", hintId = $"finance-hint-{Guid.NewGuid():N}";
+    private readonly string errorId = $"finance-error-{Guid.NewGuid():N}";
+    private ElementReference input;
     private string raw = "";
+    private string DisplayValue => DecimalPlaces == 0 ? PropFlowMoneyText.FormatInput(raw) : raw;
     private decimal? lastValue;
     private bool initialized, touched;
     private string? Error => !Required && string.IsNullOrWhiteSpace(raw) ? null : FinanceInputValidation.Number(raw, Label, Min, Max, DecimalPlaces, out _);
@@ -24,9 +27,9 @@
     {
         if (!initialized || Value != lastValue) { raw = Value?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? ""; lastValue = Value; initialized = true; }
     }
-    private async Task Change(ChangeEventArgs args)
+    private async Task Change(string text)
     {
-        raw = args.Value?.ToString() ?? "";
+        raw = DecimalPlaces == 0 ? PropFlowMoneyText.NormalizeEdit(DisplayValue, text) : text;
         touched = true;
         FinanceInputValidation.Number(raw, Label, Min, Max, DecimalPlaces, out var parsed);
         lastValue = parsed;

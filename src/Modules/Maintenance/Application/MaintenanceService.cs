@@ -21,7 +21,8 @@ public sealed class MaintenanceService(
     TimeProvider? clock = null,
     IServiceRequestMaintenanceSource? serviceRequestSource = null,
     ICurrentBuildingTimeZone? buildingTimeZone = null,
-    IMaintenanceEvidenceStorage? evidenceStorage = null)
+    IMaintenanceEvidenceStorage? evidenceStorage = null,
+    IMaintenanceAssetTransactionCoordinator? assetTransaction = null)
 {
     private readonly TimeProvider timeProvider = clock ?? TimeProvider.System;
 
@@ -48,6 +49,20 @@ public sealed class MaintenanceService(
 
     public async Task<MaintenanceTaskDto> CreateTaskAsync(CreateMaintenanceTaskCommand command, Guid actor, CancellationToken ct)
     {
+        if (!command.IsEmergency)
+            return await CreateTaskCoreAsync(command, actor, markAssetUnderMaintenance: false, ct);
+
+        if (command.ScheduleId is not null)
+            throw new ArgumentException("Công việc khẩn cấp không được tạo từ lịch bảo trì.", nameof(command));
+        if (assetTransaction is null)
+            throw new InvalidOperationException("Chưa cấu hình giao dịch đồng bộ công việc bảo trì và trạng thái tài sản.");
+
+        return await assetTransaction.ExecuteAsync(
+            token => CreateTaskCoreAsync(command, actor, markAssetUnderMaintenance: true, token), ct);
+    }
+
+    private async Task<MaintenanceTaskDto> CreateTaskCoreAsync(CreateMaintenanceTaskCommand command, Guid actor, bool markAssetUnderMaintenance, CancellationToken ct)
+    {
         MaintenanceSchedule? schedule = null;
         if (command.ScheduleId.HasValue)
         {
@@ -58,6 +73,8 @@ public sealed class MaintenanceService(
         var facilityId = schedule?.FacilityId ?? command.FacilityId;
         var equipmentId = schedule?.EquipmentId ?? command.EquipmentId;
         if (schedule is null) await EnsureAssetsAsync(facilityId, equipmentId, ct, requireAnyAsset: false);
+        if (markAssetUnderMaintenance)
+            await EnsureEmergencyAssetsCanEnterMaintenanceAsync(facilityId, equipmentId, ct);
 
         var description = schedule?.Description ?? command.Description;
         if (string.IsNullOrWhiteSpace(description)) throw new ArgumentException("Mô tả là bắt buộc.");
@@ -99,6 +116,8 @@ public sealed class MaintenanceService(
         }
         if (task is null)
             throw new InvalidOperationException("Không thể cấp mã công việc duy nhất. Vui lòng thử lại.");
+        if (markAssetUnderMaintenance)
+            await assets.MarkUnderMaintenanceAsync(facilityId, equipmentId, actor, ct);
         return await ToTaskDtoAsync(task, schedule, await MonitorAsync(task, ct), null, ct);
     }
 
@@ -283,7 +302,9 @@ public sealed class MaintenanceService(
         {
             if (transaction is not null) await transaction.RollbackAsync(ct);
             if (evidenceStorage is not null)
-                foreach (var saved in stored) await evidenceStorage.DeleteAsync(saved.StorageKey, CancellationToken.None);
+                foreach (var saved in stored)
+                    try { await evidenceStorage.DeleteAsync(saved.StorageKey, CancellationToken.None); }
+                    catch { /* Preserve the original failure; orphan cleanup is retriable operational work. */ }
             throw;
         }
         await NotifyVisibleAssigneesAsync(task, ct);
@@ -544,6 +565,55 @@ public sealed class MaintenanceService(
         return new(items, total, page, size);
     }
 
+    public async Task<MaintenanceOverviewDto> OverviewAsync(CancellationToken ct)
+    {
+        var now = timeProvider.GetUtcNow();
+        var (monthStart, monthEnd) = await CurrentBuildingMonthBoundsAsync(now, ct);
+        var schedules = db.MaintenanceSchedules.AsNoTracking();
+        var tasks = db.MaintenanceTasks.AsNoTracking();
+
+        var upcomingScheduleCount = await schedules.CountAsync(schedule =>
+            schedule.Status == MaintenanceScheduleStatus.ACTIVE &&
+            schedule.PlannedStartAt >= now &&
+            schedule.PlannedStartAt >= monthStart &&
+            schedule.PlannedStartAt < monthEnd, ct);
+
+        var completedTaskCount = await tasks.CountAsync(task =>
+            (task.Status == MaintenanceTaskStatus.COMPLETED || task.Status == MaintenanceTaskStatus.CLOSED) &&
+            task.CompletedAt != null &&
+            task.CompletedAt >= monthStart &&
+            task.CompletedAt < monthEnd, ct);
+
+        var nextSchedule = await schedules
+            .Where(schedule => schedule.Status == MaintenanceScheduleStatus.ACTIVE && schedule.PlannedStartAt >= now)
+            .OrderBy(schedule => schedule.PlannedStartAt)
+            .Select(schedule => new MaintenanceOverviewScheduleDto(schedule.Id, schedule.Title, schedule.PlannedStartAt))
+            .FirstOrDefaultAsync(ct);
+
+        var upcomingItems = await schedules
+            .Where(schedule => schedule.Status == MaintenanceScheduleStatus.ACTIVE && schedule.PlannedStartAt >= now)
+            .OrderBy(schedule => schedule.PlannedStartAt)
+            .Take(3)
+            .Select(schedule => new MaintenanceOverviewItemDto(schedule.Id, MaintenanceOverviewItemType.SCHEDULE, schedule.Title, schedule.PlannedStartAt, null))
+            .ToListAsync(ct);
+
+        var remaining = 3 - upcomingItems.Count;
+        if (remaining > 0)
+        {
+            var completedItems = await tasks
+                .Where(task =>
+                    (task.Status == MaintenanceTaskStatus.COMPLETED || task.Status == MaintenanceTaskStatus.CLOSED) &&
+                    task.CompletedAt != null)
+                .OrderByDescending(task => task.CompletedAt)
+                .Take(remaining)
+                .Select(task => new MaintenanceOverviewItemDto(task.Id, MaintenanceOverviewItemType.TASK, task.Title, task.CompletedAt!.Value, task.PriorityCode))
+                .ToListAsync(ct);
+            upcomingItems.AddRange(completedItems);
+        }
+
+        return new MaintenanceOverviewDto(upcomingScheduleCount, completedTaskCount, nextSchedule, upcomingItems);
+    }
+
     public async Task<ScheduleDto> CreateScheduleAsync(CreateScheduleCommand command, Guid actor, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(command.Description)) throw new ArgumentException("Mô tả là bắt buộc.");
@@ -653,10 +723,17 @@ public sealed class MaintenanceService(
             var equipment = schedule.EquipmentId is { } equipmentId ? await assets.GetEquipmentAsync(equipmentId, ct) : null;
             if ((facility is null && equipment is null) || (facility is not null && equipment?.FacilityId is { } equipmentFacilityId && equipmentFacilityId != facility.Id))
                 continue;
-            if ((facility is null || facility.Status == "UNDER_MAINTENANCE") && (equipment is null || equipment.Status == "UNDER_MAINTENANCE"))
+            // The activated scope follows the same rule as MaintenanceAssetSource:
+            // an equipment selection is the only affected asset; otherwise the facility is the marker
+            // for a facility-wide activation. This prevents the 10-second worker from re-notifying.
+            var isAlreadyActivated = equipment is not null
+                ? equipment.Status == "UNDER_MAINTENANCE"
+                : facility?.Status == "UNDER_MAINTENANCE";
+            if (isAlreadyActivated)
                 continue;
 
             await assets.MarkUnderMaintenanceAsync(schedule.FacilityId, schedule.EquipmentId, schedule.CreatedBy, ct);
+            await NotifyAssetStatusChangedAfterCommitAsync(ct);
         }
     }
 
@@ -698,6 +775,21 @@ public sealed class MaintenanceService(
         if (requireUnderMaintenance && equipment is not null && !string.Equals(equipment.Status, "UNDER_MAINTENANCE", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Chỉ được chọn thiết bị đang bảo trì.");
     }
+
+    private async Task EnsureEmergencyAssetsCanEnterMaintenanceAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct)
+    {
+        var facility = facilityId is { } selectedFacilityId
+            ? await assets.GetFacilityAsync(selectedFacilityId, ct)
+            : null;
+        var equipment = equipmentId is { } selectedEquipmentId
+            ? await assets.GetEquipmentAsync(selectedEquipmentId, ct)
+            : null;
+
+        if (facility is not null && facility.Status is not ("ACTIVE" or "UNDER_MAINTENANCE"))
+            throw new InvalidOperationException("Cơ sở vật chất không ở trạng thái có thể chuyển sang đang bảo trì.");
+        if (equipment is not null && equipment.Status is not ("ACTIVE" or "UNDER_MAINTENANCE"))
+            throw new InvalidOperationException("Thiết bị không ở trạng thái có thể chuyển sang đang bảo trì.");
+    }
     private static DateTimeOffset Utc(DateTimeOffset value) => value.ToUniversalTime();
     private static DateTimeOffset? Utc(DateTimeOffset? value) => value?.ToUniversalTime();
 
@@ -727,9 +819,28 @@ public sealed class MaintenanceService(
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
     }
 
+    private async Task<(DateTimeOffset Start, DateTimeOffset End)> CurrentBuildingMonthBoundsAsync(DateTimeOffset instant, CancellationToken ct)
+    {
+        var timeZoneId = buildingTimeZone is null ? "Asia/Ho_Chi_Minh" : await buildingTimeZone.GetAsync(ct);
+        TimeZoneInfo zone;
+        try { zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
+        catch (TimeZoneNotFoundException) { zone = TimeZoneInfo.Utc; }
+        var local = TimeZoneInfo.ConvertTime(instant, zone);
+        var localMonthStart = new DateTime(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        var localMonthEnd = localMonthStart.AddMonths(1);
+        return (
+            new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localMonthStart, zone)),
+            new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localMonthEnd, zone)));
+    }
+
     private async Task<T> WithAdvisoryLockAsync<T>(string scope, Func<CancellationToken, Task<T>> action, CancellationToken ct)
     {
         if (!db.Database.IsNpgsql()) return await action(ct);
+        if (db.Database.CurrentTransaction is not null)
+        {
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0})", [IdentifierCodeNormalizer.AdvisoryLockKey(scope)], ct);
+            return await action(ct);
+        }
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock({0})", [IdentifierCodeNormalizer.AdvisoryLockKey(scope)], ct);
         var result = await action(ct);
@@ -1016,6 +1127,19 @@ public sealed class MaintenanceService(
             .Select(assignment => assignment.StaffUserId)
             .Distinct()
             .ToArray(), ct);
+
+    private async Task NotifyAssetStatusChangedAfterCommitAsync(CancellationToken ct)
+    {
+        try
+        {
+            // MarkUnderMaintenanceAsync has already persisted the asset update before this notification.
+            await notifier.NotifyAssetStatusChangedAsync(ct);
+        }
+        catch
+        {
+            // SignalR is a best-effort UI notification and must not make a committed schedule activation fail.
+        }
+    }
 
     private sealed class NoopMaintenanceNotifier : IMaintenanceNotifier
     {

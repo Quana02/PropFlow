@@ -9,6 +9,7 @@ public sealed record CollectPaymentRequest(Guid InvoiceId, decimal Amount, strin
     string? ReferenceNumber, string? Note);
 public interface IPaymentFinanceStore
 {
+    Task<MutationResult> SubmitAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct) => Task.FromResult(new MutationResult(MutationOutcome.NotFound));
     Task<IReadOnlyList<PaymentRow>> ByInvoiceAsync(Guid invoiceId, CancellationToken ct);
     Task<PagedPayments> ListAsync(string status, string? search, int page, int pageSize, string sortDirection, CancellationToken ct, string? filter = null);
     Task<PaymentRow?> FindAsync(Guid id, CancellationToken ct);
@@ -19,6 +20,7 @@ public interface IPaymentFinanceStore
 }
 public sealed class PaymentFinanceUseCases(IPaymentFinanceStore store)
 {
+    public Task<MutationResult> SubmitAsync(CollectPaymentRequest request, string key, Guid actor, CancellationToken ct) => store.SubmitAsync(request, key, actor, ct);
     public Task<IReadOnlyList<PaymentRow>> ByInvoiceAsync(Guid invoiceId, CancellationToken ct) => store.ByInvoiceAsync(invoiceId, ct);
     public Task<PagedPayments> ListAsync(string status, string? search, int page, int pageSize, string sortDirection, CancellationToken ct, string? filter = null) =>
         store.ListAsync(status, search, Math.Max(1, page), Math.Clamp(pageSize, 1, 100), sortDirection, ct, filter);
