@@ -194,6 +194,7 @@
                 </section>
 
                 <label class="note-field result-note"><span>Ghi chú nghiệm thu</span><textarea rows="3" maxlength="2000" @bind="reviewDecisionNote" placeholder="Nhập nhận xét cho Staff hoặc ghi chú nghiệm thu…"></textarea></label>
+                <label class="note-field result-note"><span>Chi phí phát sinh được duyệt (VND)</span><input type="number" min="0" step="1" @bind="approvedAdditionalCost" /><small>Staff đề xuất: @Money(detail?.ProposedAdditionalCost ?? 0). Có thể duyệt thấp hơn nhưng không được vượt mức đề xuất.</small></label>
                 @if (!string.IsNullOrWhiteSpace(resultActionNotice))
                 {
                     <p class="result-action-notice" role="status"><span class="material-symbols-outlined">info</span>@resultActionNotice</p>
@@ -265,6 +266,7 @@
                     }
                 }
             </div>
+            <label class="note-field"><span>Chi phí dịch vụ dự kiến (VND, có thể bằng 0)</span><input type="number" min="0" step="1" @bind="baseServiceCost" /></label>
             <label class="note-field"><span>Ghi chú phân công (không bắt buộc)</span><textarea rows="3" maxlength="2000" @bind="assignmentNote" placeholder="Thông tin cần lưu ý cho Staff…"></textarea></label>
             @if (!string.IsNullOrWhiteSpace(assignmentError)) { <p class="ui-notice" role="alert">@assignmentError</p> }
             <footer><button type="button" class="dialog-cancel" disabled="@savingAssignment" @onclick="CloseAssignPanel">Hủy</button><button type="button" class="dialog-confirm" disabled="@(savingAssignment || selectedStaffUserId is null)" @onclick="ConfirmAssignmentAsync">@(savingAssignment ? "Đang lưu…" : "Xác nhận phân công")</button></footer>
@@ -299,6 +301,8 @@
     private bool savingClose;
     private string? staffSearch;
     private string? assignmentNote;
+    private decimal baseServiceCost;
+    private decimal approvedAdditionalCost;
     private string? assignmentError;
     private string? reviewDecisionNote;
     private string? resultActionNotice;
@@ -364,6 +368,7 @@
         assignmentError = null;
         staffSearch = null;
         assignmentNote = null;
+        baseServiceCost = detail?.BaseServiceCost ?? 0;
         selectedStaffUserId = detail?.AssignedStaffUserId;
         if (staffOptions.Count == 0)
         {
@@ -386,6 +391,7 @@
     {
         selectedActivity = activity;
         reviewDecisionNote = null;
+        approvedAdditionalCost = detail?.ProposedAdditionalCost ?? 0;
         resultActionNotice = null;
     }
 
@@ -431,7 +437,7 @@
         if (Id is not { } id || !CanReviewStaffResult) return;
         savingResolution = true;
         resultActionNotice = null;
-        var result = await Api.ApproveResolutionAsync(id, new(reviewDecisionNote));
+        var result = await Api.ApproveResolutionAsync(id, new(reviewDecisionNote, approvedAdditionalCost));
         savingResolution = false;
         if (!result.IsSuccess || result.Data is null)
         {
@@ -482,7 +488,7 @@
         if (Id is not { } id || selectedStaffUserId is not { } staffUserId) return;
         savingAssignment = true;
         assignmentError = null;
-        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote));
+        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote, baseServiceCost));
         savingAssignment = false;
         if (!result.IsSuccess || result.Data is null)
         {
@@ -501,6 +507,7 @@
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption? AssignedStaff() =>
         detail?.AssignedStaffUserId is { } id ? staffOptions.FirstOrDefault(x => x.UserId == id) : null;
     private string AssignedStaffName() => detail?.AssignedStaffUserId is null ? "Chưa phân công" : AssignedStaff()?.DisplayName ?? "Đã phân công nhân sự";
+    private static string Money(decimal value) => $"{value:N0} ₫";
     private static string ResultText(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem activity) =>
         activity.WorkResult ?? activity.Detail ?? StatusTransition(activity.FromStatus, activity.ToStatus);
     private string LocationLabel() => detail?.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{detail.ApartmentUnitNumber} · Tầng {detail.FloorNumber}";

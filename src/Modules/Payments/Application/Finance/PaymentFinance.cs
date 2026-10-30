@@ -14,6 +14,8 @@ public interface IPaymentFinanceStore
     Task<PaymentRow?> FindAsync(Guid id, CancellationToken ct);
     Task<MutationResult> ChangeAsync(Guid id, string action, string? reason, string key, Guid actorId, CancellationToken ct);
     Task<MutationResult> CollectAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct);
+    Task<MutationResult> CollectVerifiedBankAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct) =>
+        CollectAsync(request, key, actorId, ct);
 }
 public sealed class PaymentFinanceUseCases(IPaymentFinanceStore store)
 {

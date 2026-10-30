@@ -28,7 +28,8 @@ public class ServiceRequest
         string? finalPriorityCode = null,
         string? serviceAreaCode = null,
         DateOnly? preferredDate = null,
-        string? preferredTimeCode = null)
+        string? preferredTimeCode = null,
+        Guid? submittedByUserId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestNumber);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -41,6 +42,7 @@ public class ServiceRequest
         RequestNumber = requestNumber.Trim();
         ResidentId = residentId;
         ResidentApartmentId = residentApartmentId;
+        SubmittedByUserId = submittedByUserId;
         
         ApartmentUnitId = apartmentUnitId;
         CategoryId = categoryId;
@@ -62,6 +64,7 @@ public class ServiceRequest
     public string RequestNumber { get; private set; } = null!;
     public Guid ResidentId { get; private set; }
     public Guid ResidentApartmentId { get; private set; }
+    public Guid? SubmittedByUserId { get; private set; }
     
     public Guid? ApartmentUnitId { get; private set; }
     public Guid? CategoryId { get; private set; }
@@ -78,6 +81,11 @@ public class ServiceRequest
     public DateTimeOffset? ResolvedAt { get; private set; }
     public DateTimeOffset? ClosedAt { get; private set; }
     public Guid? ClosedBy { get; private set; }
+    public decimal BaseServiceCost { get; private set; }
+    public decimal ProposedAdditionalCost { get; private set; }
+    public string? AdditionalCostNote { get; private set; }
+    public decimal ApprovedAdditionalCost { get; private set; }
+    public Guid? ServiceInvoiceId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -140,6 +148,52 @@ public class ServiceRequest
         UpdatedAt = now;
     }
 
+    public void SetBaseServiceCost(decimal amount, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        EnsureMoney(amount, nameof(amount));
+        if (Status is not (ServiceRequestStatus.UNDER_REVIEW or ServiceRequestStatus.ASSIGNED))
+            throw new InvalidOperationException("Service cost can only be set before work starts.");
+        BaseServiceCost = amount;
+        UpdatedAt = now;
+    }
+
+    public void ProposeAdditionalCost(decimal amount, string? note, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        EnsureMoney(amount, nameof(amount));
+        if (Status != ServiceRequestStatus.IN_PROGRESS)
+            throw new InvalidOperationException("Additional cost can only be proposed while work is in progress.");
+        var normalized = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (amount > 0 && string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException("Additional cost note is required when the amount is greater than zero.", nameof(note));
+        if (normalized?.Length > 1000)
+            throw new ArgumentException("Additional cost note is too long.", nameof(note));
+        ProposedAdditionalCost = amount;
+        AdditionalCostNote = normalized;
+        ApprovedAdditionalCost = 0;
+        UpdatedAt = now;
+    }
+
+    public void ApproveAdditionalCost(decimal amount, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        EnsureMoney(amount, nameof(amount));
+        if (Status != ServiceRequestStatus.IN_PROGRESS || amount > ProposedAdditionalCost)
+            throw new InvalidOperationException("Approved additional cost must not exceed the staff proposal.");
+        ApprovedAdditionalCost = amount;
+        UpdatedAt = now;
+    }
+
+    public void LinkServiceInvoice(Guid invoiceId, DateTimeOffset now)
+    {
+        ThrowIfEmpty(invoiceId, nameof(invoiceId));
+        if (ServiceInvoiceId is not null && ServiceInvoiceId != invoiceId)
+            throw new InvalidOperationException("A different service invoice is already linked.");
+        ServiceInvoiceId = invoiceId;
+        UpdatedAt = now;
+    }
+
     public void MarkInProgress(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
@@ -191,5 +245,11 @@ public class ServiceRequest
     {
         if (value == Guid.Empty)
             throw new ArgumentException($"{paramName} cannot be empty.", paramName);
+    }
+
+    private static void EnsureMoney(decimal amount, string paramName)
+    {
+        if (amount < 0 || amount >= 1000000000000000000m || amount != decimal.Round(amount, 0))
+            throw new ArgumentOutOfRangeException(paramName, "Amount must be a non-negative whole VND value within numeric(18,0).");
     }
 }

@@ -21,6 +21,8 @@ using PropFlow.Modules.Communication.Domain.Announcements;
 using PropFlow.Modules.Communication.Domain.Notifications;
 using PropFlow.Modules.Communication.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Domain.Payments;
+using PropFlow.Modules.Payments.Domain.PaymentDestinations;
+using PropFlow.Modules.Payments.Domain.PaymentInstructions;
 using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
@@ -359,10 +361,10 @@ public class EfCoreMetadataTests
         Assert.Contains(roleSeedData, row => string.Equals(row["Code"] as string, SystemRoleCodes.Admin, StringComparison.Ordinal));
         var designTimePermissionEntity = designTimeModel.FindEntityType(typeof(Permission));
         Assert.NotNull(designTimePermissionEntity);
-        Assert.Equal(7, designTimePermissionEntity.GetSeedData().Count());
+        Assert.Equal(8, designTimePermissionEntity.GetSeedData().Count());
         var designTimeRolePermissionEntity = designTimeModel.FindEntityType(typeof(RolePermission));
         Assert.NotNull(designTimeRolePermissionEntity);
-        Assert.Equal(7, designTimeRolePermissionEntity.GetSeedData().Count());
+        Assert.Equal(8, designTimeRolePermissionEntity.GetSeedData().Count());
 
         // No external entities
         Assert.Null(model.FindEntityType(typeof(UserAccount)));
@@ -734,7 +736,17 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("payments", model.GetDefaultSchema());
-        Assert.Equal(3, model.GetEntityTypes().Count());
+        Assert.Equal(10, model.GetEntityTypes().Count());
+        var sandbox = designTimeModel.FindEntityType(typeof(PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePaySandboxConnection));
+        Assert.NotNull(sandbox);
+        Assert.Contains(sandbox.GetCheckConstraints(), x => x.Name == "ck_sepay_sandbox_singleton");
+        var oauth = designTimeModel.FindEntityType(typeof(PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthConnection));
+        Assert.NotNull(oauth);
+        Assert.Contains(oauth.GetCheckConstraints(), x => x.Name == "ck_sepay_oauth_singleton");
+        var bankTransfer = model.FindEntityType(typeof(PropFlow.Modules.Payments.Domain.BankTransfers.BankTransfer));
+        Assert.NotNull(bankTransfer);
+        Assert.Contains(bankTransfer.GetIndexes(), index => index.IsUnique && index.Properties.Single().Name == "TransactionId");
+        Assert.True(bankTransfer.FindProperty("Revision")!.IsConcurrencyToken);
 
         var paymentEntity = model.FindEntityType(typeof(Payment));
         Assert.NotNull(paymentEntity);
@@ -772,6 +784,30 @@ public class EfCoreMetadataTests
         Assert.Equal("payment_operations", operationEntity.GetTableName());
         Assert.Contains(operationEntity.GetIndexes(), index =>
             index.IsUnique && index.Properties.Single().Name == nameof(PaymentOperation.Key));
+
+        var destinationEntity = model.FindEntityType(typeof(PaymentDestination));
+        Assert.NotNull(destinationEntity);
+        Assert.Equal("payment_destinations", destinationEntity.GetTableName());
+        Assert.Equal("sepay_account_id", destinationEntity.FindProperty(nameof(PaymentDestination.SePayAccountId))!.GetColumnName());
+        Assert.True(destinationEntity.FindProperty(nameof(PaymentDestination.SePayAccountId))!.IsNullable);
+        Assert.Contains(destinationEntity.GetIndexes(), index =>
+            index.Properties.Single().Name == nameof(PaymentDestination.SePayAccountId));
+        Assert.Contains(destinationEntity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(PaymentDestination.Version));
+        Assert.Contains(destinationEntity.GetIndexes(), index =>
+            index.IsUnique &&
+            index.GetFilter() == "is_active = true" &&
+            index.Properties.Single().Name == nameof(PaymentDestination.IsActive));
+
+        var instructionEntity = model.FindEntityType(typeof(PaymentInstruction));
+        Assert.NotNull(instructionEntity);
+        Assert.Equal("payment_instructions", instructionEntity.GetTableName());
+        Assert.Contains(instructionEntity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(PaymentInstruction.TransferCode));
+        Assert.Contains(instructionEntity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(PaymentInstruction.InvoiceId));
+        Assert.Contains(instructionEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(PaymentDestination));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
             fk.Properties.Any(p => p.Name is "InvoiceId" or "SubmittedBy" or "ConfirmedBy" or "RejectedBy" or "ChangedBy"));

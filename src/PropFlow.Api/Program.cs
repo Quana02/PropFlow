@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -27,6 +28,10 @@ using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Contracts;
 using PropFlow.Modules.Payments.Application.Finance;
 using PropFlow.Modules.Payments.Infrastructure.Finance;
+using PropFlow.Modules.Payments.Application.PaymentSettings;
+using PropFlow.Modules.Payments.Infrastructure.PaymentSettings;
+using PropFlow.Modules.Payments.Infrastructure.ResidentPayments;
+using PropFlow.Modules.Payments.Presentation;
 using PropFlow.Modules.Billing.Contracts;
 using PropFlow.Modules.Billing.Application.Finance;
 using PropFlow.Modules.Billing.Infrastructure.Finance;
@@ -55,6 +60,7 @@ using PropFlow.Api.Composition;
 using PropFlow.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDataProtection().SetApplicationName("PropFlow");
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
     options.JsonSerializerOptions.Converters.Insert(0, new FlexibleEnumJsonConverterFactory()));
 
@@ -199,11 +205,42 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Communication.Presentation.ResidentNotificationsController).Assembly);
 builder.Services.AddScoped<IInvoiceFinancialSource, InvoiceFinancialSource>();
+builder.Services.AddScoped<IServiceRequestBilling, ServiceRequestBilling>();
 builder.Services.AddScoped<IConfirmedPaymentSource, ConfirmedPaymentSource>();
 builder.Services.AddScoped<BillingFinanceQueries>();
 builder.Services.AddScoped<PaymentFinanceStore>();
 builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceNotifications>();
 builder.Services.AddScoped<PaymentFinanceUseCases>();
+builder.Services.AddScoped<IPaymentDestinationStore, PaymentDestinationStore>();
+builder.Services.AddScoped<IPaymentAccountProtector, PaymentAccountProtector>();
+builder.Services.AddHttpClient<IPaymentBankDirectory, VietQrBankDirectory>(client =>
+{
+    client.BaseAddress = new Uri("https://api.vietqr.io/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<PaymentDestinationSettings>();
+builder.Services.AddScoped<ResidentServiceRequestPayments>();
+builder.Services.AddScoped<ISandboxPaymentDisplaySource, SandboxPaymentDisplaySource>();
+builder.Services.Configure<SePayOptions>(builder.Configuration.GetSection("Payments:SePay"));
+builder.Services.Configure<SePayOAuthOptions>(builder.Configuration.GetSection("Payments:SePay:OAuth"));
+builder.Services.AddHttpClient<SePayOAuth>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<OAuthSePayBankAccounts>();
+builder.Services.AddHttpClient<SePaySandbox>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient<ISePayConnectionProbe, SePayConnectionProbe>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<SePayConnectionSettings>();
+builder.Services.AddHttpClient<SePayBankAccounts>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<ISePayBankAccounts>(sp => sp.GetRequiredService<SePayOAuth>().Enabled
+    ? sp.GetRequiredService<OAuthSePayBankAccounts>() : sp.GetRequiredService<SePayBankAccounts>());
+builder.Services.AddScoped<SePayAccountSelection>();
+builder.Services.AddScoped<SePayWebhook>();
+builder.Services.AddScoped<SePaySandboxWebhook>();
+builder.Services.AddScoped<SePayInbox>();
+builder.Services.AddScoped<BankTransferReview>();
+builder.Services.AddHostedService<SePayInboxWorker>();
 builder.Services.AddScoped<IBillingHouseholdDirectory, BillingHouseholdDirectory>();
 builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
 builder.Services.AddScoped<IBillingCycle, BillingCycle>();
@@ -257,6 +294,8 @@ builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoord
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("finance.manage", policy => policy.RequireRole(SystemRoleCodes.Accountant).RequireClaim("permission", SystemPermissionCodes.ManageFinance));
+    options.AddPolicy(PaymentSettingsAuthorizationPolicies.Manage,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManagePaymentDestination));
     options.AddPolicy("billing.configure", policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
     options.AddPolicy("billing.read", policy => policy.RequireAssertion(c =>
         (c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
@@ -324,6 +363,19 @@ builder.Services.AddRateLimiter(options =>
         var limit = builder.Configuration.GetValue($"Authentication:RateLimits:{name}:PermitLimit", count);
         var window = builder.Configuration.GetValue($"Authentication:RateLimits:{name}:WindowMinutes", minutes);
         options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
+    }
+    foreach (var (name, count, minutes) in new[]
+    {
+        (PaymentSettingsRateLimitPolicies.Read, 120, 1),
+        (PaymentSettingsRateLimitPolicies.Provider, 20, 1),
+        (PaymentSettingsRateLimitPolicies.Otp, 5, 15)
+    })
+    {
+        var limit = builder.Configuration.GetValue($"Payments:RateLimits:{name}:PermitLimit", count);
+        var window = builder.Configuration.GetValue($"Payments:RateLimits:{name}:WindowMinutes", minutes);
+        options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
     }
     var residentSubmitLimit = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:PermitLimit", 5);

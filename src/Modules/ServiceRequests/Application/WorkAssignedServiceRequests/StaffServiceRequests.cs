@@ -30,7 +30,10 @@ public sealed record StaffServiceRequestCore(
     Guid AssignmentId,
     DateTimeOffset AssignedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    decimal BaseServiceCost,
+    decimal ProposedAdditionalCost,
+    string? AdditionalCostNote);
 
 public sealed record StaffServiceRequestPage(
     IReadOnlyList<StaffServiceRequestCore> Items,
@@ -63,7 +66,8 @@ public interface IStaffServiceRequestStore
     Task<StaffEvidenceMetadata?> EvidenceFileAsync(Guid staffUserId, Guid requestId, Guid evidenceId, CancellationToken ct);
     Task<StaffServiceRequestOutcome> AcceptAsync(Guid staffUserId, Guid id, DateTimeOffset now, CancellationToken ct);
     Task<StaffServiceRequestOutcome> AddProgressAsync(Guid staffUserId, Guid id, string detail, DateTimeOffset now, CancellationToken ct);
-    Task<StaffServiceRequestOutcome> CompleteWorkAsync(Guid staffUserId, Guid id, string workResult, DateTimeOffset now, CancellationToken ct);
+    Task<StaffServiceRequestOutcome> CompleteWorkAsync(Guid staffUserId, Guid id, string workResult,
+        decimal additionalCost, string? additionalCostNote, DateTimeOffset now, CancellationToken ct);
     Task<StaffServiceRequestOutcome> AddEvidenceAsync(Guid staffUserId, Guid id, Guid activityId, IReadOnlyList<StaffEvidenceMetadata> evidence, DateTimeOffset now, CancellationToken ct);
 }
 
@@ -127,8 +131,15 @@ public sealed class StaffServiceRequestHandler(
         var result = request.WorkResult?.Trim();
         if (string.IsNullOrWhiteSpace(result) || result.Length is < 10 or > 4000)
             return Invalid<StaffServiceRequestDetailResponse>("invalid_work_result", "Kết quả xử lý phải có từ 10 đến 4000 ký tự.");
+        if (request.AdditionalCost < 0 || request.AdditionalCost >= 1000000000000000000m || request.AdditionalCost != decimal.Round(request.AdditionalCost, 0))
+            return Invalid<StaffServiceRequestDetailResponse>("invalid_additional_cost", "Chi phí phát sinh phải là số tiền VND nguyên, không âm.");
+        var costNote = request.AdditionalCostNote?.Trim();
+        if (request.AdditionalCost > 0 && string.IsNullOrWhiteSpace(costNote))
+            return Invalid<StaffServiceRequestDetailResponse>("additional_cost_note_required", "Cần nhập lý do cho chi phí phát sinh.");
+        if (costNote?.Length > 1000)
+            return Invalid<StaffServiceRequestDetailResponse>("additional_cost_note_too_long", "Lý do chi phí phát sinh không được vượt quá 1000 ký tự.");
         return await MutateAsync(staffUserId, id,
-            () => store.CompleteWorkAsync(staffUserId, id, result, clock.GetUtcNow(), ct),
+            () => store.CompleteWorkAsync(staffUserId, id, result, request.AdditionalCost, costNote, clock.GetUtcNow(), ct),
             "service_request_work_result_conflict", "Yêu cầu chưa được tiếp nhận hoặc đã có kết quả đang chờ tải bằng chứng.", ct);
     }
 
@@ -225,7 +236,8 @@ public sealed class StaffServiceRequestHandler(
             item.Id, item.RequestNumber, item.Title, item.Description, item.CategoryName,
             apartment?.UnitNumber, apartment?.FloorNumber, facility?.Name, equipment?.Name,
             item.Status, item.PriorityCode, item.ServiceAreaCode, item.PreferredDate, item.PreferredTimeCode,
-            item.AssignedAt, item.StartedAt, item.UpdatedAt, activities, evidence));
+            item.AssignedAt, item.StartedAt, item.UpdatedAt, activities, evidence,
+            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote));
     }
 
     private async Task<Dictionary<Guid, MaintenanceAssetReference>> AssetMapAsync(IEnumerable<StaffServiceRequestCore> items, CancellationToken ct)

@@ -68,6 +68,12 @@ public sealed class PaymentFinanceStore(PaymentsDbContext db, IInvoiceFinancialS
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return new(MutationOutcome.Success, await FindAsync(id, ct));
     }
     public async Task<MutationResult> CollectAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct)
+        => await CollectCoreAsync(request, key, actorId, false, ct);
+
+    public Task<MutationResult> CollectVerifiedBankAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct) =>
+        CollectCoreAsync(request, key, actorId, true, ct);
+
+    private async Task<MutationResult> CollectCoreAsync(CollectPaymentRequest request, string key, Guid actorId, bool verifiedBank, CancellationToken ct)
     {
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(request))));
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -88,7 +94,18 @@ public sealed class PaymentFinanceStore(PaymentsDbContext db, IInvoiceFinancialS
             request.PaymentMethodCode, now, now, actorId, request.ReferenceNumber, request.Note);
         p.Confirm(actorId, invoice.TotalAmount - paid, now);
         db.Payments.Add(p);
-        db.PaymentStatusHistory.Add(new PaymentStatusHistory(p.Id, PaymentStatus.CONFIRMED, actorId, now, PaymentStatus.PENDING, "Kế toán thu tiền đã kiểm tra"));
+        db.PaymentStatusHistory.Add(new PaymentStatusHistory(p.Id, PaymentStatus.CONFIRMED, actorId, now, PaymentStatus.PENDING,
+            verifiedBank ? "Đối soát giao dịch ngân hàng SePay đã xác thực" : "Kế toán thu tiền đã kiểm tra"));
+        if (verifiedBank)
+        {
+            var claims = await db.Payments.Where(x => x.InvoiceId == request.InvoiceId && x.Status == PaymentStatus.PENDING).ToArrayAsync(ct);
+            foreach (var claim in claims)
+            {
+                claim.Reject(actorId, "Đã ghi nhận tiền từ SePay. Báo chuyển khoản được đóng để tránh xác nhận trùng.", now);
+                db.PaymentStatusHistory.Add(new PaymentStatusHistory(claim.Id, PaymentStatus.REJECTED, actorId, now,
+                    PaymentStatus.PENDING, claim.RejectionReason));
+            }
+        }
         db.PaymentOperations.Add(new PaymentOperation(key, p.Id, "COLLECT", hash, now));
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return new(MutationOutcome.Success, await FindAsync(p.Id, ct));

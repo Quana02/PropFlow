@@ -93,6 +93,11 @@ else
             </header>
             <div class="evidence-dialog-body">
                 <label><span>Tóm tắt kết quả xử lý</span><textarea rows="5" minlength="10" maxlength="4000" disabled="@(uploadingEvidence || currentStep == 4)" @bind="resultDraft" placeholder="Mô tả công việc đã xử lý và kết quả kiểm tra sau khi hoàn thành…"></textarea><small>Từ 10 đến 4000 ký tự.@(currentStep == 4 ? " Tóm tắt đã được lưu, vui lòng bổ sung ảnh để hoàn tất." : null)</small></label>
+                <label><span>Chi phí phát sinh (VND, có thể bằng 0)</span><input type="number" min="0" step="1" disabled="@(uploadingEvidence || currentStep == 4)" @bind="additionalCost" /><small>Chi phí ban đầu Manager đã ghi: @($"{(detail?.BaseServiceCost ?? 0):N0} ₫")</small></label>
+                @if (additionalCost > 0)
+                {
+                    <label><span>Lý do chi phí phát sinh</span><textarea rows="3" maxlength="1000" disabled="@(uploadingEvidence || currentStep == 4)" @bind="additionalCostNote" placeholder="Nêu vật tư, hạng mục hoặc nguyên nhân phát sinh…"></textarea></label>
+                }
                 <label class="evidence-picker">
                     <InputFile OnChange="SelectEvidence" accept="image/jpeg,image/png,image/webp" multiple disabled="@uploadingEvidence" />
                     <span class="material-symbols-outlined">cloud_upload</span>
@@ -114,7 +119,7 @@ else
                     <p class="evidence-error" role="alert"><span class="material-symbols-outlined">error</span>@evidenceError</p>
                 }
             </div>
-            <footer><button type="button" class="cancel" disabled="@uploadingEvidence" @onclick="CloseSubmitDialog">Thoát</button><button type="button" class="confirm green-confirm" disabled="@(uploadingEvidence || resultDraft.Trim().Length is < 10 or > 4000 || selectedEvidence.Count == 0)" @onclick="SubmitForReview">@(uploadingEvidence ? "Đang lưu…" : "Lưu kết quả và ảnh")</button></footer>
+            <footer><button type="button" class="cancel" disabled="@uploadingEvidence" @onclick="CloseSubmitDialog">Thoát</button><button type="button" class="confirm green-confirm" disabled="@(uploadingEvidence || resultDraft.Trim().Length is < 10 or > 4000 || selectedEvidence.Count == 0 || additionalCost < 0 || (additionalCost > 0 && string.IsNullOrWhiteSpace(additionalCostNote)))" @onclick="SubmitForReview">@(uploadingEvidence ? "Đang lưu…" : "Lưu kết quả và ảnh")</button></footer>
         </section>
     </div>
 }
@@ -151,6 +156,8 @@ else
     private string? evidencePreviewSource;
     private string? evidencePreviewError;
     private string resultDraft = string.Empty;
+    private decimal additionalCost;
+    private string? additionalCostNote;
     private readonly List<IBrowserFile> selectedEvidence = [];
     private PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse? detail;
     private bool disposed;
@@ -261,19 +268,19 @@ else
     private void OpenProgressDialog(){ progressNote = null; showProgressDialog = true; }
     private void CloseProgressDialog() => showProgressDialog = false;
     private async Task SaveProgress(){ if(string.IsNullOrWhiteSpace(progressNote) || detail is null) return; var result = await Api.ProgressAsync(detail.Id, new(progressNote.Trim())); if (ApplyResult(result, "Đã lưu cập nhật tiến độ.")) showProgressDialog = false; }
-    private void OpenSubmitDialog(){ if (!CanSubmitCombinedWork || detail is null) return; resultDraft = currentStep == 4 ? LatestWorkResult()?.WorkResult ?? string.Empty : string.Empty; selectedEvidence.Clear(); evidenceError = null; showSubmitDialog = true; }
+    private void OpenSubmitDialog(){ if (!CanSubmitCombinedWork || detail is null) return; resultDraft = currentStep == 4 ? LatestWorkResult()?.WorkResult ?? string.Empty : string.Empty; additionalCost = detail.ProposedAdditionalCost; additionalCostNote = detail.AdditionalCostNote; selectedEvidence.Clear(); evidenceError = null; showSubmitDialog = true; }
     private void CloseSubmitDialog(){ if (uploadingEvidence) return; showSubmitDialog = false; selectedEvidence.Clear(); evidenceError = null; }
     private async Task SubmitForReview()
     {
         var normalizedResult = resultDraft.Trim();
-        if (normalizedResult.Length is < 10 or > 4000 || selectedEvidence.Count == 0 || !CanSubmitCombinedWork || detail is null || uploadingEvidence) return;
+        if (normalizedResult.Length is < 10 or > 4000 || selectedEvidence.Count == 0 || additionalCost < 0 || (additionalCost > 0 && string.IsNullOrWhiteSpace(additionalCostNote)) || !CanSubmitCombinedWork || detail is null || uploadingEvidence) return;
         uploadingEvidence = true;
         evidenceError = null;
         try
         {
             if (currentStep == 3)
             {
-                var completion = await Api.CompleteAsync(detail.Id, new(normalizedResult));
+                var completion = await Api.CompleteAsync(detail.Id, new(normalizedResult, additionalCost, additionalCostNote));
                 if (!completion.IsSuccess || completion.Data is null) { evidenceError = completion.Message ?? "Không thể lưu tóm tắt kết quả."; return; }
                 Apply(completion.Data);
             }

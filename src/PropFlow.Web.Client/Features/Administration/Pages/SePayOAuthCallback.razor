@@ -1,0 +1,34 @@
+@page "/admin/sepay/callback"
+@layout PropFlow.Web.Client.Layout.AdminLayout
+@attribute [Authorize(Roles = "ADMIN")]
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Services.Api
+@inject AuthenticatedApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Kết nối SePay · PropFlow</PageTitle>
+<section class="callback-card" aria-live="polite">
+    <span class="material-symbols-outlined" aria-hidden="true">@(working ? "sync" : success ? "check_circle" : "error")</span>
+    <h1>@(working ? "Đang hoàn tất kết nối SePay" : success ? "Đã kết nối SePay" : "Chưa thể kết nối SePay")</h1>
+    <p>@message</p>
+    @if (!working) { <a href="/admin/dashboard?tab=payment&amp;paymentEnvironment=live">Quay lại cấu hình thanh toán SePay thật</a> }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "state")] public string? State { get; set; }
+    [SupplyParameterFromQuery(Name = "code")] public string? Code { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    private bool working = true, success;
+    private string message = "Vui lòng chờ trong khi PropFlow xác nhận quyền truy cập.";
+    protected override async Task OnInitializedAsync()
+    {
+        // Remove the authorization code from browser history before any other navigation.
+        var request = new SePayOAuthCallbackRequest(State ?? "", Code, Error);
+        Navigation.NavigateTo("/admin/sepay/callback", replace: true);
+        if (string.IsNullOrWhiteSpace(request.State)) { working = false; message = "Phiên kết nối không hợp lệ. Hãy quay lại và nhấn Kết nối SePay."; return; }
+        var result = await Api.SendAsync<SePayOAuthState>(HttpMethod.Post, "api/v1/payment-settings/sepay/oauth/callback", request);
+        working = false; success = result.IsSuccess;
+        message = success ? "Quay lại để đồng bộ và chọn tài khoản ngân hàng nhận tiền, sau đó thiết lập nhận giao dịch. Tài khoản nhận tiền hiện tại chưa bị thay đổi."
+            : result.Message ?? "Phiên kết nối đã hết hạn hoặc chưa được cấp quyền. Vui lòng bắt đầu lại.";
+    }
+}

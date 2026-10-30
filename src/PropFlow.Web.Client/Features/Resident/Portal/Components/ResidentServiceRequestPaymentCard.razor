@@ -1,0 +1,146 @@
+@using PropFlow.Modules.Payments.Contracts
+@using PropFlow.Web.Client.Features.Resident.Portal.Services
+@implements IDisposable
+@inject IResidentServiceRequestApiClient Api
+
+<section class="resident-payment-card" aria-label="Thanh toán dịch vụ">
+    <header><div><small>THANH TOÁN DỊCH VỤ</small><h3>@(payment?.InvoiceNumber ?? "Hóa đơn dịch vụ")</h3></div><span class="payment-badge @(payment?.SettlementStatus == "PAID" ? "paid" : "")">@StatusLabel</span></header>
+    @if (!Completed) { <p>Chi phí sẽ được chốt và hóa đơn phát hành sau khi Ban quản lý nghiệm thu công việc.</p> }
+    else if (loading && payment is null) { <p role="status">Đang tải thông tin thanh toán…</p> }
+    else if (payment is not null)
+    {
+        <dl><div><dt>Tổng hóa đơn</dt><dd>@Money(payment.TotalAmount)</dd></div><div><dt>@(IsSandbox ? "Đã ghi nhận (Sandbox)" : "Đã ghi nhận")</dt><dd>@Money(payment.ConfirmedPaidAmount)</dd></div><div class="balance"><dt>Còn cần thanh toán</dt><dd>@Money(payment.OutstandingAmount)</dd></div></dl>
+        @if (IsSandbox)
+        {
+            <div class="sandbox-payment" role="status"><strong>SANDBOX — KHÔNG CHUYỂN TIỀN THẬT</strong><p>Tạo giao dịch trong SePay Test mode. PropFlow chỉ xác nhận khi nhận webhook hợp lệ từ SePay.</p>
+                @if (payment.SettlementStatus == "PAID" && payment.SimulatedTransferAmount is { } amount)
+                { <p class="simulation-complete">SePay đã xác nhận giao dịch thử: <strong>@Money(amount)</strong>.</p><p>Đã thanh toán trong Sandbox. Khoản thu thật được lưu riêng.</p> }
+                else if (payment.OutstandingAmount <= 0) { <p>Hóa đơn thực tế đã hoàn tất, không cần mô phỏng thêm.</p> }
+                else if (payment.TransferCode is { } sandboxCode && sandboxCode.StartsWith("PS", StringComparison.Ordinal))
+                {
+                    <p><strong>Đang chờ webhook SePay</strong></p>
+                    <p>Trong SePay Test mode → Mô phỏng giao dịch, chọn <strong>@payment.BankName · @payment.MaskedAccountNumber</strong>, loại <strong>Tiền vào</strong>, số tiền <strong>@Money(payment.OutstandingAmount)</strong>.</p>
+                    <p>Nội dung chuyển khoản: <code>@sandboxCode</code></p>
+                    @if (payment.SimulatedTransferAmount > 0) { <p>SePay đã ghi nhận một phần: @Money(payment.SimulatedTransferAmount.Value).</p> }
+                    <a href="https://my.sepay.vn" target="_blank" rel="noopener noreferrer">Mở SePay để mô phỏng giao dịch</a>
+                    <p>Giữ nguyên nội dung trên. Trạng thái tự cập nhật sau khi SePay gửi thông báo.</p>
+                }
+                else
+                {
+                    <button type="button" disabled="@(reporting || loading || !payment.SandboxSimulationAvailable)" @onclick="SimulateAsync">@(reporting ? "Đang chuẩn bị…" : "Lấy nội dung thanh toán SePay")</button>
+                    @if (!payment.SandboxSimulationAvailable) { <p>Admin cần kiểm tra kết nối và cấu hình khóa webhook Sandbox trước.</p> }
+                }
+            </div>
+        }
+        else if (payment.SettlementStatus == "PAID")
+        {
+            <div class="payment-success" role="status"><span class="material-symbols-outlined">check_circle</span><div><strong>Đã thanh toán đầy đủ</strong><p>Bạn có thể đánh giá dịch vụ bên dưới.</p></div></div>
+        }
+        else
+        {
+            @if (payment.AutomaticConfirmationEnabled)
+            { <p class="payment-help"><span class="material-symbols-outlined">sync</span>Quét QR và chuyển đúng số tiền, giữ nguyên nội dung. Hệ thống tự ghi nhận khi nhận thông báo từ ngân hàng. Bạn không cần báo chuyển khoản để được xác nhận.</p> }
+            else { <p class="payment-help">Chuyển khoản theo QR và gửi mã giao dịch để kế toán kiểm tra.</p> }
+            @if (payment.SettlementStatus == "PARTIAL") { <p class="payment-help">Đã ghi nhận một phần. QR hiện tại chỉ có số tiền còn thiếu.</p> }
+            @if (payment.PaymentStatus == "REJECTED") { <p class="payment-error">Báo chuyển khoản trước đó chưa được xác nhận: @payment.RejectionReason</p> }
+            @if (!string.IsNullOrEmpty(qr)) { <img class="payment-qr" src="@qr" alt="QR thanh toán số tiền còn nợ của hóa đơn @payment.InvoiceNumber" /> }
+            else if (payment.PaymentStatus != "PENDING") { <p class="payment-help">Chưa thể hiển thị QR. Vui lòng thử tải lại hoặc liên hệ Ban quản lý.</p> }
+            <div class="payment-bank"><strong>@payment.BankName · @payment.MaskedAccountNumber</strong><span>@payment.AccountName</span>@if (payment.TransferCode is { } code) { <small>Nội dung chuyển khoản: <code>@(code)</code></small> }</div>
+            @if (payment.PaymentStatus == "PENDING")
+            { <p class="payment-help" role="status">Đã gửi thông tin chuyển khoản. @(payment.AutomaticConfirmationEnabled ? "Đang chờ thông báo ngân hàng hoặc kế toán đối soát." : "Đang chờ kế toán kiểm tra.") Không cần chuyển lại nếu ngân hàng đã báo thành công.</p> }
+            else
+            {
+                <details open="@(!payment.AutomaticConfirmationEnabled)">
+                    <summary>@(payment.AutomaticConfirmationEnabled ? "Đã chuyển nhưng chưa được ghi nhận?" : "Báo chuyển khoản cho kế toán")</summary>
+                    <div class="report-fields"><label>Mã giao dịch ngân hàng<input maxlength="100" @bind="reference" placeholder="Mã giao dịch trong ứng dụng ngân hàng" disabled="@reporting" /></label><label>Ghi chú<textarea maxlength="1000" @bind="note" disabled="@reporting"></textarea></label><button type="button" disabled="@(reporting || string.IsNullOrWhiteSpace(reference))" @onclick="ReportAsync">@(reporting ? "Đang gửi…" : "Gửi thông tin đối soát")</button></div>
+                </details>
+            }
+        }
+    }
+    @if (!string.IsNullOrWhiteSpace(error)) { <p class="payment-error" role="alert">@error</p> }
+    @if (Completed) { <footer><small>@(payment?.SettlementStatus == "PAID" ? IsSandbox ? "Đã thanh toán trong Sandbox" : "Thanh toán đã hoàn tất" : "Trạng thái được tự cập nhật mỗi 5 giây")</small><button type="button" disabled="@(loading || reporting)" @onclick="RefreshAsync">Kiểm tra lại</button></footer> }
+</section>
+
+@code {
+    [Parameter] public Guid RequestId { get; set; }
+    [Parameter] public bool Completed { get; set; }
+    [Parameter] public EventCallback<ResidentServiceRequestPaymentView> Changed { get; set; }
+    private ResidentServiceRequestPaymentView? payment;
+    private Guid loadedId;
+    private bool loadedCompleted, loading, reporting;
+    private string? qr, error, note;
+    private string reference = "";
+    private decimal? qrAmount;
+    private readonly CancellationTokenSource cancellation = new();
+    private bool IsSandbox => payment?.PaymentEnvironment == "SANDBOX";
+    private string StatusLabel => !Completed ? "Chờ nghiệm thu" : IsSandbox ? payment?.SettlementStatus == "PAID" ? "Đã thanh toán (Sandbox)" : "Sandbox" : payment?.SettlementStatus == "PAID" ? "Đã thanh toán"
+        : payment?.SettlementStatus == "PARTIAL" ? "Còn thiếu tiền" : payment?.PaymentStatus == "PENDING" ? "Đang đối soát" : "Chờ thanh toán";
+    protected override void OnInitialized() => _ = WatchAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedId == RequestId && loadedCompleted == Completed) return;
+        loadedId = RequestId; loadedCompleted = Completed; payment = null; qr = null; qrAmount = null; error = note = null; reference = "";
+        if (Completed) await RefreshAsync();
+    }
+    private async Task WatchAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try { while (await timer.WaitForNextTickAsync(cancellation.Token))
+            if (Completed && (IsSandbox || payment?.SettlementStatus != "PAID")) await InvokeAsync(RefreshAsync); }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+    }
+    private async Task RefreshAsync()
+    {
+        if (loading || reporting || cancellation.IsCancellationRequested) return;
+        loading = true;
+        var requestId = RequestId;
+        try
+        {
+            var result = await Api.GetPaymentAsync(requestId, cancellation.Token);
+            if (requestId != RequestId || cancellation.IsCancellationRequested) return;
+            if (!result.IsSuccess || result.Data is null) { error = result.Message ?? "Không thể tải thông tin thanh toán."; return; }
+            payment = result.Data; error = null;
+            if (IsSandbox || payment.QrImageUrl is null || payment.OutstandingAmount <= 0) { qr = null; qrAmount = null; }
+            else if (qr is null || qrAmount != payment.OutstandingAmount)
+            {
+                var image = await Api.GetPaymentQrAsync(requestId, cancellation.Token);
+                if (requestId != RequestId || cancellation.IsCancellationRequested) return;
+                if (image.IsSuccess && image.Data is not null) { qr = $"data:{image.Data.ContentType};base64,{Convert.ToBase64String(image.Data.Bytes)}"; qrAmount = payment.OutstandingAmount; }
+                else { qr = null; error = image.Message ?? "Chưa tải được QR thanh toán."; }
+            }
+            if (!IsSandbox) await Changed.InvokeAsync(payment);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally { loading = false; if (!cancellation.IsCancellationRequested) StateHasChanged(); }
+    }
+    private async Task ReportAsync()
+    {
+        if (reporting || string.IsNullOrWhiteSpace(reference)) return;
+        reporting = true;
+        try
+        {
+            var result = await Api.ReportTransferAsync(RequestId, new(reference.Trim(), Note: note), cancellation.Token);
+            if (!result.IsSuccess || result.Data is null) { error = result.Message ?? "Không thể gửi thông tin đối soát."; return; }
+            payment = result.Data; error = null;
+            if (payment.QrImageUrl is null) { qr = null; qrAmount = null; }
+            await Changed.InvokeAsync(payment);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally { reporting = false; }
+    }
+    private static string Money(decimal value) => $"{value:N0} ₫";
+    private async Task SimulateAsync()
+    {
+        if (!IsSandbox || reporting || loading || payment?.SandboxSimulationAvailable != true) return;
+        reporting = true; error = null;
+        try
+        {
+            var result = await Api.SimulateTransferAsync(RequestId, cancellation.Token);
+            if (!result.IsSuccess || result.Data is null) { error = result.Message ?? "Không thể thực hiện chuyển khoản giả lập."; return; }
+            payment = result.Data; qr = null; qrAmount = null;
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally { reporting = false; }
+    }
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}

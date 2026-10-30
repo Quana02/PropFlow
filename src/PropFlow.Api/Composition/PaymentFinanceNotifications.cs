@@ -13,6 +13,7 @@ public sealed class PaymentFinanceNotifications(PaymentFinanceStore store, IBill
     public Task<PaymentRow?> FindAsync(Guid id,CancellationToken ct) => store.FindAsync(id,ct);
     public async Task<MutationResult> ChangeAsync(Guid id,string action,string? reason,string key,Guid actor,CancellationToken ct) => await Notify(await store.ChangeAsync(id,action,reason,key,actor,ct),ct);
     public async Task<MutationResult> CollectAsync(CollectPaymentRequest request,string key,Guid actor,CancellationToken ct) => await Notify(await store.CollectAsync(request,key,actor,ct),ct);
+    public async Task<MutationResult> CollectVerifiedBankAsync(CollectPaymentRequest request,string key,Guid actor,CancellationToken ct) => await Notify(await store.CollectVerifiedBankAsync(request,key,actor,ct),ct);
     private async Task<MutationResult> Notify(MutationResult result,CancellationToken ct) {
         if(result.Outcome == MutationOutcome.Success && result.Payment is { } payment)
             try { await cycle.NotifyPaymentAsync(payment.InvoiceId,ct); }

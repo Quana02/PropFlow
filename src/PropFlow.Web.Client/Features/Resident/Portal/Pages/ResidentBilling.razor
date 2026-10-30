@@ -7,7 +7,9 @@
 @inject FinanceCycleApi Api
 <PageTitle>Hóa đơn và phiếu thu của tôi — PropFlow</PageTitle>
 <section class="glass-panel resident-billing">
-    <h1>Hóa đơn và thanh toán</h1><p>Chủ sở hữu chịu phí dịch vụ; chủ hộ thuê căn hộ chưa có chủ sở hữu chịu thêm tiền thuê theo cấu hình. Chỉ khoản đã được kế toán xác nhận mới làm giảm dư nợ.</p>
+    <h1>Hóa đơn và thanh toán</h1>
+    @if (invoices.Any(x => x.PaymentEnvironment == "SANDBOX")) { <p role="status">SANDBOX — Đang hiển thị kết quả thanh toán thử nghiệm. Khoản thu thật được lưu riêng.</p> }
+    else { <p>Chủ sở hữu chịu phí dịch vụ; chủ hộ thuê căn hộ chưa có chủ sở hữu chịu thêm tiền thuê theo cấu hình. Chỉ khoản đã được kế toán xác nhận mới làm giảm dư nợ.</p> }
     <button @onclick="Load" disabled="@loading">Tải lại</button>
     @if (error is not null) { <p role="alert">@error</p> }
     @if (!loading && invoices.Length == 0 && error is null) { <p>Chưa có hóa đơn được gửi cho bạn.</p> }
@@ -26,6 +28,7 @@
     </article> }
 </section>
 <ResidentFinanceNotifications />
+<SandboxInvoiceRefresh Enabled="@invoices.Any(x => x.PaymentEnvironment == "SANDBOX")" Refresh="Load" />
 @code {
     private HouseholdInvoice[] invoices = []; private ResidentPayment[] payments = [];
     private bool loading; private string? error;

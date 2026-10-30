@@ -30,10 +30,11 @@ public class AdministrationTests
 
         Assert.NotNull(access);
         Assert.Equal(SystemRoleCodes.Admin, access!.Role);
-        Assert.Equal(3, access.Permissions.Length);
+        Assert.Equal(4, access.Permissions.Length);
         Assert.Contains(SystemPermissionCodes.ManageInternalAccounts, access.Permissions);
         Assert.Contains(SystemPermissionCodes.ViewAdministrationActivity, access.Permissions);
         Assert.Contains(SystemPermissionCodes.ViewSystemOverview, access.Permissions);
+        Assert.Contains(SystemPermissionCodes.ManagePaymentDestination, access.Permissions);
         Assert.DoesNotContain(SystemPermissionCodes.ManageOperations, access.Permissions);
         Assert.DoesNotContain(SystemPermissionCodes.ManageFinance, access.Permissions);
     }

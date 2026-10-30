@@ -1,0 +1,30 @@
+@using PropFlow.Web.Client.Features.Resident.Portal.Services
+@implements IDisposable
+@inject IResidentServiceRequestApiClient Api
+
+@code {
+    [Parameter] public Guid RequestId { get; set; }
+    [Parameter] public decimal OutstandingAmount { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    private readonly CancellationTokenSource cancellation = new();
+
+    protected override void OnInitialized() => _ = WatchAsync();
+
+    private async Task WatchAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellation.Token))
+            {
+                if (OutstandingAmount <= 0) continue;
+                var result = await Api.GetPaymentAsync(RequestId, cancellation.Token);
+                if (result.IsSuccess && result.Data is { } payment && payment.OutstandingAmount != OutstandingAmount)
+                    await InvokeAsync(() => Changed.InvokeAsync());
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+    }
+
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}
