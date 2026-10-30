@@ -71,13 +71,14 @@ builder.Services.AddOptions<DatabaseConnectionOptions>()
         "Connection string 'PropFlowDatabase' must be configured through the environment or secret provider.")
     .ValidateOnStart();
 
-builder.Services.AddOptions<CloudinaryOptions>()
+var cloudinaryOptions = builder.Services.AddOptions<CloudinaryOptions>()
     .BindConfiguration("Cloudinary")
     .Validate(options => !string.IsNullOrWhiteSpace(options.CloudName)
                         && !string.IsNullOrWhiteSpace(options.ApiKey)
                         && !string.IsNullOrWhiteSpace(options.ApiSecret),
-        "Cloudinary phải được cấu hình bằng User Secrets hoặc secret provider.")
-    .ValidateOnStart();
+        "Cloudinary phải được cấu hình bằng User Secrets hoặc secret provider.");
+if (!builder.Environment.IsEnvironment("Testing"))
+    cloudinaryOptions.ValidateOnStart();
 
 builder.Services.AddSingleton(services =>
 {
@@ -197,11 +198,6 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
-builder.Services.AddScoped<LocalMaintenanceEvidenceStorage>();
-builder.Services.AddHttpClient<CloudinaryMaintenanceEvidenceStorage>(client =>
-    client.Timeout = TimeSpan.FromSeconds(90));
-builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage>(services =>
-    services.GetRequiredService<CloudinaryMaintenanceEvidenceStorage>());
 builder.Services.AddScoped<IMaintenanceAssetTransactionCoordinator, MaintenanceAssetTransactionCoordinator>();
 builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage, CloudinaryMaintenanceEvidenceStorage>();
 builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceNotifier, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceNotifier>();
@@ -227,7 +223,10 @@ builder.Services.AddScoped<IServiceRequestBilling, ServiceRequestBilling>();
 builder.Services.AddScoped<IConfirmedPaymentSource, ConfirmedPaymentSource>();
 builder.Services.AddScoped<BillingFinanceQueries>();
 builder.Services.AddScoped<PaymentFinanceStore>();
-builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceNotifications>();
+builder.Services.AddScoped<IPaymentFinanceStore>(services => new PaymentFinanceNotifications(
+    services.GetRequiredService<PaymentFinanceStore>(),
+    services.GetRequiredService<IBillingCycle>(),
+    services.GetRequiredService<ILogger<PaymentFinanceNotifications>>()));
 builder.Services.AddScoped<PaymentFinanceUseCases>();
 builder.Services.AddScoped<IPaymentDestinationStore, PaymentDestinationStore>();
 builder.Services.AddScoped<IPaymentAccountProtector, PaymentAccountProtector>();
@@ -291,15 +290,6 @@ builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewMa
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
 builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRequestInsightSource>();
 builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
-var cloudinaryOptions = builder.Services.AddOptions<CloudinaryOptions>()
-    .BindConfiguration(CloudinaryOptions.SectionName)
-    .Validate(options =>
-        !string.IsNullOrWhiteSpace(options.CloudName) &&
-        !string.IsNullOrWhiteSpace(options.ApiKey) &&
-        !string.IsNullOrWhiteSpace(options.ApiSecret),
-        "Cloudinary:CloudName, Cloudinary:ApiKey and Cloudinary:ApiSecret must be configured through User Secrets or environment variables.");
-if (!builder.Environment.IsEnvironment("Testing"))
-    cloudinaryOptions.ValidateOnStart();
 builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
 builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
     client.Timeout = TimeSpan.FromSeconds(90));
@@ -466,11 +456,4 @@ public partial class Program { }
 public sealed class DatabaseConnectionOptions
 {
     public string PropFlowDatabase { get; set; } = "";
-}
-
-public sealed class CloudinaryOptions
-{
-    public string CloudName { get; set; } = "";
-    public string ApiKey { get; set; } = "";
-    public string ApiSecret { get; set; } = "";
 }

@@ -13,8 +13,14 @@ public sealed class PaymentFinanceStore(PaymentsDbContext db, IInvoiceFinancialS
     public async Task<MutationResult> SubmitAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct)
     {
         if (!await invoices.IsRecipientAsync(request.InvoiceId, actorId, ct)) return new(MutationOutcome.NotFound);
+        if (await db.SePaySandboxConnections.AsNoTracking().AnyAsync(x => x.DemoEnabled, ct))
+            return new(MutationOutcome.SandboxEnabled);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{actorId}|{System.Text.Json.JsonSerializer.Serialize(request)}")));
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        // Serialize environment changes with Sandbox setup and webhook handling.
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(728405193)", ct);
+        if (await db.SePaySandboxConnections.AsNoTracking().AnyAsync(x => x.DemoEnabled, ct))
+            return new(MutationOutcome.SandboxEnabled);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 2))", ct);
         await LockInvoiceAsync(request.InvoiceId, ct);
         var prior = await db.PaymentOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Key == key, ct);

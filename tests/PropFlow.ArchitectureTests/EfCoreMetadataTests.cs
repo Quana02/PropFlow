@@ -556,7 +556,11 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("maintenance", model.GetDefaultSchema());
-        Assert.Equal(6, model.GetEntityTypes().Count());
+        Assert.Equal(7, model.GetEntityTypes().Count());
+        var residentOutbox = model.FindEntityType(typeof(PropFlow.Shared.Messaging.OutboxEvent));
+        Assert.NotNull(residentOutbox);
+        Assert.Equal("resident_notification_outbox", residentOutbox.GetTableName());
+        Assert.Equal("maintenance", residentOutbox.GetSchema());
         var attachmentEntity = model.FindEntityType(typeof(MaintenanceResultAttachment));
         Assert.NotNull(attachmentEntity);
         Assert.Equal("maintenance_result_attachments", attachmentEntity.GetTableName());
@@ -647,7 +651,15 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("billing", model.GetDefaultSchema());
-        Assert.Equal(6, model.GetEntityTypes().Count());
+        Assert.Equal(8, model.GetEntityTypes().Count());
+        var usageEntity = model.FindEntityType(typeof(PropFlow.Modules.Billing.Domain.ElectricityUsages.ElectricityUsage));
+        Assert.NotNull(usageEntity);
+        Assert.Equal("electricity_usages", usageEntity.GetTableName());
+        Assert.Equal("billing", usageEntity.GetSchema());
+        var pricingOutbox = model.FindEntityType(typeof(PropFlow.Modules.Billing.Domain.PricingChanges.PricingChange));
+        Assert.NotNull(pricingOutbox);
+        Assert.Equal("pricing_change_outbox", pricingOutbox.GetTableName());
+        Assert.Equal("billing", pricingOutbox.GetSchema());
         var recipientEntity = model.FindEntityType(typeof(InvoiceRecipient));
         Assert.NotNull(recipientEntity);
         Assert.Equal("invoice_recipients", recipientEntity.GetTableName());

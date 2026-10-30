@@ -3,7 +3,7 @@ namespace PropFlow.Modules.Payments.Application.Finance;
 public sealed record PaymentRow(Guid Id, string PaymentNumber, Guid InvoiceId, decimal Amount, string PaymentMethodCode,
     DateTimeOffset PaymentDate, string? ReferenceNumber, string? Note, string Status, DateTimeOffset? ConfirmedAt, string? InvoiceNumber = null, string? ApartmentNumber = null, string? ResidentName = null);
 public sealed record PagedPayments(int Total, int Page, int PageSize, IReadOnlyList<PaymentRow> Items, IReadOnlyDictionary<string,int>? Counts = null);
-public enum MutationOutcome { Success, NotFound, Conflict, IdempotencyConflict, Overpayment }
+public enum MutationOutcome { Success, NotFound, Conflict, IdempotencyConflict, Overpayment, SandboxEnabled }
 public sealed record MutationResult(MutationOutcome Outcome, PaymentRow? Payment = null);
 public sealed record CollectPaymentRequest(Guid InvoiceId, decimal Amount, string PaymentMethodCode,
     string? ReferenceNumber, string? Note);

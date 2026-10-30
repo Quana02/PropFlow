@@ -147,7 +147,7 @@ public sealed class StaffServiceRequestTests
             Assert.StartsWith("cloudinary:propflow/service-request-evidence/", saved.StorageKey);
             Assert.Equal(jpeg.Length, saved.SizeBytes);
             Assert.Equal("https://api.cloudinary.com/v1_1/propflow-test/image/upload", handler.RequestUri?.AbsoluteUri);
-            Assert.Contains("name=\"signature\"", handler.RequestBody);
+            Assert.Matches("name=\"?signature\"?(?:\\r\\n|;)", handler.RequestBody);
             Assert.False(Directory.Exists(Path.Combine(contentRoot, "App_Data", "service-request-evidence")));
         }
         finally

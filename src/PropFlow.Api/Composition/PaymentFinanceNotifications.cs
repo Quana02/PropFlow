@@ -6,8 +6,9 @@ namespace PropFlow.Api.Composition;
 
 // After the payment transaction commits, reuse Billing's existing reconciliation and outbox.
 // A delivery failure never undoes a recorded collection; the existing worker retries it.
-public sealed class PaymentFinanceNotifications(PaymentFinanceStore store, IBillingCycle cycle, ILogger<PaymentFinanceNotifications> logger) : IPaymentFinanceStore
+public sealed class PaymentFinanceNotifications(IPaymentFinanceStore store, IBillingCycle cycle, ILogger<PaymentFinanceNotifications> logger) : IPaymentFinanceStore
 {
+    public async Task<MutationResult> SubmitAsync(CollectPaymentRequest request,string key,Guid actor,CancellationToken ct) => await Notify(await store.SubmitAsync(request,key,actor,ct),ct);
     public Task<IReadOnlyList<PaymentRow>> ByInvoiceAsync(Guid invoiceId, CancellationToken ct) => store.ByInvoiceAsync(invoiceId, ct);
     public Task<PagedPayments> ListAsync(string status,string? search,int page,int pageSize,string sort,CancellationToken ct,string? filter = null) => store.ListAsync(status,search,page,pageSize,sort,ct,filter);
     public Task<PaymentRow?> FindAsync(Guid id,CancellationToken ct) => store.FindAsync(id,ct);
