@@ -1,0 +1,64 @@
+@using PropFlow.Web.Client.Features.Administration.Models
+@implements IDisposable
+
+<div class="otp-backdrop" role="presentation" @onclick="Cancel">
+    <section class="otp-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-otp-title" @onclick:stopPropagation="true">
+        <header>
+            <span class="material-symbols-outlined" aria-hidden="true">mark_email_read</span>
+            <div><h2 id="payment-otp-title">Xác nhận bằng email OTP</h2><p>Mã đã được gửi tới <strong>@Challenge.MaskedEmail</strong></p></div>
+        </header>
+        <div class="otp-body">
+            <p>Nhập mã gồm 6 chữ số để @(Action == "SANDBOX_WEBHOOK_KEY" ? "lấy khóa nhận thông báo giao dịch SePay Sandbox" : Action == "SANDBOX_DEMO_ON" ? "bật thanh toán thử qua SePay và ẩn QR thật" : Action == "SANDBOX_DEMO_OFF" ? "tắt mô phỏng và trở về thanh toán thật" : Action == "SANDBOX_CONNECT" ? "lưu kết nối Sandbox" : Action == "SANDBOX_DISCONNECT" ? "ngắt kết nối Sandbox" : Action == "CONNECT" ? "kết nối tài khoản SePay" : Action == "WEBHOOK" ? "thiết lập nhận thông báo giao dịch" : Action == "DEACTIVATE" ? "vô hiệu hóa cấu hình nhận tiền" : "kích hoạt cấu hình nhận tiền").</p>
+            <label>Mã xác minh
+                <input inputmode="numeric" autocomplete="one-time-code" maxlength="6" value="@otpCode" @oninput="OnCodeInput" disabled="@Busy" autofocus />
+            </label>
+            <div class="otp-meta">
+                <span>Mã hết hạn sau <strong>@RemainingText</strong></span>
+                <button type="button" disabled="@(Busy || resendSeconds > 0)" @onclick="Resend">
+                    @(resendSeconds > 0 ? $"Gửi lại sau {resendSeconds}s" : "Gửi lại mã")
+                </button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Error)) { <p class="otp-error" role="alert">@Error</p> }
+        </div>
+        <footer>
+            <button type="button" class="secondary" disabled="@Busy" @onclick="Cancel">Hủy</button>
+            <button type="button" class="primary" disabled="@(Busy || otpCode.Length != 6)" @onclick="Confirm">
+                @(Busy ? "Đang xác minh…" : "Xác nhận")
+            </button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PrivilegedActionChallengeResult Challenge { get; set; } = null!;
+    [Parameter] public string Action { get; set; } = "UPSERT";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnResend { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    private string otpCode = string.Empty;
+    private int remainingSeconds;
+    private int resendSeconds;
+    private Timer? timer;
+    private string RemainingText => $"{Math.Max(0, remainingSeconds) / 60:00}:{Math.Max(0, remainingSeconds) % 60:00}";
+
+    protected override void OnParametersSet()
+    {
+        remainingSeconds = Math.Max(0, (int)Math.Ceiling((Challenge.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds));
+        resendSeconds = Math.Max(0, (int)Math.Ceiling((Challenge.ResendAfter - DateTimeOffset.UtcNow).TotalSeconds));
+        timer ??= new Timer(_ => _ = InvokeAsync(Tick), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void Tick()
+    {
+        if (remainingSeconds > 0) remainingSeconds--;
+        if (resendSeconds > 0) resendSeconds--;
+        StateHasChanged();
+    }
+    private void OnCodeInput(ChangeEventArgs args) => otpCode = new string((args.Value?.ToString() ?? string.Empty).Where(char.IsAsciiDigit).Take(6).ToArray());
+    private Task Confirm() => OnConfirm.InvokeAsync(otpCode);
+    private Task Resend() => OnResend.InvokeAsync();
+    private Task Cancel() => OnCancel.InvokeAsync();
+    public void Dispose() => timer?.Dispose();
+}

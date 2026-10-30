@@ -57,3 +57,19 @@ The family relationship of an active Household Member residency to its Household
 ## Business Scope Authorization
 
 The domain-level check applied after fixed RBAC authorization. A role and fixed permission do not permit access outside the authorized building, assignment, ownership, residency, or other applicable business scope.
+
+## Pending Payment
+
+A resident-reported or recorded transfer awaiting reconciliation by an Accountant. It does not reduce the invoice balance or unlock service-request feedback.
+
+## Service Request Charge
+
+The payable cost of one Service Request. It consists of an optional Base Service Cost recorded by the Manager before work starts and an optional Additional Cost proposed by Staff and explicitly approved by the Manager during acceptance. Staff proposals are not payable until approved.
+
+## Service Request Invoice
+
+An issued Billing invoice linked one-to-one to a completed Service Request when its approved charge is greater than zero. It snapshots the addressed resident account and drives the exact-amount VietQR payment flow. A zero-charge request does not create an invoice.
+
+## Confirmed Payment
+
+A payment that an Accountant has matched against the received funds. Only confirmed payments reduce the invoice balance and count toward unlocking service-request feedback.

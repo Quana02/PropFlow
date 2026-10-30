@@ -218,6 +218,17 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                             Module = "Reporting",
                             Name = "Xem tổng quan hệ thống",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666668"),
+                            Code = "MANAGE_PAYMENT_DESTINATION",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Cấu hình tài khoản ngân hàng nhận thanh toán sau khi xác minh OTP.",
+                            IsActive = true,
+                            Module = "Finance",
+                            Name = "Quản lý tài khoản nhận tiền",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });
 
@@ -389,6 +400,12 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                         {
                             RoleId = new Guid("55555555-5555-4555-8555-555555555555"),
                             PermissionId = new Guid("66666666-6666-4666-8666-666666666667"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("55555555-5555-4555-8555-555555555555"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666668"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });

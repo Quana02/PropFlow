@@ -5,6 +5,7 @@ using PropFlow.Modules.Authentication.Application;
 using PropFlow.Modules.Authentication.Domain.Users;
 using PropFlow.Modules.Authentication.Domain.Tokens;
 using PropFlow.Modules.Authentication.Domain.ResidentVerifications;
+using PropFlow.Modules.Authentication.Domain.PrivilegedActions;
 
 namespace PropFlow.Modules.Authentication.Infrastructure.Persistence;
 
@@ -59,9 +60,15 @@ public sealed class AuthStore(AuthenticationDbContext db) : IAuthStore
     public Task<RefreshToken?> RefreshAsync(string hash, CancellationToken ct) => db.RefreshTokens.SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
     public Task<RefreshToken?> RefreshByIdAsync(Guid id, CancellationToken ct) => db.RefreshTokens.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<List<RefreshToken>> SessionsAsync(Guid id, CancellationToken ct) => db.RefreshTokens.Where(x => x.UserId == id && x.RevokedAt == null).ToListAsync(ct);
+    public Task<PrivilegedActionChallenge?> PrivilegedChallengeAsync(Guid id, CancellationToken ct) => db.PrivilegedActionChallenges.SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<List<PrivilegedActionChallenge>> PrivilegedChallengesAsync(Guid userId, string purpose, CancellationToken ct) => db.PrivilegedActionChallenges
+        .Where(x => x.UserId == userId && x.Purpose == purpose)
+        .OrderByDescending(x => x.CreatedAt)
+        .ToListAsync(ct);
     public void Add(UserAccount value) => db.Add(value);
     public void Add(ResidentVerification value) => db.Add(value);
     public void Add(PasswordResetToken value) => db.Add(value);
     public void Add(RefreshToken value) => db.Add(value);
+    public void Add(PrivilegedActionChallenge value) => db.Add(value);
     public Task SaveAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 }

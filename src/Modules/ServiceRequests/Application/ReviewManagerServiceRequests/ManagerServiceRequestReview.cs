@@ -5,6 +5,7 @@ using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
+using PropFlow.Modules.Billing.Contracts;
 
 namespace PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests;
 
@@ -22,7 +23,9 @@ public sealed record ManagerServiceRequestCore(
     Guid? ApartmentUnitId, Guid? FacilityId, Guid? EquipmentId, string Status,
     string? PriorityCode, string? ServiceAreaCode, DateOnly? PreferredDate,
     string? PreferredTimeCode, DateTimeOffset SubmittedAt, DateTimeOffset UpdatedAt,
-    Guid? AssignedStaffUserId);
+    Guid? AssignedStaffUserId, Guid? SubmittedByUserId, decimal BaseServiceCost,
+    decimal ProposedAdditionalCost, string? AdditionalCostNote,
+    decimal ApprovedAdditionalCost, Guid? ServiceInvoiceId);
 
 public sealed record ManagerServiceRequestPage(
     IReadOnlyList<ManagerServiceRequestCore> Items, int TotalCount,
@@ -44,13 +47,14 @@ public interface IManagerServiceRequestStore
         Guid id, Guid managerUserId, Guid? apartmentUnitId, Guid? facilityId, Guid? equipmentId,
         string? serviceAreaCode, string? note, DateTimeOffset now, CancellationToken ct);
     Task<ManagerServiceRequestOutcome> AssignAsync(
-        Guid id, Guid managerUserId, Guid staffUserId, string? note, DateTimeOffset now, CancellationToken ct);
+        Guid id, Guid managerUserId, Guid staffUserId, decimal baseServiceCost, string? note, DateTimeOffset now, CancellationToken ct);
     Task<ManagerServiceRequestOutcome> RequestReworkAsync(
         Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct);
     Task<ManagerServiceRequestOutcome> ApproveResolutionAsync(
-        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct);
+        Guid id, Guid managerUserId, decimal approvedAdditionalCost, string? note, DateTimeOffset now, CancellationToken ct);
     Task<ManagerServiceRequestOutcome> CloseAsync(
         Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct);
+    Task<ManagerServiceRequestOutcome> LinkInvoiceAsync(Guid id, Guid invoiceId, DateTimeOffset now, CancellationToken ct);
 }
 
 public sealed class ManagerServiceRequestReviewHandler(
@@ -62,7 +66,8 @@ public sealed class ManagerServiceRequestReviewHandler(
     IManagerServiceRequestInsightSource insights,
     IServiceRequestEvidenceStorage evidenceStorage,
     TimeProvider clock,
-    IServiceRequestRealtimeNotifier? realtime = null)
+    IServiceRequestRealtimeNotifier? realtime = null,
+    IServiceRequestBilling? billing = null)
 {
     public async Task<ManagerServiceRequestResult<ManagerServiceRequestListResponse>> ListAsync(
         ManagerServiceRequestListQuery query, CancellationToken ct)
@@ -109,7 +114,9 @@ public sealed class ManagerServiceRequestReviewHandler(
             item.ResidentId, resident?.ResidentCode, resident?.FullName, item.ResidentApartmentId,
             item.ApartmentUnitId, apartment?.UnitNumber, apartment?.FloorNumber, item.Status, item.PriorityCode,
             item.ServiceAreaCode, item.PreferredDate, item.PreferredTimeCode, item.SubmittedAt, item.UpdatedAt,
-            item.AssignedStaffUserId, ToAsset(facility), ToAsset(equipment), insight, activities, evidence));
+            item.AssignedStaffUserId, ToAsset(facility), ToAsset(equipment), insight, activities, evidence,
+            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote,
+            item.ApprovedAdditionalCost, item.ServiceInvoiceId));
     }
 
     public async Task<ManagerServiceRequestResult<StaffEvidenceDownload>> DownloadEvidenceAsync(
@@ -174,13 +181,15 @@ public sealed class ManagerServiceRequestReviewHandler(
             return Invalid<ManagerServiceRequestDetailResponse>("invalid_assignment", "Thông tin phân công nhân sự không hợp lệ.");
         if (request.Note?.Trim().Length > 2000)
             return Invalid<ManagerServiceRequestDetailResponse>("assignment_note_too_long", "Ghi chú phân công không được vượt quá 2000 ký tự.");
+        if (!ValidMoney(request.BaseServiceCost))
+            return Invalid<ManagerServiceRequestDetailResponse>("invalid_base_service_cost", "Chi phí dịch vụ phải là số tiền VND nguyên, không âm.");
 
         var staff = await staffDirectory.GetActiveStaffAsync(request.StaffUserId, ct);
         if (staff is null)
             return Invalid<ManagerServiceRequestDetailResponse>("active_staff_not_found", "Nhân sự đã chọn không tồn tại, không hoạt động hoặc không còn vai trò Staff.");
 
         var outcome = await store.AssignAsync(
-            id, managerUserId, staff.UserId, request.Note?.Trim(), clock.GetUtcNow(), ct);
+            id, managerUserId, staff.UserId, request.BaseServiceCost, request.Note?.Trim(), clock.GetUtcNow(), ct);
         if (outcome == ManagerServiceRequestOutcome.NotFound)
             return NotFound<ManagerServiceRequestDetailResponse>();
         if (outcome == ManagerServiceRequestOutcome.Conflict)
@@ -191,11 +200,11 @@ public sealed class ManagerServiceRequestReviewHandler(
 
     public Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> RequestReworkAsync(
         Guid id, Guid managerUserId, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct) =>
-        ReviewResolutionAsync(id, managerUserId, request.Note, approve: false, ct);
+        ReviewResolutionAsync(id, managerUserId, request.Note, null, approve: false, ct);
 
     public Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ApproveResolutionAsync(
         Guid id, Guid managerUserId, ReviewManagerServiceRequestResolutionRequest request, CancellationToken ct) =>
-        ReviewResolutionAsync(id, managerUserId, request.Note, approve: true, ct);
+        ReviewResolutionAsync(id, managerUserId, request.Note, request.ApprovedAdditionalCost, approve: true, ct);
 
     public async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> CloseAsync(
         Guid id, Guid managerUserId, CloseManagerServiceRequestRequest request, CancellationToken ct)
@@ -219,7 +228,7 @@ public sealed class ManagerServiceRequestReviewHandler(
     }
 
     private async Task<ManagerServiceRequestResult<ManagerServiceRequestDetailResponse>> ReviewResolutionAsync(
-        Guid id, Guid managerUserId, string? note, bool approve, CancellationToken ct)
+        Guid id, Guid managerUserId, string? note, decimal? approvedAdditionalCost, bool approve, CancellationToken ct)
     {
         if (id == Guid.Empty || managerUserId == Guid.Empty)
             return Invalid<ManagerServiceRequestDetailResponse>("invalid_resolution_review", "Thông tin nghiệm thu kết quả không hợp lệ.");
@@ -228,17 +237,41 @@ public sealed class ManagerServiceRequestReviewHandler(
 
         var current = await store.GetAsync(id, ct);
         if (current is null) return NotFound<ManagerServiceRequestDetailResponse>();
-        if (current.Status != "IN_PROGRESS")
+        if (current.Status != "IN_PROGRESS" && !(approve && current.Status == "RESOLVED" && current.ServiceInvoiceId is null))
             return new(ManagerServiceRequestOutcome.Conflict, ErrorCode: "service_request_not_in_progress",
                 Message: "Chỉ yêu cầu đang tiến hành và đã có kết quả từ Staff mới có thể nghiệm thu.");
 
-        var outcome = approve
-            ? await store.ApproveResolutionAsync(id, managerUserId, note?.Trim(), clock.GetUtcNow(), ct)
+        var approvedCost = approvedAdditionalCost ?? current.ProposedAdditionalCost;
+        if (approve && (!ValidMoney(approvedCost) || approvedCost > current.ProposedAdditionalCost))
+            return Invalid<ManagerServiceRequestDetailResponse>("invalid_approved_additional_cost", "Chi phí phát sinh duyệt không được lớn hơn mức Staff đề xuất.");
+
+        var now = clock.GetUtcNow();
+        var outcome = approve && current.Status == "RESOLVED"
+            ? ManagerServiceRequestOutcome.Success
+            : approve
+            ? await store.ApproveResolutionAsync(id, managerUserId, approvedCost, note?.Trim(), now, ct)
             : await store.RequestReworkAsync(id, managerUserId, note?.Trim(), clock.GetUtcNow(), ct);
         if (outcome == ManagerServiceRequestOutcome.NotFound) return NotFound<ManagerServiceRequestDetailResponse>();
         if (outcome == ManagerServiceRequestOutcome.Conflict)
             return new(outcome, ErrorCode: "staff_work_result_not_available",
                 Message: "Không có kết quả Staff mới kèm ảnh bằng chứng đang chờ nghiệm thu hoặc trạng thái yêu cầu vừa thay đổi.");
+
+        if (approve && billing is not null)
+        {
+            var approved = await store.GetAsync(id, ct);
+            if (approved?.ApartmentUnitId is { } apartmentId && approved.ServiceInvoiceId is null &&
+                approved.BaseServiceCost + approved.ApprovedAdditionalCost > 0)
+            {
+                var residentMap = await residents.GetResidentsAsync([approved.ResidentId], ct);
+                residentMap.TryGetValue(approved.ResidentId, out var resident);
+                var settlement = await billing.IssueAsync(new ServiceRequestInvoiceCommand(
+                    approved.Id, approved.RequestNumber, apartmentId, approved.ResidentId,
+                    approved.SubmittedByUserId, resident?.FullName ?? "Cư dân", approved.BaseServiceCost,
+                    approved.ApprovedAdditionalCost, approved.AdditionalCostNote, managerUserId, now), ct);
+                if (settlement is not null)
+                    await store.LinkInvoiceAsync(id, settlement.InvoiceId, now, ct);
+            }
+        }
         return await ChangedDetailAsync(id, ct);
     }
 
@@ -324,5 +357,6 @@ public sealed class ManagerServiceRequestReviewHandler(
     private static ManagerPropertyContextOption ToContextOption(MaintenanceAssetReference x) =>
         new(x.Id, x.Code, x.Name, x.LocationDescription, x.Status, x.FacilityId);
     private static ManagerServiceRequestResult<T> Invalid<T>(string code, string message) => new(ManagerServiceRequestOutcome.InvalidInput, ErrorCode: code, Message: message);
+    private static bool ValidMoney(decimal amount) => amount >= 0 && amount < 1000000000000000000m && amount == decimal.Round(amount, 0);
     private static ManagerServiceRequestResult<T> NotFound<T>() => new(ManagerServiceRequestOutcome.NotFound, ErrorCode: "service_request_not_found", Message: "Không tìm thấy yêu cầu dịch vụ.");
 }

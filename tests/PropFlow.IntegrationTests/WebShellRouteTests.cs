@@ -48,6 +48,7 @@ public sealed class WebShellRouteTests : IClassFixture<WebShellRouteTests.WebShe
     [InlineData("/finance/payments/confirmed")]
     [InlineData("/finance/payments/overdue")]
     [InlineData("/finance/invoices/unpaid")]
+    [InlineData("/admin/sepay/callback?state=test&code=test")]
     public async Task Direct_navigation_serves_only_the_non_prerendered_shell(string route)
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new("https://localhost"), AllowAutoRedirect = false });

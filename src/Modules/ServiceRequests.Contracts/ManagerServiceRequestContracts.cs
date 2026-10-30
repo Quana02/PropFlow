@@ -108,15 +108,23 @@ public sealed record ManagerServiceRequestDetailResponse(
     ManagerServiceRequestAsset? Equipment,
     ManagerServiceRequestAiInsight? AiInsight,
     IReadOnlyList<ManagerServiceRequestActivityItem> Activities,
-    IReadOnlyList<ManagerServiceRequestEvidenceItem> Evidence);
+    IReadOnlyList<ManagerServiceRequestEvidenceItem> Evidence,
+    decimal BaseServiceCost = 0,
+    decimal ProposedAdditionalCost = 0,
+    string? AdditionalCostNote = null,
+    decimal ApprovedAdditionalCost = 0,
+    Guid? ServiceInvoiceId = null);
 
 public sealed record ReviewManagerServiceRequestRequest(string? Note = null);
 
 public sealed record AssignManagerServiceRequestRequest(
     Guid StaffUserId,
-    string? Note = null);
+    string? Note = null,
+    decimal BaseServiceCost = 0);
 
-public sealed record ReviewManagerServiceRequestResolutionRequest(string? Note = null);
+public sealed record ReviewManagerServiceRequestResolutionRequest(
+    string? Note = null,
+    decimal? ApprovedAdditionalCost = null);
 
 public sealed record CloseManagerServiceRequestRequest(string? Note = null);
 

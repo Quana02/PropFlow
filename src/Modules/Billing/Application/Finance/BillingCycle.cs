@@ -7,7 +7,7 @@ public sealed record UtilityUsageInput(DateOnly UsageMonth, decimal? Kwh, decima
 public sealed record ElectricityUsageView(Guid ApartmentId, DateOnly UsageMonth, decimal? Kwh, bool IsLocked, DateTimeOffset? UpdatedAt, decimal? WaterM3 = null);
 public sealed record ResidentInvoice(Guid Id, string Number, string Apartment, string ResidentName,
     DateOnly Period, DateOnly? DueDate, decimal Total, decimal Paid, decimal Outstanding,
-    decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null);
+    decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null, string PaymentEnvironment = "LIVE");
 public sealed record FinanceDocument(byte[] Content, string ContentType, string FileName);
 public sealed record InvoiceDetailLine(Guid Id, Guid? FeeTypeId, Guid? RateId, string FeeCode, string FeeName,
     string CalculationMethod, decimal Quantity, string? UnitName, decimal UnitRate, decimal Amount, string? Description, int AmountDivisor);
@@ -16,7 +16,7 @@ public sealed record InvoiceDetail(Guid Id, string InvoiceNumber, Guid Apartment
     DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly? IssueDate, DateOnly? DueDate, string Status,
     decimal TotalAmount, decimal ConfirmedPaidAmount, decimal OutstandingAmount, string SettlementStatus,
     DateTimeOffset CreatedAt, Guid CreatedBy, DateTimeOffset? IssuedAt, Guid? IssuedBy, string? Note,
-    IReadOnlyList<InvoiceDetailLine> Lines, IReadOnlyList<InvoiceDetailHistory> History, string? ResidentName, string? InvoiceType);
+    IReadOnlyList<InvoiceDetailLine> Lines, IReadOnlyList<InvoiceDetailHistory> History, string? ResidentName, string? InvoiceType, string PaymentEnvironment = "LIVE");
 public sealed record ServiceInvoiceCorrection(string Key, decimal ServiceUnitRate, decimal WaterUnitRate,
     decimal ElectricityUnitRate, decimal WaterM3, decimal Kwh, string Reason);
 

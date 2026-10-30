@@ -22,7 +22,8 @@ public class Invoice
         DateOnly? issueDate = null,
         DateOnly? dueDate = null,
         string? note = null,
-        InvoiceType invoiceType = InvoiceType.SERVICE_FEE)
+        InvoiceType invoiceType = InvoiceType.SERVICE_FEE,
+        Guid? sourceServiceRequestId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invoiceNumber);
         ThrowIfEmpty(apartmentUnitId, nameof(apartmentUnitId));
@@ -33,6 +34,7 @@ public class Invoice
         Id = Guid.NewGuid();
         InvoiceNumber = invoiceNumber.Trim();
         Type = invoiceType;
+        SourceServiceRequestId = sourceServiceRequestId;
         ApartmentUnitId = apartmentUnitId;
         BillingPeriodStart = billingPeriodStart;
         BillingPeriodEnd = billingPeriodEnd;
@@ -50,6 +52,7 @@ public class Invoice
     public Guid Id { get; private set; }
     public string InvoiceNumber { get; private set; } = null!;
     public InvoiceType? Type { get; private set; }
+    public Guid? SourceServiceRequestId { get; private set; }
     public Guid ApartmentUnitId { get; private set; }
     public DateOnly BillingPeriodStart { get; private set; }
     public DateOnly BillingPeriodEnd { get; private set; }

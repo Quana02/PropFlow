@@ -12,6 +12,14 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
 {
     private readonly TimeProvider timeProvider = clock ?? TimeProvider.System;
 
+    public Task<ManagerServiceRequestOutcome> AssignAsync(
+        Guid id, Guid managerUserId, Guid staffUserId, string? note, DateTimeOffset now, CancellationToken ct) =>
+        AssignAsync(id, managerUserId, staffUserId, 0, note, now, ct);
+
+    public Task<ManagerServiceRequestOutcome> ApproveResolutionAsync(
+        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct) =>
+        ApproveResolutionAsync(id, managerUserId, 0, note, now, ct);
+
     public async Task<ManagerServiceRequestPage> ListAsync(ManagerServiceRequestListQuery query, CancellationToken ct)
     {
         var requests = db.ServiceRequests.AsNoTracking().AsQueryable();
@@ -48,7 +56,9 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 x.Status.ToString(), x.FinalPriorityCode, x.ServiceAreaCode, x.PreferredDate,
                 x.PreferredTimeCode, x.SubmittedAt, x.UpdatedAt,
                 x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
-                    .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault()))
+                    .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
+                x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
+                x.ApprovedAdditionalCost, x.ServiceInvoiceId))
             .ToArrayAsync(ct);
 
         var summary = await db.ServiceRequests.AsNoTracking().GroupBy(_ => 1).Select(group =>
@@ -73,7 +83,9 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             x.Status.ToString(), x.FinalPriorityCode, x.ServiceAreaCode, x.PreferredDate,
             x.PreferredTimeCode, x.SubmittedAt, x.UpdatedAt,
             x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
-                .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault()))
+                .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
+            x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
+            x.ApprovedAdditionalCost, x.ServiceInvoiceId))
         .SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceRequestActivityItem>> GetActivitiesAsync(Guid id, CancellationToken ct) =>
@@ -166,7 +178,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
     }
 
     public async Task<ManagerServiceRequestOutcome> AssignAsync(
-        Guid id, Guid managerUserId, Guid staffUserId, string? note, DateTimeOffset now, CancellationToken ct)
+        Guid id, Guid managerUserId, Guid staffUserId, decimal baseServiceCost, string? note, DateTimeOffset now, CancellationToken ct)
     {
         var request = await db.ServiceRequests
             .Include(x => x.Assignments)
@@ -189,6 +201,8 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
 
         var assignment = new ServiceRequestAssignment(request.Id, staffUserId, managerUserId, now, note);
         db.ServiceRequestAssignments.Add(assignment);
+        if (request.Status != ServiceRequestStatus.IN_PROGRESS)
+            request.SetBaseServiceCost(baseServiceCost, now);
         request.MarkAssigned(now);
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(
             request.Id,
@@ -214,11 +228,11 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
 
     public Task<ManagerServiceRequestOutcome> RequestReworkAsync(
         Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct) =>
-        ReviewResolutionAsync(id, managerUserId, note, approve: false, now, ct);
+        ReviewResolutionAsync(id, managerUserId, 0, note, approve: false, now, ct);
 
     public Task<ManagerServiceRequestOutcome> ApproveResolutionAsync(
-        Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct) =>
-        ReviewResolutionAsync(id, managerUserId, note, approve: true, now, ct);
+        Guid id, Guid managerUserId, decimal approvedAdditionalCost, string? note, DateTimeOffset now, CancellationToken ct) =>
+        ReviewResolutionAsync(id, managerUserId, approvedAdditionalCost, note, approve: true, now, ct);
 
     public async Task<ManagerServiceRequestOutcome> CloseAsync(
         Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct)
@@ -241,8 +255,24 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
         return await SaveAsync(ct);
     }
 
+    public async Task<ManagerServiceRequestOutcome> LinkInvoiceAsync(
+        Guid id, Guid invoiceId, DateTimeOffset now, CancellationToken ct)
+    {
+        var request = await db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (request is null) return ManagerServiceRequestOutcome.NotFound;
+        try
+        {
+            request.LinkServiceInvoice(invoiceId, now);
+            return await SaveAsync(ct);
+        }
+        catch (InvalidOperationException)
+        {
+            return ManagerServiceRequestOutcome.Conflict;
+        }
+    }
+
     private async Task<ManagerServiceRequestOutcome> ReviewResolutionAsync(
-        Guid id, Guid managerUserId, string? note, bool approve, DateTimeOffset now, CancellationToken ct)
+        Guid id, Guid managerUserId, decimal approvedAdditionalCost, string? note, bool approve, DateTimeOffset now, CancellationToken ct)
     {
         var request = await db.ServiceRequests
             .Include(x => x.Assignments)
@@ -275,6 +305,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
 
         if (approve)
         {
+            request.ApproveAdditionalCost(approvedAdditionalCost, now);
             activeAssignment?.Complete(now);
             request.Resolve(now);
             db.ServiceRequestActivities.Add(new ServiceRequestActivity(

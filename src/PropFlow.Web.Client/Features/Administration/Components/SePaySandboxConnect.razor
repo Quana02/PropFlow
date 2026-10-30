@@ -1,0 +1,156 @@
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Services.Api
+@inject AuthenticatedApiClient Api
+
+<article class="sandbox-card">
+    <header><div><span class="sandbox-badge">SANDBOX · THỬ NGHIỆM</span><h2>Thiết lập kết nối thử nghiệm</h2><p>Dùng API Token trong Test mode của tài khoản SePay của bạn.</p></div><span class="connection-status @(state?.Verified == true ? "connected" : null)">@(loading ? "Đang tải…" : state?.Verified == true ? "Đã kiểm tra kết nối" : state?.Configured == true ? "Cần kiểm tra lại" : "Chưa thiết lập")</span></header>
+    <div class="sandbox-intro"><span class="material-symbols-outlined" aria-hidden="true">science</span><p>Sandbox dùng dữ liệu giả lập, không phát sinh tiền thật. Kết nối thử nghiệm được lưu riêng với kết nối SePay thật.</p></div>
+    <ol class="setup-guide"><li>Mở SePay và bật <strong>Test mode</strong>.</li><li>Vào <strong>API Access → Thêm API</strong>, chọn hoạt động và sao chép API Token.</li><li>Dán token bên dưới, kiểm tra kết nối và xác nhận OTP email để lưu.</li></ol>
+    <a class="external-link" href="https://my.sepay.vn" target="_blank" rel="noopener noreferrer">Mở SePay để lấy token thử nghiệm<span class="material-symbols-outlined" aria-hidden="true">open_in_new</span></a>
+    @if (!loading && state is null)
+    {
+        <div class="actions"><button type="button" class="secondary" disabled="@busy" @onclick="ReloadAsync">Thử tải lại trạng thái Sandbox</button></div>
+    }
+    @if (state?.Configured == true)
+    {
+        <div class="saved-facts"><div><small>Khóa thử nghiệm</small><strong>Đã lưu an toàn · ••••••••••••</strong></div><div><small>Kiểm tra gần nhất</small><strong>@(state.CheckedAt?.ToLocalTime().ToString("HH:mm · dd/MM/yyyy") ?? "Chưa kiểm tra")</strong></div><div><small>Tài khoản thử nghiệm</small><strong>@state.AccountCount tài khoản</strong></div></div>
+        <div class="actions"><button type="button" class="secondary" disabled="@Unavailable" @onclick="CheckSavedAsync">Kiểm tra kết nối đã lưu</button><button type="button" class="secondary" disabled="@Unavailable" @onclick="LoadAccountsAsync">Đồng bộ tài khoản thử nghiệm</button><button type="button" class="danger" disabled="@Unavailable" @onclick='() => RequestOtpAsync("DISCONNECT")'>Ngắt kết nối Sandbox</button></div>
+    }
+    <div class="token-form"><label for="sepay-sandbox-token">@(state?.Configured == true ? "Thay API Token thử nghiệm" : "API Token thử nghiệm")</label><input id="sepay-sandbox-token" type="password" autocomplete="off" spellcheck="false" maxlength="4096" placeholder="Dán API Token từ Test mode → API Access" @bind="token" @bind:event="oninput" disabled="@Unavailable" /><p class="field-help">Nhập token mới khi muốn thay đổi. Mọi thao tác lưu, thay hoặc ngắt kết nối đều cần xác nhận OTP email.</p><div class="actions"><button type="button" class="secondary" disabled="@(Unavailable || string.IsNullOrWhiteSpace(token))" @onclick="PreviewAsync">Kiểm tra token</button><button type="button" class="primary" disabled="@(Unavailable || string.IsNullOrWhiteSpace(token))" @onclick='() => RequestOtpAsync("CONNECT")'>Lưu bằng OTP email</button></div></div>
+    <section class="sandbox-intro"><span class="material-symbols-outlined">science</span><div><strong>Mô phỏng thanh toán FE-05: @(state?.DemoEnabled == true ? "Đang bật" : "Đang tắt")</strong><p>Khi bật, cư dân lấy nội dung thanh toán để tạo giao dịch trong SePay Test mode. Hệ thống chỉ ghi nhận sau khi nhận thông báo từ SePay; QR thật được ẩn và kết quả thử được lưu riêng.</p><div class="actions"><button type="button" class="secondary" disabled="@(Unavailable || state?.DemoEnabled != true && state?.Verified != true)" @onclick='() => RequestOtpAsync(state?.DemoEnabled == true ? "DEMO_OFF" : "DEMO_ON")'>@(state?.DemoEnabled == true ? "Tắt mô phỏng, trở về thanh toán thật" : "Bật mô phỏng FE-05 bằng OTP")</button></div></div></section>
+    <section class="accounts"><h3>Nhận thông báo giao dịch SePay Sandbox</h3>
+        <p>Trong SePay Test mode → Tích hợp Webhook → Thêm webhook: chọn Tiền vào, JSON, bật gửi lại khi lỗi; chọn tài khoản thử nghiệm, tắt “Chỉ gửi khi có mã thanh toán” và để trống bộ lọc tiền tố.</p>
+        <label>Địa chỉ API công khai (ngrok / Cloudflare Tunnel)<input class="webhook-origin" placeholder="https://ten-mien-tam.trycloudflare.com" @bind="publicOrigin" @bind:event="oninput" /></label>
+        <p>URL nhận webhook: <code>@WebhookUrl</code></p>
+        <p>Bảo mật: chọn <strong>API Key</strong>. Khóa webhook bên dưới khác API Token dùng để kết nối.</p>
+        <button type="button" class="secondary" disabled="@(Unavailable || state?.Configured != true)" @onclick='() => RequestOtpAsync("WEBHOOK_KEY")'>Lấy khóa webhook bằng OTP</button>
+        @if (!string.IsNullOrWhiteSpace(webhookKey)) { <label>API Key webhook (sao chép vào SePay)<input type="@(showKey ? "text" : "password")" readonly value="@webhookKey" autocomplete="off" /><button type="button" @onclick="() => showKey = !showKey">@(showKey ? "Ẩn khóa" : "Hiện khóa để sao chép")</button></label> }
+        <p>@(state?.WebhookKeyConfigured == true ? "Đã tạo khóa webhook. Cần lưu webhook tương ứng trong SePay và gửi giao dịch thử." : "Chưa tạo khóa webhook Sandbox.")</p>
+    </section>
+    @if (!string.IsNullOrWhiteSpace(message)) { <p class="feedback @(failed ? "error" : "success")" role="@(failed ? "alert" : "status")">@message</p> }
+    @if (accounts is not null)
+    {
+        <section class="accounts"><h3>Tài khoản ngân hàng thử nghiệm</h3>
+        @if (accounts.Length == 0) { <p>Chưa có tài khoản. Vào Test mode → Tài khoản ngân hàng → Thêm tài khoản trên SePay, sau đó đồng bộ lại.</p> }
+        @foreach (var account in accounts)
+        {
+            <div class="account"><span class="material-symbols-outlined" aria-hidden="true">account_balance</span><div><strong>@(string.IsNullOrWhiteSpace(account.BankName) ? "Ngân hàng thử nghiệm" : account.BankName)</strong><span>@account.MaskedAccountNumber · @account.AccountName</span></div><small>@(account.Active ? "Đang hoạt động" : "Chưa hoạt động")</small></div>
+        }
+        </section>
+    }
+    <p class="scope-note">FE-05 chờ giao dịch được tạo trong SePay Test mode và xác nhận qua webhook. Không có nút tự ghi nhận thanh toán nội bộ.</p>
+</article>
+
+@if (challenge is not null)
+{
+    <PaymentDestinationOtpDialog Challenge="challenge" Action="@(pending?.Action == "WEBHOOK_KEY" ? "SANDBOX_WEBHOOK_KEY" : pending?.Action == "DISCONNECT" ? "SANDBOX_DISCONNECT" : pending?.Action == "DEMO_ON" ? "SANDBOX_DEMO_ON" : pending?.Action == "DEMO_OFF" ? "SANDBOX_DEMO_OFF" : "SANDBOX_CONNECT")" Busy="busy" Error="otpError" OnConfirm="ConfirmAsync" OnResend="ResendAsync" OnCancel="CloseOtp" />
+}
+
+@code {
+    private SePaySandboxState? state;
+    private SePaySandboxAccount[]? accounts;
+    private PrivilegedActionChallengeResult? challenge;
+    private SePaySandboxDraft? pending;
+    private string token = "", publicOrigin = "";
+    private string? webhookKey;
+    private bool showKey;
+    private string WebhookUrl => Uri.TryCreate(publicOrigin, UriKind.Absolute, out var origin) && origin.Scheme == "https" &&
+        origin.AbsolutePath == "/" && string.IsNullOrEmpty(origin.UserInfo) && string.IsNullOrEmpty(origin.Query) && string.IsNullOrEmpty(origin.Fragment)
+        ? origin.GetLeftPart(UriPartial.Authority) + "/api/v1/payments/webhooks/sepay/sandbox"
+        : "https://TEN_MIEN_API/api/v1/payments/webhooks/sepay/sandbox";
+    private string? message, otpError;
+    private bool loading = true, busy, failed;
+    private bool Unavailable => loading || busy || state is null || challenge is not null;
+    protected override Task OnInitializedAsync() => ReloadAsync();
+    private async Task ReloadAsync()
+    {
+        loading = true; message = null; failed = false;
+        try { await RefreshAsync(); }
+        finally { loading = false; }
+    }
+    private async Task RefreshAsync()
+    {
+        var result = await Api.SendAsync<SePaySandboxState>(HttpMethod.Get, "api/v1/payment-settings/sepay/sandbox/status");
+        if (result.IsSuccess) state = result.Data; else Feedback(result.Message ?? "Không tải được cấu hình Sandbox.", true);
+    }
+    private async Task PreviewAsync()
+    {
+        busy = true;
+        try
+        {
+            var result = await Api.SendAsync<SePaySandboxProbe>(HttpMethod.Post, "api/v1/payment-settings/sepay/sandbox/preview", new SePaySandboxDraft("CONNECT", token, state?.Version ?? 0));
+            if (result.IsSuccess && result.Data is not null) Feedback(result.Data.Message, !result.Data.Connected);
+            else Feedback(result.Message ?? "Chưa thể kiểm tra token Sandbox.", true);
+        }
+        finally { busy = false; }
+    }
+    private async Task RequestOtpAsync(string action)
+    {
+        if (state is null) return;
+        pending = new(action, action == "CONNECT" ? token : null, state.Version);
+        await SendOtpAsync();
+    }
+    private async Task SendOtpAsync()
+    {
+        busy = true; otpError = null;
+        try
+        {
+            var result = await Api.SendAsync<PrivilegedActionChallengeResult>(HttpMethod.Post, "api/v1/payment-settings/sepay/sandbox/challenge", pending);
+            if (result.IsSuccess) challenge = result.Data;
+            else { otpError = result.Message ?? "Chưa gửi được OTP email."; Feedback(otpError, true); }
+        }
+        finally { busy = false; }
+    }
+    private async Task ConfirmAsync(string code)
+    {
+        if (pending is null || challenge is null) return;
+        busy = true; otpError = null;
+        try
+        {
+            var request = new SePaySandboxConfirm(pending.Action, pending.ApiToken, pending.ExpectedVersion, challenge.ChallengeId, code);
+            var result = await Api.SendAsync<SePaySandboxState>(HttpMethod.Post, "api/v1/payment-settings/sepay/sandbox/confirm", request);
+            if (result.IsSuccess)
+            {
+                var action = pending.Action;
+                state = result.Data; if (state?.WebhookApiKey is { } key) webhookKey = key;
+                challenge = null; pending = null; token = ""; accounts = null;
+                Feedback(action switch { "DISCONNECT" => "Đã ngắt kết nối Sandbox. Chế độ FE-05 được giữ nguyên đến khi bạn tắt mô phỏng.",
+                    "DEMO_ON" => "Đã bật mô phỏng FE-05. QR thật được ẩn trên trang thanh toán cư dân.",
+                    "DEMO_OFF" => "Đã tắt mô phỏng. FE-05 trở về quy trình thanh toán thật.",
+                    "WEBHOOK_KEY" => "Đã lấy khóa webhook. Sao chép khóa vào SePay Test mode → Webhook → Bảo mật → API Key.",
+                    _ => "Đã xác nhận OTP và lưu kết nối Sandbox." }, false);
+            }
+            else
+            {
+                otpError = result.Message ?? "Không lưu được kết nối Sandbox. Vui lòng yêu cầu OTP mới rồi thử lại.";
+                if (result.Code == "sepay_sandbox_changed") { challenge = null; pending = null; await RefreshAsync(); Feedback(otpError, true); }
+            }
+        }
+        finally { busy = false; }
+    }
+    private async Task CheckSavedAsync()
+    {
+        busy = true;
+        try
+        {
+            var result = await Api.SendAsync<SePaySandboxProbe>(HttpMethod.Post, "api/v1/payment-settings/sepay/sandbox/check");
+            await RefreshAsync(); Feedback(result.Data?.Message ?? result.Message ?? "Chưa thể kiểm tra Sandbox.", !result.IsSuccess || result.Data?.Connected != true);
+        }
+        finally { busy = false; }
+    }
+    private async Task LoadAccountsAsync()
+    {
+        busy = true;
+        try
+        {
+            var result = await Api.SendAsync<SePaySandboxAccount[]>(HttpMethod.Get, "api/v1/payment-settings/sepay/sandbox/accounts");
+            if (result.IsSuccess) { accounts = result.Data ?? []; Feedback($"Đã đồng bộ {accounts.Length} tài khoản thử nghiệm.", false); }
+            else { accounts = null; Feedback(result.Message ?? "Chưa tải được tài khoản thử nghiệm.", true); }
+            await RefreshAsync();
+        }
+        finally { busy = false; }
+    }
+    private Task ResendAsync() => SendOtpAsync();
+    private void CloseOtp() { challenge = null; pending = null; otpError = null; }
+    private void Feedback(string text, bool error) { message = text; failed = error; }
+}

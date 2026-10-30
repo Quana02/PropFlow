@@ -10,6 +10,7 @@
     </header>
     @if (error is not null) { <p role="alert" class="feedback error">@error</p> }
     @if (notice is not null) { <p role="status" class="feedback success">@notice</p> }
+    @if (invoices.Any(x => x.PaymentEnvironment == "SANDBOX")) { <p role="status" class="feedback">SANDBOX — Trạng thái và số dư đang hiển thị kết quả thử nghiệm. Đây không phải xác nhận thu tiền thật.</p> }
     <details class="billing-rules"><summary>Quy tắc tính phí</summary><p>Dịch vụ theo m² đã gồm giữ xe. Nước theo m³ và điện theo kWh đã sử dụng tháng trước, nhập tại danh sách căn hộ. Tiền thuê được lập hóa đơn riêng cho căn thuê chưa có chủ sở hữu.</p></details>
     @if (serviceDialog) {
     <FinancePricingDialog Title="Thiết lập giá dịch vụ + nước + điện" Busy="busy" OnClose="() => serviceDialog = false">
@@ -60,6 +61,7 @@
         </nav>
     </section>
 </section>
+<SandboxInvoiceRefresh Enabled="@invoices.Any(x => x.PaymentEnvironment == "SANDBOX")" Refresh="Load" />
 @code {
     private ManagerInvoiceFilter filter = new();
     private int page = 1, pageSize = 10, ratePage = 1;
@@ -83,7 +85,7 @@
     private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string OptionalMoney(decimal? value) => value.HasValue ? Money(value.Value) : "Chưa cấu hình";
     private static bool IsOverdue(HouseholdInvoice i) => i.Outstanding > 0 && i.DueDate is { } due && due < DateOnly.FromDateTime(DateTime.Today);
-    private static string StatusName(HouseholdInvoice i) => i.Outstanding == 0 ? "Đã thanh toán" : IsOverdue(i) ? "Quá hạn" : i.Paid > 0 ? "Thanh toán một phần" : "Chưa thanh toán";
+    private static string StatusName(HouseholdInvoice i) => (i.Outstanding == 0 ? "Đã thanh toán" : IsOverdue(i) ? "Quá hạn" : i.Paid > 0 ? "Thanh toán một phần" : "Chưa thanh toán") + (i.PaymentEnvironment == "SANDBOX" ? " (Sandbox)" : "");
     private static string StatusClass(HouseholdInvoice i) => i.Outstanding == 0 ? "paid" : IsOverdue(i) ? "overdue" : i.Paid > 0 ? "partial" : "unpaid";
     private decimal? electricityRate = 3000, rate, waterRate; private string month = DateTime.Today.ToString("yyyy-MM");
     private ServiceRateRow[] rates = []; private HouseholdInvoice[] invoices = [];

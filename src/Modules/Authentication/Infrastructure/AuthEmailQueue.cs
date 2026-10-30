@@ -20,16 +20,23 @@ public sealed class AuthMailOptions
 // Pending messages are not durable across a process restart; users can request another code.
 public sealed class AuthEmailQueue(AuthMailOptions options, ILogger<AuthEmailQueue> logger) : BackgroundService, IAuthEmail
 {
-    private sealed record Mail(string Address, string Code, bool Recovery, int Minutes, DateTimeOffset CreatedAt);
+    private enum MailPurpose { Registration, Recovery, PrivilegedAction }
+    private sealed record Mail(string Address, string Code, MailPurpose Purpose, int Minutes, DateTimeOffset CreatedAt);
     private readonly Channel<Mail> queue = Channel.CreateBounded<Mail>(new BoundedChannelOptions(200) { FullMode = BoundedChannelFullMode.Wait });
     public Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct)
     {
-        if (!queue.Writer.TryWrite(new(email, code, recovery, expiryMinutes, DateTimeOffset.UtcNow)))
+        if (!queue.Writer.TryWrite(new(email, code, recovery ? MailPurpose.Recovery : MailPurpose.Registration, expiryMinutes, DateTimeOffset.UtcNow)))
         {
             logger.LogWarning("Authentication email queue is full; a new code may be requested later.");
             if (!recovery)
                 throw new AuthFailure(503, "email_delivery_unavailable", "Chưa thể gửi mã xác minh. Vui lòng thử lại sau.");
         }
+        return Task.CompletedTask;
+    }
+    public Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct)
+    {
+        if (!queue.Writer.TryWrite(new(email, code, MailPurpose.PrivilegedAction, expiryMinutes, DateTimeOffset.UtcNow)))
+            throw new AuthFailure(503, "email_delivery_unavailable", "Chưa thể gửi mã xác minh. Vui lòng thử lại sau.");
         return Task.CompletedTask;
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -44,7 +51,12 @@ public sealed class AuthEmailQueue(AuthMailOptions options, ILogger<AuthEmailQue
                         Credentials = new NetworkCredential(options.Username, options.Password), Timeout = 15000 };
                     using var mail = new MailMessage(options.From, item.Address)
                     {
-                        Subject = item.Recovery ? "PropFlow — Khôi phục mật khẩu" : "PropFlow — Xác minh tài khoản cư dân",
+                        Subject = item.Purpose switch
+                        {
+                            MailPurpose.Recovery => "PropFlow — Khôi phục mật khẩu",
+                            MailPurpose.PrivilegedAction => "PropFlow — Xác nhận thay đổi cấu hình thanh toán",
+                            _ => "PropFlow — Xác minh tài khoản cư dân"
+                        },
                         Body = $"Mã xác minh của bạn: {item.Code}\nMã có hiệu lực {item.Minutes} phút kể từ khi yêu cầu. Không chia sẻ mã này. Nếu bạn không yêu cầu, hãy bỏ qua email này."
                     };
                     await client.SendMailAsync(mail, stoppingToken);

@@ -54,7 +54,8 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Seed(manager, permissions[SystemPermissionCodes.ManageOperations]),
             Seed(admin, permissions[SystemPermissionCodes.ManageInternalAccounts]),
             Seed(admin, permissions[SystemPermissionCodes.ViewAdministrationActivity]),
-            Seed(admin, permissions[SystemPermissionCodes.ViewSystemOverview]));
+            Seed(admin, permissions[SystemPermissionCodes.ViewSystemOverview]),
+            Seed(admin, permissions[SystemPermissionCodes.ManagePaymentDestination]));
     }
 
     private static object Seed(Guid roleId, Guid permissionId) => new

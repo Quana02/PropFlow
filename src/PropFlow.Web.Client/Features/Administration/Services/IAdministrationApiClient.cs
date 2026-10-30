@@ -14,4 +14,17 @@ public interface IAdministrationApiClient
     Task<ApiResult<AdministrationRoleAccess[]>> GetRolesAsync(CancellationToken ct = default);
     Task<ApiResult<InternalAccountAccess>> GetEffectiveAccessAsync(Guid userId, CancellationToken ct = default);
     Task<ApiResult<PagedAdministrationActivities>> GetActivityAsync(string? action, int page, CancellationToken ct = default);
+    Task<ApiResult<PaymentDestinationState>> GetPaymentDestinationAsync(CancellationToken ct = default);
+    Task<ApiResult<PaymentDestinationView[]>> GetPaymentDestinationHistoryAsync(CancellationToken ct = default);
+    Task<ApiResult<BankOption[]>> GetPaymentBanksAsync(CancellationToken ct = default);
+    Task<ApiResult<PaymentDestinationPreview>> PreviewPaymentDestinationAsync(PaymentDestinationDraft request, CancellationToken ct = default);
+    Task<ApiResult<PrivilegedActionChallengeResult>> RequestPaymentDestinationChallengeAsync(PaymentDestinationChallengeRequest request, CancellationToken ct = default);
+    Task<ApiResult<PaymentDestinationView>> SavePaymentDestinationAsync(ConfirmPaymentDestinationRequest request, CancellationToken ct = default);
+    Task<ApiResult> DeactivatePaymentDestinationAsync(DeactivatePaymentDestinationRequest request, CancellationToken ct = default);
+    Task<ApiResult<SePayConnectionState>> GetSePayConnectionAsync(CancellationToken ct = default);
+    Task<ApiResult<SePayConnectionState>> CheckSePayConnectionAsync(CancellationToken ct = default);
+    Task<ApiResult<SePayBankAccountView[]>> GetSePayAccountsAsync(CancellationToken ct = default);
+    Task<ApiResult<PaymentDestinationPreview>> PreviewSePayAccountAsync(SelectSePayAccountRequest request, CancellationToken ct = default);
+    Task<ApiResult<PrivilegedActionChallengeResult>> RequestSePayAccountChallengeAsync(SelectSePayAccountRequest request, CancellationToken ct = default);
+    Task<ApiResult<PaymentDestinationView>> SaveSePayAccountAsync(ConfirmSePayAccountRequest request, CancellationToken ct = default);
 }

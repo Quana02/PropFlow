@@ -57,6 +57,7 @@ Configure API secrets with environment variables or a deployment secret provider
 | Authentication__Mail__Username / Password | Credentials supplied by the mail operator when required |
 | Cors__AllowedOrigins__0, etc. | Exact HTTPS frontend origin(s), credentials allowed, never wildcard |
 | Authentication__CrossSiteCookie | true only when deployment actually requires cross-site cookies (SameSite=None; Secure) |
+| Cloudinary__CloudName / Cloudinary__ApiKey / Cloudinary__ApiSecret | Cloudinary account credentials used by the API for Service Request and Maintenance evidence; never expose these in the Web/WASM client |
 
 AuthPolicy exposes AccessMinutes, RefreshDays, OtpMinutes, OtpAttempts, ResendSeconds, SendsPerHour, LockoutFailures and LockoutMinutes. Rate policy overrides are under `Authentication:RateLimits:{auth-login|auth-entry|auth-session}:{PermitLimit|WindowMinutes}`. Defaults follow the approved interpretations. Changing these values is a policy change, not a UI assumption.
 

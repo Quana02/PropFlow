@@ -328,9 +328,26 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AdditionalCostNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("additional_cost_note");
+
                     b.Property<Guid?>("ApartmentUnitId")
                         .HasColumnType("uuid")
                         .HasColumnName("apartment_unit_id");
+
+                    b.Property<decimal>("ApprovedAdditionalCost")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(18,0)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("approved_additional_cost");
+
+                    b.Property<decimal>("BaseServiceCost")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(18,0)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("base_service_cost");
 
                     b.Property<Guid?>("CategoryId")
                         .HasColumnType("uuid")
@@ -377,6 +394,12 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("preferred_time_code");
 
+                    b.Property<decimal>("ProposedAdditionalCost")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(18,0)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("proposed_additional_cost");
+
                     b.Property<string>("RequestNumber")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -400,6 +423,10 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("service_area_code");
 
+                    b.Property<Guid?>("ServiceInvoiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_invoice_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -413,6 +440,10 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("submitted_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("SubmittedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submitted_by_user_id");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -437,6 +468,10 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ResidentId");
+
+                    b.HasIndex("ServiceInvoiceId")
+                        .IsUnique()
+                        .HasFilter("service_invoice_id IS NOT NULL");
 
                     b.HasIndex("Status");
 

@@ -13,7 +13,8 @@ using PropFlow.Modules.Payments.Contracts;
 
 namespace PropFlow.Modules.Billing.Infrastructure.Finance;
 public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdDirectory directory,
-    IConfirmedPaymentSource totals, IPaymentNoticeSource payments, IFinanceNoticePublisher notices, TimeProvider? clock = null, ICurrentBuildingTimeZone? buildingTimeZone = null, ILogger<BillingCycle>? logger = null) : IBillingCycle
+    IConfirmedPaymentSource totals, IPaymentNoticeSource payments, IFinanceNoticePublisher notices, TimeProvider? clock = null, ICurrentBuildingTimeZone? buildingTimeZone = null, ILogger<BillingCycle>? logger = null,
+    ISandboxPaymentDisplaySource? sandbox = null) : IBillingCycle
 {
     public const string ServiceFeeCode = "SERVICE_AREA_MONTHLY";
     public const string WaterFeeCode = "WATER_PERSON_MONTHLY";
@@ -28,13 +29,19 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
         var paid = await totals.TotalAsync(id, ct);
         var outstanding = Math.Max(0, invoice.TotalAmount - paid);
         var settlement = invoice.Status != InvoiceStatus.ISSUED ? "NOT_APPLICABLE" : outstanding == 0 ? "PAID" : paid > 0 ? "PARTIAL" : "UNPAID";
-        return new(invoice.Id, invoice.InvoiceNumber, invoice.ApartmentUnitId, recipient?.UnitNumber ?? "Chưa có thông tin căn hộ",
+        var detail = new InvoiceDetail(invoice.Id, invoice.InvoiceNumber, invoice.ApartmentUnitId, recipient?.UnitNumber ?? "Chưa có thông tin căn hộ",
             invoice.BillingPeriodStart, invoice.BillingPeriodEnd, invoice.IssueDate, invoice.DueDate, invoice.Status.ToString(),
             invoice.TotalAmount, paid, outstanding, settlement, invoice.CreatedAt, invoice.CreatedBy, invoice.IssuedAt, invoice.IssuedBy, invoice.Note,
             invoice.Items.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Select(x => new InvoiceDetailLine(x.Id, x.FeeTypeId, x.FeeRateRuleId,
                 x.FeeCodeSnapshot, x.FeeNameSnapshot, x.CalculationMethodCodeSnapshot, x.Quantity, x.UnitName, x.UnitRate, x.LineAmount, x.Description, x.AmountDivisor)).ToArray(),
             invoice.StatusHistory.Select(x => new InvoiceDetailHistory(x.FromStatus?.ToString(), x.ToStatus.ToString(), x.ChangedBy, x.ChangedAt, x.Reason)).ToArray(),
             recipient?.FullName, invoice.Type?.ToString());
+        if (sandbox is null || invoice.Status != InvoiceStatus.ISSUED) return detail;
+        var demo = await sandbox.ReadAsync([invoice.Id], ct);
+        if (!demo.Enabled) return detail;
+        var display = SandboxPaymentDisplay.Balance(invoice.TotalAmount, paid, demo.Amounts.GetValueOrDefault(invoice.Id));
+        return detail with { ConfirmedPaidAmount = display.Paid, OutstandingAmount = display.Outstanding,
+            SettlementStatus = display.Status, PaymentEnvironment = "SANDBOX" };
     }
     private TimeZoneInfo businessZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime((clock ?? TimeProvider.System).GetUtcNow(), businessZone).DateTime);
@@ -256,15 +263,27 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
                     i.DueDate, i.TotalAmount, amounts.GetValueOrDefault(i.Id), Math.Max(0, i.TotalAmount - amounts.GetValueOrDefault(i.Id)),
                     i.Items.Where(x => x.FeeCodeSnapshot != RentalPricing.FeeCode).Sum(x => x.LineAmount), i.Items.Where(x => x.FeeCodeSnapshot == RentalPricing.FeeCode).Sum(x => x.LineAmount), recipient?.Capacity ?? "HOUSEHOLD_HEAD", i.Type?.ToString()));
             }
-            return result;
+            return await DisplayInvoicesAsync(result, ct);
         }
         var q = from i in db.Invoices.AsNoTracking().Include(x => x.Items) join r in db.InvoiceRecipients.AsNoTracking() on i.Id equals r.InvoiceId
                 where i.Status == InvoiceStatus.ISSUED && (userId == null || r.UserId == userId)
                 orderby i.BillingPeriodStart descending select new { i, r };
         var rows = await q.ToArrayAsync(ct); var paid = await totals.TotalsAsync(rows.Select(x => x.i.Id).ToArray(), ct);
-        return rows.Select(x => new ResidentInvoice(x.i.Id, x.i.InvoiceNumber, x.r.UnitNumber, x.r.FullName, x.i.BillingPeriodStart,
+        var resultRows = rows.Select(x => new ResidentInvoice(x.i.Id, x.i.InvoiceNumber, x.r.UnitNumber, x.r.FullName, x.i.BillingPeriodStart,
             x.i.DueDate, x.i.TotalAmount, paid.GetValueOrDefault(x.i.Id), Math.Max(0, x.i.TotalAmount - paid.GetValueOrDefault(x.i.Id)),
             x.i.Items.Where(i => i.FeeCodeSnapshot != RentalPricing.FeeCode).Sum(i => i.LineAmount), x.i.Items.Where(i => i.FeeCodeSnapshot == RentalPricing.FeeCode).Sum(i => i.LineAmount), x.r.Capacity, x.i.Type?.ToString())).ToArray();
+        return await DisplayInvoicesAsync(resultRows, ct);
+    }
+    private async Task<IReadOnlyList<ResidentInvoice>> DisplayInvoicesAsync(IReadOnlyList<ResidentInvoice> invoices, CancellationToken ct)
+    {
+        if (sandbox is null) return invoices;
+        var demo = await sandbox.ReadAsync(invoices.Select(x => x.Id).ToArray(), ct);
+        if (!demo.Enabled) return invoices;
+        return invoices.Select(invoice =>
+        {
+            var display = SandboxPaymentDisplay.Balance(invoice.Total, invoice.Paid, demo.Amounts.GetValueOrDefault(invoice.Id));
+            return invoice with { Paid = display.Paid, Outstanding = display.Outstanding, PaymentEnvironment = "SANDBOX" };
+        }).ToArray();
     }
     public async Task<FinanceDocument?> InvoiceDocumentAsync(Guid id, Guid? userId, CancellationToken ct)
     {
