@@ -10,4 +10,6 @@ public interface IFacilityApiClient
     Task<ApiResult<FacilityModel>> CreateFacilityAsync(CreateFacilityModel model, CancellationToken cancellationToken = default);
     Task<ApiResult<FacilityModel>> UpdateFacilityAsync(Guid id, UpdateFacilityModel model, CancellationToken cancellationToken = default);
     Task<ApiResult<FacilityModel>> SetFacilityStatusAsync(Guid id, MasterDataStatus status, CancellationToken cancellationToken = default);
+    Task<ApiResult<IReadOnlyList<FacilityTypeModel>>> GetFacilityTypesAsync(bool activeOnly, CancellationToken cancellationToken = default);
+    Task<ApiResult<FacilityTypeModel>> CreateFacilityTypeAsync(CreateFacilityTypeModel model, CancellationToken cancellationToken = default);
 }

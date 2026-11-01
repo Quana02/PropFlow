@@ -114,6 +114,16 @@ public class MaintenanceTask
         UpdatedAt = now;
     }
 
+    public void LinkServiceRequest(Guid serviceRequestId, DateTimeOffset now)
+    {
+        ThrowIfEmpty(serviceRequestId, nameof(serviceRequestId));
+        if (SourceServiceRequestId is not null)
+            throw new InvalidOperationException("Công việc đã được liên kết với một yêu cầu dịch vụ.");
+
+        SourceServiceRequestId = serviceRequestId;
+        UpdatedAt = now;
+    }
+
     public void MarkAssigned(DateTimeOffset now)
     {
         EnsureNotTerminal();

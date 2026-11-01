@@ -63,3 +63,26 @@ public interface IInternalAccountDirectory
     Task<InternalAccountRecord> CreateAsync(CreateInternalAccount request, Guid actorUserId, CancellationToken ct);
     Task<InternalAccountRecord?> SetStatusAsync(Guid userId, string status, Guid actorUserId, CancellationToken ct);
 }
+
+public sealed record PrivilegedActionChallengeResult(
+    Guid ChallengeId,
+    DateTimeOffset ExpiresAt,
+    DateTimeOffset ResendAfter,
+    string MaskedEmail);
+
+public interface IPrivilegedActionOtp
+{
+    Task<PrivilegedActionChallengeResult> RequestAsync(
+        Guid userId,
+        string purpose,
+        string payloadHash,
+        CancellationToken ct);
+
+    Task VerifyAsync(
+        Guid userId,
+        Guid challengeId,
+        string purpose,
+        string payloadHash,
+        string code,
+        CancellationToken ct);
+}

@@ -103,6 +103,21 @@ public sealed class DropdownUiTests
     }
 
     [Fact]
+    public void HiddenResidentPortalModal_DoesNotLockPageScrolling()
+    {
+        var styles = File.ReadAllText(Path.Combine(
+            SolutionDirectory,
+            "src",
+            "PropFlow.Web.Client",
+            "wwwroot",
+            "css",
+            "resident-portal.css"));
+
+        Assert.DoesNotContain("body:has(.resident-portal-modal) { overflow: hidden; }", styles, StringComparison.Ordinal);
+        Assert.Contains("body:has(.resident-portal-modal:not([hidden])) { overflow: hidden; }", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ResidentManagement_UsesFieldValidationAndFilterPopover()
     {
         var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
@@ -247,6 +262,87 @@ public sealed class DropdownUiTests
             "if(r.IsSuccess&&r.Data is not null){Close();await LoadAsync();return;}",
             source,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResidentServiceRequestDetailModal_HasAnIndependentScrollableBody()
+    {
+        var styles = File.ReadAllText(Path.Combine(
+            SolutionDirectory,
+            "src",
+            "PropFlow.Web.Client",
+            "wwwroot",
+            "css",
+            "resident-portal.css"));
+
+        Assert.Contains(
+            ".request-detail-modal { display: flex; min-height: 0; max-width: 40rem; flex-direction: column; overflow: hidden; }",
+            styles,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            ".request-detail-body { display: grid; min-height: 0; flex: 1 1 auto; gap: 1rem; padding: 1.25rem; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }",
+            styles,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResidentDashboard_RequestStatusChipsFilterTheRenderedRequestList()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            SolutionDirectory,
+            "src",
+            "PropFlow.Web.Client",
+            "Features",
+            "Resident",
+            "Portal",
+            "Pages",
+            "ResidentDashboard.razor"));
+
+        Assert.Equal(4, source.Split("SelectRequestFilter(RequestFilter.", StringSplitOptions.None).Length - 1);
+        Assert.Contains("@foreach (var request in FilteredRequests)", source, StringComparison.Ordinal);
+        Assert.Contains("RequestFilter.Waiting =>", source, StringComparison.Ordinal);
+        Assert.Contains("RequestFilter.InProgress =>", source, StringComparison.Ordinal);
+        Assert.Contains("RequestFilter.Completed =>", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<button class=\"active\" type=\"button\">Tất cả", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResidentDashboard_GlobalSearchOffersMatchingServiceSuggestions()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Portal", "Pages", "ResidentDashboard.razor"));
+
+        Assert.Contains("role=\"combobox\"", source, StringComparison.Ordinal);
+        Assert.Contains("resident-search-suggestions", source, StringComparison.Ordinal);
+        Assert.Contains("SearchResults", source, StringComparison.Ordinal);
+        Assert.Contains("OpenSearchResult", source, StringComparison.Ordinal);
+        Assert.Contains("NormalizeSearch", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResidentPortal_AllowsDocumentScrollingAtHighBrowserZoom()
+    {
+        var styles = File.ReadAllText(Path.Combine(
+            SolutionDirectory, "src", "PropFlow.Web.Client", "wwwroot", "css", "resident-portal.css"));
+
+        Assert.Contains("overflow-x: clip; overflow-y: visible", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".resident-portal { position: relative; min-height: 100vh; overflow: hidden;", styles, StringComparison.Ordinal);
+        Assert.Contains(".resident-main { width: min(100%, 80rem); min-width: 0;", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResidentNavigation_TracksApartmentAndUsesSpaNavigation()
+    {
+        var navigation = File.ReadAllText(Path.Combine(
+            SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Portal", "Components", "ResidentNavigation.razor"));
+        var script = File.ReadAllText(Path.Combine(
+            SolutionDirectory, "src", "PropFlow.Web.Client", "wwwroot", "js", "resident.js"));
+
+        Assert.Contains("id=\"navApartment\"", navigation, StringComparison.Ordinal);
+        Assert.Contains("Navigation.LocationChanged", navigation, StringComparison.Ordinal);
+        Assert.Contains("GoToTabAsync", navigation, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"resident-nav-button active\" id=\"navHome\"", navigation, StringComparison.Ordinal);
+        Assert.Contains("global.Blazor?.navigateTo", script, StringComparison.Ordinal);
     }
 
     private static string FindSolutionDirectory()

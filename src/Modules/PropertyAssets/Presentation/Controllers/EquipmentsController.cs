@@ -18,6 +18,20 @@ public class EquipmentsController : ControllerBase
         _equipmentService = equipmentService;
     }
 
+    [HttpGet("/api/v1/equipment-types")]
+    [Authorize(Policy = PropertyAssetsAuthorizationPolicies.View)]
+    public async Task<ActionResult<IReadOnlyList<EquipmentTypeDto>>> GetEquipmentTypes([FromQuery] bool activeOnly = false, CancellationToken cancellationToken = default) =>
+        Ok(await _equipmentService.GetEquipmentTypesAsync(activeOnly, cancellationToken));
+
+    [HttpPost("/api/v1/equipment-types")]
+    [Authorize(Policy = PropertyAssetsAuthorizationPolicies.Manage)]
+    public async Task<ActionResult<EquipmentTypeDto>> CreateEquipmentType([FromBody] CreateEquipmentTypeCommand command, CancellationToken cancellationToken)
+    {
+        try { return Ok(await _equipmentService.CreateEquipmentTypeAsync(command with { CreatedBy = CurrentUserId() }, cancellationToken)); }
+        catch (EquipmentTypeNameConflictException) { return Conflict(Problem(StatusCodes.Status409Conflict, "equipment_type_name_conflict", "Xung đột dữ liệu", "Tên loại thiết bị đã tồn tại.")); }
+        catch (ArgumentException ex) { return BadRequest(Problem(StatusCodes.Status400BadRequest, "invalid_equipment_type_data", "Dữ liệu không hợp lệ", ex.Message)); }
+    }
+
     [HttpGet]
     [Authorize(Policy = PropertyAssetsAuthorizationPolicies.View)]
     public async Task<ActionResult<PagedResult<EquipmentDto>>> GetEquipments([FromQuery] EquipmentFilterQuery query, CancellationToken cancellationToken)

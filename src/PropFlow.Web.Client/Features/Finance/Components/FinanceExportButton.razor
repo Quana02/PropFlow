@@ -1,0 +1,22 @@
+@using Microsoft.JSInterop
+@using PropFlow.Web.Client.Features.Finance.Services
+@inject BillingWorkspaceApi Api
+@inject IJSRuntime Js
+@implements IAsyncDisposable
+<button type="button" disabled="@busy" @onclick="Export">@(busy ? "Đang xuất…" : "Xuất Excel")</button>
+@if (error is not null) { <span role="alert">@error</span> }
+@code {
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    private bool busy; private string? error; private IJSObjectReference? module;
+    private async Task Export() {
+        if (busy) return; busy = true; error = null;
+        try {
+            var r = await Api.FileAsync(Path);
+            if (!r.IsSuccess || r.Data is null) { error = r.Message; return; }
+            module ??= await Js.InvokeAsync<IJSObjectReference>("import", "./js/finance-documents.js");
+            await module.InvokeVoidAsync("download", r.Data.Content, r.Data.ContentType, r.Data.FileName);
+        } catch (JSException) { error = "Chưa thể tải file. Vui lòng thử lại."; }
+        finally { busy = false; }
+    }
+    public async ValueTask DisposeAsync() { if (module is not null) await module.DisposeAsync(); }
+}

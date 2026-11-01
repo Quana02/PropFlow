@@ -3,6 +3,7 @@ using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestCategories;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 
 namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -19,6 +20,7 @@ public class ServiceRequestsDbContext : DbContext
     public DbSet<ServiceRequestAssignment> ServiceRequestAssignments => Set<ServiceRequestAssignment>();
     public DbSet<ServiceRequestActivity> ServiceRequestActivities => Set<ServiceRequestActivity>();
     public DbSet<ServiceRequestFeedback> ServiceRequestFeedbacks => Set<ServiceRequestFeedback>();
+    public DbSet<ServiceRequestEvidenceFile> ServiceRequestEvidenceFiles => Set<ServiceRequestEvidenceFile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Components.Forms;
 using PropFlow.Web.Client.Features.Maintenance.Models;
 using PropFlow.Web.Client.Services.Api;
 namespace PropFlow.Web.Client.Features.Maintenance.Services;
 public interface IMaintenanceApiClient
 {
+    Task<ApiResult<MaintenanceOverviewModel>> OverviewAsync(CancellationToken ct = default);
     Task<ApiResult<Page<ScheduleModel>>> SchedulesAsync(ScheduleFilterModel filter, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<AssetModel>>> AssetsAsync(CancellationToken ct = default);
     Task<ApiResult<ScheduleModel>> CreateScheduleAsync(CreateScheduleModel model, CancellationToken ct = default);
@@ -10,12 +12,14 @@ public interface IMaintenanceApiClient
     Task<ApiResult<ScheduleModel>> SetScheduleStatusAsync(Guid id, string action, CancellationToken ct = default);
     Task<ApiResult<ScheduleModel>> ExtendScheduleAsync(Guid id, ExtendScheduleModel model, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> CreateTaskAsync(CreateMaintenanceTaskModel model, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceTaskModel>> LinkTaskServiceRequestAsync(Guid taskId, LinkMaintenanceTaskServiceRequestModel model, CancellationToken ct = default);
     Task<ApiResult<Page<MaintenanceTaskModel>>> TasksAsync(TaskFilterModel filter, CancellationToken ct = default);
     Task<ApiResult<Page<MaintenanceTaskModel>>> MyTasksAsync(MyMaintenanceTaskFilterModel filter, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> MyTaskAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> StartMyTaskAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> UpdateMyTaskProgressAsync(Guid taskId, UpdateMaintenanceProgressModel model, CancellationToken ct = default);
-    Task<ApiResult<MaintenanceTaskModel>> SubmitMyTaskResultAsync(Guid taskId, SubmitMaintenanceResultModel model, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceTaskModel>> SubmitMyTaskResultAsync(Guid taskId, SubmitMaintenanceResultModel model, IReadOnlyList<IBrowserFile> evidenceImages, CancellationToken ct = default);
+    Task<ApiResult<byte[]>> ResultAttachmentAsync(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<MaintenanceTaskActivityModel>>> MyTaskActivitiesAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<MaintenanceHistoryListModel>> HistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default);
     Task<ApiResult<MaintenanceHistoryListModel>> MyHistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default);

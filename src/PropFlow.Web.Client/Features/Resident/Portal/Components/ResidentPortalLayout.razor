@@ -1,10 +1,15 @@
 @inherits LayoutComponentBase
+@implements IAsyncDisposable
+@inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState FinanceNotices
 @inject IJSRuntime JSRuntime
+@using Microsoft.AspNetCore.SignalR.Client
+@using PropFlow.Web.Client.Features.Finance.Services
+@inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentNotificationConnectionFactory NotificationConnections
 @inject PropFlow.Web.Client.Features.Resident.Shared.Services.IResidentApiClient Residents
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 
 <HeadContent>
-    <link rel="stylesheet" href="css/resident-portal.css?v=20261003-2" />
+    <link rel="stylesheet" href="css/resident-portal.css?v=20261015-4" />
 </HeadContent>
 
 <div class="resident-portal">
@@ -38,7 +43,31 @@
 @code {
     private ResidentPortalProfileContext _profileContext = ResidentPortalProfileContext.Loading;
 
-    protected override Task OnInitializedAsync() => LoadProfileAsync();
+    private readonly CancellationTokenSource _noticeCancellation = new();
+    private Task? _noticeRefresh;
+    private HubConnection? _noticeConnection;
+    protected override async Task OnInitializedAsync()
+    {
+        FinanceNotices.Reset();
+        await Task.WhenAll(LoadProfileAsync(), FinanceNotices.ReloadAsync());
+    }
+    private async Task RefreshNoticesAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try { await _noticeConnection!.StartAsync(ct); await InvokeAsync(FinanceNotices.ReloadAsync); return; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch { try { await Task.Delay(TimeSpan.FromSeconds(3), ct); } catch (OperationCanceledException) { return; } }
+        }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        _noticeCancellation.Cancel();
+        if (_noticeRefresh is not null) await _noticeRefresh;
+        if (_noticeConnection is not null) await _noticeConnection.DisposeAsync();
+        FinanceNotices.Reset();
+        _noticeCancellation.Dispose();
+    }
 
     private async Task LoadProfileAsync()
     {
@@ -62,6 +91,11 @@
         if (firstRender)
         {
             await JSRuntime.InvokeVoidAsync("propFlowResident.init");
+            _noticeConnection = NotificationConnections.Create();
+            _noticeConnection.On<ResidentNotice>("FinanceNotificationCreated", notice => InvokeAsync(() => FinanceNotices.Receive(notice)));
+            _noticeConnection.Reconnected += _ => InvokeAsync(FinanceNotices.ReloadAsync);
+            _noticeRefresh = RefreshNoticesAsync(_noticeCancellation.Token);
         }
     }
 }
+

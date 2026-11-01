@@ -19,7 +19,7 @@ public class EquipmentConfiguration : IEntityTypeConfiguration<Equipment>
 
         builder.Property(e => e.Code)
             .HasColumnName("code")
-            .HasMaxLength(50)
+            .HasMaxLength(512)
             .IsRequired();
 
         builder.Property(e => e.Name)
@@ -30,6 +30,7 @@ public class EquipmentConfiguration : IEntityTypeConfiguration<Equipment>
         builder.Property(e => e.EquipmentType)
             .HasColumnName("equipment_type")
             .HasMaxLength(100);
+        builder.Property(e => e.EquipmentTypeId).HasColumnName("equipment_type_id");
 
         builder.Property(e => e.Manufacturer)
             .HasColumnName("manufacturer")
@@ -87,6 +88,8 @@ public class EquipmentConfiguration : IEntityTypeConfiguration<Equipment>
 
         builder.HasIndex(e => e.FacilityId);
         builder.HasIndex(e => e.EquipmentType);
+        builder.HasIndex(e => e.EquipmentTypeId);
+        builder.HasOne(e => e.Type).WithMany().HasForeignKey(e => e.EquipmentTypeId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(e => e.Status);
 
         // Within-module relationships

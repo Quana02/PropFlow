@@ -756,7 +756,7 @@ public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : 
             "MANAGER" => new[] { SystemPermissionCodes.ManageOperations },
             "STAFF" => new[] { SystemPermissionCodes.PerformAssignedOperations },
             "ACCOUNTANT" => new[] { SystemPermissionCodes.ManageFinance },
-            "ADMIN" => new[] { SystemPermissionCodes.ManageInternalAccounts, SystemPermissionCodes.ViewAdministrationActivity, SystemPermissionCodes.ViewSystemOverview },
+            "ADMIN" => new[] { SystemPermissionCodes.ManageInternalAccounts, SystemPermissionCodes.ViewAdministrationActivity, SystemPermissionCodes.ViewSystemOverview, SystemPermissionCodes.ManagePaymentDestination },
             "RESIDENT" => new[] { SystemPermissionCodes.UseResidentServices },
             _ => Array.Empty<string>()
         };

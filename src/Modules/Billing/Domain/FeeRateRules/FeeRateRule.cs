@@ -56,6 +56,24 @@ public class FeeRateRule
 
     public Guid Id { get; private set; }
     public Guid FeeTypeId { get; private set; }
+    public Guid? ApartmentUnitId { get; private set; }
+    public Guid? ApartmentTypeId { get; private set; }
+    public void AssignApartmentType(Guid typeId)
+    {
+        ThrowIfEmpty(typeId, nameof(typeId));
+        if (ApartmentUnitId is not null || ApartmentTypeId is not null && ApartmentTypeId != typeId)
+            throw new InvalidOperationException("A pricing version cannot be moved to another scope.");
+        ApartmentTypeId = typeId;
+    }
+
+    public void AssignApartment(Guid apartmentUnitId)
+    {
+        ThrowIfEmpty(apartmentUnitId, nameof(apartmentUnitId));
+        if (ApartmentTypeId is not null) throw new InvalidOperationException("A type price cannot be assigned to an apartment.");
+        if (ApartmentUnitId.HasValue && ApartmentUnitId != apartmentUnitId)
+            throw new InvalidOperationException("A pricing version cannot be moved to another apartment.");
+        ApartmentUnitId = apartmentUnitId;
+    }
     
     public string RuleName { get; private set; } = null!;
     public string CalculationMethodCode { get; private set; } = null!;

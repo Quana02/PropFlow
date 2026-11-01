@@ -1,0 +1,23 @@
+@using Microsoft.JSInterop
+@using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Features.Finance.Models
+@inject FinanceCycleApi Api
+@inject IJSRuntime Js
+@implements IAsyncDisposable
+<button type="button" disabled="@busy" @onclick="Open">@Label</button>
+@if (error is not null) { <span role="alert">@error</span> }
+@code {
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "In phiếu";
+    [Parameter] public bool Print { get; set; } = true;
+    private bool busy; private string? error; private IJSObjectReference? module;
+    private async Task Open() {
+        busy = true; error = null;
+        try { var r = await Api.GetAsync<FileResponse>(Path); if (!r.IsSuccess || r.Data is null) { error = r.Message; return; }
+            module ??= await Js.InvokeAsync<IJSObjectReference>("import", "./js/finance-documents.js");
+            if (Print) await module.InvokeVoidAsync("print", r.Data.Content);
+            else await module.InvokeVoidAsync("download", r.Data.Content, r.Data.ContentType, r.Data.FileName);
+        } catch (JSException) { error = "Chưa thể mở chứng từ. Vui lòng thử lại."; } finally { busy = false; }
+    }
+    public async ValueTask DisposeAsync() { if (module is not null) await module.DisposeAsync(); }
+}

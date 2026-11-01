@@ -48,14 +48,7 @@
             var result = await Session.LoginAsync(new(form.Username, form.Password));
             if (result.IsSuccess)
             {
-                Navigation.NavigateTo(Session.User?.Role switch
-                {
-                    "ADMIN" => "/admin/dashboard",
-                    "MANAGER" or "STAFF" => "/buildings",
-                    "ACCOUNTANT" => "/finance/dashboard",
-                    "RESIDENT" => "/resident",
-                    _ => "/account"
-                });
+                Navigation.NavigateTo(RoleHomeNavigation.Home(Session.User?.Role));
                 return;
             }
 

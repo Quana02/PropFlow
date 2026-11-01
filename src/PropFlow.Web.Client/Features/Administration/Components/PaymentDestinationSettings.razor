@@ -1,0 +1,279 @@
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Features.Administration.Services
+@using PropFlow.Web.Client.Services.Api
+@inject IAdministrationApiClient Api
+
+<section class="payment-settings">
+    <header class="payment-header">
+        <div class="payment-title">
+            <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
+            <div><span class="eyebrow">THANH TOÁN SEPAY</span><h1>Kết nối ngân hàng &amp; nhận thanh toán</h1><p>Thiết lập Sandbox để thử nghiệm hoặc kết nối SePay thật để nhận tiền. Xác nhận OTP email để lưu thay đổi.</p></div>
+        </div>
+        @if (setupEnvironment == "LIVE" && current is not null && !editing)
+        {
+            <button type="button" class="primary-action" @onclick="BeginEdit"><span class="material-symbols-outlined">edit</span>Thay đổi cấu hình</button>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(notice))
+    {
+        <div class="notice @(noticeError ? "error" : "success")" role="@(noticeError ? "alert" : "status")"><span class="material-symbols-outlined">@(noticeError ? "error" : "check_circle")</span>@notice</div>
+    }
+
+    @if (loading)
+    {
+        <div class="payment-state"><span class="material-symbols-outlined spinning">progress_activity</span><p>Đang tải cấu hình thanh toán…</p></div>
+    }
+    else
+    {
+        <div class="environment-picker" role="group" aria-label="Chọn phần cấu hình SePay">
+            <button type="button" class="@(setupEnvironment == "SANDBOX" ? "selected" : null)" aria-pressed="@(setupEnvironment == "SANDBOX")" disabled="@(busy || challenge is not null)" @onclick='() => setupEnvironment = "SANDBOX"'><span class="material-symbols-outlined">science</span><span><strong>Sandbox</strong><small>Kết nối thử nghiệm</small></span></button>
+            <button type="button" class="@(setupEnvironment == "LIVE" ? "selected" : null)" aria-pressed="@(setupEnvironment == "LIVE")" disabled="@(busy || challenge is not null)" @onclick='() => setupEnvironment = "LIVE"'><span class="material-symbols-outlined">account_balance</span><span><strong>SePay thật</strong><small>Nhận thanh toán thực tế</small></span></button>
+        </div>
+        @if (setupEnvironment == "SANDBOX")
+        {
+            <SePaySandboxConnect />
+        }
+        else
+        {
+        <article class="connection-card">
+            @if (connection?.OAuthEnabled == true)
+            {
+                <SePayOAuthConnect HasDestination="@(current?.SePayAccountId is not null)" OnChanged="RefreshConnectionAsync" />
+            }
+            <div class="connection-heading"><div><span class="section-label">Bước 1 · Kết nối</span><h2>Kết nối SePay</h2><p>@ConnectionLabel</p></div><span class="status @(connection?.ApiCheck?.Connected == true ? "active" : "inactive")">@(connection?.ApiCheck?.Connected == true ? "Đã kiểm tra kết nối" : connection?.ApiTokenConfigured == true ? "Chưa kiểm tra" : "Chưa thiết lập")</span></div>
+            <div class="connection-facts"><div><small>Thông tin kết nối</small><strong>@(connection?.OAuthEnabled == true ? connection.ApiTokenConfigured ? "Đã cấp quyền qua SePay" : "Chưa kết nối SePay" : connection?.ApiTokenConfigured == true ? "Đã cấu hình ở máy chủ" : "Chưa có API Token")</strong></div><div><small>Xác nhận thanh toán tự động</small><strong>@(connection?.AutomaticConfirmationEnabled == true ? "Đã bật trong cấu hình" : "Chưa bật")</strong></div><div><small>Địa chỉ nhận thông báo giao dịch</small><strong>@(connection?.PublicWebhookUrl ?? "Chưa cấu hình địa chỉ công khai")</strong></div></div>
+            <div class="connection-facts"><div><small>Lần nhận giao dịch gần nhất</small><strong>@(connection?.LastWebhookReceivedAt?.ToLocalTime().ToString("HH:mm · dd/MM/yyyy") ?? "Chưa nhận thông báo giao dịch")</strong></div><div><small>Giao dịch cần kế toán xử lý</small><strong>@(connection?.PendingReviewCount ?? 0) giao dịch</strong></div><div><small>Cấu hình thông báo giao dịch</small><strong>@(connection?.WebhookConfigurationReady == true ? "Đã đủ cấu hình — cần kiểm tra gửi từ SePay" : "Chưa sẵn sàng")</strong></div></div>
+            @if (connection?.ApiTokenConfigured != true && connection?.OAuthEnabled != true)
+            {
+                <p class="connection-help">Cần cấu hình API Token SePay ở máy chủ trước. Sau đó liên kết tài khoản ngân hàng trong SePay và nhấn “Đồng bộ tài khoản”.</p>
+            }
+            @if (connection?.AutomaticConfirmationEnabled == true && !connection.WebhookConfigurationReady)
+            {
+                <p class="connection-help">Cấu hình nhận thông báo giao dịch chưa đầy đủ. Kiểm tra khóa xác thực, ngân hàng nhận và địa chỉ công khai.</p>
+            }
+            <div class="connection-actions"><button type="button" class="secondary-action" disabled="@(busy || syncing || checking || connection?.ApiTokenConfigured != true)" @onclick="CheckConnectionAsync">@(checking ? "Đang kiểm tra…" : "Kiểm tra kết nối")</button><button type="button" class="primary-action" disabled="@(busy || syncing || checking || connection?.ApiTokenConfigured != true)" @onclick="SyncAccountsAsync"><span class="material-symbols-outlined">sync</span>@(syncing ? "Đang đồng bộ…" : "Đồng bộ tài khoản")</button></div>
+            @if (lastSynced is { } time) { <p class="sync-time" role="status">Đồng bộ gần nhất: @time.ToLocalTime().ToString("HH:mm · dd/MM/yyyy") · @accounts.Length tài khoản</p> }
+            @if (!string.IsNullOrWhiteSpace(syncError)) { <p class="form-error" role="alert">@syncError</p> }
+        </article>
+        <div class="settings-grid">
+            <article class="current-card">
+                <header><div><span class="section-label">Cấu hình hiện tại</span><h2>Tài khoản nhận thanh toán</h2></div><span class="status @(current?.IsActive == true ? "active" : "inactive")">@(current?.IsActive == true ? "Đang hoạt động" : "Chưa cấu hình")</span></header>
+                @if (current is null)
+                {
+                    <div class="empty-current"><span class="material-symbols-outlined">account_balance_wallet</span><h3>Chưa có tài khoản nhận tiền</h3><p>Đồng bộ tài khoản từ SePay, chọn tài khoản thu tiền và xác nhận qua email.</p><button type="button" class="primary-action" @onclick="BeginCreate">Chọn tài khoản SePay</button></div>
+                }
+                else
+                {
+                    <div class="bank-identity"><div class="bank-mark">@Initials(current.BankCode)</div><div><strong>@current.BankName</strong><span>@current.BankCode · BIN @current.BankBin</span></div></div>
+                    <dl>
+                        <div><dt>Số tài khoản</dt><dd>@current.MaskedAccountNumber</dd></div>
+                        <div><dt>Tên người nhận</dt><dd>@current.AccountName</dd></div>
+                        <div><dt>Phiên bản</dt><dd>#@current.Version</dd></div>
+                        <div><dt>Nguồn tài khoản</dt><dd>@(current.SePayAccountId.HasValue ? "Đồng bộ từ SePay" : "Cấu hình trước khi chuyển sang SePay")</dd></div>
+                        @if (current.SePayAccountId.HasValue) { <div><dt>Mã tài khoản SePay</dt><dd>@current.SePayAccountId</dd></div> }
+                        <div><dt>Cập nhật</dt><dd>@current.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm")</dd></div>
+                    </dl>
+                    @if (!confirmDeactivate)
+                    {
+                        <button type="button" class="danger-link" @onclick="() => confirmDeactivate = true">Vô hiệu hóa cấu hình</button>
+                    }
+                    else
+                    {
+                        <div class="deactivate-confirm"><p>Hệ thống sẽ ngừng cung cấp tài khoản này cho các QR mới. Bạn vẫn cần xác nhận bằng OTP.</p><div><button type="button" @onclick="() => confirmDeactivate = false">Hủy</button><button type="button" class="danger" disabled="@busy" @onclick="RequestDeactivateOtpAsync">Tiếp tục</button></div></div>
+                    }
+                }
+            </article>
+
+            <article class="editor-card @(editing ? "is-editing" : null)">
+                <header><div><span class="section-label">Bước 2 · Chọn tài khoản</span><h2>Tài khoản ngân hàng từ SePay</h2></div>@if (editing && current is not null) { <button type="button" class="icon-button" title="Đóng" aria-label="Đóng biểu mẫu" @onclick="CancelEdit"><span class="material-symbols-outlined">close</span></button> }</header>
+                @if (!editing)
+                {
+                    <div class="locked-editor"><span class="material-symbols-outlined">verified_user</span><p>Nhấn “Thay đổi cấu hình” để chọn tài khoản khác từ SePay. Tài khoản nhận tiền chỉ thay đổi khi xác nhận OTP thành công.</p></div>
+                }
+                else
+                {
+                    <div class="destination-form">
+                        @if (syncing) { <p class="wide">Đang tải tài khoản từ SePay…</p> }
+                        else if (accounts.Length == 0)
+                        {
+                            <div class="account-empty wide"><span class="material-symbols-outlined">account_balance</span><strong>@(lastSynced.HasValue ? "Chưa có tài khoản trong SePay" : "Chưa đồng bộ tài khoản")</strong><p>@(lastSynced.HasValue ? "Hãy thêm và liên kết ngân hàng trong SePay, sau đó đồng bộ lại." : "Nhấn “Đồng bộ tài khoản” ở phần kết nối để tải danh sách.")</p></div>
+                        }
+                        else
+                        {
+                            <div class="account-options wide" role="group" aria-label="Tài khoản SePay">
+                            @foreach (var account in accounts)
+                            {
+                                <button type="button" class="account-option @(selectedId == account.Id ? "selected" : null)" disabled="@(busy || !account.Active)" aria-pressed="@(selectedId == account.Id)" @onclick="() => SelectAccount(account.Id)"><span class="bank-mark">@Initials(account.BankCode)</span><span class="account-copy"><strong>@account.BankName</strong><span>@account.MaskedAccountNumber · @account.AccountName</span><small>@(account.Active ? "Có thể chọn để nhận thanh toán" : "Chưa hoạt động hoặc chưa đủ thông tin")</small></span><span class="material-symbols-outlined">@(selectedId == account.Id ? "radio_button_checked" : "radio_button_unchecked")</span></button>
+                            }
+                            </div>
+                        }
+                        <p class="form-help wide"><span class="material-symbols-outlined">info</span>Thông tin ngân hàng và người nhận được lấy từ SePay. Đồng bộ danh sách không làm thay đổi tài khoản hiện tại.</p>
+                        @if (!string.IsNullOrWhiteSpace(formError)) { <p class="form-error wide" role="alert">@formError</p> }
+                        <div class="form-actions wide"><button type="button" class="secondary-action" disabled="@(busy || syncing || selectedId is null)" @onclick="PreviewAsync">Xem QR mẫu</button><button type="button" class="primary-action" disabled="@(busy || syncing || selectedId is null)" @onclick="RequestSaveOtpAsync">@(busy ? "Đang xử lý…" : "Xác nhận qua email")</button></div>
+                    </div>
+                }
+            </article>
+        </div>
+
+        @if (preview is not null)
+        {
+            <article class="preview-card">
+                <div><span class="section-label">QR mẫu · chưa có số tiền</span><h2>Kiểm tra thông tin người nhận</h2><p>QR mẫu dùng tài khoản SePay đã chọn. QR hóa đơn sẽ có số tiền cần thanh toán và mã đối soát riêng.</p><dl><div><dt>Ngân hàng</dt><dd>@preview.BankName</dd></div><div><dt>Số tài khoản</dt><dd>@preview.AccountNumber</dd></div><div><dt>Người nhận</dt><dd>@preview.AccountName</dd></div></dl></div>
+                <img src="@preview.QrImageUrl" alt="QR mẫu cho tài khoản @preview.AccountName" />
+            </article>
+        }
+
+        <article class="history-card">
+            <header><div><span class="section-label">Lịch sử bảo mật</span><h2>Các phiên bản cấu hình</h2></div><span>@history.Length phiên bản</span></header>
+            @if (history.Length == 0) { <p class="history-empty">Chưa có thay đổi cấu hình thanh toán.</p> }
+            else
+            {
+                <div class="history-table"><table><thead><tr><th>Phiên bản</th><th>Ngân hàng</th><th>Tài khoản</th><th>Người nhận</th><th>Nguồn</th><th>Xác nhận lúc</th><th>Trạng thái</th></tr></thead><tbody>@foreach (var item in history) { <tr><td><strong>#@item.Version</strong></td><td>@item.BankCode<small>@item.BankName</small></td><td>@item.MaskedAccountNumber</td><td>@item.AccountName</td><td>@(item.SePayAccountId.HasValue ? "SePay" : "Cấu hình cũ")<small>@item.SePayAccountId</small></td><td>@((item.CreatedAt ?? item.UpdatedAt).ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</td><td><span class="history-status @(item.IsActive ? "active" : null)">@(item.IsActive ? "Đang dùng" : "Đã đóng")</span></td></tr> }</tbody></table></div>
+            }
+        </article>
+        }
+    }
+</section>
+
+@if (challenge is not null)
+{
+    <PaymentDestinationOtpDialog Challenge="challenge" Action="pendingAction" Busy="busy" Error="otpError" OnConfirm="ConfirmOtpAsync" OnResend="ResendOtpAsync" OnCancel="CloseOtp" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "paymentEnvironment")] public string? PaymentEnvironment { get; set; }
+    private string setupEnvironment = "SANDBOX";
+    private PaymentDestinationView? current;
+    private PaymentDestinationView[] history = [];
+    private SePayBankAccountView[] accounts = [];
+    private SePayConnectionState? connection;
+    private Guid? selectedId, pendingAccountId;
+    private int pendingVersion;
+    private DateTimeOffset? lastSynced;
+    private bool checking, syncing;
+    private string? syncError;
+    private PaymentDestinationPreview? preview;
+    private PrivilegedActionChallengeResult? challenge;
+    private string pendingAction = "UPSERT";
+    private string? notice, formError, otpError;
+    private bool loading, editing, busy, noticeError, confirmDeactivate;
+    private string ConnectionLabel => connection?.ApiCheck?.Message ?? (connection?.OAuthEnabled == true
+        ? "Kết nối SePay bằng tài khoản của chủ chung cư hoặc ban quản lý."
+        : connection?.ApiTokenConfigured == true ? "Thông tin kết nối đã có. Kiểm tra để xác nhận quyền đọc tài khoản." : "Thiết lập kết nối SePay để lấy tài khoản ngân hàng đã liên kết.");
+
+    protected override Task OnInitializedAsync()
+    {
+        setupEnvironment = string.Equals(PaymentEnvironment, "live", StringComparison.OrdinalIgnoreCase) ? "LIVE" : "SANDBOX";
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true; notice = null;
+        var destinationResult = await Api.GetPaymentDestinationAsync();
+        var historyResult = await Api.GetPaymentDestinationHistoryAsync();
+        var connectionResult = await Api.GetSePayConnectionAsync();
+        if (destinationResult.IsSuccess) current = destinationResult.Data?.Destination;
+        if (historyResult.IsSuccess) history = historyResult.Data ?? [];
+        if (connectionResult.IsSuccess) connection = connectionResult.Data;
+        var failure = new ApiResult?[] { destinationResult, historyResult, connectionResult }.FirstOrDefault(result => result?.IsSuccess == false);
+        if (failure is not null) ShowNotice(Friendly(failure, "Không thể tải đầy đủ cấu hình thanh toán."), true);
+        editing = current is null;
+        loading = false;
+    }
+
+    private void BeginCreate() { editing = true; formError = null; notice = null; }
+    private void BeginEdit() { editing = true; selectedId = null; preview = null; formError = null; notice = null; }
+    private void CancelEdit() { editing = false; selectedId = null; preview = null; formError = null; }
+    private void SelectAccount(Guid id) { selectedId = id; preview = null; formError = null; }
+
+    private SelectSePayAccountRequest? Selection()
+    {
+        if (selectedId is not { } id || !accounts.Any(x => x.Id == id && x.Active)) { formError = "Vui lòng chọn tài khoản SePay đang hoạt động."; return null; }
+        formError = null;
+        return new(id, current?.Version ?? 0);
+    }
+
+    private async Task CheckConnectionAsync()
+    {
+        checking = true; syncError = null;
+        try { var result = await Api.CheckSePayConnectionAsync(); if (result.IsSuccess) connection = result.Data; else syncError = Friendly(result, "Không thể kiểm tra kết nối."); }
+        finally { checking = false; }
+    }
+
+    private async Task RefreshConnectionAsync()
+    {
+        var result = await Api.GetSePayConnectionAsync();
+        if (result.IsSuccess) connection = result.Data;
+    }
+
+    private async Task SyncAccountsAsync()
+    {
+        syncing = true; syncError = null; selectedId = null; preview = null; accounts = []; lastSynced = null;
+        try
+        {
+            var result = await Api.GetSePayAccountsAsync();
+            if (result.IsSuccess) { accounts = result.Data ?? []; lastSynced = DateTimeOffset.Now; }
+            else syncError = Friendly(result, "Không thể đồng bộ tài khoản SePay.");
+        }
+        finally { syncing = false; }
+    }
+
+    private async Task PreviewAsync()
+    {
+        var selection = Selection(); if (selection is null) return;
+        busy = true; var result = await Api.PreviewSePayAccountAsync(selection); busy = false;
+        if (result.IsSuccess) preview = result.Data; else formError = Friendly(result, "Không thể tạo QR mẫu lúc này.");
+    }
+
+    private async Task RequestSaveOtpAsync()
+    {
+        var selection = Selection(); if (selection is null) return;
+        pendingAccountId = selection.AccountId; pendingVersion = selection.ExpectedVersion;
+        pendingAction = "UPSERT"; busy = true; otpError = null;
+        var result = await Api.RequestSePayAccountChallengeAsync(selection); busy = false;
+        if (result.IsSuccess) challenge = result.Data; else formError = Friendly(result, "Không thể gửi OTP xác nhận.");
+    }
+
+    private async Task RequestDeactivateOtpAsync()
+    {
+        if (current is null) return;
+        pendingAction = "DEACTIVATE"; busy = true; otpError = null;
+        var marker = new PaymentDestinationDraft("", "", "", "", "", current.Version);
+        var result = await Api.RequestPaymentDestinationChallengeAsync(new(pendingAction, marker)); busy = false;
+        if (result.IsSuccess) challenge = result.Data; else ShowNotice(Friendly(result, "Không thể gửi OTP xác nhận."), true);
+    }
+
+    private async Task ConfirmOtpAsync(string code)
+    {
+        if (challenge is null) return;
+        busy = true; otpError = null;
+        ApiResult result;
+        if (pendingAction == "DEACTIVATE")
+        {
+            result = await Api.DeactivatePaymentDestinationAsync(new(current!.Version, challenge.ChallengeId, code));
+        }
+        else
+        {
+            if (pendingAccountId is not { } id) { busy = false; otpError = "Vui lòng chọn lại tài khoản SePay."; return; }
+            result = await Api.SaveSePayAccountAsync(new(id, pendingVersion, challenge.ChallengeId, code));
+        }
+        busy = false;
+        if (!result.IsSuccess) { otpError = Friendly(result, "Không thể xác nhận thay đổi cấu hình."); return; }
+        var action = pendingAction;
+        CloseOtp(); CancelEdit(); confirmDeactivate = false;
+        await LoadAsync();
+        ShowNotice(action == "DEACTIVATE" ? "Đã vô hiệu hóa cấu hình nhận tiền." : "Đã xác minh và kích hoạt cấu hình nhận tiền.");
+    }
+
+    private async Task ResendOtpAsync()
+    {
+        challenge = null;
+        if (pendingAction == "DEACTIVATE") await RequestDeactivateOtpAsync(); else await RequestSaveOtpAsync();
+    }
+    private void CloseOtp() { challenge = null; otpError = null; }
+    private void ShowNotice(string message, bool error = false) { notice = message; noticeError = error; }
+    private static string Initials(string value) => string.Concat(value.Where(char.IsLetterOrDigit).Take(3)).ToUpperInvariant();
+    private static string Friendly(ApiResult result, string fallback) => result.ValidationErrors?.Values.SelectMany(value => value).FirstOrDefault() ?? result.Message ?? fallback;
+}

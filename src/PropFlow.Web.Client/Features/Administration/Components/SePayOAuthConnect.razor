@@ -1,0 +1,91 @@
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Services.Api
+@inject AuthenticatedApiClient Api
+@inject NavigationManager Navigation
+
+<div class="oauth-connect">
+    <div class="oauth-heading"><span class="material-symbols-outlined" aria-hidden="true">@(state?.Connected == true ? "verified_user" : "link")</span><div><h3>@(state?.Connected == true ? "Đã kết nối SePay của chung cư" : "Kết nối tài khoản SePay của bạn")</h3><p>@(state?.Message ?? "Đang tải trạng thái kết nối…")</p></div></div>
+    <ol class="oauth-steps"><li>Đăng nhập và cấp quyền trên SePay</li><li>Chọn ngân hàng và xác nhận OTP email</li><li>Thiết lập nhận thông báo giao dịch</li></ol>
+    <p class="oauth-help">Dùng tài khoản SePay riêng của chủ chung cư hoặc ban quản lý. Cư dân chỉ quét QR để thanh toán. Nếu chưa liên kết ngân hàng, hãy thực hiện trên SePay rồi quay lại đồng bộ.</p>
+    @if (state?.ConnectedAt is { } time) { <p class="sync-time">Kết nối lúc @time.ToLocalTime().ToString("HH:mm · dd/MM/yyyy")</p> }
+    <div class="connection-actions">
+        @if (!loading && state is null)
+        {
+            <button type="button" class="secondary-action" disabled="@busy" @onclick="LoadStateAsync">Thử tải lại trạng thái SePay</button>
+        }
+        <button type="button" class="primary-action" disabled="@(busy || state?.Available != true)" @onclick='() => ChallengeAsync("CONNECT")'><span class="material-symbols-outlined">link</span>@(state?.Connected == true || state?.RequiresReconnect == true ? "Kết nối lại SePay" : "Kết nối SePay")</button>
+        @if (state?.Connected == true)
+        {
+            <button type="button" class="secondary-action" disabled="@(busy || !HasDestination)" @onclick='() => ChallengeAsync("WEBHOOK")'>@(state.WebhookConfigured ? "Cập nhật nhận giao dịch" : "Thiết lập nhận giao dịch")</button>
+        }
+        <a class="secondary-action" href="https://my.sepay.vn" target="_blank" rel="noopener noreferrer">Mở SePay<span class="material-symbols-outlined" aria-hidden="true">open_in_new</span></a>
+    </div>
+    @if (state?.Connected == true && !state.WebhookConfigured) { <p class="connection-help">Sau khi chọn và lưu tài khoản nhận tiền, nhấn “Thiết lập nhận giao dịch”. Mỗi thay đổi đều cần OTP email.</p> }
+    @if (!string.IsNullOrWhiteSpace(message)) { <p class="@(failed ? "form-error" : "sync-time")" role="@(failed ? "alert" : "status")">@message</p> }
+</div>
+
+@if (challenge is not null)
+{
+    <PaymentDestinationOtpDialog Challenge="challenge" Action="@action" Busy="busy" Error="message" OnConfirm="ConfirmAsync" OnResend="ResendAsync" OnCancel="Close" />
+}
+
+@code {
+    [Parameter] public bool HasDestination { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private SePayOAuthState? state;
+    private PrivilegedActionChallengeResult? challenge;
+    private bool busy, failed, loading = true;
+    private string action = "CONNECT";
+    private string? message;
+    protected override Task OnInitializedAsync() => LoadStateAsync();
+    private async Task LoadStateAsync()
+    {
+        loading = true; message = null; failed = false;
+        try
+        {
+            var result = await Api.SendAsync<SePayOAuthState>(HttpMethod.Get, "api/v1/payment-settings/sepay/oauth/status");
+            if (result.IsSuccess) state = result.Data; else { message = result.Message ?? "Không tải được trạng thái SePay."; failed = true; }
+        }
+        finally { loading = false; }
+    }
+    private async Task ChallengeAsync(string value)
+    {
+        action = value; busy = true; message = null;
+        try
+        {
+            var result = await Api.SendAsync<PrivilegedActionChallengeResult>(HttpMethod.Post, $"api/v1/payment-settings/sepay/oauth/challenge/{action}");
+            if (result.IsSuccess) challenge = result.Data; else { message = result.Message ?? "Không gửi được OTP email."; failed = true; }
+        }
+        finally { busy = false; }
+    }
+    private async Task ConfirmAsync(string code)
+    {
+        if (challenge is null) return;
+        busy = true; message = null;
+        try
+        {
+            var confirm = new SePayOAuthConfirm(challenge.ChallengeId, code);
+            if (action == "CONNECT")
+            {
+                var result = await Api.SendAsync<SePayOAuthStart>(HttpMethod.Post, "api/v1/payment-settings/sepay/oauth/start", confirm);
+                if (result.IsSuccess && result.Data is not null)
+                {
+                    // Only navigate to the fixed provider, even if a malformed response reaches the UI.
+                    if (Uri.TryCreate(result.Data.AuthorizationUrl, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "my.sepay.vn" && uri.AbsolutePath == "/oauth/authorize" && string.IsNullOrEmpty(uri.UserInfo))
+                        Navigation.NavigateTo(uri.AbsoluteUri, forceLoad: true);
+                    else { message = "Địa chỉ kết nối SePay chưa hợp lệ."; failed = true; }
+                }
+                else { message = result.Message ?? "Không thể bắt đầu kết nối SePay."; failed = true; }
+            }
+            else
+            {
+                var result = await Api.SendAsync<SePayOAuthState>(HttpMethod.Post, "api/v1/payment-settings/sepay/oauth/webhook", confirm);
+                if (result.IsSuccess) { state = result.Data; challenge = null; message = "Đã thiết lập nhận giao dịch. Hãy kiểm tra gửi thông báo từ SePay trước khi thu tiền."; failed = false; await OnChanged.InvokeAsync(); }
+                else { message = result.Message ?? "Chưa thể thiết lập nhận giao dịch. Vui lòng yêu cầu OTP mới rồi thử lại."; failed = true; }
+            }
+        }
+        finally { busy = false; }
+    }
+    private Task ResendAsync() => ChallengeAsync(action);
+    private void Close() { if (!busy) { challenge = null; message = null; } }
+}

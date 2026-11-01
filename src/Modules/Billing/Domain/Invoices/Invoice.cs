@@ -21,7 +21,9 @@ public class Invoice
         DateTimeOffset now,
         DateOnly? issueDate = null,
         DateOnly? dueDate = null,
-        string? note = null)
+        string? note = null,
+        InvoiceType invoiceType = InvoiceType.SERVICE_FEE,
+        Guid? sourceServiceRequestId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invoiceNumber);
         ThrowIfEmpty(apartmentUnitId, nameof(apartmentUnitId));
@@ -31,6 +33,8 @@ public class Invoice
 
         Id = Guid.NewGuid();
         InvoiceNumber = invoiceNumber.Trim();
+        Type = invoiceType;
+        SourceServiceRequestId = sourceServiceRequestId;
         ApartmentUnitId = apartmentUnitId;
         BillingPeriodStart = billingPeriodStart;
         BillingPeriodEnd = billingPeriodEnd;
@@ -47,6 +51,8 @@ public class Invoice
 
     public Guid Id { get; private set; }
     public string InvoiceNumber { get; private set; } = null!;
+    public InvoiceType? Type { get; private set; }
+    public Guid? SourceServiceRequestId { get; private set; }
     public Guid ApartmentUnitId { get; private set; }
     public DateOnly BillingPeriodStart { get; private set; }
     public DateOnly BillingPeriodEnd { get; private set; }
@@ -103,7 +109,8 @@ public class Invoice
         Guid? feeTypeId = null,
         Guid? feeRateRuleId = null,
         string? description = null,
-        string? unitName = null)
+        string? unitName = null,
+        int amountDivisor = 1)
     {
         EnsureDraft();
         ThrowIfEmpty(updatedBy, nameof(updatedBy));
@@ -119,7 +126,8 @@ public class Invoice
             feeTypeId,
             feeRateRuleId,
             description,
-            unitName);
+            unitName,
+            amountDivisor);
 
         _items.Add(item);
         RecalculateTotals();
@@ -172,6 +180,21 @@ public class Invoice
         CancellationReason = reason.Trim();
         UpdatedBy = cancelledBy;
         UpdatedAt = now;
+    }
+
+    // Called only by the audited correction use case after checking payment obligations under its lock.
+    public void CorrectIssuedItems(IReadOnlyList<InvoiceItem> replacement, Guid actor, string summary, DateTimeOffset now)
+    {
+        if (Status != InvoiceStatus.ISSUED || Type == InvoiceType.MONTHLY_RENTAL)
+            throw new InvalidOperationException("Chỉ điều chỉnh hóa đơn dịch vụ đã phát hành.");
+        ThrowIfEmpty(actor, nameof(actor));
+        ArgumentException.ThrowIfNullOrWhiteSpace(summary);
+        if (replacement.Count == 0 || replacement.Any(item => item.InvoiceId != Id))
+            throw new ArgumentException("Chi tiết điều chỉnh không thuộc hóa đơn.");
+        _items.Clear(); _items.AddRange(replacement);
+        RecalculateTotals();
+        Note = "[ĐIỀU CHỈNH] " + summary;
+        UpdatedBy = actor; UpdatedAt = now;
     }
 
     private void RecalculateTotals()

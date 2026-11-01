@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.SignalR;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using PropFlow.Modules.Authentication.Infrastructure;
@@ -21,10 +23,15 @@ using PropFlow.Modules.Maintenance.Infrastructure.Persistence;
 using PropFlow.Modules.Maintenance.Application;
 using PropFlow.Modules.Maintenance.Contracts;
 using PropFlow.Modules.Maintenance.Presentation;
+using PropFlow.Modules.Maintenance.Infrastructure.Storage;
 using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Contracts;
 using PropFlow.Modules.Payments.Application.Finance;
 using PropFlow.Modules.Payments.Infrastructure.Finance;
+using PropFlow.Modules.Payments.Application.PaymentSettings;
+using PropFlow.Modules.Payments.Infrastructure.PaymentSettings;
+using PropFlow.Modules.Payments.Infrastructure.ResidentPayments;
+using PropFlow.Modules.Payments.Presentation;
 using PropFlow.Modules.Billing.Contracts;
 using PropFlow.Modules.Billing.Application.Finance;
 using PropFlow.Modules.Billing.Infrastructure.Finance;
@@ -37,9 +44,12 @@ using PropFlow.Modules.Apartments.Infrastructure;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.PropertyAssets.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.ListResidentServiceRequests;
+using PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
+using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Presentation;
@@ -47,8 +57,11 @@ using PropFlow.Api.Serialization;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 using Npgsql;
 using PropFlow.Api.Composition;
+using PropFlow.Shared;
+using CloudinaryDotNet;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDataProtection().SetApplicationName("PropFlow");
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
     options.JsonSerializerOptions.Converters.Insert(0, new FlexibleEnumJsonConverterFactory()));
 
@@ -58,6 +71,22 @@ builder.Services.AddOptions<DatabaseConnectionOptions>()
         "Connection string 'PropFlowDatabase' must be configured through the environment or secret provider.")
     .ValidateOnStart();
 
+var cloudinaryOptions = builder.Services.AddOptions<CloudinaryOptions>()
+    .BindConfiguration("Cloudinary")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.CloudName)
+                        && !string.IsNullOrWhiteSpace(options.ApiKey)
+                        && !string.IsNullOrWhiteSpace(options.ApiSecret),
+        "Cloudinary phải được cấu hình bằng User Secrets hoặc secret provider.");
+if (!builder.Environment.IsEnvironment("Testing"))
+    cloudinaryOptions.ValidateOnStart();
+
+builder.Services.AddSingleton(services =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<CloudinaryOptions>>().Value;
+    return new Cloudinary(new Account(options.CloudName, options.ApiKey, options.ApiSecret));
+});
+builder.Services.AddHttpClient("MaintenanceEvidenceCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+
 // Authentication and Administration share one scoped connection so their
 // account-provisioning workflow can commit atomically across module DbContexts.
 builder.Services.AddScoped(services => new NpgsqlConnection(
@@ -66,7 +95,7 @@ builder.Services.AddScoped(services => new NpgsqlConnection(
 // Register Batch 1 DbContexts with schema-specific migration history tables
 builder.Services.AddDbContext<PropertyAssetsDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "property_assets")));
@@ -115,7 +144,7 @@ builder.Services.AddDbContext<ComplaintsDbContext>((services, options) =>
 
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "maintenance")));
@@ -169,7 +198,10 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
+builder.Services.AddScoped<IMaintenanceAssetTransactionCoordinator, MaintenanceAssetTransactionCoordinator>();
+builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceEvidenceStorage, CloudinaryMaintenanceEvidenceStorage>();
 builder.Services.AddScoped<PropFlow.Modules.Maintenance.Application.IMaintenanceNotifier, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceNotifier>();
+builder.Services.AddSingleton<IUserIdProvider, PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceUserIdProvider>();
 builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
@@ -184,12 +216,64 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(ResidentServiceRequestsController).Assembly)
     .AddApplicationPart(typeof(MaintenanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
-    .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly);
+    .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.Communication.Presentation.ResidentNotificationsController).Assembly);
 builder.Services.AddScoped<IInvoiceFinancialSource, InvoiceFinancialSource>();
+builder.Services.AddScoped<IServiceRequestBilling, ServiceRequestBilling>();
 builder.Services.AddScoped<IConfirmedPaymentSource, ConfirmedPaymentSource>();
 builder.Services.AddScoped<BillingFinanceQueries>();
-builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceStore>();
+builder.Services.AddScoped<PaymentFinanceStore>();
+builder.Services.AddScoped<IPaymentFinanceStore>(services => new PaymentFinanceNotifications(
+    services.GetRequiredService<PaymentFinanceStore>(),
+    services.GetRequiredService<IBillingCycle>(),
+    services.GetRequiredService<ILogger<PaymentFinanceNotifications>>()));
 builder.Services.AddScoped<PaymentFinanceUseCases>();
+builder.Services.AddScoped<IPaymentDestinationStore, PaymentDestinationStore>();
+builder.Services.AddScoped<IPaymentAccountProtector, PaymentAccountProtector>();
+builder.Services.AddHttpClient<IPaymentBankDirectory, VietQrBankDirectory>(client =>
+{
+    client.BaseAddress = new Uri("https://api.vietqr.io/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<PaymentDestinationSettings>();
+builder.Services.AddScoped<ResidentServiceRequestPayments>();
+builder.Services.AddScoped<ISandboxPaymentDisplaySource, SandboxPaymentDisplaySource>();
+builder.Services.Configure<SePayOptions>(builder.Configuration.GetSection("Payments:SePay"));
+builder.Services.Configure<SePayOAuthOptions>(builder.Configuration.GetSection("Payments:SePay:OAuth"));
+builder.Services.AddHttpClient<SePayOAuth>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<OAuthSePayBankAccounts>();
+builder.Services.AddHttpClient<SePaySandbox>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient<ISePayConnectionProbe, SePayConnectionProbe>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<SePayConnectionSettings>();
+builder.Services.AddHttpClient<SePayBankAccounts>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<ISePayBankAccounts>(sp => sp.GetRequiredService<SePayOAuth>().Enabled
+    ? sp.GetRequiredService<OAuthSePayBankAccounts>() : sp.GetRequiredService<SePayBankAccounts>());
+builder.Services.AddScoped<SePayAccountSelection>();
+builder.Services.AddScoped<SePayWebhook>();
+builder.Services.AddScoped<SePaySandboxWebhook>();
+builder.Services.AddScoped<SePayInbox>();
+builder.Services.AddScoped<BankTransferReview>();
+builder.Services.AddHostedService<SePayInboxWorker>();
+builder.Services.AddScoped<IBillingHouseholdDirectory, BillingHouseholdDirectory>();
+builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
+builder.Services.AddScoped<IBillingCycle, BillingCycle>();
+builder.Services.AddScoped<IRentalPricing, RentalPricing>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationStore, PropFlow.Modules.Communication.Infrastructure.FinanceNoticePublisher>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceNotificationRealtime, PropFlow.Modules.Communication.Presentation.FinanceNotificationRealtime>();
+builder.Services.AddScoped<IFinanceNoticePublisher, FinanceNoticePublisherBridge>();
+builder.Services.AddScoped<IPricingChangePublisher, PricingChangePublisher>();
+builder.Services.AddScoped<PricingChangeDispatcher>();
+builder.Services.AddScoped<IPricingChangeDelivery>(sp => sp.GetRequiredService<PricingChangeDispatcher>());
+builder.Services.AddHostedService<PricingChangeWorker>();
+builder.Services.AddScoped<OperationalNoticeDispatcher>();
+builder.Services.AddHostedService<OperationalNoticeWorker>();
+builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("Authentication:Mail"));
+builder.Services.AddHostedService<BillingCycleWorker>();
+builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
 builder.Services.AddScoped<IResidentResidenceSource, ResidentResidenceSource>();
@@ -197,8 +281,22 @@ builder.Services.AddScoped<IServiceRequestSubmissionStore, ServiceRequestSubmiss
 builder.Services.AddScoped<SubmitServiceRequestHandler>();
 builder.Services.AddScoped<IResidentServiceRequestReadStore, ResidentServiceRequestReadStore>();
 builder.Services.AddScoped<ListResidentServiceRequestsHandler>();
+builder.Services.AddScoped<IResidentServiceRequestDetailStore, ResidentServiceRequestDetailStore>();
+builder.Services.AddScoped<GetResidentServiceRequestHandler>();
 builder.Services.AddScoped<IResidentServiceRequestFeedbackStore, ResidentServiceRequestFeedbackStore>();
 builder.Services.AddScoped<RateResidentServiceRequestHandler>();
+builder.Services.AddScoped<IServiceRequestMaintenanceSource, ServiceRequestMaintenanceSource>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.IManagerServiceRequestStore, ManagerServiceRequestStore>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
+builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRequestInsightSource>();
+builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
+builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
+builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
+    client.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<IServiceRequestEvidenceStorage>(services =>
+    services.GetRequiredService<CloudinaryServiceRequestEvidenceStorage>());
+builder.Services.AddScoped<IServiceRequestRealtimeNotifier, ServiceRequestRealtimeNotifier>();
+builder.Services.AddScoped<StaffServiceRequestHandler>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentOnboardingService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentCodeGenerator>();
@@ -210,12 +308,22 @@ builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoord
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("finance.manage", policy => policy.RequireRole(SystemRoleCodes.Accountant).RequireClaim("permission", SystemPermissionCodes.ManageFinance));
+    options.AddPolicy(PaymentSettingsAuthorizationPolicies.Manage,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManagePaymentDestination));
+    options.AddPolicy("billing.configure", policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy("billing.read", policy => policy.RequireAssertion(c =>
+        (c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
+        (c.User.IsInRole(SystemRoleCodes.Accountant) && c.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
     options.AddPolicy(AdministrationAuthorizationPolicies.ManageInternalAccounts,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageInternalAccounts));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewAdministrationActivity,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ViewAdministrationActivity));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewSystemOverview,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ViewSystemOverview));
+    options.AddPolicy(ServiceRequestsAuthorizationPolicies.Manage,
+        policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy(ServiceRequestsAuthorizationPolicies.WorkAssigned,
+        policy => policy.RequireRole(SystemRoleCodes.Staff).RequireClaim("permission", SystemPermissionCodes.PerformAssignedOperations));
     options.AddPolicy(PropertyAssetsAuthorizationPolicies.View, policy =>
         policy.RequireAssertion(context =>
             (context.User.IsInRole(SystemRoleCodes.Manager) && context.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
@@ -249,6 +357,7 @@ builder.Services.AddScoped<IApartmentOwnershipCommand, PropFlow.Modules.Apartmen
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatusCommand, PropFlow.Modules.Apartments.Application.ApartmentStatusCommand>();
 builder.Services.AddScoped<IResidentApartmentReadSource, ResidentApartmentReadSource>();
 builder.Services.AddScoped<ICurrentBuildingTimeZone, CurrentBuildingTimeZone>();
+builder.Services.AddScoped<ICurrentBuildingFloorLimit, CurrentBuildingFloorLimit>();
 builder.Services.AddScoped<IResidentOverviewSource, ResidentOverviewSource>();
 builder.Services.AddScoped<IServiceRequestOverviewSource, ServiceRequestOverviewSource>();
 builder.Services.AddScoped<AdministrationOverviewQuery>();
@@ -269,6 +378,19 @@ builder.Services.AddRateLimiter(options =>
         var limit = builder.Configuration.GetValue($"Authentication:RateLimits:{name}:PermitLimit", count);
         var window = builder.Configuration.GetValue($"Authentication:RateLimits:{name}:WindowMinutes", minutes);
         options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
+    }
+    foreach (var (name, count, minutes) in new[]
+    {
+        (PaymentSettingsRateLimitPolicies.Read, 120, 1),
+        (PaymentSettingsRateLimitPolicies.Provider, 20, 1),
+        (PaymentSettingsRateLimitPolicies.Otp, 5, 15)
+    })
+    {
+        var limit = builder.Configuration.GetValue($"Payments:RateLimits:{name}:PermitLimit", count);
+        var window = builder.Configuration.GetValue($"Payments:RateLimits:{name}:WindowMinutes", minutes);
+        options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
     }
     var residentSubmitLimit = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:PermitLimit", 5);
@@ -324,6 +446,8 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
+app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

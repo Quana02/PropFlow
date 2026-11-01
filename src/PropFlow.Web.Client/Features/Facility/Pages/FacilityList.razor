@@ -5,15 +5,18 @@
 @using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using PropFlow.Web.Client.Features.Maintenance.Services
 @using System.ComponentModel.DataAnnotations
 @inject IFacilityApiClient FacilityApiClient
 @inject IBuildingApiClient BuildingApiClient
 @inject NavigationManager Navigation
 @inject IAuthorizationService AuthorizationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject MaintenanceHubConnectionFactory MaintenanceHubConnectionFactory
 @using PropFlow.Web.Client.Shared.Forms
 @using PropFlow.Web.Client.Shared.Feedback
-@implements IDisposable
+@implements IAsyncDisposable
 
 <PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
 @if (!IsManager)
@@ -22,7 +25,9 @@
 }
 
 
-<div class="fe04-page font-sans text-slate-800 antialiased">
+<div class="fe04-page font-sans text-slate-800 antialiased"
+     aria-hidden="@(IsFacilityTypeDialogOpen ? "true" : null)"
+     inert="@(IsFacilityTypeDialogOpen ? "inert" : null)">
 
     <!-- Page Header & Title Section -->
     <div class="fe04-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
@@ -160,12 +165,12 @@
 
                 <!-- Status Dropdown Filter -->
                 <div class="w-full sm:w-56 relative">
-                    <PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" @bind-Value:after="ApplyFilter"  />
+                    <div class="fe04-light-select"><PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" @bind-Value:after="ApplyFilter" /></div>
                 </div>
 
                 <!-- FacilityType Dropdown Filter -->
                 <div class="w-full sm:w-56 relative">
-                    <PropFlowSelect Options="FacilityTypeFilterOptions" @bind-Value="FacilityTypeFilterString" @bind-Value:after="ApplyFilter"  />
+                    <div class="fe04-light-select"><PropFlowSelect Options="FacilityTypeFilterOptions" @bind-Value="FacilityTypeFilterString" @bind-Value:after="ApplyFilter" /></div>
                 </div>
             </div>
 
@@ -331,7 +336,7 @@
             </div>
 
             <!-- Pagination Footer -->
-            <div class="p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
+            <div class="fe04-pagination p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
                 <!-- Page size info -->
                 <div class="flex items-center gap-2">
                     <span>Bản ghi <strong class="text-[#0f172a]">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> - <strong class="text-[#0f172a]">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong> trong tổng số <strong class="text-[#0f172a]">@PagedResult.TotalCount</strong> CSVT</span>
@@ -403,7 +408,11 @@
 @if (IsManager && IsFormOpen)
 {
     <div class="fe04-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm transition-opacity">
-        <div class="fe04-modal relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden font-sans text-[#0f172a] animate-in fade-in zoom-in duration-200">
+        <div class="fe04-modal relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden font-sans text-[#0f172a] animate-in fade-in zoom-in duration-200"
+             role="dialog"
+             aria-modal="@(!IsFacilityTypeDialogOpen)"
+             aria-hidden="@(IsFacilityTypeDialogOpen ? "true" : null)"
+             inert="@(IsFacilityTypeDialogOpen ? "inert" : null)">
             
             <!-- Modal Header -->
             <div class="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
@@ -429,19 +438,8 @@
                     
                     @if (SelectedFacilityToEdit == null)
                     {
-                        <!-- Field 1: Mã CSVT (Required) -->
-                        <div class="space-y-1.5">
-                            <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                MÃ CƠ SỞ VẬT CHẤT <span class="text-rose-500">*</span>
-                            </label>
-                            <div class="relative">
-                                <input @bind="CreateFormModel.Code" type="text" placeholder="VD: CSVC-HOBOI-T05" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all font-mono" />
-                            </div>
-                            <p class="text-[11px] text-slate-400">Quy ước: CSVC-[TÊN]-[VỊ TRÍ]</p>
-                            @if (!string.IsNullOrWhiteSpace(FacilityCodeError)) { <p class="text-xs text-rose-600" role="alert">@FacilityCodeError</p> }
-                        </div>
-
-                        <!-- Field 2: Tên CSVT (Required) -->
+                        <div class="sm:col-span-2 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-xs text-sky-800">Mã sẽ được hệ thống tự động tạo khi lưu.</div>
+                        <!-- Field 1: Tên CSVT (Required) -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
                                 Tên Cơ Sở Vật Chất <span class="text-rose-500">*</span>
@@ -449,20 +447,21 @@
                             <input @bind="CreateFormModel.Name" type="text" placeholder="VD: Khu vui chơi trẻ em KidZone" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
 
-                        <!-- Field 3: Loại CSVT (FacilityType) -->
+                        <!-- Field 2: Loại CSVT (FacilityType) -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
                                 Loại Cơ Sở Vật Chất
                             </label>
-                            <div class="relative">
-                                <PropFlowSelect Options="FacilityTypeCreateOptions" @bind-Value="CreateFormModel.FacilityType"  />
+                            <div class="flex gap-2">
+                                <div class="flex-1 fe04-light-select"><PropFlowSelect Options="FacilityTypeCreateOptions" @bind-Value="CreateFacilityTypeId" /></div>
+                                <button type="button" class="px-3 rounded-xl border border-sky-300 text-sky-700 text-xs font-bold" @ref="FacilityTypeTrigger" @onclick="OpenFacilityTypeDialog">+ Thêm loại</button>
                             </div>
                         </div>
 
-                        <!-- Field 4: Vị trí -->
+                        <!-- Field 3: Vị trí -->
                         <div class="space-y-1.5">
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
-                                Vị trí
+                                Vị trí <span class="text-rose-500">*</span>
                             </label>
                             <input @bind="CreateFormModel.LocationDescription" type="text" placeholder="VD: Tầng 1, khu vực A" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all" />
                         </div>
@@ -501,8 +500,9 @@
                             <label class="block text-xs font-semibold uppercase tracking-wider text-[#0f172a]">
                                 Loại Cơ Sở Vật Chất
                             </label>
-                            <div class="relative">
-                                <PropFlowSelect Options="FacilityTypeCreateOptions" @bind-Value="UpdateFormModel.FacilityType"  />
+                            <div class="flex gap-2">
+                                <div class="flex-1 fe04-light-select"><PropFlowSelect Options="FacilityTypeCreateOptions" @bind-Value="UpdateFacilityTypeId" /></div>
+                                <button type="button" class="px-3 rounded-xl border border-sky-300 text-sky-700 text-xs font-bold" @ref="FacilityTypeTrigger" @onclick="OpenFacilityTypeDialog">+ Thêm loại</button>
                             </div>
                         </div>
 
@@ -543,6 +543,24 @@
 }
 
 <PropFlow.Web.Client.Features.Facility.Components.FacilityDetailDialog IsOpen="IsDetailOpen" Facility="SelectedFacilityToView" OnClose="() => IsDetailOpen = false" />
+@if (IsManager && IsFacilityTypeDialogOpen)
+{
+    <div class="fe04-nested-modal-backdrop fixed inset-0 flex items-center justify-center p-4" @onclick="CloseFacilityTypeDialog">
+        <section class="fe04-nested-modal w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="facility-type-dialog-title"
+                 @onclick:stopPropagation="true"
+                 @onkeydown="HandleFacilityTypeDialogKeyDown"
+                 @onkeydown:stopPropagation="true">
+            <h3 id="facility-type-dialog-title" class="text-lg font-bold">Thêm loại cơ sở vật chất</h3>
+            <label class="mt-4 block text-sm font-medium" for="facility-type-name">Tên loại</label>
+            <input id="facility-type-name" @ref="FacilityTypeNameInput" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" @bind="NewFacilityType.Name" @onkeydown="HandleFacilityTypeNameKeyDown" />
+            @if (!string.IsNullOrWhiteSpace(FacilityTypeDialogError)) { <p class="mt-2 text-sm text-rose-700" role="alert">@FacilityTypeDialogError</p> }
+            <div class="mt-5 flex justify-end gap-2"><button type="button" class="px-4 py-2" @onclick="CloseFacilityTypeDialog">Hủy</button><button type="button" @ref="FacilityTypeSaveButton" disabled="@IsCreatingFacilityType" class="rounded-xl bg-sky-600 px-4 py-2 text-white" @onclick="CreateFacilityType" @onkeydown="HandleFacilityTypeSaveKeyDown">@(IsCreatingFacilityType ? "Đang lưu..." : "Lưu")</button></div>
+        </section>
+    </div>
+}
 @if (IsSaveConfirmationOpen)
 {
     <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedFacilityToEdit is null ? "Bạn có muốn tạo cơ sở vật chất này không?" : "Bạn có muốn cập nhật cơ sở vật chất này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveFacility" OnCancel="CloseSaveConfirmation" />
@@ -551,38 +569,15 @@
 @code {
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
         new("", "Tất cả trạng thái"),
-        new("ACTIVE", "● Đang hoạt động"),
-        new("UNDER_MAINTENANCE", "● Đang bảo trì"),
-        new("UNAVAILABLE", "● Tạm ngưng / Kín lịch"),
-        new("INACTIVE", "● Ngừng kích hoạt"),
-        new("OUT_OF_SERVICE", "● Ngừng phục vụ")
+        new("ACTIVE", "Đang hoạt động"),
+        new("UNDER_MAINTENANCE", "Đang bảo trì"),
+        new("UNAVAILABLE", "Tạm ngưng / Kín lịch"),
+        new("INACTIVE", "Ngừng hoạt động"),
+        new("OUT_OF_SERVICE", "Ngừng phục vụ")
     ];
 
-    private static readonly IReadOnlyList<PropFlowSelectOption> FacilityTypeFilterOptions = [
-        new("", "Tất cả loại CSVT"),
-        new("Phòng GYM / Fitness", "Phòng GYM / Fitness"),
-        new("Hồ Bơi", "Hồ Bơi"),
-        new("Sân Tennis / Cầu Lông", "Sân Tennis / Cầu Lông"),
-        new("Sân Bóng / Thể Thao", "Sân Bóng / Thể Thao"),
-        new("Khu Vui Chơi & Giải Trí", "Khu Vui Chơi & Giải Trí"),
-        new("Khu Thương Mại", "Khu Thương Mại"),
-        new("Phòng Tiệc / Sự Kiện", "Phòng Tiệc / Sự Kiện"),
-        new("Khu Giáo Dục", "Khu Giáo Dục"),
-        new("Khác", "Khác")
-    ];
-
-    private static readonly IReadOnlyList<PropFlowSelectOption> FacilityTypeCreateOptions = [
-        new("", "Chọn loại cơ sở vật chất"),
-        new("Phòng GYM / Fitness", "Phòng GYM / Fitness"),
-        new("Hồ Bơi", "Hồ Bơi"),
-        new("Sân Tennis / Cầu Lông", "Sân Tennis / Cầu Lông"),
-        new("Sân Bóng / Thể Thao", "Sân Bóng / Thể Thao"),
-        new("Khu Vui Chơi & Giải Trí", "Khu Vui Chơi & Giải Trí"),
-        new("Khu Thương Mại", "Khu Thương Mại"),
-        new("Phòng Tiệc / Sự Kiện", "Phòng Tiệc / Sự Kiện"),
-        new("Khu Giáo Dục", "Khu Giáo Dục"),
-        new("Khác", "Khác")
-    ];
+    private IReadOnlyList<PropFlowSelectOption> FacilityTypeFilterOptions => [new("", "Tất cả loại CSVT"), .. FacilityTypes.Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Name))];
+    private IReadOnlyList<PropFlowSelectOption> FacilityTypeCreateOptions => [new("", "Chọn loại cơ sở vật chất"), .. FacilityTypes.Where(x => x.IsActive).Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Name))];
 
     private PagedResult<FacilityModel> PagedResult { get; set; } = new();
     private FacilitySummaryModel? FacilitySummary { get; set; }
@@ -603,7 +598,18 @@
     private FacilityModel? SelectedFacilityToView { get; set; }
 
     private bool IsManager { get; set; }
+    private IReadOnlyList<FacilityTypeModel> FacilityTypes { get; set; } = [];
+    private bool IsFacilityTypeDialogOpen { get; set; }
+    private bool IsCreatingFacilityType { get; set; }
+    private string? FacilityTypeDialogError { get; set; }
+    private CreateFacilityTypeModel NewFacilityType { get; set; } = new();
+    private ElementReference FacilityTypeTrigger;
+    private ElementReference FacilityTypeNameInput;
+    private ElementReference FacilityTypeSaveButton;
+    private bool FocusFacilityTypeNameInput;
+    private bool RestoreFacilityTypeTriggerFocus;
     private readonly CancellationTokenSource StatusRefreshCancellation = new();
+    private HubConnection? AssetStatusHub;
 
     private string StatusFilterString
     {
@@ -618,33 +624,50 @@
     {
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
         IsManager = AssetPermissions.CanManage(user);
-        await Task.WhenAll(LoadData(), LoadSummaryAsync());
-        _ = RefreshStatusAsync(StatusRefreshCancellation.Token);
+        await Task.WhenAll(LoadData(), LoadSummaryAsync(), LoadFacilityTypesAsync());
+        _ = ConnectAssetStatusHubAsync();
     }
 
-    private async Task RefreshStatusAsync(CancellationToken ct)
+    private async Task ConnectAssetStatusHubAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        HubConnection? hub = null;
         try
         {
-            while (await timer.WaitForNextTickAsync(ct))
+            hub = MaintenanceHubConnectionFactory.Create();
+            hub.On("AssetStatusChanged", () => RefreshAssetStatusForRealtimeAsync());
+            hub.Reconnected += _ => InvokeAsync(async () =>
             {
-                if (IsFormOpen || IsSaving || IsLoading) continue;
-                await InvokeAsync(async () =>
-                {
-                    if (ct.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
-                    if (IsDetailOpen)
-                        await RefreshDetailAsync(ct);
-                    else
-                        await Task.WhenAll(LoadData(), LoadSummaryAsync());
-                    if (!ct.IsCancellationRequested) StateHasChanged();
-                });
-            }
+                await hub.InvokeAsync("JoinAssetStatus", StatusRefreshCancellation.Token);
+                await RefreshAssetStatusForRealtimeAsync();
+            });
+            await hub.StartAsync(StatusRefreshCancellation.Token);
+            await hub.InvokeAsync("JoinAssetStatus", StatusRefreshCancellation.Token);
+            AssetStatusHub = hub;
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (StatusRefreshCancellation.IsCancellationRequested) { }
+        catch
+        {
+            // A realtime outage must not block the FE-04 page.
+            if (AssetStatusHub is null && hub is not null) await hub.DisposeAsync();
+        }
     }
 
-    public void Dispose() => StatusRefreshCancellation.Cancel();
+    private Task RefreshAssetStatusForRealtimeAsync() => InvokeAsync(async () =>
+    {
+        if (StatusRefreshCancellation.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
+        if (IsDetailOpen)
+            await RefreshDetailAsync(StatusRefreshCancellation.Token);
+        else
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
+        if (!StatusRefreshCancellation.IsCancellationRequested) StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        StatusRefreshCancellation.Cancel();
+        if (AssetStatusHub is not null) await AssetStatusHub.DisposeAsync();
+        StatusRefreshCancellation.Dispose();
+    }
 
     private async Task RefreshDetailAsync(CancellationToken ct)
     {
@@ -685,6 +708,13 @@
     {
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
         FacilitySummary = result.IsSuccess ? result.Data?.Facilities : null;
+    }
+
+    private async Task LoadFacilityTypesAsync()
+    {
+        var result = await FacilityApiClient.GetFacilityTypesAsync(activeOnly: false);
+        if (result.IsSuccess && result.Data is not null) FacilityTypes = result.Data;
+        else ErrorMessage ??= result.Message ?? "Không thể tải loại cơ sở vật chất.";
     }
 
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
@@ -729,7 +759,7 @@
         UpdateFormModel = new UpdateFacilityModel
         {
             Name = item.Name,
-            FacilityType = item.FacilityType,
+            FacilityTypeId = item.FacilityTypeId,
             LocationDescription = item.LocationDescription,
             Description = item.Description
         };
@@ -772,10 +802,11 @@
                 : await FacilityApiClient.UpdateFacilityAsync(SelectedFacilityToEdit.Id, UpdateFormModel);
             if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu cơ sở vật chất."; return; }
             var name = SelectedFacilityToEdit == null ? CreateFormModel.Name : UpdateFormModel.Name;
+            var generatedCode = SelectedFacilityToEdit is null ? result.Data?.Code : null;
             IsSaveConfirmationOpen = false;
             CloseDialog();
             await Task.WhenAll(LoadData(), LoadSummaryAsync());
-            if (ErrorMessage == null) SuccessMessage = $"Đã lưu cơ sở vật chất '{name}' thành công!";
+            if (ErrorMessage == null) SuccessMessage = generatedCode is null ? $"Đã lưu cơ sở vật chất '{name}' thành công!" : $"Đã tạo cơ sở vật chất '{name}' với mã {generatedCode}.";
         }
         finally { IsSaving = false; }
     }
@@ -817,7 +848,68 @@
 
     private string FacilityTypeFilterString
     {
-        get => Filter.FacilityType ?? "";
-        set => Filter.FacilityType = string.IsNullOrWhiteSpace(value) ? null : value;
+        get => Filter.FacilityTypeId?.ToString() ?? "";
+        set => Filter.FacilityTypeId = Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private string CreateFacilityTypeId { get => CreateFormModel.FacilityTypeId?.ToString() ?? ""; set => CreateFormModel.FacilityTypeId = Guid.TryParse(value, out var id) ? id : null; }
+    private string UpdateFacilityTypeId { get => UpdateFormModel.FacilityTypeId?.ToString() ?? ""; set => UpdateFormModel.FacilityTypeId = Guid.TryParse(value, out var id) ? id : null; }
+    private void OpenFacilityTypeDialog()
+    {
+        if (!IsManager) return;
+        NewFacilityType = new();
+        FacilityTypeDialogError = null;
+        FocusFacilityTypeNameInput = true;
+        IsFacilityTypeDialogOpen = true;
+    }
+
+    private void CloseFacilityTypeDialog()
+    {
+        if (IsCreatingFacilityType) return;
+        IsFacilityTypeDialogOpen = false;
+        RestoreFacilityTypeTriggerFocus = true;
+    }
+
+    private Task HandleFacilityTypeDialogKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CloseFacilityTypeDialog();
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleFacilityTypeNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Tab" && e.ShiftKey)
+            await FacilityTypeSaveButton.FocusAsync();
+    }
+
+    private async Task HandleFacilityTypeSaveKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Tab" && !e.ShiftKey)
+            await FacilityTypeNameInput.FocusAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (FocusFacilityTypeNameInput && IsFacilityTypeDialogOpen)
+        {
+            FocusFacilityTypeNameInput = false;
+            await FacilityTypeNameInput.FocusAsync();
+        }
+
+        if (RestoreFacilityTypeTriggerFocus && !IsFacilityTypeDialogOpen)
+        {
+            RestoreFacilityTypeTriggerFocus = false;
+            await FacilityTypeTrigger.FocusAsync();
+        }
+    }
+
+    private async Task CreateFacilityType()
+    {
+        if (!IsManager) return;
+        if (!TryValidate(NewFacilityType, out var error)) { FacilityTypeDialogError = error; return; }
+        IsCreatingFacilityType = true; FacilityTypeDialogError = null;
+        try { var result = await FacilityApiClient.CreateFacilityTypeAsync(NewFacilityType); if (!result.IsSuccess || result.Data is null) { FacilityTypeDialogError = result.Message ?? "Không thể tạo loại cơ sở vật chất."; return; } FacilityTypes = FacilityTypes.Append(result.Data).OrderBy(x => x.Name).ToArray(); if (SelectedFacilityToEdit is null) CreateFormModel.FacilityTypeId = result.Data.Id; else UpdateFormModel.FacilityTypeId = result.Data.Id; IsFacilityTypeDialogOpen = false; RestoreFacilityTypeTriggerFocus = true; }
+        finally { IsCreatingFacilityType = false; }
     }
 }

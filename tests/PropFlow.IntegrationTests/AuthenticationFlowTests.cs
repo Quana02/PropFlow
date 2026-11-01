@@ -50,6 +50,11 @@ public sealed class AuthTestMail : IAuthEmail
         if (FailNext) { FailNext = false; throw new InvalidOperationException("Test delivery failure"); }
         Codes[email] = code; return Task.CompletedTask;
     }
+    public Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct)
+    {
+        Codes[email] = code;
+        return Task.CompletedTask;
+    }
 }
 public sealed class AuthTestClock : TimeProvider
 {
@@ -89,7 +94,8 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         while (root != null && !File.Exists(Path.Combine(root.FullName, "PropFlow.sln"))) root = root.Parent;
         if (root == null) throw new DirectoryNotFoundException("Không tìm thấy PropFlow.sln từ thư mục kiểm thử.");
         var configured = new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString());
-        if (configured.Database != "propflow_test") throw new InvalidOperationException("Auth tests require the configured propflow_test connection as the isolated test server source.");
+        if (configured.Database != TestDatabaseConfiguration.GetExpectedDatabaseName())
+            throw new InvalidOperationException("Auth tests require the configured whitelisted test database as the isolated test server source.");
         databaseName = "propflow_fe01_test_" + Guid.NewGuid().ToString("N");
         configured.Database = "postgres";
         adminConnection = configured.ConnectionString;

@@ -466,7 +466,6 @@ Table residents.residents {
 // It is not an authorization scope and child business tables do not carry building_id.
 Table property_assets.buildings {
   id uuid [pk, default: `gen_random_uuid()`]
-  code varchar(30) [not null, unique]
   name varchar(150) [not null]
   address text [not null]
   time_zone_id varchar(64) [not null, default: 'Asia/Ho_Chi_Minh', note: 'IANA timezone ID for building-local business calculations; do not store raw UTC offsets such as +07:00 as the timezone identifier.']
@@ -572,9 +571,10 @@ Table residents.resident_apartments {
 
 Table property_assets.facilities {
   id uuid [pk, default: `gen_random_uuid()`]
-  code varchar(30) [not null]
+  code varchar(512) [not null]
   name varchar(150) [not null]
-  facility_type varchar(80)
+  facility_type varchar(80) [note: 'Legacy text retained during Facility Type migration; do not use for new writes.']
+  facility_type_id uuid [ref: > property_assets.facility_types.id]
   location_description varchar(255)
   description text
   status master_data_status [not null, default: 'ACTIVE']
@@ -586,14 +586,27 @@ Table property_assets.facilities {
   Indexes {
     code [unique]
     facility_type
+    facility_type_id
     status
   }
+}
+
+Table property_assets.facility_types {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(80) [not null, note: 'Unique by lower(btrim(name)) in PostgreSQL.']
+  is_active boolean [not null, default: true]
+  created_by uuid [note: 'Scalar actor reference to auth.users; no cross-module physical FK.']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes { is_active }
+  Note: 'PropertyAssets-owned master data. Hard deletion is not exposed; facilities references use RESTRICT.'
 }
 
 Table property_assets.equipment {
   id uuid [pk, default: `gen_random_uuid()`]
   facility_id uuid [ref: > property_assets.facilities.id]
-  code varchar(50) [not null]
+  code varchar(512) [not null]
   name varchar(150) [not null]
   equipment_type varchar(100)
   manufacturer varchar(100)
@@ -798,7 +811,7 @@ Table complaints.complaint_activities {
 
 Table maintenance.maintenance_schedules {
   id uuid [pk, default: `gen_random_uuid()`]
-  schedule_code varchar(30) [not null, unique]
+  schedule_code varchar(512) [not null, unique]
   facility_id uuid [note: 'Cross-module scalar reference to property_assets.facilities.id; no cross-module EF navigation or physical FK.']
   equipment_id uuid [note: 'Cross-module scalar reference to property_assets.equipment.id; no cross-module EF navigation or physical FK.']
   title varchar(200) [not null]
@@ -821,7 +834,7 @@ Table maintenance.maintenance_schedules {
 
 Table maintenance.maintenance_tasks {
   id uuid [pk, default: `gen_random_uuid()`]
-  task_number varchar(30) [not null, unique]
+  task_number varchar(512) [not null, unique]
   schedule_id uuid [ref: > maintenance.maintenance_schedules.id]
   source_service_request_id uuid [note: 'Optional stable scalar reference to FE-05; no cross-module EF navigation.']
   source_complaint_id uuid [note: 'Optional stable scalar reference to FE-06 when maintenance originates from complaint follow-up.']
@@ -918,6 +931,23 @@ Table maintenance.maintenance_results {
   }
 
   Note: 'Append each Staff result submission/revision instead of overwriting earlier submissions; this preserves review and revision history.'
+}
+
+Table maintenance.maintenance_result_attachments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  maintenance_result_id uuid [not null, ref: > maintenance.maintenance_results.id]
+  storage_key varchar(512) [not null, unique, note: 'Server-generated private storage key.']
+  original_file_name varchar(255) [not null]
+  content_type varchar(100) [not null]
+  size_bytes bigint [not null]
+  uploaded_by uuid [not null, note: 'Cross-module scalar reference to auth.users.id; no physical FK.']
+  uploaded_at timestamptz [not null]
+
+  Indexes {
+    maintenance_result_id
+  }
+
+  Note: 'Evidence is append-only per maintenance result attempt and stored privately outside PostgreSQL.'
 }
 
 // =========================================================

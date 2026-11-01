@@ -16,6 +16,7 @@ public class InvoiceItemConfiguration : IEntityTypeConfiguration<InvoiceItem>
         });
 
         builder.HasKey(item => item.Id);
+        builder.Property(item => item.AmountDivisor).HasColumnName("amount_divisor").HasDefaultValue(1);
         builder.Property(item => item.Id).HasColumnName("id");
 
         builder.Property(item => item.InvoiceId).HasColumnName("invoice_id").IsRequired();
