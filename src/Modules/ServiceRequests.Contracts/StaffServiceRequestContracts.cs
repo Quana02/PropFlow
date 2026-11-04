@@ -70,7 +70,13 @@ public sealed record StaffServiceRequestDetailResponse(
     DateTimeOffset? StartedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<StaffServiceRequestActivityItem> Activities,
-    IReadOnlyList<StaffServiceRequestEvidenceItem> Evidence);
+    IReadOnlyList<StaffServiceRequestEvidenceItem> Evidence,
+    decimal BaseServiceCost = 0,
+    decimal ProposedAdditionalCost = 0,
+    string? AdditionalCostNote = null);
 
 public sealed record UpdateStaffServiceRequestProgressRequest(string Detail);
-public sealed record CompleteStaffServiceRequestWorkRequest(string WorkResult);
+public sealed record CompleteStaffServiceRequestWorkRequest(
+    string WorkResult,
+    decimal AdditionalCost = 0,
+    string? AdditionalCostNote = null);

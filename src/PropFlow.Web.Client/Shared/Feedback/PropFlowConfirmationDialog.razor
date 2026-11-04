@@ -2,7 +2,7 @@
 @inject IJSRuntime JS
 @using Microsoft.AspNetCore.Components.Web
 
-<div class="pf-confirm-backdrop" @onclick="CancelAsync">
+<div class="pf-confirm-backdrop" popover="manual" @onclick="CancelAsync">
     <section @ref="dialog" class="pf-confirm @(InformationOnly ? "pf-confirm--information" : null)" role="alertdialog" aria-modal="true" aria-labelledby="@titleId" aria-describedby="@messageId" tabindex="-1" @onclick:stopPropagation="true" @onkeydown="HandleKeyDown">
         <header>
             <h2 id="@titleId">@if(InformationOnly){<span class="material-symbols-outlined" aria-hidden="true">warning</span>}@Title</h2>
@@ -39,7 +39,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261002.1");
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2");
         await module.InvokeVoidAsync("open", dialog);
     }
 

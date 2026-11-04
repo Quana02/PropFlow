@@ -1,6 +1,7 @@
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.Billing.Contracts;
 
 namespace PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
 
@@ -29,7 +30,8 @@ public sealed class GetResidentServiceRequestHandler(
     IResidentServiceRequestDetailStore store,
     IResidentResidenceSource residences,
     ICurrentBuildingTimeZone buildingTimeZone,
-    TimeProvider clock)
+    TimeProvider clock,
+    IServiceRequestBilling? billing = null)
 {
     public async Task<GetResidentServiceRequestResult> HandleAsync(
         Guid userId,
@@ -52,9 +54,16 @@ public sealed class GetResidentServiceRequestHandler(
         }
 
         var detail = await store.GetAsync(residence.ResidentId, serviceRequestId, ct);
-        return detail is null
-            ? NotFound()
-            : new(GetResidentServiceRequestOutcome.Success, detail);
+        if (detail is null) return NotFound();
+        if (billing is not null)
+        {
+            var settlement = await billing.FindForResidentAsync(serviceRequestId, residence.ResidentId, ct);
+            if (settlement is not null)
+                detail = detail with { Settlement = new ResidentServiceRequestSettlement(
+                    settlement.InvoiceId, settlement.InvoiceNumber, settlement.TotalAmount,
+                    settlement.ConfirmedPaidAmount, settlement.OutstandingAmount, settlement.Status) };
+        }
+        return new(GetResidentServiceRequestOutcome.Success, detail);
     }
 
     private static GetResidentServiceRequestResult NotFound() =>

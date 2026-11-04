@@ -70,3 +70,6 @@
         width: calc(100vw - 1.5rem);
     }
 }
+
+.pf-toast[popover]{inset:1rem 0 auto 0;margin:0 auto;max-width:none;max-height:none}.pf-toast[popover]:not(:popover-open){display:none}
+

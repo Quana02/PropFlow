@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -13,21 +13,25 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.InsertData(
-                schema: "service_requests",
-                table: "service_request_categories",
-                columns: new[] { "id", "code", "created_at", "created_by", "description", "display_order", "is_active", "name", "updated_at", "updated_by" },
-                values: new object[,]
-                {
-                    { new Guid("00000000-0000-4000-8000-000000000501"), "REPAIR", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 10, true, "Sửa chữa kỹ thuật", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null },
-                    { new Guid("00000000-0000-4000-8000-000000000502"), "CLEANING", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 20, true, "Dịch vụ vệ sinh", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null },
-                    { new Guid("00000000-0000-4000-8000-000000000503"), "VISITOR", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 30, true, "Đăng ký khách thăm", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null },
-                    { new Guid("00000000-0000-4000-8000-000000000504"), "VEHICLE", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 40, true, "Đăng ký thẻ xe", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null },
-                    { new Guid("00000000-0000-4000-8000-000000000505"), "MOVING", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 50, true, "Chuyển đồ / Chuyển nhà", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null },
-                    { new Guid("00000000-0000-4000-8000-000000000506"), "CONSTRUCTION", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 60, true, "Thi công nội thất", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null },
-                    { new Guid("00000000-0000-4000-8000-000000000507"), "BILLING", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 70, true, "Hỗ trợ hóa đơn", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null },
-                    { new Guid("00000000-0000-4000-8000-000000000508"), "OTHER", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null, null, 80, true, "Hỗ trợ khác", new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)), null }
-                });
+            // Existing local databases may already contain these codes with referenced IDs.
+            // Keep those rows intact and add only missing categories.
+            migrationBuilder.Sql(@"
+                INSERT INTO service_requests.service_request_categories
+                    (id, code, created_at, created_by, description, display_order, is_active, name, updated_at, updated_by)
+                SELECT v.id, v.code, TIMESTAMPTZ '2026-09-14 00:00:00+00', NULL, NULL, v.display_order, true, v.name,
+                    TIMESTAMPTZ '2026-09-14 00:00:00+00', NULL
+                FROM (VALUES
+                    ('00000000-0000-4000-8000-000000000501'::uuid, 'REPAIR', 10, 'Sửa chữa kỹ thuật'),
+                    ('00000000-0000-4000-8000-000000000502'::uuid, 'CLEANING', 20, 'Dịch vụ vệ sinh'),
+                    ('00000000-0000-4000-8000-000000000503'::uuid, 'VISITOR', 30, 'Đăng ký khách thăm'),
+                    ('00000000-0000-4000-8000-000000000504'::uuid, 'VEHICLE', 40, 'Đăng ký thẻ xe'),
+                    ('00000000-0000-4000-8000-000000000505'::uuid, 'MOVING', 50, 'Chuyển đồ / Chuyển nhà'),
+                    ('00000000-0000-4000-8000-000000000506'::uuid, 'CONSTRUCTION', 60, 'Thi công nội thất'),
+                    ('00000000-0000-4000-8000-000000000507'::uuid, 'BILLING', 70, 'Hỗ trợ hóa đơn'),
+                    ('00000000-0000-4000-8000-000000000508'::uuid, 'OTHER', 80, 'Hỗ trợ khác')
+                ) AS v(id, code, display_order, name)
+                ON CONFLICT (code) DO NOTHING;
+            ");
         }
 
         /// <inheritdoc />

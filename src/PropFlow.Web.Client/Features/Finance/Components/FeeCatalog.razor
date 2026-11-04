@@ -39,7 +39,7 @@
                 <h2>Thêm phiên bản đơn giá</h2><div class="fields">
                     <label>Loại phí<PropFlowSelect @bind-Value="FeeValue" Options="FeeOptions" Disabled="busy" AriaLabel="Loại phí" Searchable="true" /></label>
                     <label>Tên phiên bản<input required maxlength="150" disabled="@busy" @bind="rateName" /></label>
-                    <label>Đơn giá (VND)<input type="number" min="0" step="1" required @bind="unitRate" disabled="@busy" /></label>
+                    <FinanceNumberField Label="Đơn giá (VND)" Placeholder="Nhập đơn giá" @bind-Value="unitRate" Max="999999999999999999" ShowErrors="true" Disabled="busy" />
                     <label>Đơn vị<input maxlength="50" @bind="unitName" disabled="@busy" /></label>
                     <label>Hiệu lực từ<PropFlowDatePicker @bind-Value="effectiveFrom" ValidityChanged="v => effectiveFromValid = v" AriaLabel="Hiệu lực từ" Disabled="busy" /></label>
                     <label>Đến ngày (tùy chọn)<PropFlowDatePicker @bind-Value="effectiveTo" ValidityChanged="v => effectiveToValid = v" AriaLabel="Hiệu lực đến" Disabled="busy" /></label>
@@ -58,14 +58,14 @@
     private IReadOnlyList<PropFlowSelectOption> FeeOptions => fees.Where(x => x.Status == "ACTIVE").Select(x => new PropFlowSelectOption(x.Id.ToString(), x.Code + " — " + x.Name)).ToArray();
     private static readonly PropFlowSelectOption[] CalculationOptions = [new("FIXED", "Cố định theo số lượng"), new("AREA", "Theo diện tích (nhập số m²)")];
     private bool effectiveFromValid = true, effectiveToValid = true;
-    private Guid feeId; private string rateName = "", unitName = ""; private decimal unitRate;
+    private Guid feeId; private string rateName = "", unitName = ""; private decimal? unitRate = 0;
     private DateOnly? effectiveFrom = DateOnly.FromDateTime(DateTime.Today); private DateOnly? effectiveTo;
     protected override Task OnInitializedAsync() => Load();
     private async Task Load() { loading = true; var f = await Api.GetAsync<FeeView[]>("fees"); var r = await Api.GetAsync<RateView[]>("rates"); fees = f.Data ?? []; rates = r.Data ?? []; if (!f.IsSuccess || !r.IsSuccess) error = f.Message ?? r.Message; loading = false; }
     private void Edit(FeeView f) { editing = f.Id; code = f.Code; name = f.Name; method = f.CalculationMethod; frequency = f.BillingFrequency; description = f.Description ?? ""; }
     private void Reset() { editing = null; code = name = description = ""; method = "FIXED"; frequency = "MONTHLY"; }
     private async Task SaveFee() { if (busy || !CanWrite) return; busy = true; error = null; var r = await Api.SaveAsync<SavedId>(editing.HasValue ? $"fees/{editing}" : "fees", new FeeInput(code, name, method, frequency, description), editing.HasValue ? HttpMethod.Put : HttpMethod.Post); if (r.IsSuccess) { Reset(); await Load(); } else error = r.Message; busy = false; }
-    private async Task SaveRate() { if (busy || !CanWrite) return; if (!effectiveFrom.HasValue || !effectiveFromValid || !effectiveToValid) { error = "Ngày hiệu lực không hợp lệ."; return; } busy = true; error = null; var r = await Api.SaveAsync<SavedId>("rates", new RateInput(feeId, rateName, unitRate, unitName, effectiveFrom.Value, effectiveTo)); if (r.IsSuccess) { rateName = ""; await Load(); } else error = r.Message; busy = false; }
+    private async Task SaveRate() { if (busy || !CanWrite) return; if (unitRate is null) { error = "Vui lòng nhập đơn giá hợp lệ."; return; } if (!effectiveFrom.HasValue || !effectiveFromValid || !effectiveToValid) { error = "Ngày hiệu lực không hợp lệ."; return; } busy = true; error = null; var r = await Api.SaveAsync<SavedId>("rates", new RateInput(feeId, rateName, unitRate.Value, unitName, effectiveFrom.Value, effectiveTo)); if (r.IsSuccess) { rateName = ""; await Load(); } else error = r.Message; busy = false; }
     private async Task SetActive(FeeView f) { busy = true; error = null; var r = await Api.SaveAsync<EmptyResponse>($"fees/{f.Id}/active", new { active = f.Status != "ACTIVE" }, HttpMethod.Patch); if (r.IsSuccess) await Load(); else error = r.Message; busy = false; }
     private async Task SetRateActive(RateView r) { busy = true; error = null; var result = await Api.SaveAsync<EmptyResponse>($"rates/{r.Id}/active", new { active = !r.IsActive }, HttpMethod.Patch); if (result.IsSuccess) await Load(); else error = result.Message; busy = false; }
 }

@@ -537,12 +537,14 @@
             hub.On<Guid>("MaintenanceTaskUpdated", HandleMaintenanceTaskUpdatedAsync);
             hub.Reconnected += _ => InvokeAsync(async () =>
             {
+                await hub.InvokeAsync("JoinMaintenanceUpdates");
                 await JoinTaskGroupAsync(Detail?.Id);
                 await RefreshForRealtimeAsync(Detail?.Id);
                 StateHasChanged();
             });
             await hub.StartAsync();
             _hubConnection = hub;
+            await hub.InvokeAsync("JoinMaintenanceUpdates");
             await JoinTaskGroupAsync(Detail?.Id);
         }
         catch

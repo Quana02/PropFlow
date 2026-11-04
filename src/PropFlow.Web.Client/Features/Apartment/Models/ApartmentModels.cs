@@ -3,7 +3,7 @@ namespace PropFlow.Web.Client.Features.Apartment.Models;
 public sealed record ApartmentSummary(int TotalCount, int OccupiedCount, int VacantCount, int InactiveCount);
 public sealed record PagedApartmentsResponse(IReadOnlyList<ApartmentListItem> Items, int TotalCount, int PageIndex, int PageSize, ApartmentSummary Summary);
 public sealed record ApartmentListItem(Guid Id, string UnitNumber, int FloorNumber, Guid ApartmentUnitTypeId, string UnitType, decimal UsableAreaM2, string Status, IReadOnlyList<ResidentLookupItem> Owners, bool IsOccupied);
-public sealed record ApartmentUnitTypeResponse(Guid Id, string Name);
+public sealed record ApartmentUnitTypeResponse(Guid Id, string Name, decimal? DefaultUsableAreaM2 = null, int? DefaultBedroomCount = null, int? DefaultBathroomCount = null);
 public sealed record ResidentLookupItem(Guid ResidentId, string ResidentCode, string FullName);
 public sealed record ActiveResidentAssociation(Guid ResidentId, string ResidentCode, string FullName, string HouseholdRole, string ResidencyType, string? RelationshipToHead, DateOnly StartDate, string ResidencyStatus);
 public sealed record ResidentAssociationItem(Guid ResidencyId, Guid ResidentId, string ResidentCode, string FullName, string HouseholdRole, string ResidencyType, Guid? HouseholdHeadResidencyId, string? HouseholdHeadName, string? HouseholdHeadResidentCode, string? RelationshipToHead, DateOnly StartDate, DateOnly? EndDate, string ResidencyStatus)
@@ -31,8 +31,14 @@ public class CreateApartmentRequest
 }
 
 public sealed class UpdateApartmentRequest : CreateApartmentRequest { }
-public sealed class CreateApartmentUnitTypeRequest { public string Name { get; set; } = ""; }
-public sealed class UpdateApartmentUnitTypeRequest { public string Name { get; set; } = ""; }
+public class CreateApartmentUnitTypeRequest
+{
+    public string Name { get; set; } = "";
+    public decimal? DefaultUsableAreaM2 { get; set; }
+    public int? DefaultBedroomCount { get; set; }
+    public int? DefaultBathroomCount { get; set; }
+}
+public sealed class UpdateApartmentUnitTypeRequest : CreateApartmentUnitTypeRequest { }
 public sealed class ChangeApartmentOwnerRequest { public Guid OwnerResidentId { get; set; } public DateOnly? EffectiveDate { get; set; } }
 public sealed class EndApartmentOwnershipRequest { public DateOnly? EndDate { get; set; } }
 public sealed class SetApartmentStatusRequest { public string Status { get; set; } = "ACTIVE"; }

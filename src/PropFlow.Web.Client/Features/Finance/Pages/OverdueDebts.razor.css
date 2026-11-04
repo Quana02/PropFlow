@@ -93,3 +93,5 @@
 }
 
 .process-button { cursor: pointer; }
+
+.debt-actions{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;white-space:nowrap}.collect-debt-button{border:0;border-radius:.7rem;padding:.55rem .8rem;background:#009d78;color:#fff;font:inherit;font-size:.75rem;font-weight:700;cursor:pointer}.collect-debt-button:hover{background:#008767}

@@ -1,0 +1,19 @@
+@implements IDisposable
+
+@code {
+    [Parameter] public bool Enabled { get; set; }
+    [Parameter] public EventCallback Refresh { get; set; }
+    private readonly CancellationTokenSource cancellation = new();
+    protected override void OnInitialized() => _ = WatchAsync();
+    private async Task WatchAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellation.Token))
+                if (Enabled) await InvokeAsync(() => Refresh.InvokeAsync());
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+    }
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}

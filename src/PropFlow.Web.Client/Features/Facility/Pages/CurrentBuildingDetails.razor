@@ -20,7 +20,7 @@
     <header class="page-header">
         <div>
             <span class="eyebrow">Hồ sơ hiện tại</span>
-            <h1 id="building-page-title">Chi tiết chung cư</h1>
+            <h1 id="building-page-title">Chi tiết chung cư: @Building?.Name</h1>
             <p>Thông tin hồ sơ và tổng quan vận hành của chung cư đang được PropFlow quản lý.</p>
         </div>
         @if (CanEdit && !IsLoading)
@@ -65,10 +65,10 @@
         <section class="metrics-grid" aria-label="Tổng quan vận hành">
             @if (CanEdit)
             {
-            <article class="metric-card"><span>Căn hộ</span><strong>@Building.TotalApartments</strong><small>Tổng số căn hộ</small></article>
+            <article class="metric-card apartments"><span class="metric-icon material-symbols-outlined" aria-hidden="true">apartment</span><div><span>Căn hộ</span><small>Tổng số căn hộ</small></div><strong>@Building.TotalApartments</strong></article>
             }
-            <article class="metric-card"><span>Cơ sở vật chất</span><strong>@Building.Facilities.Total</strong><small>@Building.Facilities.Active đang hoạt động</small></article>
-            <article class="metric-card"><span>Thiết bị</span><strong>@Building.Equipment.Total</strong><small>@Building.Equipment.Active đang hoạt động</small></article>
+            <article class="metric-card facilities"><span class="metric-icon material-symbols-outlined" aria-hidden="true">construction</span><div><span>Cơ sở vật chất</span><small>@Building.Facilities.Active đang hoạt động</small></div><strong>@Building.Facilities.Total</strong></article>
+            <article class="metric-card equipment"><span class="metric-icon material-symbols-outlined" aria-hidden="true">settings</span><div><span>Thiết bị</span><small>@Building.Equipment.Active đang hoạt động</small></div><strong>@Building.Equipment.Total</strong></article>
         </section>
 
         <div class="details-grid">
@@ -83,19 +83,18 @@
                     <div><dt>Số tầng</dt><dd>@Building.NumberOfFloors tầng</dd></div>
                     <div><dt>Múi giờ</dt><dd>@Building.TimeZoneId</dd></div>
                 </dl>
+                @if (!string.IsNullOrWhiteSpace(Building.Description))
+                {
+                    <p class="building-description">@Building.Description</p>
+                }
+                <footer class="building-note"><span aria-hidden="true"></span>Được quản lý tập trung bởi hệ thống PropFlow Enterprise</footer>
             </section>
 
             @if (CanEdit)
             {
-            <section class="detail-panel" aria-labelledby="description-heading">
-                <header class="section-header">
-                    <span class="section-icon secondary" aria-hidden="true">≡</span>
-                    <div><h2 id="description-heading">Mô tả</h2><p>Thông tin bổ sung về chung cư</p></div>
-                </header>
-                <p class="description">@(string.IsNullOrWhiteSpace(Building.Description) ? "Chưa có mô tả." : Building.Description)</p>
-            </section>
-
+            <MaintenanceOverviewCard TimeZoneId="Building.TimeZoneId" />
             }
+
             <section class="detail-panel wide-panel" aria-labelledby="operation-heading">
                 <header class="section-header">
                     <span class="section-icon operation" aria-hidden="true">◇</span>

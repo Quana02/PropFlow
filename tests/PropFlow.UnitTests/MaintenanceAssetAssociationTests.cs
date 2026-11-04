@@ -92,6 +92,55 @@ public sealed class MaintenanceAssetAssociationTests
     }
 
     [Fact]
+    public async Task CreateTaskAsync_EmergencyTaskMarksOnlyItsReferencedAssetsUnderMaintenance()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY");
+        var equipment = Asset("EQUIPMENT", facility.Id);
+        var source = new AssetSource(facility, equipment);
+        var service = new MaintenanceService(db, source, new StaffDirectory(), notifier: new NoopNotifier(),
+            assetTransaction: new PassThroughAssetTransactionCoordinator());
+
+        var created = await service.CreateTaskAsync(
+            new("CLIENT-SUPPLIED", "Sửa chữa khẩn cấp", Description: "Xử lý sự cố", FacilityId: facility.Id,
+                EquipmentId: equipment.Id, IsEmergency: true), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.NotNull(await db.MaintenanceTasks.SingleOrDefaultAsync(task => task.Id == created.Id));
+        Assert.Equal(1, source.MarkUnderMaintenanceCalls);
+    }
+
+    [Fact]
+    public async Task CreateTaskAsync_EmergencyTaskWithoutTransactionCoordinatorDoesNotCreateTask()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY");
+        var service = new MaintenanceService(db, new AssetSource(facility), new StaffDirectory());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateTaskAsync(
+            new(null, "Sửa chữa khẩn cấp", Description: "Xử lý sự cố", FacilityId: facility.Id,
+                IsEmergency: true), Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Empty(await db.MaintenanceTasks.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateTaskAsync_EmergencyTaskRejectsAssetOutsideMaintainableStatusWithoutCreatingTask()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY", status: "OUT_OF_SERVICE");
+        var source = new AssetSource(facility);
+        var service = new MaintenanceService(db, source, new StaffDirectory(), notifier: new NoopNotifier(),
+            assetTransaction: new PassThroughAssetTransactionCoordinator());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateTaskAsync(
+            new(null, "Sửa chữa khẩn cấp", Description: "Xử lý sự cố", FacilityId: facility.Id,
+                IsEmergency: true), Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Empty(await db.MaintenanceTasks.ToListAsync());
+        Assert.Equal(0, source.MarkUnderMaintenanceCalls);
+    }
+
+    [Fact]
     public async Task CreateTaskAsync_ManualTaskStillRejectsMissingAssetsAndMismatchedFacilityEquipment()
     {
         await using var db = CreateDb();
@@ -204,11 +253,29 @@ public sealed class MaintenanceAssetAssociationTests
         AddSchedule(db, facility.Id, mismatchedEquipment.Id, DateTimeOffset.UtcNow.AddMinutes(-2));
         AddSchedule(db, facility.Id, validEquipment.Id, DateTimeOffset.UtcNow.AddMinutes(-1));
         var source = new ActivatingAssetSource(facility, mismatchedEquipment, validEquipment);
-        var service = new MaintenanceService(db, source, new StaffDirectory());
+        var notifier = new AssetStatusNotifier();
+        var service = new MaintenanceService(db, source, new StaffDirectory(), notifier: notifier);
 
+        await service.ActivateDueSchedulesAsync(CancellationToken.None);
         await service.ActivateDueSchedulesAsync(CancellationToken.None);
 
         Assert.Contains(validEquipment.Id, source.ActivatedScheduleEquipmentIds);
+        Assert.Equal(1, notifier.AssetStatusChangedCount);
+        Assert.Single(source.ActivatedScheduleEquipmentIds);
+    }
+
+    [Fact]
+    public async Task ActivateDueSchedulesAsync_PreservesCommittedAssetActivationWhenRealtimeNotificationFails()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY");
+        AddSchedule(db, facility.Id, null, DateTimeOffset.UtcNow.AddMinutes(-1));
+        var source = new ActivatingAssetSource(facility);
+        var service = new MaintenanceService(db, source, new StaffDirectory(), notifier: new ThrowingAssetStatusNotifier());
+
+        await service.ActivateDueSchedulesAsync(CancellationToken.None);
+
+        Assert.Equal(1, source.MarkUnderMaintenanceCalls);
     }
 
     private static MaintenanceDbContext CreateDb() => new(new DbContextOptionsBuilder<MaintenanceDbContext>()
@@ -255,20 +322,52 @@ public sealed class MaintenanceAssetAssociationTests
         public Task<MaintenanceStaffRecord?> GetActiveStaffAsync(Guid userId, CancellationToken ct) => Task.FromResult<MaintenanceStaffRecord?>(null);
     }
 
+    private sealed class NoopNotifier : IMaintenanceNotifier
+    {
+        public Task NotifyTaskUpdatedAsync(Guid taskId, IReadOnlyCollection<Guid> recipientStaffUserIds, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class AssetStatusNotifier : IMaintenanceNotifier
+    {
+        public int AssetStatusChangedCount { get; private set; }
+        public Task NotifyTaskUpdatedAsync(Guid taskId, IReadOnlyCollection<Guid> recipientStaffUserIds, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyAssetStatusChangedAsync(CancellationToken ct = default)
+        {
+            AssetStatusChangedCount++;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingAssetStatusNotifier : IMaintenanceNotifier
+    {
+        public Task NotifyTaskUpdatedAsync(Guid taskId, IReadOnlyCollection<Guid> recipientStaffUserIds, CancellationToken ct = default) => Task.CompletedTask;
+        public Task NotifyAssetStatusChangedAsync(CancellationToken ct = default) => throw new InvalidOperationException("SignalR unavailable");
+    }
+
+    private sealed class PassThroughAssetTransactionCoordinator : IMaintenanceAssetTransactionCoordinator
+    {
+        public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken) => operation(cancellationToken);
+    }
+
     private sealed class ActivatingAssetSource(params MaintenanceAssetReference[] assets) : IMaintenanceAssetSource
     {
         public List<Guid> ActivatedScheduleEquipmentIds { get; } = [];
+        public int MarkUnderMaintenanceCalls { get; private set; }
         public Task<IReadOnlyList<MaintenanceAssetReference>> GetAvailableAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<MaintenanceAssetReference>>(assets);
-        public Task<MaintenanceAssetReference?> GetFacilityAsync(Guid facilityId, CancellationToken ct) => Task.FromResult(assets.SingleOrDefault(x => x.AssetType == "FACILITY" && x.Id == facilityId));
-        public Task<MaintenanceAssetReference?> GetEquipmentAsync(Guid equipmentId, CancellationToken ct) => Task.FromResult(assets.SingleOrDefault(x => x.AssetType == "EQUIPMENT" && x.Id == equipmentId));
+        public Task<MaintenanceAssetReference?> GetFacilityAsync(Guid facilityId, CancellationToken ct) => Task.FromResult(StatusAfterActivation(assets.SingleOrDefault(x => x.AssetType == "FACILITY" && x.Id == facilityId)));
+        public Task<MaintenanceAssetReference?> GetEquipmentAsync(Guid equipmentId, CancellationToken ct) => Task.FromResult(StatusAfterActivation(assets.SingleOrDefault(x => x.AssetType == "EQUIPMENT" && x.Id == equipmentId)));
         public Task<bool> ExistsAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct) => Task.FromResult(true);
         public Task MarkUnderMaintenanceAsync(Guid facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
         {
+            MarkUnderMaintenanceCalls++;
             var equipment = assets.SingleOrDefault(x => x.Id == equipmentId);
             if (equipment?.FacilityId is not null && equipment.FacilityId != facilityId)
                 throw new ArgumentException("Thiết bị không thuộc cơ sở vật chất đã chọn.");
             if (equipmentId is { } id) ActivatedScheduleEquipmentIds.Add(id);
             return Task.CompletedTask;
         }
+
+        private MaintenanceAssetReference? StatusAfterActivation(MaintenanceAssetReference? asset) =>
+            asset is null || MarkUnderMaintenanceCalls == 0 ? asset : asset with { Status = "UNDER_MAINTENANCE" };
     }
 }

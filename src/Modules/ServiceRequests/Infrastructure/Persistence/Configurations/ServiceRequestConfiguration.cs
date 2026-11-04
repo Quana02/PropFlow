@@ -23,6 +23,7 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
         builder.HasIndex(request => request.ResidentId);
 
         builder.Property(request => request.ResidentApartmentId).HasColumnName("resident_apartment_id").IsRequired();
+        builder.Property(request => request.SubmittedByUserId).HasColumnName("submitted_by_user_id");
         
 
         builder.Property(request => request.ApartmentUnitId).HasColumnName("apartment_unit_id");
@@ -85,6 +86,16 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
             .HasColumnType("timestamp with time zone");
 
         builder.Property(request => request.ClosedBy).HasColumnName("closed_by");
+
+        builder.Property(request => request.BaseServiceCost).HasColumnName("base_service_cost")
+            .HasColumnType("numeric(18,0)").HasDefaultValue(0m).IsRequired();
+        builder.Property(request => request.ProposedAdditionalCost).HasColumnName("proposed_additional_cost")
+            .HasColumnType("numeric(18,0)").HasDefaultValue(0m).IsRequired();
+        builder.Property(request => request.AdditionalCostNote).HasColumnName("additional_cost_note").HasMaxLength(1000);
+        builder.Property(request => request.ApprovedAdditionalCost).HasColumnName("approved_additional_cost")
+            .HasColumnType("numeric(18,0)").HasDefaultValue(0m).IsRequired();
+        builder.Property(request => request.ServiceInvoiceId).HasColumnName("service_invoice_id");
+        builder.HasIndex(request => request.ServiceInvoiceId).IsUnique().HasFilter("service_invoice_id IS NOT NULL");
 
         builder.Property(request => request.CreatedAt)
             .HasColumnName("created_at")

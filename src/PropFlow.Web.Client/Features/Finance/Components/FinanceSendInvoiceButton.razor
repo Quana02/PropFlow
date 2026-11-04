@@ -1,0 +1,35 @@
+@using PropFlow.Web.Client.Shared.Feedback
+@inject FinanceCycleApi Api
+<span class="finance-reminder"><button type="button" disabled="@busy" @onclick="BeginSend"><span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span>@(busy ? "Đang gửi…" : "Gửi hóa đơn")</button></span>
+@if (confirming)
+{
+    <PropFlowConfirmationDialog Title="Gửi hóa đơn?" Message="Bạn có muốn gửi hóa đơn này cho cư dân không?" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
+}
+@if (message is not null)
+{
+    <PropFlowToast @key="toastVersion" Message="@message" Severity="@(failed ? "error" : "success")" DurationMs="@(failed ? 5000 : 2000)" OnDismiss="Dismiss" />
+}
+@code {
+    [Parameter] public Guid InvoiceId { get; set; }
+    private bool busy, failed, confirming;
+    private string? message, requestKey;
+    private int toastVersion;
+    private void BeginSend() { if (!busy) confirming = true; }
+    private void Cancel() { if (!busy) confirming = false; }
+    private void Dismiss() => message = null;
+    private async Task Send()
+    {
+        if (busy) return;
+        busy = true; message = null;
+        requestKey ??= Guid.NewGuid().ToString();
+        try
+        {
+            var result = await Api.SendInvoiceAsync(InvoiceId, requestKey);
+            failed = !result.IsSuccess || result.Data?.Recipients is not > 0;
+            message = failed ? (result.IsSuccess ? "Hóa đơn chưa có người nhận phù hợp." : result.Message) : "Đã gửi hóa đơn.";
+            if (!failed) requestKey = null;
+        }
+        catch (Exception) { failed = true; message = "Không thể gửi hóa đơn. Vui lòng thử lại."; }
+        finally { busy = false; confirming = false; toastVersion++; }
+    }
+}

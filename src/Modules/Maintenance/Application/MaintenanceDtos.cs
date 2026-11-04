@@ -9,6 +9,14 @@ namespace PropFlow.Modules.Maintenance.Application;
 
 public record Page<T>(IReadOnlyList<T> Items, int TotalCount, int PageIndex, int PageSize);
 public record ScheduleDto(Guid Id, string ScheduleCode, Guid? FacilityId, Guid? EquipmentId, string Title, string? Description, DateTimeOffset PlannedStartAt, DateTimeOffset? PlannedEndAt, MaintenanceScheduleStatus Status);
+public record MaintenanceOverviewScheduleDto(Guid Id, string Title, DateTimeOffset PlannedStartAt);
+public enum MaintenanceOverviewItemType { SCHEDULE, TASK }
+public record MaintenanceOverviewItemDto(Guid Id, MaintenanceOverviewItemType Type, string Title, DateTimeOffset OccurredAt, string? PriorityCode = null);
+public record MaintenanceOverviewDto(
+    int UpcomingScheduleCount,
+    int CompletedTaskCount,
+    MaintenanceOverviewScheduleDto? NextSchedule,
+    IReadOnlyList<MaintenanceOverviewItemDto> RecentAndUpcomingItems);
 
 public record ScheduleQuery(string? SearchKeyword = null, Guid? FacilityId = null, Guid? EquipmentId = null, MaintenanceScheduleStatus? Status = null, DateTimeOffset? From = null, DateTimeOffset? To = null, int PageIndex = 1, int PageSize = 20);
 public record CreateScheduleCommand([StringLength(512)] string? ScheduleCode, [Required, StringLength(200)] string Title, DateTimeOffset PlannedStartAt, DateTimeOffset? PlannedEndAt = null, Guid? FacilityId = null, Guid? EquipmentId = null, [Required(ErrorMessage = "Mô tả là bắt buộc.")] string? Description = null);
@@ -40,7 +48,7 @@ public record SubmitMaintenanceResultCommand(
     string? PartsOrResourcesUsed = null,
     string? Recommendation = null);
 public record MaintenanceTaskActivityDto(Guid Id, MaintenanceActivityType ActivityType, string? Detail, DateTimeOffset CreatedAt, Guid? PerformedBy);
-public record CreateMaintenanceTaskCommand([StringLength(512)] string? TaskNumber, [Required, StringLength(200)] string Title, Guid? ScheduleId = null, [Required(ErrorMessage = "Mô tả là bắt buộc.")] string? Description = null, string? PriorityCode = null, DateTimeOffset? PlannedStartAt = null, DateTimeOffset? DueAt = null, Guid? FacilityId = null, Guid? EquipmentId = null, Guid? ServiceRequestId = null) : IValidatableObject
+public record CreateMaintenanceTaskCommand([StringLength(512)] string? TaskNumber, [Required, StringLength(200)] string Title, Guid? ScheduleId = null, [Required(ErrorMessage = "Mô tả là bắt buộc.")] string? Description = null, string? PriorityCode = null, DateTimeOffset? PlannedStartAt = null, DateTimeOffset? DueAt = null, Guid? FacilityId = null, Guid? EquipmentId = null, Guid? ServiceRequestId = null, bool IsEmergency = false) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -48,10 +56,14 @@ public record CreateMaintenanceTaskCommand([StringLength(512)] string? TaskNumbe
             yield return new ValidationResult("Vui lòng chọn mức ưu tiên.", [nameof(PriorityCode)]);
 
         if (ScheduleId is not null)
+        {
+            if (IsEmergency)
+                yield return new ValidationResult("Công việc khẩn cấp không được tạo từ lịch bảo trì.", [nameof(IsEmergency)]);
             yield break;
+        }
 
-        if (FacilityId is null || FacilityId == Guid.Empty)
-            yield return new ValidationResult("Vui lòng chọn cơ sở vật chất.", [nameof(FacilityId)]);
+        if ((FacilityId is null || FacilityId == Guid.Empty) && (EquipmentId is null || EquipmentId == Guid.Empty))
+            yield return new ValidationResult("Vui lòng chọn cơ sở vật chất hoặc thiết bị.", [nameof(FacilityId), nameof(EquipmentId)]);
         if (PlannedStartAt is null)
             yield return new ValidationResult("Vui lòng chọn thời điểm dự kiến.", [nameof(PlannedStartAt)]);
         if (DueAt is null)

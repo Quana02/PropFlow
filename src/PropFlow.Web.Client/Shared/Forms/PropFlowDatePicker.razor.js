@@ -19,7 +19,7 @@ export function open(root, dotnet) {
         const rect = anchor.getBoundingClientRect();
         const gap = 6;
         const edge = 8;
-        const width = Math.min(rect.width, window.innerWidth - edge * 2);
+        const width = Math.min(304, window.innerWidth - edge * 2);
         let left = Math.min(Math.max(edge, rect.left), window.innerWidth - width - edge);
         root.style.setProperty('--pf-date-left', `${left}px`);
         root.style.setProperty('--pf-date-width', `${width}px`);

@@ -23,6 +23,62 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PropFlow.Modules.Authentication.Domain.PrivilegedActions.PrivilegedActionChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("attempt_count");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_hash");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("purpose");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId", "Purpose", "CreatedAt");
+
+                    b.ToTable("privileged_action_challenges", "auth");
+                });
+
             modelBuilder.Entity("PropFlow.Modules.Authentication.Domain.ResidentVerifications.ResidentVerification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -50,10 +106,6 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
-                    b.Property<Guid>("ResidentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("resident_id");
-
                     b.Property<string>("RegistrationDisplayName")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
@@ -72,6 +124,10 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("registration_username");
+
+                    b.Property<Guid>("ResidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resident_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -104,11 +160,11 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ApartmentUnitId");
 
-                    b.HasIndex("ResidentId");
-
                     b.HasIndex("RegistrationEmail");
 
                     b.HasIndex("RegistrationUsername");
+
+                    b.HasIndex("ResidentId");
 
                     b.HasIndex("Status");
 
@@ -358,6 +414,15 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("users", "auth");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Authentication.Domain.PrivilegedActions.PrivilegedActionChallenge", b =>
+                {
+                    b.HasOne("PropFlow.Modules.Authentication.Domain.Users.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Authentication.Domain.ResidentVerifications.ResidentVerification", b =>

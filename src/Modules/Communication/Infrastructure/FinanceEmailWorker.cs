@@ -40,8 +40,8 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
                             Credentials = new NetworkCredential(options.Username, options.Password), Timeout = 15000 };
                         using var mail = new MailMessage(options.From, item.Address) { Subject = item.Subject, Body = item.Html, IsBodyHtml = true };
                         mail.Headers.Add("X-PropFlow-Event", item.EventId.ToString());
-                        if(item.AttachmentFileName is not null)
-                            mail.Attachments.Add(new Attachment(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(item.Html)), Path.GetFileName(item.AttachmentFileName), "text/html"));
+                        // The complete receipt is rendered in the email body for direct viewing.
+                        // Do not attach a duplicate HTML file that mail clients display as source.
                         await client.SendMailAsync(mail, ct); item.SentAt = DateTimeOffset.UtcNow;
                     } catch (Exception ex) when (ex is SmtpException or InvalidOperationException or FormatException) {
                         item.Attempts++; item.NextAttemptAt = DateTimeOffset.UtcNow.AddMinutes(Math.Min(60, 2 * item.Attempts));

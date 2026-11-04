@@ -65,7 +65,18 @@ public sealed record ResidentServiceRequestDetailResponse(
     int? Rating,
     string? FeedbackComment,
     DateTimeOffset? FeedbackSubmittedAt,
-    IReadOnlyList<ResidentServiceRequestActivityItem> Activities);
+    IReadOnlyList<ResidentServiceRequestActivityItem> Activities,
+    decimal BaseServiceCost = 0,
+    decimal ApprovedAdditionalCost = 0,
+    ResidentServiceRequestSettlement? Settlement = null);
+
+public sealed record ResidentServiceRequestSettlement(
+    Guid InvoiceId,
+    string InvoiceNumber,
+    decimal TotalAmount,
+    decimal ConfirmedPaidAmount,
+    decimal OutstandingAmount,
+    string Status);
 
 public sealed record RateResidentServiceRequestRequest(int Rating, string Comment);
 

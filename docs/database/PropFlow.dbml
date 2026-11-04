@@ -486,6 +486,9 @@ Table property_assets.buildings {
 Table apartments.apartment_unit_types {
   id uuid [pk, default: `gen_random_uuid()`]
   name varchar(80) [not null]
+  default_usable_area_m2 numeric(10,2) [note: 'Nullable; when supplied >= 25, matching the existing FE-03 area limit. Copied only when creating an apartment; never synchronized to saved apartments.']
+  default_bedroom_count int [note: 'Nullable, non-negative; Studio may have 0.']
+  default_bathroom_count int [note: 'Nullable, non-negative.']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 

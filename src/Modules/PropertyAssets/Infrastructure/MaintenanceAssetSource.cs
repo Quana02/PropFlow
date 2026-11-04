@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
+using PropFlow.Modules.PropertyAssets.Domain.Equipment;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.PropertyAssets.Infrastructure;
@@ -47,8 +48,19 @@ public sealed class MaintenanceAssetSource(PropertyAssetsDbContext db) : IMainte
             throw new ArgumentException("Thiết bị không thuộc cơ sở vật chất đã chọn.");
 
         var now = DateTimeOffset.UtcNow;
-        facility?.SetStatus(MasterDataStatus.UNDER_MAINTENANCE, actor, now);
-        equipment?.MarkUnderMaintenance(actor, now);
+        if (facility is not null && equipment is null)
+        {
+            // Facility-wide maintenance: affect this facility and its eligible equipment only.
+            facility.SetStatus(MasterDataStatus.UNDER_MAINTENANCE, actor, now);
+            var children = await db.Equipment.Where(item => item.FacilityId == facility.Id).ToListAsync(ct);
+            foreach (var child in children.Where(item => item.Status != EquipmentStatus.OUT_OF_SERVICE))
+                child.MarkUnderMaintenance(actor, now);
+        }
+        else
+        {
+            // A selected equipment scopes maintenance to that equipment; never alter its facility.
+            equipment?.MarkUnderMaintenance(actor, now);
+        }
         await db.SaveChangesAsync(ct);
     }
 
@@ -66,8 +78,20 @@ public sealed class MaintenanceAssetSource(PropertyAssetsDbContext db) : IMainte
             throw new ArgumentException("Thiết bị không thuộc cơ sở vật chất đã chọn.");
 
         var now = DateTimeOffset.UtcNow;
-        facility?.SetStatus(MasterDataStatus.ACTIVE, actor, now);
-        equipment?.MarkActive(actor, now);
+        if (facility is not null && equipment is null)
+        {
+            // Restore only the facility-wide scope and only states FE-07 could have applied.
+            if (facility.Status == MasterDataStatus.UNDER_MAINTENANCE)
+                facility.SetStatus(MasterDataStatus.ACTIVE, actor, now);
+            var children = await db.Equipment.Where(item => item.FacilityId == facility.Id).ToListAsync(ct);
+            foreach (var child in children.Where(item => item.Status == EquipmentStatus.UNDER_MAINTENANCE))
+                child.MarkActive(actor, now);
+        }
+        else if (equipment?.Status == EquipmentStatus.UNDER_MAINTENANCE)
+        {
+            // An equipment-scoped operation never changes the facility or sibling equipment.
+            equipment.MarkActive(actor, now);
+        }
         await db.SaveChangesAsync(ct);
     }
 }

@@ -15,7 +15,7 @@ public static class ApartmentsAuthorizationPolicies { public const string Read =
 [ApiController, Route("api/v1/apartments")]
 public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartmentReadSource residents,
     IApartmentOwnershipCommand ownerships, IApartmentStatusCommand statuses,
-    ICurrentBuildingTimeZone buildingTimeZone, TimeProvider clock) : ControllerBase
+    ICurrentBuildingTimeZone buildingTimeZone, TimeProvider clock, ICurrentBuildingFloorLimit floorLimit) : ControllerBase
 {
     [HttpGet, Authorize(Policy = ApartmentsAuthorizationPolicies.Read)]
     public async Task<ActionResult<PagedApartmentsResponse>> List(string? search, MasterDataStatus? status,
@@ -134,6 +134,10 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
     [HttpPost, Authorize(Policy = ApartmentsAuthorizationPolicies.Manage)]
     public async Task<ActionResult<ApartmentDetailResponse>> Create(CreateApartmentRequest request, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71241006)", ct);
+        var floorError = await ValidateFloorAsync(request.FloorNumber, ct);
+        if (floorError is not null) return floorError;
         var validation = Validate(request.UnitNumber, request.FloorNumber, request.ApartmentUnitTypeId, request.UsableAreaM2, request.BedroomCount, request.BathroomCount);
         if (validation is not null) return validation;
         var apartmentType = await db.ApartmentUnitTypes.SingleOrDefaultAsync(x => x.Id == request.ApartmentUnitTypeId, ct);
@@ -145,6 +149,7 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
             request.UsableAreaM2, request.BedroomCount, request.BathroomCount, request.HandoverDate, request.Description, Actor());
         if (status == MasterDataStatus.INACTIVE) apartment.Deactivate(Actor(), clock.GetUtcNow());
         db.ApartmentUnits.Add(apartment); await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
         return CreatedAtAction(nameof(Get), new { id = apartment.Id }, new ApartmentDetailResponse(apartment.Id,
             apartment.UnitNumber, apartment.FloorNumber, apartment.ApartmentUnitTypeId, apartmentType.Name, apartment.UsableAreaM2, apartment.BedroomCount,
             apartment.BathroomCount, apartment.HandoverDate, apartment.Description, apartment.Status.ToString(), [], [], [], []));
@@ -153,6 +158,10 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
     [HttpPut("{id:guid}"), Authorize(Policy = ApartmentsAuthorizationPolicies.Manage)]
     public async Task<IActionResult> Update(Guid id, UpdateApartmentRequest request, CancellationToken ct)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71241006)", ct);
+        var floorError = await ValidateFloorAsync(request.FloorNumber, ct);
+        if (floorError is not null) return floorError;
         var validation = Validate(request.UnitNumber, request.FloorNumber, request.ApartmentUnitTypeId, request.UsableAreaM2, request.BedroomCount, request.BathroomCount);
         if (validation is not null) return validation;
         if (!await db.ApartmentUnitTypes.AnyAsync(x => x.Id == request.ApartmentUnitTypeId, ct)) return BadRequest(Problem("APARTMENT_UNIT_TYPE_NOT_FOUND", "Loại căn hộ không tồn tại."));
@@ -161,7 +170,7 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
         if (await db.ApartmentUnits.AnyAsync(x => x.Id != id && x.UnitNumber == request.UnitNumber.Trim(), ct)) return Conflict(Problem("APARTMENT_UNIT_NUMBER_DUPLICATE", "Mã căn hộ đã tồn tại."));
         apartment.Update(request.UnitNumber, request.FloorNumber, request.ApartmentUnitTypeId, request.UsableAreaM2,
             request.BedroomCount, request.BathroomCount, request.HandoverDate, request.Description, Actor(), clock.GetUtcNow());
-        await db.SaveChangesAsync(ct); return NoContent();
+        await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); return NoContent();
     }
 
     [HttpPost("{id:guid}/owners"), Authorize(Policy = ApartmentsAuthorizationPolicies.Manage)]
@@ -199,12 +208,20 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
         }
     }
 
+    private async Task<ActionResult?> ValidateFloorAsync(int floor, CancellationToken ct)
+    {
+        var maximum = await floorLimit.GetMaximumFloorAsync(ct);
+        if (maximum is null or <= 0)
+            return BadRequest(Problem("BUILDING_NOT_CONFIGURED", "Vui lòng thiết lập số tầng chung cư trước khi lưu căn hộ."));
+        return floor > maximum ? BadRequest(Problem("APARTMENT_FLOOR_OUT_OF_RANGE", $"Tầng căn hộ không được vượt quá {maximum} tầng của chung cư.")) : null;
+    }
+
     private ActionResult? Validate(string unitNumber, int floorNumber, Guid apartmentUnitTypeId, decimal usableAreaM2, int? bedroomCount, int? bathroomCount)
     {
         if (string.IsNullOrWhiteSpace(unitNumber) || unitNumber.Trim().Length > 30) return BadRequest(Problem("APARTMENT_UNIT_NUMBER_REQUIRED", "Mã căn hộ là bắt buộc và tối đa 30 ký tự."));
         if (floorNumber < 0) return BadRequest(Problem("APARTMENT_FLOOR_NUMBER_INVALID", "Tầng phải lớn hơn hoặc bằng 0."));
         if (apartmentUnitTypeId == Guid.Empty) return BadRequest(Problem("APARTMENT_UNIT_TYPE_REQUIRED", "Loại căn hộ là bắt buộc."));
-        if (usableAreaM2 <= 0) return BadRequest(Problem("APARTMENT_USABLE_AREA_INVALID", "Diện tích sử dụng phải lớn hơn 0."));
+        if (usableAreaM2 < 25 || usableAreaM2 > 99999999.99m || decimal.Round(usableAreaM2, 2) != usableAreaM2) return BadRequest(Problem("APARTMENT_USABLE_AREA_INVALID", "Diện tích sử dụng phải từ 25 m² trở lên, tối đa 99.999.999,99 m² và không quá 2 chữ số thập phân."));
         if (bedroomCount is < 0 || bathroomCount is < 0) return BadRequest(Problem("APARTMENT_ROOM_COUNT_INVALID", "Số phòng ngủ và phòng tắm phải lớn hơn hoặc bằng 0."));
         return null;
     }

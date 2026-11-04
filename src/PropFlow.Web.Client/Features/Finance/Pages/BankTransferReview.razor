@@ -1,0 +1,112 @@
+@page "/finance/payments/bank-transfers"
+@layout PropFlow.Web.Client.Layout.AccountantLayout
+@attribute [Authorize(Roles = "ACCOUNTANT")]
+@using PropFlow.Modules.Payments.Contracts
+@using PropFlow.Web.Client.Services.Api
+@implements IDisposable
+@inject AuthenticatedApiClient Api
+
+<PageTitle>Đối soát SePay — PropFlow</PageTitle>
+<div class="bank-review-page">
+    <header class="bank-heading"><div><small>ĐỐI SOÁT NGÂN HÀNG</small><h1>Giao dịch SePay</h1><p>Kiểm tra giao dịch chưa khớp hóa đơn và tiền dư. Các khoản thu khớp được ghi nhận tự động.</p></div><button type="button" @onclick="ReloadAsync" disabled="@loading">Tải lại</button></header>
+    <div class="bank-toolbar"><label>Hiển thị<PropFlowSelect Value="@status" ValueChanged="StatusChanged" Options="StatusOptions" Disabled="loading" AriaLabel="Lọc trạng thái giao dịch SePay" /></label><span>@(data?.Total ?? 0) giao dịch · tự cập nhật mỗi 10 giây</span><a href="/finance/payments/pending">Báo chuyển khoản của cư dân →</a></div>
+    @if (!string.IsNullOrWhiteSpace(notice)) { <p class="bank-notice" role="status">@notice</p> }
+    @if (!string.IsNullOrWhiteSpace(error)) { <p class="bank-error" role="alert">@error</p> }
+    <section class="bank-table"><table><thead><tr><th>Giao dịch</th><th>Tài khoản nhận</th><th>Số tiền</th><th>Hóa đơn</th><th>Đối soát</th><th></th></tr></thead><tbody>
+    @if (loading && data is null) { <tr><td colspan="6">Đang tải giao dịch…</td></tr> }
+    else if (data?.Items.Count is null or 0) { <tr><td colspan="6">Chưa có giao dịch trong nhóm này.</td></tr> }
+    else { @foreach (var row in data.Items) {
+        <tr><td><strong>SePay #@row.TransactionId</strong><small>@row.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small><small>@row.BankReference</small></td><td>@row.Gateway<small>@row.MaskedAccountNumber</small></td><td><strong>@Money(row.Amount)</strong>@if (row.AllocatedAmount > 0) { <small>Đã ghi nhận: @Money(row.AllocatedAmount)</small> }</td><td>@(row.InvoiceNumber ?? "Chưa khớp")<small>@row.TransferCode</small></td><td><span class="bank-badge">@Status(row.Status)</span><small>@Outcome(row.Outcome)</small></td><td><button type="button" @onclick="() => OpenAsync(row.Id)">Xem chi tiết</button></td></tr>
+    } }
+    </tbody></table></section>
+    <footer class="bank-pagination"><button type="button" disabled="@(page <= 1 || loading)" @onclick="PreviousAsync">Trước</button><span>Trang @(page) / @Pages</span><button type="button" disabled="@(page >= Pages || loading)" @onclick="NextAsync">Sau</button></footer>
+</div>
+
+@if (selected is not null)
+{
+    <div class="bank-backdrop"><section class="bank-dialog" role="dialog" aria-modal="true" aria-labelledby="bank-transfer-title">
+        <header><div><small>GIAO DỊCH ĐÃ NHẬN TỪ NGÂN HÀNG</small><h2 id="bank-transfer-title">SePay #@selected.TransactionId</h2></div><button type="button" disabled="@saving" @onclick="Close">Đóng</button></header>
+        <dl><div><dt>Số tiền nhận</dt><dd>@Money(selected.Amount)</dd></div><div><dt>Đã phân bổ</dt><dd>@Money(selected.AllocatedAmount)</dd></div><div><dt>Chưa phân bổ</dt><dd>@Money(selected.Amount - selected.AllocatedAmount)</dd></div><div><dt>Kết quả kiểm tra</dt><dd>@Outcome(selected.Outcome)</dd></div></dl>
+        <p class="bank-memo">Nội dung ngân hàng: @(selected.Content ?? "Không có")</p>
+        @if (!string.IsNullOrWhiteSpace(selected.ReviewNote)) { <p>Ghi chú trước: @selected.ReviewNote</p> }
+        @if (selected.Status == "REVIEW")
+        {
+            @if (selected.PaymentId is null)
+            {
+                <div class="invoice-search"><input @bind="invoiceSearch" placeholder="Tìm hóa đơn, căn hộ hoặc cư dân" aria-label="Tìm hóa đơn" /><button type="button" disabled="@saving" @onclick="FindInvoicesAsync">Tìm hóa đơn</button></div>
+                <label>Hóa đơn nhận khoản thu<PropFlowSelect Value="@(invoiceId == Guid.Empty ? "" : invoiceId.ToString())" ValueChanged="SelectInvoice" Options="InvoiceOptions" Searchable="true" Disabled="saving" Placeholder="Chọn hóa đơn" AriaLabel="Hóa đơn nhận khoản thu SePay" /></label>
+                <label>Số tiền phân bổ (VND)<input type="number" step="1" min="1" max="@selected.Amount" @bind="allocation" /></label>
+                <p>Chỉ phân bổ trong số tiền thực nhận và số còn nợ. Nếu còn tiền dư, giao dịch tiếp tục nằm trong danh sách cần xử lý.</p>
+            }
+            else { <p>Khoản thu đã được ghi nhận. Hãy xử lý phần tiền dư theo quy trình kế toán và ghi rõ kết quả trước khi đóng giao dịch.</p> }
+            <label>Ghi chú xử lý bắt buộc<textarea maxlength="1000" @bind="reviewNote" placeholder="Nêu lý do gắn hóa đơn, xử lý tiền dư hoặc bỏ qua giao dịch"></textarea></label>
+            @if (!string.IsNullOrWhiteSpace(dialogError)) { <p class="bank-error" role="alert">@dialogError</p> }
+            <footer><button type="button" disabled="@(saving || reviewNote.Trim().Length < 3)" @onclick="DismissAsync">Đóng giao dịch theo ghi chú</button>@if (selected.PaymentId is null) { <button class="primary" type="button" disabled="@(saving || invoiceId == Guid.Empty || allocation <= 0 || allocation > selected.Amount || reviewNote.Trim().Length < 3)" @onclick="AssignAsync">@(saving ? "Đang gửi…" : "Gắn hóa đơn & đối soát")</button> }</footer>
+        }
+    </section></div>
+}
+
+@code {
+    private PagedBankTransfers? data;
+    private string status = "REVIEW", invoiceSearch = "", reviewNote = "";
+    private string? error, notice, dialogError;
+    private int page = 1;
+    private bool loading, saving;
+    private BankTransferRow? selected;
+    private IReadOnlyList<BankTransferInvoiceOption> candidates = [];
+    private Guid invoiceId;
+    private decimal allocation;
+    private static readonly PropFlowSelectOption[] StatusOptions = [new("REVIEW", "Cần kế toán xử lý"), new("CONFIRMED", "Đã ghi nhận"), new("RECEIVED", "Chờ xử lý"), new("PROCESSING", "Đang xử lý"), new("RETRY", "Đang thử lại"), new("DISMISSED", "Đã xử lý thủ công"), new("ALL", "Tất cả")];
+    private PropFlowSelectOption[] InvoiceOptions => candidates.Select(x => new PropFlowSelectOption(x.Id.ToString(), $"{x.InvoiceNumber} · {x.ApartmentNumber} · {x.ResidentName} · còn {Money(x.OutstandingAmount)}")).ToArray();
+    private readonly CancellationTokenSource cancellation = new();
+    private int Pages => Math.Max(1, (int)Math.Ceiling((data?.Total ?? 0) / 20d));
+    protected override async Task OnInitializedAsync() { await ReloadAsync(); _ = WatchAsync(); }
+    private async Task WatchAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        try { while (await timer.WaitForNextTickAsync(cancellation.Token)) if (selected is null) await InvokeAsync(ReloadAsync); }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+    }
+    private async Task ReloadAsync()
+    {
+        if (loading) return; loading = true;
+        try { var result = await Api.SendAsync<PagedBankTransfers>(HttpMethod.Get, $"api/v1/payments/bank-transfers?status={status}&page={page}&pageSize=20", ct: cancellation.Token);
+            if (result.IsSuccess) { data = result.Data; error = null; } else error = result.Message; }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally { loading = false; if (!cancellation.IsCancellationRequested) StateHasChanged(); }
+    }
+    private Task ResetAsync() { page = 1; data = null; return ReloadAsync(); }
+    private Task StatusChanged(string value) { status = value; return ResetAsync(); }
+    private Task PreviousAsync() { page--; return ReloadAsync(); }
+    private Task NextAsync() { page++; return ReloadAsync(); }
+    private async Task OpenAsync(Guid id)
+    {
+        var result = await Api.SendAsync<BankTransferRow>(HttpMethod.Get, $"api/v1/payments/bank-transfers/{id}", ct: cancellation.Token);
+        if (!result.IsSuccess || result.Data is null) { error = result.Message; return; }
+        selected = result.Data; invoiceId = Guid.Empty; reviewNote = invoiceSearch = ""; allocation = selected.Amount; dialogError = null;
+        if (selected.Status == "REVIEW" && selected.PaymentId is null) await FindInvoicesAsync();
+    }
+    private async Task FindInvoicesAsync()
+    {
+        var result = await Api.SendAsync<BankTransferInvoiceOption[]>(HttpMethod.Get, $"api/v1/payments/bank-transfers/invoices?search={Uri.EscapeDataString(invoiceSearch)}", ct: cancellation.Token);
+        if (result.IsSuccess) { candidates = result.Data ?? []; dialogError = candidates.Count == 0 ? "Chưa có hóa đơn phù hợp. Hóa đơn cần phát hành và có tài khoản nhận tiền được gắn trước." : null; }
+        else dialogError = result.Message;
+    }
+    private void SelectInvoice(string value) { invoiceId = Guid.TryParse(value, out var id) ? id : Guid.Empty; var invoice = candidates.FirstOrDefault(x => x.Id == invoiceId); if (invoice is not null && selected is not null) allocation = Math.Min(selected.Amount, invoice.OutstandingAmount); }
+    private Task AssignAsync() => SaveAsync("assign", new AssignBankTransferRequest(invoiceId, allocation, reviewNote, selected!.Revision));
+    private Task DismissAsync() => SaveAsync("dismiss", new DismissBankTransferRequest(reviewNote, selected!.Revision));
+    private async Task SaveAsync(string action, object request)
+    {
+        if (selected is null) return; saving = true; dialogError = null;
+        try { var result = await Api.SendAsync<EmptyResponse>(HttpMethod.Post, $"api/v1/payments/bank-transfers/{selected.Id}/{action}", request, ct: cancellation.Token);
+            if (!result.IsSuccess) { dialogError = result.Message; return; }
+            notice = action == "assign" ? "Đã gửi yêu cầu đối soát. Hệ thống sẽ kiểm tra tài khoản nhận và số còn nợ trước khi ghi nhận." : "Đã lưu kết quả xử lý giao dịch.";
+            selected = null; await ReloadAsync(); }
+        finally { saving = false; }
+    }
+    private void Close() { if (!saving) selected = null; }
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+    private static string Money(decimal value) => $"{value:N0} ₫";
+    private static string Status(string value) => value switch { "CONFIRMED" => "Đã ghi nhận", "REVIEW" => "Cần xử lý", "DISMISSED" => "Đã xử lý thủ công", "RETRY" => "Đang thử lại", "PROCESSING" => "Đang xử lý", "IGNORED" => "Tiền ra", _ => "Chờ xử lý" };
+    private static string Outcome(string value) => value switch { "UNMATCHED_CODE" => "Không tìm thấy mã hóa đơn", "ACCOUNT_MISMATCH" => "Tài khoản hoặc ngân hàng nhận không khớp", "Overpayment" => "Số tiền vượt quá số còn nợ", "EXCESS_REQUIRES_REVIEW" => "Đã thu hóa đơn, còn tiền dư", "INVOICE_UNAVAILABLE" or "Conflict" or "NotFound" => "Hóa đơn không còn đủ điều kiện thu", "PROCESSING_ERROR" => "Cần kiểm tra kết nối hoặc dữ liệu", "IdempotencyConflict" => "Giao dịch đã được ghi nhận với dữ liệu khác", "CONFIRMED" => "Đã xác thực khoản thu", "ACCOUNTANT_RESOLVED" => "Đã lưu kết quả kế toán", "INVALID_TRANSFER" => "Dữ liệu ngân hàng không hợp lệ", _ => Status(value) };
+}

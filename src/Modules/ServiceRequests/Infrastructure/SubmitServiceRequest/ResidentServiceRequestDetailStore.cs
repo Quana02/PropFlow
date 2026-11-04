@@ -34,6 +34,8 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 item.UpdatedAt,
                 item.ResolvedAt,
                 item.ClosedAt,
+                item.BaseServiceCost,
+                item.ApprovedAdditionalCost,
                 Rating = db.ServiceRequestFeedbacks
                     .Where(feedback => feedback.ServiceRequestId == item.Id)
                     .Select(feedback => (int?)feedback.Rating)
@@ -90,7 +92,9 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 activity.ActivityType,
                 activity.FromStatus?.ToString(),
                 activity.ToStatus?.ToString(),
-                activity.CreatedAt)).ToArray());
+                activity.CreatedAt)).ToArray(),
+            request.BaseServiceCost,
+            request.ApprovedAdditionalCost);
     }
 
     private static ResidentServiceRequestActivityItem ToResidentActivity(

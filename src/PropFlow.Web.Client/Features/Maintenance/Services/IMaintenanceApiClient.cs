@@ -4,6 +4,7 @@ using PropFlow.Web.Client.Services.Api;
 namespace PropFlow.Web.Client.Features.Maintenance.Services;
 public interface IMaintenanceApiClient
 {
+    Task<ApiResult<MaintenanceOverviewModel>> OverviewAsync(CancellationToken ct = default);
     Task<ApiResult<Page<ScheduleModel>>> SchedulesAsync(ScheduleFilterModel filter, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<AssetModel>>> AssetsAsync(CancellationToken ct = default);
     Task<ApiResult<ScheduleModel>> CreateScheduleAsync(CreateScheduleModel model, CancellationToken ct = default);

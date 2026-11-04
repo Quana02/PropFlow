@@ -3,7 +3,6 @@
 <nav class="operations-nav" aria-label="Điều hướng vận hành">
     <a class="operations-brand" href="/">PropFlow</a>
     <p class="operations-heading">Phân hệ vận hành</p>
-    <AuthorizeView Roles="MANAGER"><NavLink href="/operations/service-fee" class="operations-link" title="Phí dịch vụ"><span class="material-symbols-outlined operations-icon">receipt_long</span><span class="operations-label">Phí dịch vụ / hóa đơn</span></NavLink></AuthorizeView>
     <NavLink href="/buildings" Match="NavLinkMatch.All" class="operations-link"
              title="Hồ sơ tòa nhà" aria-label="Hồ sơ tòa nhà">
         <span class="material-symbols-outlined operations-icon" aria-hidden="true">apartment</span>
@@ -43,6 +42,11 @@
         <NavLink href="/my-maintenance" Match="NavLinkMatch.All" class="operations-link" title="Công việc của tôi" aria-label="Công việc của tôi">
             <span class="material-symbols-outlined operations-icon" aria-hidden="true">assignment</span>
             <span class="operations-label">Công việc của tôi</span>
+        </NavLink>
+    </AuthorizeView>
+    <AuthorizeView Roles="MANAGER">
+        <NavLink href="/operations/service-fee" class="operations-link" title="Đơn giá và hóa đơn" aria-label="Đơn giá và hóa đơn">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">receipt_long</span><span class="operations-label">Đơn giá và hóa đơn</span>
         </NavLink>
     </AuthorizeView>
 </nav>

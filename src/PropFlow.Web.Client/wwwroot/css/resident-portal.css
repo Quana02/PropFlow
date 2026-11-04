@@ -443,3 +443,6 @@ html.dark .service-modal-card .service-cancel-button,html[data-theme="dark"] .se
 .resident-profile-alert button { flex:0 0 auto; padding:.35rem .7rem; border:1px solid rgba(239,68,68,.35); border-radius:.65rem; color:#b91c1c; background:#fff; font:800 .68rem var(--resident-font); cursor:pointer; }
 html.dark .resident-profile-alert,html[data-theme="dark"] .resident-profile-alert { border-color:rgba(248,113,113,.35); color:#fecaca; background:rgba(69,10,10,.78); }
 html.dark .resident-profile-alert button,html[data-theme="dark"] .resident-profile-alert button { border-color:rgba(248,113,113,.35); color:#fecaca; background:#450a0a; }
+
+/* Keep notification content inside its grid column, including long invoice codes. */
+.resident-dashboard-card,.resident-card-list,.notice-list,.notice-list-item{min-width:0;max-width:100%;box-sizing:border-box}.notice-list-item{overflow:hidden}.notice-list-item>span{min-width:0}.notice-list-item>span small{flex-shrink:0}.notice-list-item strong,.notice-list-item p{max-width:100%}.announcement{min-width:0;overflow-wrap:anywhere}

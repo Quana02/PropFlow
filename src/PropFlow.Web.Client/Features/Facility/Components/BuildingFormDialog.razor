@@ -19,7 +19,6 @@
                     <div class="field wide"><label for="building-address">Địa chỉ <b>*</b></label><InputText id="building-address" @bind-Value="UpdateModel.Address" /><ValidationMessage For="() => UpdateModel.Address" /></div>
                     <div class="field"><label for="building-floors">Số tầng <b>*</b></label><InputNumber id="building-floors" @bind-Value="UpdateModel.NumberOfFloors" /><ValidationMessage For="() => UpdateModel.NumberOfFloors" /></div>
                     <div class="field"><label for="building-timezone">Múi giờ <b>*</b></label><InputText id="building-timezone" @bind-Value="UpdateModel.TimeZoneId" /><ValidationMessage For="() => UpdateModel.TimeZoneId" /></div>
-                    <div class="field wide"><label for="building-description">Mô tả</label><InputTextArea id="building-description" @bind-Value="UpdateModel.Description" rows="4" /><ValidationMessage For="() => UpdateModel.Description" /></div>
                 </div>
                 <footer><button class="secondary" type="button" @onclick="Close" disabled="@IsSaving">Hủy</button><button class="primary" type="submit" disabled="@IsSaving">@(IsSaving ? "Đang lưu…" : IsCreating ? "Thiết lập hồ sơ" : "Lưu thay đổi")</button></footer>
             </EditForm>

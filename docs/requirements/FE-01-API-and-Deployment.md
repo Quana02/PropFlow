@@ -1,6 +1,19 @@
 # FE-01 API and deployment
 
-Implementation baseline: [approved interpretations](FE-01-Implementation-Decisions.md). This document describes the implementation, not a replacement SRS. Missing consolidated SRS/UC documents remain unresolved.
+Tài liệu hợp nhất quyết định triển khai, API và vận hành FE-01; cập nhật theo lời làm rõ nghiệp vụ ngày 03/11/2026. Đây là bổ sung cho đặc tả Word, không phải SRS thay thế. Xem [mục lục và giới hạn nghiệm thu](README.md).
+
+## Quyết định nghiệp vụ và bảo mật
+
+- Chỉ cư dân tự đăng ký; không chọn role hoặc căn hộ. Username, tên hiển thị, email, mật khẩu, điện thoại, loại/số giấy tờ là bắt buộc.
+- Đủ điều kiện khi là **chủ sở hữu hiện hành**, hoặc **chủ hộ TENANT hiện hành tại căn hộ không có chủ sở hữu hiện hành** (thuê của đơn vị vận hành). Chủ hộ thuê căn có owner khác, chủ hộ AUTHORIZED_OCCUPANT và thành viên hộ không sở hữu không đủ điều kiện. Ownership cần `StartDate <= today`, `EndDate == null`; quan hệ tương lai hoặc đã hết hạn không đủ điều kiện.
+- Resident phải ACTIVE, chưa liên kết tài khoản và khớp cùng bốn giá trị đã chuẩn hóa trên một hồ sơ. Không khớp, không đủ điều kiện hoặc kết quả mơ hồ dùng chung phản hồi công khai; không tạo account/OTP.
+- OTP gắn fingerprint hồ sơ; khi kích hoạt phải kiểm tra lại toàn bộ điều kiện. FE-01 chỉ liên kết account với Resident; không tạo residency/ownership hoặc cấp quyền xem PII/căn hộ ngoài business scope.
+- Xác thực tiêu thụ `Residents.Contracts`; Residents có thể dùng public contract của Apartments để kiểm tra ownership. Không truy cập DbContext/domain của module khác.
+- Mật khẩu 12–128 ký tự, không trim/normalize, hash bằng PasswordHasher. Mặc định khóa 15 phút sau 5 lần sai; rate limit login 10/phút, registration/recovery 5/15 phút.
+- Không có Remember Me. Token chỉ giữ trong bộ nhớ WASM; không lưu password/OTP/token vào browser storage. Route sau đăng nhập theo role và safe authorized return URL.
+- Hồ sơ tự sửa chỉ gồm tên hiển thị và điện thoại; username/email/role/status chỉ đọc. FE-01 không sửa hồ sơ cư dân/quan hệ cư trú, avatar hoặc phương tiện.
+- Security event có baseline retention 30 ngày tại log sink; không lưu secret hoặc payload nhạy cảm. Quy tắc này độc lập với lịch sử nghiệp vụ của [FE-15](FE-15-Administration.md).
+- Giữ quan hệ DBML đã duyệt; corrective migration phải báo lỗi khi dữ liệu bất nhất, không tự xóa hoặc dựng dữ liệu để chạy qua.
 
 ## API contract
 
@@ -24,7 +37,7 @@ All paths below are relative to `/api/v1/auth`. Request/response DTOs live in `A
 
 `RegisterRequest` requires username, display name, email, password, phone number, identity type and identity number. Resident matching uses exactly four normalized values on the same Resident row: email (`trim + lowercase`), phone (canonical FE-02 representation), identity type (`CCCD` or `CMND`) and digits-only identity number (`CCCD`: 12 digits; `CMND`: 9 or 12 digits). Phone is required but is not a globally unique Resident identifier and is never used as a standalone lookup key.
 
-`ChallengeId == Guid.Empty` means the generic registration mismatch response and no account or OTP was created. Eligibility requires exactly one matching Resident that is `ACTIVE`, has `UserId == null`, and has either an active residency or a current ownership. This admits `OWNER_ONLY`, `RESIDENT_ONLY` and `OWNER_AND_RESIDENT`; historical residency/ownership alone does not qualify. Public mismatch never reveals which field failed, whether the Resident exists, whether an account is already linked, or whether the Resident is inactive.
+`ChallengeId == Guid.Empty` means the generic registration mismatch response and no account or OTP was created. Eligibility requires exactly one matching Resident that is `ACTIVE`, has `UserId == null`, and has either an active HOUSEHOLD_HEAD residency or a current ownership (user decision 2026-11-03). A non-owning household head qualifies only with an active TENANT residency in an apartment with no current owner (a rental from the operator). A tenant head in an apartment owned by another person does not qualify. A household member without current ownership does not qualify; historical residency/ownership alone does not qualify. Public mismatch never reveals which field failed, whether the Resident exists, whether an account is already linked, or whether the Resident is inactive.
 
 The email OTP challenge is bound to the matched Resident fingerprint. Activation revalidates Resident existence, `ACTIVE` status, unlinked state, a qualifying current relationship, and the same registration fingerprint before linking. Registration success does not authenticate. Activation links the existing Resident, assigns RESIDENT through Administration, verifies email, and activates the account in one database transaction. The client cannot supply resident/apartment IDs or privileged roles.
 
@@ -57,6 +70,7 @@ Configure API secrets with environment variables or a deployment secret provider
 | Authentication__Mail__Username / Password | Credentials supplied by the mail operator when required |
 | Cors__AllowedOrigins__0, etc. | Exact HTTPS frontend origin(s), credentials allowed, never wildcard |
 | Authentication__CrossSiteCookie | true only when deployment actually requires cross-site cookies (SameSite=None; Secure) |
+| Cloudinary__CloudName / Cloudinary__ApiKey / Cloudinary__ApiSecret | Cloudinary account credentials used by the API for Service Request and Maintenance evidence; never expose these in the Web/WASM client |
 
 AuthPolicy exposes AccessMinutes, RefreshDays, OtpMinutes, OtpAttempts, ResendSeconds, SendsPerHour, LockoutFailures and LockoutMinutes. Rate policy overrides are under `Authentication:RateLimits:{auth-login|auth-entry|auth-session}:{PermitLimit|WindowMinutes}`. Defaults follow the approved interpretations. Changing these values is a policy change, not a UI assumption.
 
@@ -81,15 +95,15 @@ On an empty database, apply initial migrations in dependency order:
 
 The new cross-schema FKs are migration SQL and scalar IDs only, without cross-module EF navigations. The resident/apartment ACTIVE date-range exclusion constraint is also migration SQL. Do not expect EF model snapshots alone to recreate these raw SQL constraints. The auth reset-proof columns/self-audit FKs are represented in the generated snapshot.
 
-Real eligible Resident records and active `ResidentApartment` rows are managed through FE-02; current ownership is managed through FE-03. FE-01 consumes the Residents public onboarding contract only; Residents may compose qualifying ownership through the Apartments public relationship contract. Authentication does not access `ResidentsDbContext`, `ApartmentsDbContext`, or cross-module entities. FE-01 never creates, converts, or changes either relationship during registration. A deterministic qualifying Apartment ID may be stored as verification audit context, but it is not account authorization scope. No bootstrap user/password or privileged self-registration is supplied.
+Real eligible Resident records and active `ResidentApartment` rows are managed through FE-02; current ownership is managed through FE-03. FE-01 consumes the Residents public onboarding contract only; Residents may compose qualifying ownership through the Apartments public relationship contract. Authentication does not access `ResidentsDbContext`, `ApartmentsDbContext`, or cross-module entities. FE-01 never creates, converts, or changes either relationship during registration. A deterministic qualifying Apartment ID may be stored as verification audit context, but it is not account authorization scope. Privileged self-registration is not supported; không suy ra credential bootstrap từ tài liệu này.
 
 ## Operations and known verification limits
+
+Các kết quả kiểm thử cũ không chứng minh đã nghiệm thu toàn bộ browser/cookie/CORS đa tab hoặc SMTP trên deployment đích. Cần xác minh lại theo môi trường phát hành.
 
 - SMTP uses TLS, an in-memory queue bounded at 200 messages, up to three attempts, and skips expired messages. It is not durable across process restart. A full queue or exhausted retry is logged without recipient/code/body; the user may request a new code after cooldown. Production delivery has not been verified without SMTP credentials.
 - Authentication security events contain action, HTTP status, account ID when available and trace ID, never request bodies/passwords/OTP/tokens. The deployment logging sink must enforce the approved 30-day retention and access controls; this repository does not provision that sink or its retention policy.
 - Isolated integration tests capture outbound email in the test host only. Production always uses SMTP; no mock login, OTP, token or role is used in product code.
-- `/resident` remains an existing business UI prototype outside FE-01. Its account identity, profile navigation and logout use real auth and the route requires RESIDENT; unrelated sample billing/apartment widgets are not presented as completed FE-02/financial functionality.
-- Browser automation was blocked by request-header policy loading failures and timeouts in this environment. Read-only checks found the local development certificate valid and present in CurrentUser Trusted Root. Successful .NET tests establish API CORS response behavior for an allowed and a denied origin, but not end-to-end browser cookie/CORS behavior, rendered responsiveness, or real SMTP delivery. Those checks remain required against the configured deployment before release.
 
 ## Reproducible checks
 
@@ -102,3 +116,15 @@ dotnet test tests/PropFlow.IntegrationTests --filter FullyQualifiedName~WebShell
 ```
 
 AuthenticationFlowTests require PostgreSQL and CREATE DATABASE permission. The test connection comes from `ConnectionStrings:PropFlowTestDatabase` in API User Secrets/environment; when that key is absent, the test helper derives the dedicated database name `propflow_test` from `ConnectionStrings:PropFlowDatabase`. It rejects every database name other than `propflow_test`. Each authentication flow then creates a uniquely named `propflow_fe01_test_<guid>`, verifies every context points at it, applies migrations, and drops only that isolated database afterward. Existing DatabaseVerificationTests use the separately prepared full schema in `propflow_test`; they are not part of the isolated FE-01 test command above.
+
+## Truy vết FE-01
+
+| FE item | Frontend | Application | Kiểm chứng chính |
+|---|---|---|---|
+| FE-01.1 | Register | Registration.RegisterAsync | Eligible và pending/no-match |
+| FE-01.2 | Login, AuthSession/AuthHttpHandler | Sessions.LoginAsync/RefreshAsync | Login, lockout, JWT expiry, rotation, state/concurrency |
+| FE-01.3 | Otp, ResumeRegistration | Registration.ActivateAsync/ResumeRegistrationAsync | Activation, resend cancellation, expiry, attempts |
+| FE-01.4 | ForgotPassword, Otp, ResetPassword | Recovery | Neutral recovery, one-use proof, revoke |
+| FE-01.5 | ChangePassword | OwnAccount.ChangePasswordAsync | Password change, revoked refresh |
+| FE-01.6 | Account | OwnAccount.GetAccountAsync/UpdateAccountAsync | Own profile, forbidden access, privilege fields ignored |
+| FE-01.7 | Account/resident logout, Login retry | Sessions.LogoutAsync | Current-chain revoke, other device survives, local race handling |

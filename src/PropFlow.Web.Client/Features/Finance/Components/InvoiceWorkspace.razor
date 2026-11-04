@@ -95,7 +95,7 @@ else if (data is not null)
     @if (CanWrite && detail.Status == "ISSUED" && detail.OutstandingAmount > 0)
     {
         <form @onsubmit="RecordPayment" @onsubmit:preventDefault><h2>Ghi nhận khoản thanh toán</h2><p>Khoản ghi nhận ở trạng thái chờ xác nhận, chưa làm giảm dư nợ.</p><div class="fields">
-            <label>Số tiền (VND)<input type="number" min="1" step="1" max="@detail.OutstandingAmount" required @bind="paymentAmount" /></label>
+            <FinanceNumberField Label="Số tiền (VND)" Placeholder="Nhập số tiền thanh toán" @bind-Value="paymentAmount" Min="1" Max="detail.OutstandingAmount" ShowErrors="true" Disabled="busy" />
             <label>Phương thức<PropFlowSelect @bind-Value="paymentMethod" Options="PaymentMethodOptions" AriaLabel="Phương thức thanh toán" Disabled="busy" /></label>
             <label>Ngày thanh toán<PropFlowDatePicker @bind-Value="paymentDate" ValidityChanged="v => paymentDateValid = v" AriaLabel="Ngày thanh toán" Disabled="busy" /></label>
             <label>Mã tham chiếu<input maxlength="100" @bind="paymentReference" /></label><label>Ghi chú<input @bind="paymentNote" /></label>
@@ -135,7 +135,7 @@ else if (data is not null)
     private DateOnly? periodStart = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1), periodEnd = DateOnly.FromDateTime(DateTime.Today), issueDate = DateOnly.FromDateTime(DateTime.Today);
     private DateOnly? dueDate, issueDue;
     private List<LineInput> lines = [];
-    private decimal paymentAmount; private string paymentMethod = "", paymentReference = "", paymentNote = "";
+    private decimal? paymentAmount; private string paymentMethod = "", paymentReference = "", paymentNote = "";
     private DateOnly? paymentDate = DateOnly.FromDateTime(DateTime.Today);
     private bool fromValid = true, toValid = true, periodStartValid = true, periodEndValid = true, dueDateValid = true, issueDateValid = true, issueDueValid = true, paymentDateValid = true;
     private string paymentKey = Guid.NewGuid().ToString(); private string? paymentPayload;
@@ -167,7 +167,7 @@ else if (data is not null)
         try { jsModule ??= await Js.InvokeAsync<IJSObjectReference>("import", "./js/finance-documents.js"); if (print) await jsModule.InvokeVoidAsync("print", r.Data.Content); else await jsModule.InvokeVoidAsync("download", r.Data.Content, r.Data.ContentType, r.Data.FileName); }
         catch (JSException) { error = "Trình duyệt chưa thể mở bản in/tải file. Vui lòng thử lại."; }
     }
-    private async Task RecordPayment() { if (busy || detail is null) return; if (!paymentDate.HasValue || !paymentDateValid) { error = "Ngày thanh toán không hợp lệ."; return; } busy = true; error = null; var id = detail.Id;
+    private async Task RecordPayment() { if (busy || detail is null) return; if (paymentAmount is null) { error = "Vui lòng nhập số tiền hợp lệ."; return; } if (!paymentDate.HasValue || !paymentDateValid) { error = "Ngày thanh toán không hợp lệ."; return; } busy = true; error = null; var id = detail.Id;
         var payload = new { invoiceId = id, amount = paymentAmount, paymentMethodCode = paymentMethod, paymentDate = new DateTimeOffset(paymentDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeOffset.Now.Offset), referenceNumber = paymentReference, note = paymentNote };
         var serialized = System.Text.Json.JsonSerializer.Serialize(payload); if (serialized != paymentPayload) { paymentKey = Guid.NewGuid().ToString(); paymentPayload = serialized; }
         var r = await Api.RecordPaymentAsync(payload, paymentKey); if (r.IsSuccess) { paymentPayload = null; notice = "Đã ghi nhận khoản thanh toán chờ xác nhận."; await Open(id); } else error = r.Message; busy = false;
@@ -175,7 +175,7 @@ else if (data is not null)
     private readonly Dictionary<Guid, string> confirmationKeys = new();
     private async Task Confirm(Guid id) { if (busy || detail is null) return; busy = true; error = null; if (!confirmationKeys.TryGetValue(id, out var key)) confirmationKeys[id] = key = Guid.NewGuid().ToString(); var r = await Finance.ConfirmPaymentAsync(id, key); if (r.IsSuccess) { await Load(page); await Open(detail.Id); } else error = r.Message; busy = false; }
     private async Task Reject() { if (busy || !rejecting.HasValue || detail is null) return; busy = true; error = null; var r = await Finance.RejectPaymentAsync(rejecting.Value, rejectReason, Guid.NewGuid().ToString()); if (r.IsSuccess) { rejecting = null; await Open(detail.Id); } else error = r.Message; busy = false; }
-    private static string Money(decimal n) => n.ToString("N0", Vi) + " ₫";
+    private static string Money(decimal n) => PropFlowMoneyText.Format(n) + " ₫";
     private static string Date(DateOnly? d) => d?.ToString("dd/MM/yyyy") ?? "—";
     private static string Status(string s) => s switch { "DRAFT" => "Nháp", "ISSUED" => "Đã phát hành", "CANCELLED" => "Đã hủy", "PAID" => "Đã thanh toán", "PARTIAL" => "Thanh toán một phần", "UNPAID" => "Chưa thanh toán", _ => "Không áp dụng" };
     private static string PaymentStatus(string s) => s switch { "PENDING" => "Chờ xác nhận", "CONFIRMED" => "Đã xác nhận", "REJECTED" => "Đã từ chối", _ => s };

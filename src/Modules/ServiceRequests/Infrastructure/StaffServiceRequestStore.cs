@@ -11,6 +11,10 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure;
 
 public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : IStaffServiceRequestStore
 {
+    public Task<StaffServiceRequestOutcome> CompleteWorkAsync(
+        Guid staffUserId, Guid id, string workResult, DateTimeOffset now, CancellationToken ct) =>
+        CompleteWorkAsync(staffUserId, id, workResult, 0, null, now, ct);
+
     public async Task<StaffServiceRequestPage> ListAsync(Guid staffUserId, StaffServiceRequestListQuery query, CancellationToken ct)
     {
         var requests = VisibleRequests(staffUserId);
@@ -40,7 +44,7 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
                 x.Assignments.Where(a => a.StaffUserId == staffUserId &&
                         (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
                     .OrderByDescending(a => a.AssignedAt).Select(a => a.StartedAt).FirstOrDefault(),
-                x.UpdatedAt))
+                x.UpdatedAt, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote))
             .ToArrayAsync(ct);
 
         var all = VisibleRequests(staffUserId);
@@ -129,7 +133,8 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
         return await SaveAsync(ct);
     }
 
-    public async Task<StaffServiceRequestOutcome> CompleteWorkAsync(Guid staffUserId, Guid id, string workResult, DateTimeOffset now, CancellationToken ct)
+    public async Task<StaffServiceRequestOutcome> CompleteWorkAsync(Guid staffUserId, Guid id, string workResult,
+        decimal additionalCost, string? additionalCostNote, DateTimeOffset now, CancellationToken ct)
     {
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
@@ -141,6 +146,7 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).FirstOrDefault();
         if (latestResult is not null && (latestRework is null || latestResult.CreatedAt > latestRework.CreatedAt))
             return StaffServiceRequestOutcome.Conflict;
+        state.Request.ProposeAdditionalCost(additionalCost, additionalCostNote, now);
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(id, ServiceActivityType.WORK_RESULT_ADDED, now,
             state.Assignment.Id, title: "Staff xác nhận hoàn thành công việc", workResult: workResult, performedBy: staffUserId));
         return await SaveAsync(ct);
@@ -182,7 +188,8 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
                 .OrderByDescending(a => a.AssignedAt).Select(a => a.AssignedAt).First(),
             x.Assignments.Where(a => a.StaffUserId == staffUserId &&
                     (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
-                .OrderByDescending(a => a.AssignedAt).Select(a => a.StartedAt).FirstOrDefault(), x.UpdatedAt));
+                .OrderByDescending(a => a.AssignedAt).Select(a => a.StartedAt).FirstOrDefault(), x.UpdatedAt,
+            x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote));
 
     private async Task<(ServiceRequest? Request, ServiceRequestAssignment? Assignment)> CurrentAsync(Guid staffUserId, Guid id, CancellationToken ct)
     {

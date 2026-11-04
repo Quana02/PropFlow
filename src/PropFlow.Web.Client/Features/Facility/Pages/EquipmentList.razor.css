@@ -12,6 +12,7 @@
 .fe04-toolbar { padding:1rem 1.2rem; background:linear-gradient(90deg,rgba(2,132,199,.035),rgba(255,255,255,0)); }
 .fe04-toolbar input { min-height:2.5rem; font-size:.72rem; }
 .fe04-toolbar ::deep .pf-select__trigger { min-height:2.5rem; padding:.5rem .7rem; border-radius:.7rem; font-size:.72rem; }
+.fe04-toolbar > div:first-child { max-width:none; }
 .fe04-panel { min-height:19rem; }
 .fe04-table-scroll { position:relative; isolation:isolate; transition:padding-bottom .18s ease; }
 .fe04-table-scroll.status-menu-open { padding-bottom:15rem; }
@@ -30,11 +31,105 @@
 .fe04-modal > div:last-child { padding:.9rem 1.2rem; }
 .fe04-nested-modal-backdrop { z-index:1060; background:rgba(15,23,42,.38); backdrop-filter:blur(2px); }
 .fe04-nested-modal { max-height:calc(100vh - 2rem); overflow:auto; border:1px solid var(--admin-line,#dce8f1); box-shadow:0 1.5rem 4rem rgba(15,23,42,.3); }
-html.dark .fe04-light-select ::deep .pf-select { color:#17243a; }
-html.dark .fe04-light-select ::deep .pf-select__trigger,
-html.dark .fe04-light-select ::deep .pf-select__menu { background:#fff; border-color:var(--admin-line,#cbd5e1); color:#17243a; }
-html.dark .fe04-light-select ::deep .pf-select__option:hover,
-html.dark .fe04-light-select ::deep .pf-select__option.is-active { background:rgba(2,132,199,.09); }
-html.dark .fe04-light-select ::deep .pf-select__option.is-selected { background:rgba(2,132,199,.14); color:#0275b8; }
+/* Đồng bộ palette với trang Chi tiết chung cư thông qua AppShell hiện có. */
+.app-shell-dark .fe04-page { color:#f1f5f9; }
+.app-shell-dark .fe04-header,
+.app-shell-dark .fe04-toolbar,
+.app-shell-dark .fe04-panel,
+.app-shell-dark .fe04-metric-card,
+.app-shell-dark .fe04-modal {
+    background:#0d1728;
+    border-color:rgba(34,211,238,.13);
+    box-shadow:0 1rem 2.25rem -1rem rgba(0,0,0,.58);
+}
+.app-shell-dark .fe04-page .bg-white,
+.app-shell-dark .fe04-page .bg-slate-50,
+.app-shell-dark .fe04-page .bg-slate-50\/50,
+.app-shell-dark .fe04-page .bg-slate-50\/70,
+.app-shell-dark .fe04-page .bg-white\/80 { background-color:#0d1728; }
+.app-shell-dark .fe04-page .border-slate-100,
+.app-shell-dark .fe04-page .border-slate-200,
+.app-shell-dark .fe04-page .border-slate-200\/80,
+.app-shell-dark .fe04-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color:rgba(34,211,238,.13); }
+.app-shell-dark .fe04-page .text-slate-900,
+.app-shell-dark .fe04-page .text-slate-800,
+.app-shell-dark .fe04-page .text-\[\#0f172a\] { color:#f1f5f9; }
+.app-shell-dark .fe04-page .text-slate-600,
+.app-shell-dark .fe04-page .text-slate-500,
+.app-shell-dark .fe04-page .text-slate-400,
+.app-shell-dark .fe04-page .text-\[\#64748b\] { color:#94a3b8; }
+.app-shell-dark .fe04-toolbar { background:linear-gradient(90deg,rgba(8,47,73,.72),#0d1728 70%); }
+.app-shell-dark .fe04-page input,
+.app-shell-dark .fe04-page .status-dropdown-menu { background:#111f33; border-color:rgba(34,211,238,.16); color:#f1f5f9; }
+.app-shell-dark .fe04-page input::placeholder { color:#71839a; }
+.app-shell-dark .fe04-page tbody tr:hover { background:rgba(8,47,73,.42); }
+.app-shell-dark .fe04-page .hover\:bg-slate-50:hover,
+.app-shell-dark .fe04-page .hover\:bg-slate-100:hover { background:rgba(30,41,59,.85); }
+.app-shell-dark .fe04-page .bg-sky-50,
+.app-shell-dark .fe04-page .bg-blue-50 { background:rgba(8,47,73,.76); }
+.app-shell-dark .fe04-page .bg-emerald-50 { background:rgba(6,78,59,.62); }
+.app-shell-dark .fe04-page .bg-amber-50 { background:rgba(120,53,15,.52); }
+.app-shell-dark .fe04-page .bg-rose-50 { background:rgba(136,19,55,.38); }
+.app-shell-dark .fe04-page .bg-slate-100 { background:rgba(30,41,59,.9); }
+.app-shell-dark .fe04-light-select ::deep .pf-select,
+.app-shell-dark .fe04-light-select ::deep .pf-select__trigger,
+.app-shell-dark .fe04-light-select ::deep .pf-select__menu { background:#111f33; border-color:rgba(34,211,238,.16); color:#f1f5f9; }
+.app-shell-dark .fe04-light-select ::deep .pf-select__option { color:#cbd5e1; }
+.app-shell-dark .fe04-light-select ::deep .pf-select__option:hover,
+.app-shell-dark .fe04-light-select ::deep .pf-select__option.is-active { background:rgba(8,47,73,.75); }
+.app-shell-dark .fe04-light-select ::deep .pf-select__option.is-selected { background:rgba(8,47,73,.95); color:#67e8f9; }
+
+/* Override only Tailwind's light utility surfaces, which are injected after
+   the isolated CSS bundle by the CDN script. */
+.app-shell-dark .fe04-header,
+.app-shell-dark .fe04-metric-card,
+.app-shell-dark .fe04-panel,
+.app-shell-dark .fe04-panel > div:last-child,
+.app-shell-dark .fe04-legend,
+.app-shell-dark .fe04-panel table,
+.app-shell-dark .fe04-panel tbody,
+.app-shell-dark .fe04-panel tbody tr,
+.app-shell-dark .fe04-panel tbody td {
+    background-color:#0d1728 !important;
+}
+.app-shell-dark .fe04-panel thead,
+.app-shell-dark .fe04-panel thead tr { background-color:#0a1627 !important; }
+.app-shell-dark .fe04-panel tbody td,
+.app-shell-dark .fe04-panel tbody td .font-semibold { color:#f1f5f9 !important; }
+.app-shell-dark .fe04-panel tbody td .text-xs,
+.app-shell-dark .fe04-panel tbody td .text-slate-600,
+.app-shell-dark .fe04-panel tbody td .text-slate-500 { color:#94a3b8 !important; }
+.app-shell-dark .fe04-toolbar input {
+    background-color:#111f33 !important;
+    border-color:rgba(34,211,238,.22) !important;
+    color:#f1f5f9 !important;
+}
+.app-shell-dark .fe04-toolbar input::placeholder { color:#94a3b8 !important; }
+.app-shell-dark .fe04-toolbar > div:last-child button {
+    background-color:#111f33 !important;
+    border-color:rgba(34,211,238,.22) !important;
+    color:#cbd5e1 !important;
+}
+.app-shell-dark .fe04-toolbar > div:last-child button:hover {
+    background-color:rgba(8,47,73,.9) !important;
+    color:#67e8f9 !important;
+}
+.app-shell-dark .fe04-equipment-legend {
+    background-color:#0d1728 !important;
+    border-color:rgba(34,211,238,.13) !important;
+}
+.app-shell-dark .fe04-equipment-legend > div:first-child { color:#94a3b8 !important; }
+.app-shell-dark .fe04-equipment-legend .bg-emerald-50\/60 { background-color:rgba(6,78,59,.48) !important; }
+.app-shell-dark .fe04-equipment-legend .bg-amber-50\/60 { background-color:rgba(120,53,15,.42) !important; }
+.app-shell-dark .fe04-equipment-legend .bg-slate-100\/70 { background-color:rgba(30,41,59,.9) !important; }
+.app-shell-dark .fe04-equipment-legend .bg-rose-50\/60 { background-color:rgba(136,19,55,.38) !important; }
+.app-shell-dark .fe04-equipment-legend .text-emerald-800 { color:#6ee7b7 !important; }
+.app-shell-dark .fe04-equipment-legend .text-emerald-700 { color:#a7f3d0 !important; }
+.app-shell-dark .fe04-equipment-legend .text-amber-800 { color:#fcd34d !important; }
+.app-shell-dark .fe04-equipment-legend .text-amber-700 { color:#fde68a !important; }
+.app-shell-dark .fe04-equipment-legend .text-slate-800 { color:#cbd5e1 !important; }
+.app-shell-dark .fe04-equipment-legend .text-slate-600 { color:#94a3b8 !important; }
+.app-shell-dark .fe04-equipment-legend .text-rose-800 { color:#fda4af !important; }
+.app-shell-dark .fe04-equipment-legend .text-rose-700 { color:#fecdd3 !important; }
 @media (max-width:58rem) { .fe04-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:40rem) { .fe04-header { align-items:flex-start; } .fe04-header button { width:100%; justify-content:center; } .fe04-metrics { grid-template-columns:1fr; } }

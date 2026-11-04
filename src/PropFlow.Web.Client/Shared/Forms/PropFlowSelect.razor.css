@@ -20,3 +20,5 @@
 .pf-select__option:disabled,.pf-select.is-disabled { cursor:not-allowed; opacity:.58; }
 .pf-select.modified.invalid .pf-select__trigger { border-color:#e11d48; box-shadow:0 0 0 3px rgba(225,29,72,.1); }
 @media (max-width:36rem) { .pf-select__trigger { min-height:2.75rem; } }
+
+.pf-select__menu{box-sizing:border-box}.pf-select__trigger{box-sizing:border-box}
