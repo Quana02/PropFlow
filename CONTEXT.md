@@ -30,7 +30,7 @@ A time-bounded Resident-to-Apartment association owned by FE-02. It carries the 
 
 ## Resident Self Registration
 
-An FE-01 account-onboarding flow that matches one ACTIVE, unlinked Resident by the same four normalized values: email, phone, identity type and identity number. Eligibility additionally requires an active residency or current ownership. Historical-only relationships do not qualify. Authentication uses Residents public Contracts and does not read Residents or Apartments DbContexts.
+An FE-01 account-onboarding flow that matches one ACTIVE, unlinked Resident by the same four normalized values: email, phone, identity type and identity number. Eligibility additionally requires current ownership or an active HOUSEHOLD_HEAD residency (user decision 2026-11-03). A non-owning household head qualifies only with an active TENANT residency in an apartment that has no current owner (renting from the operator). A tenant head in an owned apartment and a household member without ownership do not qualify. Historical-only relationships do not qualify. Authentication uses Residents public Contracts and does not read Residents or Apartments DbContexts.
 
 ## Household Head
 

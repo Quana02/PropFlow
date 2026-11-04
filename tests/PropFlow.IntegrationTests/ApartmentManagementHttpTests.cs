@@ -25,6 +25,58 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
 {
     private static readonly DateOnly Today = new(2026, 10, 1);
 
+    [Fact]
+    public async Task Type_defaults_roundtrip_and_apartment_manual_override_is_never_synchronized()
+    {
+        using var client = await ClientAsync("MANAGER");
+        using var created = await client.PostAsJsonAsync("api/v1/apartment-unit-types", new CreateApartmentUnitTypeRequest("Defaults-" + Guid.NewGuid().ToString("N"), 75, 2, 2));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var type = (await created.Content.ReadFromJsonAsync<ApartmentUnitTypeResponse>())!;
+        Assert.Equal(75, type.DefaultUsableAreaM2);
+        Assert.Equal(2, type.DefaultBedroomCount);
+        var request = ValidCreate(type.Id) with { UsableAreaM2 = 76, BedroomCount = 3, BathroomCount = 1 };
+        using var apartmentCreated = await client.PostAsJsonAsync("api/v1/apartments", request);
+        Assert.Equal(HttpStatusCode.Created, apartmentCreated.StatusCode);
+        var unit = (await apartmentCreated.Content.ReadFromJsonAsync<ApartmentDetailResponse>())!;
+        using var updated = await client.PutAsJsonAsync($"api/v1/apartment-unit-types/{type.Id}", new UpdateApartmentUnitTypeRequest(type.Name, 78, 2, 2));
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        var reloaded = await client.GetFromJsonAsync<ApartmentDetailResponse>($"api/v1/apartments/{unit.Id}");
+        Assert.Equal(76, reloaded!.UsableAreaM2);
+        Assert.Equal(3, reloaded.BedroomCount);
+        Assert.Equal(1, reloaded.BathroomCount);
+        Assert.Equal(type.Id, reloaded.ApartmentUnitTypeId);
+        var types = await client.GetFromJsonAsync<ApartmentUnitTypeResponse[]>("api/v1/apartment-unit-types");
+        Assert.Equal(78, types!.Single(x => x.Id == type.Id).DefaultUsableAreaM2);
+    }
+
+    [Fact]
+    public async Task Legacy_partial_defaults_and_studio_zero_roundtrip_without_invented_values()
+    {
+        using var client = await ClientAsync("MANAGER");
+        var id = await SeedApartmentTypeAsync("Legacy-" + Guid.NewGuid().ToString("N"));
+        var list = await client.GetFromJsonAsync<ApartmentUnitTypeResponse[]>("api/v1/apartment-unit-types");
+        Assert.Null(list!.Single(x => x.Id == id).DefaultUsableAreaM2);
+        using var response = await client.PutAsJsonAsync($"api/v1/apartment-unit-types/{id}", new UpdateApartmentUnitTypeRequest("Studio-" + Guid.NewGuid().ToString("N"), null, 0, 1));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var type = (await response.Content.ReadFromJsonAsync<ApartmentUnitTypeResponse>())!;
+        Assert.Null(type.DefaultUsableAreaM2);
+        Assert.Equal(0, type.DefaultBedroomCount);
+        Assert.Equal(1, type.DefaultBathroomCount);
+    }
+
+    [Theory]
+    [InlineData(0, 1, 1)]
+    [InlineData(24, 1, 1)]
+    [InlineData(35, -1, 1)]
+    [InlineData(35, 1, -1)]
+    public async Task Invalid_type_defaults_return_safe_validation_errors(int area, int bedrooms, int bathrooms)
+    {
+        using var client = await ClientAsync("MANAGER");
+        using var response = await client.PostAsJsonAsync("api/v1/apartment-unit-types", new CreateApartmentUnitTypeRequest("Invalid-" + Guid.NewGuid().ToString("N"), area, bedrooms, bathrooms));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("APARTMENT_UNIT_TYPE_DEFAULTS_INVALID", await response.Content.ReadAsStringAsync());
+    }
+
     [Theory]
     [InlineData("MANAGER", HttpStatusCode.Created)]
     [InlineData("STAFF", HttpStatusCode.Forbidden)]

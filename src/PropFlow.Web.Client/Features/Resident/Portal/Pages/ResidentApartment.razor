@@ -180,14 +180,14 @@ html.dark .resident-apartment-page,html[data-theme="dark"] .resident-apartment-p
 
     private string RelationshipLabel(Guid apartmentId)
     {
-        var residency = ProfileContext.Profile?.Residencies.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.EndDate is null);
+        var residency = ProfileContext.Profile?.Residencies.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.IsActiveAt(DateOnly.FromDateTime(DateTime.Today)));
         if (residency is not null) return residency.HouseholdRole?.ToUpperInvariant() switch { "HOUSEHOLD_HEAD" => "Chủ hộ", "HOUSEHOLD_MEMBER" => "Thành viên hộ", _ => "Cư dân" };
         return ProfileContext.Profile?.Ownerships.Any(x => x.ApartmentUnitId == apartmentId && x.EndDate is null) == true ? "Chủ sở hữu" : "Đã liên kết";
     }
 
     private string ResidencyPeriod(Guid apartmentId)
     {
-        var residency = ProfileContext.Profile?.Residencies.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.EndDate is null);
+        var residency = ProfileContext.Profile?.Residencies.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.IsActiveAt(DateOnly.FromDateTime(DateTime.Today)));
         if (residency is not null) return $"Từ ngày {residency.StartDate:dd/MM/yyyy}";
         var ownership = ProfileContext.Profile?.Ownerships.FirstOrDefault(x => x.ApartmentUnitId == apartmentId && x.EndDate is null);
         return ownership is null ? "Quan hệ đang hiệu lực" : $"Từ ngày {ownership.StartDate:dd/MM/yyyy}";
