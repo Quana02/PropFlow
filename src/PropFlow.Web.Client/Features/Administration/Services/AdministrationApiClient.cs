@@ -5,6 +5,14 @@ namespace PropFlow.Web.Client.Features.Administration.Services;
 
 public sealed class AdministrationApiClient(AuthenticatedApiClient api) : IAdministrationApiClient
 {
+    public Task<ApiResult<PagedAdministrationActivities>> GetSystemActivityAsync(SystemActivityFilter filter, int page, CancellationToken ct = default)
+    {
+        var query = new List<string> { $"page={page}", "pageSize=20" };
+        void Add(string key, string? value) { if (!string.IsNullOrWhiteSpace(value)) query.Add($"{key}={Uri.EscapeDataString(value)}"); }
+        Add("module", filter.Module); Add("action", filter.Action); Add("outcome", filter.Outcome); Add("actor", filter.Actor);
+        Add("dateFrom", filter.DateFrom?.ToString("yyyy-MM-dd")); Add("dateTo", filter.DateTo?.ToString("yyyy-MM-dd"));
+        return api.SendAsync<PagedAdministrationActivities>(HttpMethod.Get, "api/v1/administration/system-activity?" + string.Join('&', query), ct: ct);
+    }
     public Task<ApiResult<SePayConnectionState>> GetSePayConnectionAsync(CancellationToken ct = default) =>
         api.SendAsync<SePayConnectionState>(HttpMethod.Get, "api/v1/payment-settings/sepay/connection", ct: ct);
     public Task<ApiResult<SePayConnectionState>> CheckSePayConnectionAsync(CancellationToken ct = default) =>

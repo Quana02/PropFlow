@@ -142,7 +142,7 @@
 }
 
 @code {
-    [SupplyParameterFromQuery(Name = "paymentEnvironment")] public string? PaymentEnvironment { get; set; }
+    [Parameter] public string? PaymentEnvironment { get; set; }
     private string setupEnvironment = "SANDBOX";
     private PaymentDestinationView? current;
     private PaymentDestinationView[] history = [];

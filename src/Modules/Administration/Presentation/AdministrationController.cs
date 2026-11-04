@@ -199,26 +199,29 @@ public sealed class AdministrationController(
         return Ok(new PagedAdministrationActivitiesResponse(total, page, pageSize, items));
     }
 
-    private static AdministrationActivityResponse MapActivity(AuditLog log, IReadOnlyDictionary<Guid, InternalAccountRecord> identities, IReadOnlyDictionary<Guid, string> roles)
+    internal static AdministrationActivityResponse MapActivity(AuditLog log, IReadOnlyDictionary<Guid, InternalAccountRecord> identities, IReadOnlyDictionary<Guid, string> roles)
     {
         ActivityMetadata metadata;
         try { metadata = JsonSerializer.Deserialize<ActivityMetadata>(log.NewValues ?? "{}") ?? new(); }
         catch (JsonException) { metadata = new(); }
         identities.TryGetValue(log.ActorUserId ?? Guid.Empty, out var actor);
-        identities.TryGetValue(log.EntityId ?? Guid.Empty, out var target);
-        roles.TryGetValue(log.EntityId ?? Guid.Empty, out var currentRole);
+        identities.TryGetValue(log.EntityType == "InternalAccount" ? log.EntityId ?? Guid.Empty : Guid.Empty, out var target);
+        roles.TryGetValue(log.EntityType == "InternalAccount" ? log.EntityId ?? Guid.Empty : Guid.Empty, out var currentRole);
         return new(log.Id, log.CreatedAt, log.Action,
             log.ActorUserId, actor?.Username, actor?.DisplayName,
-            log.EntityId, target?.Username ?? metadata.Username, target?.DisplayName,
+            log.EntityType == "InternalAccount" ? log.EntityId : null, target?.Username ?? metadata.Username, target?.DisplayName,
             metadata.Role ?? metadata.NewRole ?? currentRole, target?.Status,
-            metadata.OldRole, metadata.NewRole, metadata.OldStatus, metadata.NewStatus ?? metadata.Status);
+            metadata.OldRole, metadata.NewRole, metadata.OldStatus, metadata.NewStatus ?? metadata.Status,
+            metadata.Module ?? "Administration", log.EntityType, log.EntityId, metadata.Label, metadata.Outcome ?? "SUCCESS",
+            metadata.Changes ?? [], log.CorrelationId, metadata.HttpStatus);
     }
 
     private void AddHistory(Guid userId, AccessActionType action, Guid? oldRole = null, Guid? newRole = null, AccountStatus? oldStatus = null, AccountStatus? newStatus = null) => db.UserAccessHistories.Add(new UserAccessHistory(userId, action, DateTimeOffset.UtcNow, oldRole, newRole, oldStatus, newStatus, performedBy: ActorId));
     private void AddAudit(string action, Guid userId, object values) => db.AuditLogs.Add(new AuditLog(action, "InternalAccount", DateTimeOffset.UtcNow, ActorId, userId, newValues: JsonSerializer.Serialize(values), ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), correlationId: HttpContext.TraceIdentifier));
 }
 
-public sealed record ActivityMetadata(string? Username = null, string? Role = null, string? OldRole = null, string? NewRole = null, string? Status = null, string? OldStatus = null, string? NewStatus = null);
+public sealed record ActivityMetadata(string? Username = null, string? Role = null, string? OldRole = null, string? NewRole = null, string? Status = null, string? OldStatus = null, string? NewStatus = null,
+    string? Module = null, string? Label = null, string? Outcome = null, AuditFieldChange[]? Changes = null, int? HttpStatus = null);
 
 public sealed record InternalAccountSummaryResponse(int Total, int Active, int Disabled, int Locked, IReadOnlyDictionary<string, int> RoleCounts);
 public sealed record PagedInternalAccountsResponse(int Total, int Page, int PageSize, IReadOnlyList<InternalAccountResponse> Items);
@@ -235,8 +238,10 @@ public sealed record ChangeStatusRequest([Required(ErrorMessage = "Vui l√≤ng ch·
 public sealed record PermissionResponse(string Code, string Name, string Module, string? Description);
 public sealed record RoleAccessResponse(string Code, string Name, string? Description, bool IsActive, IReadOnlyList<PermissionResponse> Permissions);
 public sealed record InternalAccountAccessResponse(Guid UserId, string Username, string DisplayName, string Status, string Role, IReadOnlyList<PermissionResponse> Permissions);
-public sealed record PagedAdministrationActivitiesResponse(int Total, int Page, int PageSize, IReadOnlyList<AdministrationActivityResponse> Items);
+public sealed record PagedAdministrationActivitiesResponse(int Total, int Page, int PageSize, IReadOnlyList<AdministrationActivityResponse> Items, string? TimeZoneId = null);
 public sealed record AdministrationActivityResponse(Guid Id, DateTimeOffset Timestamp, string Action,
     Guid? ActorUserId, string? ActorUsername, string? ActorDisplayName,
     Guid? TargetAccountId, string? TargetUsername, string? TargetDisplayName, string? TargetRole, string? TargetStatus,
-    string? OldRole, string? NewRole, string? OldStatus, string? NewStatus);
+    string? OldRole, string? NewRole, string? OldStatus, string? NewStatus,
+    string Module = "Administration", string? EntityType = null, Guid? EntityId = null, string? Label = null, string Outcome = "SUCCESS",
+    IReadOnlyList<AuditFieldChange>? Changes = null, string? CorrelationId = null, int? HttpStatus = null);
