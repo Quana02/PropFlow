@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -27,6 +28,10 @@ using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Contracts;
 using PropFlow.Modules.Payments.Application.Finance;
 using PropFlow.Modules.Payments.Infrastructure.Finance;
+using PropFlow.Modules.Payments.Application.PaymentSettings;
+using PropFlow.Modules.Payments.Infrastructure.PaymentSettings;
+using PropFlow.Modules.Payments.Infrastructure.ResidentPayments;
+using PropFlow.Modules.Payments.Presentation;
 using PropFlow.Modules.Billing.Contracts;
 using PropFlow.Modules.Billing.Application.Finance;
 using PropFlow.Modules.Billing.Infrastructure.Finance;
@@ -52,9 +57,11 @@ using PropFlow.Api.Serialization;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 using Npgsql;
 using PropFlow.Api.Composition;
+using PropFlow.Shared;
 using CloudinaryDotNet;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDataProtection().SetApplicationName("PropFlow");
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
     options.JsonSerializerOptions.Converters.Insert(0, new FlexibleEnumJsonConverterFactory()));
 
@@ -64,13 +71,14 @@ builder.Services.AddOptions<DatabaseConnectionOptions>()
         "Connection string 'PropFlowDatabase' must be configured through the environment or secret provider.")
     .ValidateOnStart();
 
-builder.Services.AddOptions<CloudinaryOptions>()
+var cloudinaryOptions = builder.Services.AddOptions<CloudinaryOptions>()
     .BindConfiguration("Cloudinary")
     .Validate(options => !string.IsNullOrWhiteSpace(options.CloudName)
                         && !string.IsNullOrWhiteSpace(options.ApiKey)
                         && !string.IsNullOrWhiteSpace(options.ApiSecret),
-        "Cloudinary phải được cấu hình bằng User Secrets hoặc secret provider.")
-    .ValidateOnStart();
+        "Cloudinary phải được cấu hình bằng User Secrets hoặc secret provider.");
+if (!builder.Environment.IsEnvironment("Testing"))
+    cloudinaryOptions.ValidateOnStart();
 
 builder.Services.AddSingleton(services =>
 {
@@ -211,11 +219,45 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.Payments.Presentation.PaymentsFinanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Communication.Presentation.ResidentNotificationsController).Assembly);
 builder.Services.AddScoped<IInvoiceFinancialSource, InvoiceFinancialSource>();
+builder.Services.AddScoped<IServiceRequestBilling, ServiceRequestBilling>();
 builder.Services.AddScoped<IConfirmedPaymentSource, ConfirmedPaymentSource>();
 builder.Services.AddScoped<BillingFinanceQueries>();
 builder.Services.AddScoped<PaymentFinanceStore>();
-builder.Services.AddScoped<IPaymentFinanceStore, PaymentFinanceNotifications>();
+builder.Services.AddScoped<IPaymentFinanceStore>(services => new PaymentFinanceNotifications(
+    services.GetRequiredService<PaymentFinanceStore>(),
+    services.GetRequiredService<IBillingCycle>(),
+    services.GetRequiredService<ILogger<PaymentFinanceNotifications>>()));
 builder.Services.AddScoped<PaymentFinanceUseCases>();
+builder.Services.AddScoped<IPaymentDestinationStore, PaymentDestinationStore>();
+builder.Services.AddScoped<IPaymentAccountProtector, PaymentAccountProtector>();
+builder.Services.AddHttpClient<IPaymentBankDirectory, VietQrBankDirectory>(client =>
+{
+    client.BaseAddress = new Uri("https://api.vietqr.io/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<PaymentDestinationSettings>();
+builder.Services.AddScoped<ResidentServiceRequestPayments>();
+builder.Services.AddScoped<ISandboxPaymentDisplaySource, SandboxPaymentDisplaySource>();
+builder.Services.Configure<SePayOptions>(builder.Configuration.GetSection("Payments:SePay"));
+builder.Services.Configure<SePayOAuthOptions>(builder.Configuration.GetSection("Payments:SePay:OAuth"));
+builder.Services.AddHttpClient<SePayOAuth>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<OAuthSePayBankAccounts>();
+builder.Services.AddHttpClient<SePaySandbox>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHttpClient<ISePayConnectionProbe, SePayConnectionProbe>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<SePayConnectionSettings>();
+builder.Services.AddHttpClient<SePayBankAccounts>(client => client.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<ISePayBankAccounts>(sp => sp.GetRequiredService<SePayOAuth>().Enabled
+    ? sp.GetRequiredService<OAuthSePayBankAccounts>() : sp.GetRequiredService<SePayBankAccounts>());
+builder.Services.AddScoped<SePayAccountSelection>();
+builder.Services.AddScoped<SePayWebhook>();
+builder.Services.AddScoped<SePaySandboxWebhook>();
+builder.Services.AddScoped<SePayInbox>();
+builder.Services.AddScoped<BankTransferReview>();
+builder.Services.AddHostedService<SePayInboxWorker>();
 builder.Services.AddScoped<IBillingHouseholdDirectory, BillingHouseholdDirectory>();
 builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
 builder.Services.AddScoped<IBillingCycle, BillingCycle>();
@@ -248,8 +290,6 @@ builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewMa
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
 builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRequestInsightSource>();
 builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
-builder.Services.Configure<CloudinaryEvidenceOptions>(
-    builder.Configuration.GetSection(CloudinaryEvidenceOptions.SectionName));
 builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
 builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
     client.Timeout = TimeSpan.FromSeconds(90));
@@ -268,6 +308,8 @@ builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoord
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("finance.manage", policy => policy.RequireRole(SystemRoleCodes.Accountant).RequireClaim("permission", SystemPermissionCodes.ManageFinance));
+    options.AddPolicy(PaymentSettingsAuthorizationPolicies.Manage,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManagePaymentDestination));
     options.AddPolicy("billing.configure", policy => policy.RequireRole(SystemRoleCodes.Manager).RequireClaim("permission", SystemPermissionCodes.ManageOperations));
     options.AddPolicy("billing.read", policy => policy.RequireAssertion(c =>
         (c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations)) ||
@@ -338,6 +380,19 @@ builder.Services.AddRateLimiter(options =>
         options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
     }
+    foreach (var (name, count, minutes) in new[]
+    {
+        (PaymentSettingsRateLimitPolicies.Read, 120, 1),
+        (PaymentSettingsRateLimitPolicies.Provider, 20, 1),
+        (PaymentSettingsRateLimitPolicies.Otp, 5, 15)
+    })
+    {
+        var limit = builder.Configuration.GetValue($"Payments:RateLimits:{name}:PermitLimit", count);
+        var window = builder.Configuration.GetValue($"Payments:RateLimits:{name}:WindowMinutes", minutes);
+        options.AddPolicy(name, context => RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
+    }
     var residentSubmitLimit = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:PermitLimit", 5);
     var residentSubmitWindow = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:WindowMinutes", 1);
     options.AddPolicy("resident-service-request-submit", context =>
@@ -401,11 +456,4 @@ public partial class Program { }
 public sealed class DatabaseConnectionOptions
 {
     public string PropFlowDatabase { get; set; } = "";
-}
-
-public sealed class CloudinaryOptions
-{
-    public string CloudName { get; set; } = "";
-    public string ApiKey { get; set; } = "";
-    public string ApiSecret { get; set; } = "";
 }

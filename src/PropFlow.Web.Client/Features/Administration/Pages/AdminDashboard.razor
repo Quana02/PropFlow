@@ -53,6 +53,10 @@ else if (Tab == "activity")
     else { <div class="role-table-wrap"><table class="role-table activity-table"><thead><tr><th>Thời gian</th><th>Hành động</th><th>Tài khoản</th><th>Thay đổi</th><th><span class="visually-hidden">Hành động</span></th></tr></thead><tbody>@foreach (var item in activities) { <tr><td><time datetime="@item.Timestamp.ToString("O")"><strong>@item.Timestamp.LocalDateTime.ToString("dd/MM/yyyy")</strong><span>@item.Timestamp.LocalDateTime.ToString("HH:mm")</span></time></td><td><span class="activity-badge @ActionTone(item)"><span class="material-symbols-outlined" aria-hidden="true">@ActionIcon(item)</span>@ActionLabel(item)</span></td><td><div class="activity-account"><strong>@(item.TargetUsername ?? "Không xác định")</strong>@if (!string.IsNullOrWhiteSpace(item.TargetRole)) { <span class="activity-value-chip">@item.TargetRole</span> }</div></td><td>@ChangeContent(item)</td><td><button type="button" class="activity-view" title="Xem chi tiết" aria-label="Xem chi tiết hoạt động của @(item.TargetUsername ?? "tài khoản")" @onclick="() => selectedActivity = item"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button></td></tr> }</tbody></table></div><footer class="table-footer"><span>Hiển thị @activities.Length / @(activityPage?.Total ?? 0) hoạt động</span><nav class="table-pagination" aria-label="Phân trang nhật ký quản trị"><button type="button" disabled="@(activityPageNumber <= 1)" title="Trang trước" aria-label="Trang trước" @onclick="PreviousActivityPageAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button><span class="page-number" aria-current="page">@activityPageNumber</span><button type="button" disabled="@(activityPage is null || activityPageNumber * activityPage.PageSize >= activityPage.Total)" title="Trang sau" aria-label="Trang sau" @onclick="NextActivityPageAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></nav></footer> }
     </section>
 }
+else if (Tab == "payment")
+{
+    <PaymentDestinationSettings />
+}
 else
 {
     <section class="metrics-grid" aria-label="Tóm tắt tài khoản nội bộ">

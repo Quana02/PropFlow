@@ -11,6 +11,7 @@
     else if (invoice is null) { <p role="alert">@(error ?? "Không tìm thấy hóa đơn.")</p><button @onclick="Load">Thử lại</button> }
     else
     {
+        @if (invoice.PaymentEnvironment == "SANDBOX") { <p role="status">SANDBOX — Trạng thái thanh toán thử nghiệm; đây không phải xác nhận thu tiền thật.</p> }
         <header class="detail-heading">
             <div><h1>Chi tiết hóa đơn · @invoice.InvoiceNumber</h1><div class="badges"><span>@InvoiceStatus(invoice.Status)</span><span class="@(Overdue ? "overdue" : "")">@(Overdue ? "Quá hạn" : Settlement(invoice.SettlementStatus))</span></div></div>
             <div class="detail-actions">

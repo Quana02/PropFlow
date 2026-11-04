@@ -3,6 +3,7 @@
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
 @implements IDisposable
 @using PropFlow.Modules.ServiceRequests.Contracts
+@using PropFlow.Modules.Payments.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @inject IResidentServiceRequestApiClient Api
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
@@ -62,6 +63,21 @@ else if (_detail is not null)
             }
         </section>
 
+        @if (HasCharge)
+        {
+            <PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentServiceRequestPaymentCard @key="Id" RequestId="Id" Completed="@(_detail.Status is "RESOLVED" or "CLOSED")" Changed="PaymentChanged" />
+        }
+        @if (_detail.Status is "RESOLVED" or "CLOSED")
+        {
+            <section class="detail-card request-overview">
+                @if (!HasCharge || _detail.Settlement?.OutstandingAmount == 0)
+                {
+                    <h2>Đánh giá dịch vụ</h2><button type="button" @onclick="OpenFeedbackAsync">@(_detail.Rating.HasValue ? "Cập nhật đánh giá" : "Gửi đánh giá")</button>
+                }
+                else { <p>Bạn có thể đánh giá sau khi hóa đơn được thanh toán đầy đủ.</p> }
+            </section>
+        }
+
         <section class="detail-card request-progress" aria-labelledby="progressTitle">
             <header>
                 <div><small>Tiến độ xử lý</small><h2 id="progressTitle">Lịch sử yêu cầu</h2></div>
@@ -95,6 +111,8 @@ else if (_detail is not null)
     </div>
 }
 
+<PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentServiceRequestDetailDialog @ref="feedbackDialog" FeedbackSaved="LoadAsync" />
+
 @code {
     [Parameter] public Guid Id { get; set; }
 
@@ -102,6 +120,7 @@ else if (_detail is not null)
     private bool _loading;
     private bool _disposed;
     private string? _error;
+    private PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentServiceRequestDetailDialog? feedbackDialog;
     private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _realtimeRefresh;
 
     protected override async Task OnInitializedAsync()
@@ -147,6 +166,16 @@ else if (_detail is not null)
             : _realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
 
     public void Dispose() { _disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; _realtimeRefresh?.Dispose(); }
+
+    private bool HasCharge => (_detail?.BaseServiceCost ?? 0) + (_detail?.ApprovedAdditionalCost ?? 0) > 0;
+    private Task OpenFeedbackAsync() => feedbackDialog?.OpenAsync(Id) ?? Task.CompletedTask;
+    private void PaymentChanged(ResidentServiceRequestPaymentView payment)
+    {
+        if (payment.PaymentEnvironment == "SANDBOX") return;
+        if (_detail is not null && _detail.Id == payment.ServiceRequestId)
+            _detail = _detail with { Settlement = new(payment.InvoiceId, payment.InvoiceNumber, payment.TotalAmount,
+                payment.ConfirmedPaidAmount, payment.OutstandingAmount, payment.SettlementStatus) };
+    }
 
     private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     private static string PreferredSchedule(ResidentServiceRequestDetailResponse request) => request.PreferredDate is null

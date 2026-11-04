@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.Authentication.Domain.ResidentVerifications;
 using PropFlow.Modules.Authentication.Domain.Tokens;
 using PropFlow.Modules.Authentication.Domain.Users;
+using PropFlow.Modules.Authentication.Domain.PrivilegedActions;
 
 namespace PropFlow.Modules.Authentication.Infrastructure.Persistence;
 
@@ -16,6 +17,7 @@ public class AuthenticationDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<ResidentVerification> ResidentVerifications => Set<ResidentVerification>();
+    public DbSet<PrivilegedActionChallenge> PrivilegedActionChallenges => Set<PrivilegedActionChallenge>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

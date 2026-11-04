@@ -12,6 +12,7 @@ using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
+using PropFlow.Shared;
 using PropFlow.Web.Client.Features.ServiceRequests.Services;
 using PropFlow.Web.Client.Services.Api;
 
@@ -130,7 +131,7 @@ public sealed class StaffServiceRequestTests
             var legacy = new LocalServiceRequestEvidenceStorage(new TestWebHostEnvironment(contentRoot));
             var storage = new CloudinaryServiceRequestEvidenceStorage(
                 new HttpClient(handler),
-                Options.Create(new CloudinaryEvidenceOptions
+                Options.Create(new CloudinaryOptions
                 {
                     CloudName = "propflow-test",
                     ApiKey = "test-key",
@@ -146,7 +147,7 @@ public sealed class StaffServiceRequestTests
             Assert.StartsWith("cloudinary:propflow/service-request-evidence/", saved.StorageKey);
             Assert.Equal(jpeg.Length, saved.SizeBytes);
             Assert.Equal("https://api.cloudinary.com/v1_1/propflow-test/image/upload", handler.RequestUri?.AbsoluteUri);
-            Assert.Contains("name=\"signature\"", handler.RequestBody);
+            Assert.Matches("name=\"?signature\"?(?:\\r\\n|;)", handler.RequestBody);
             Assert.False(Directory.Exists(Path.Combine(contentRoot, "App_Data", "service-request-evidence")));
         }
         finally

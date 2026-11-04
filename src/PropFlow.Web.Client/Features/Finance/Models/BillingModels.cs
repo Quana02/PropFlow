@@ -22,7 +22,7 @@ public sealed record InvoiceView(Guid Id, string InvoiceNumber, Guid ApartmentUn
     DateOnly PeriodStart, DateOnly PeriodEnd, DateOnly? IssueDate, DateOnly? DueDate, string Status,
     decimal TotalAmount, decimal ConfirmedPaidAmount, decimal OutstandingAmount, string SettlementStatus,
     DateTimeOffset CreatedAt, Guid CreatedBy, DateTimeOffset? IssuedAt, Guid? IssuedBy, string? Note,
-    IReadOnlyList<InvoiceLineView> Lines, IReadOnlyList<InvoiceHistoryView> History, string? ResidentName = null, string? InvoiceType = null);
+    IReadOnlyList<InvoiceLineView> Lines, IReadOnlyList<InvoiceHistoryView> History, string? ResidentName = null, string? InvoiceType = null, string PaymentEnvironment = "LIVE");
 public sealed record InvoicePage(int Total, int Page, int PageSize, decimal TotalAmount, decimal ConfirmedPaidAmount,
     decimal OutstandingAmount, IReadOnlyList<InvoiceView> Items);
 public sealed record BillingApartment(Guid Id, string UnitNumber);

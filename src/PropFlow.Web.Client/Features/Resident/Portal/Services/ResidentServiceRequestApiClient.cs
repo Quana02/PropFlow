@@ -1,4 +1,5 @@
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.Payments.Contracts;
 using PropFlow.Web.Client.Services.Api;
 
 namespace PropFlow.Web.Client.Features.Resident.Portal.Services;
@@ -21,6 +22,10 @@ public interface IResidentServiceRequestApiClient
         Guid serviceRequestId,
         RateResidentServiceRequestRequest request,
         CancellationToken cancellationToken = default);
+    Task<ApiResult<ResidentServiceRequestPaymentView>> GetPaymentAsync(Guid serviceRequestId, CancellationToken cancellationToken = default);
+    Task<ApiResult<ResidentServiceRequestPaymentView>> SimulateTransferAsync(Guid serviceRequestId, CancellationToken cancellationToken = default);
+    Task<ApiResult<ResidentServiceRequestPaymentView>> ReportTransferAsync(Guid serviceRequestId, ReportResidentServiceRequestTransferRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid serviceRequestId, CancellationToken cancellationToken = default);
 }
 
 public sealed class ResidentServiceRequestApiClient(AuthenticatedApiClient api)
@@ -79,4 +84,20 @@ public sealed class ResidentServiceRequestApiClient(AuthenticatedApiClient api)
             $"api/v1/resident/service-requests/{serviceRequestId}/feedback",
             request,
             ct: cancellationToken);
+
+    public Task<ApiResult<ResidentServiceRequestPaymentView>> GetPaymentAsync(Guid serviceRequestId, CancellationToken cancellationToken = default) =>
+        api.SendAsync<ResidentServiceRequestPaymentView>(HttpMethod.Get,
+            $"api/v1/resident/service-requests/{serviceRequestId}/payment", ct: cancellationToken);
+
+    public Task<ApiResult<ResidentServiceRequestPaymentView>> ReportTransferAsync(Guid serviceRequestId,
+        ReportResidentServiceRequestTransferRequest request, CancellationToken cancellationToken = default) =>
+        api.SendAsync<ResidentServiceRequestPaymentView>(HttpMethod.Post,
+            $"api/v1/resident/service-requests/{serviceRequestId}/payment/report-transfer", request, ct: cancellationToken);
+
+    public Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid serviceRequestId, CancellationToken cancellationToken = default) =>
+        api.GetFileAsync($"api/v1/resident/service-requests/{serviceRequestId}/payment/qr", cancellationToken);
+
+    public Task<ApiResult<ResidentServiceRequestPaymentView>> SimulateTransferAsync(Guid serviceRequestId, CancellationToken cancellationToken = default) =>
+        api.SendAsync<ResidentServiceRequestPaymentView>(HttpMethod.Post,
+            $"api/v1/resident/service-requests/{serviceRequestId}/payment/sandbox-instruction", ct: cancellationToken);
 }

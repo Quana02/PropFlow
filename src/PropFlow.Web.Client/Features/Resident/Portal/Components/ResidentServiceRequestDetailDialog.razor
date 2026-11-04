@@ -1,4 +1,5 @@
 @using PropFlow.Modules.ServiceRequests.Contracts
+@using PropFlow.Modules.Payments.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @inject IResidentServiceRequestApiClient Api
 @implements IDisposable
@@ -76,7 +77,12 @@
                         }
                     </section>
 
-                    @if (IsCompleted)
+                    @if (HasCharge)
+                    {
+                        <ResidentServiceRequestPaymentCard @key="_requestId" RequestId="_requestId" Completed="IsCompleted" Changed="PaymentChanged" />
+                    }
+
+                    @if (CanRate)
                     {
                         <section class="request-feedback-section">
                             <span class="request-feedback-eyebrow">Đánh giá dịch vụ</span>
@@ -97,7 +103,7 @@
                     }
                     else
                     {
-                        <div class="resident-request-state">Bạn có thể đánh giá sau khi yêu cầu được hoàn thành.</div>
+                        <div class="resident-request-state">@(IsCompleted && HasCharge ? "Bạn có thể đánh giá sau khi hóa đơn được ghi nhận thanh toán đầy đủ." : "Bạn có thể đánh giá sau khi yêu cầu được hoàn thành.")</div>
                     }
                 }
             </div>
@@ -120,6 +126,8 @@
     private bool _saved;
     private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _refreshQueue;
     private bool IsCompleted => _request?.Status is "RESOLVED" or "CLOSED";
+    private bool HasCharge => (_request?.BaseServiceCost ?? 0) + (_request?.ApprovedAdditionalCost ?? 0) > 0;
+    private bool CanRate => IsCompleted && (!HasCharge || _request?.Settlement?.OutstandingAmount == 0);
 
     protected override void OnInitialized() =>
         _refreshQueue = new(
@@ -193,6 +201,14 @@
             await FeedbackSaved.InvokeAsync();
         }
         finally { _saving = false; }
+    }
+
+    private void PaymentChanged(ResidentServiceRequestPaymentView payment)
+    {
+        if (payment.PaymentEnvironment == "SANDBOX") return;
+        if (_request is not null && _request.Id == payment.ServiceRequestId)
+            _request = _request with { Settlement = new(payment.InvoiceId, payment.InvoiceNumber, payment.TotalAmount,
+                payment.ConfirmedPaidAmount, payment.OutstandingAmount, payment.SettlementStatus) };
     }
 
     private void Close()

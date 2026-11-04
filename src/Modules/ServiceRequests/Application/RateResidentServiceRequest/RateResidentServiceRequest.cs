@@ -5,8 +5,8 @@ using PropFlow.Modules.ServiceRequests.Contracts;
 
 namespace PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
 
-public enum RateResidentServiceRequestOutcome { Saved, InvalidInput, ResidentResidenceNotFound, RequestNotFound, RequestNotCompleted }
-public enum SaveResidentServiceRequestFeedbackOutcome { Saved, RequestNotFound, RequestNotCompleted }
+public enum RateResidentServiceRequestOutcome { Saved, InvalidInput, ResidentResidenceNotFound, RequestNotFound, RequestNotCompleted, PaymentRequired }
+public enum SaveResidentServiceRequestFeedbackOutcome { Saved, RequestNotFound, RequestNotCompleted, PaymentRequired }
 
 public sealed record RateResidentServiceRequestResult(
     RateResidentServiceRequestOutcome Outcome,
@@ -49,6 +49,7 @@ public sealed class RateResidentServiceRequestHandler(
         {
             SaveResidentServiceRequestFeedbackOutcome.Saved => new(RateResidentServiceRequestOutcome.Saved, saved.Response),
             SaveResidentServiceRequestFeedbackOutcome.RequestNotCompleted => new(RateResidentServiceRequestOutcome.RequestNotCompleted, ErrorCode: "request_not_completed", Message: "Chỉ có thể đánh giá yêu cầu đã hoàn thành."),
+            SaveResidentServiceRequestFeedbackOutcome.PaymentRequired => new(RateResidentServiceRequestOutcome.PaymentRequired, ErrorCode: "payment_required", Message: "Kế toán cần xác nhận thanh toán trước khi bạn có thể đánh giá."),
             _ => new(RateResidentServiceRequestOutcome.RequestNotFound, ErrorCode: "request_not_found", Message: "Không tìm thấy yêu cầu thuộc tài khoản của bạn.")
         };
     }

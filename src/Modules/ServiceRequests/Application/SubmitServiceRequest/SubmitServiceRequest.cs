@@ -119,7 +119,8 @@ public sealed class SubmitServiceRequestHandler(
             finalPriorityCode: priorityCode,
             serviceAreaCode: areaCode,
             preferredDate: command.PreferredDate,
-            preferredTimeCode: preferredTimeCode);
+            preferredTimeCode: preferredTimeCode,
+            submittedByUserId: userId);
         var activity = new ServiceRequestActivity(
             request.Id,
             ServiceActivityType.CREATED,

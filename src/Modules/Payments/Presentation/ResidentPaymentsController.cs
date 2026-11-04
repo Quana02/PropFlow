@@ -20,6 +20,7 @@ public sealed class ResidentPaymentsController(PaymentFinanceUseCases useCases) 
         {
             MutationOutcome.Success => Ok(result.Payment),
             MutationOutcome.NotFound => NotFound(),
+            MutationOutcome.SandboxEnabled => Problem(statusCode: 409, title: "Đang bật Sandbox. Vui lòng tạo giao dịch thử trong SePay Test mode; không gửi báo chuyển khoản thật."),
             MutationOutcome.Overpayment => Problem(statusCode: 409, title: "Số tiền không được vượt quá dư nợ còn lại."),
             MutationOutcome.IdempotencyConflict => Problem(statusCode: 409, title: "Yêu cầu đã được sử dụng. Vui lòng tải lại danh sách."),
             _ => Problem(statusCode: 409, title: "Hóa đơn đã có khoản thanh toán chờ xác minh. Vui lòng chờ kế toán kiểm tra.")

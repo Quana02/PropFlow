@@ -50,6 +50,11 @@ public sealed class AuthTestMail : IAuthEmail
         if (FailNext) { FailNext = false; throw new InvalidOperationException("Test delivery failure"); }
         Codes[email] = code; return Task.CompletedTask;
     }
+    public Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct)
+    {
+        Codes[email] = code;
+        return Task.CompletedTask;
+    }
 }
 public sealed class AuthTestClock : TimeProvider
 {

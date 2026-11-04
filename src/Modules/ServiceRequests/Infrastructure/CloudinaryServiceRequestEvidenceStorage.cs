@@ -4,26 +4,18 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
+using PropFlow.Shared;
 
 namespace PropFlow.Modules.ServiceRequests.Infrastructure;
 
-public sealed class CloudinaryEvidenceOptions
-{
-    public const string SectionName = "ServiceRequests:EvidenceStorage:Cloudinary";
-    public string CloudName { get; set; } = string.Empty;
-    public string ApiKey { get; set; } = string.Empty;
-    public string ApiSecret { get; set; } = string.Empty;
-    public string Folder { get; set; } = "propflow/service-request-evidence";
-}
-
 public sealed class CloudinaryServiceRequestEvidenceStorage(
     HttpClient http,
-    IOptions<CloudinaryEvidenceOptions> configuredOptions,
+    IOptions<CloudinaryOptions> configuredOptions,
     LocalServiceRequestEvidenceStorage legacyStorage) : IServiceRequestEvidenceStorage
 {
     private const string StoragePrefix = "cloudinary:";
     private const long MaxBytes = 10 * 1024 * 1024;
-    private readonly CloudinaryEvidenceOptions options = configuredOptions.Value;
+    private readonly CloudinaryOptions options = configuredOptions.Value;
 
     public async Task<StoredEvidence> SaveAsync(
         Guid serviceRequestId,
@@ -41,7 +33,7 @@ public sealed class CloudinaryServiceRequestEvidenceStorage(
             throw new ArgumentException("Mỗi ảnh bằng chứng không được vượt quá 10 MB.");
 
         using var image = await ReadValidatedImageAsync(content, normalizedType, sizeBytes, ct);
-        var folder = options.Folder.Trim().Trim('/');
+        var folder = options.ServiceRequestFolder.Trim().Trim('/');
         var publicId = string.IsNullOrEmpty(folder)
             ? $"{serviceRequestId:N}/{Guid.NewGuid():N}"
             : $"{folder}/{serviceRequestId:N}/{Guid.NewGuid():N}";

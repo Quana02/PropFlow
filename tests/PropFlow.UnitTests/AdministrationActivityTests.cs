@@ -145,7 +145,7 @@ public sealed class AdministrationActivityTests
         var rolesResponse = await controller.Roles(default);
         var roles = Assert.IsType<RoleAccessResponse[]>(Assert.IsType<OkObjectResult>(rolesResponse.Result).Value);
         Assert.Equal(5, roles.Length);
-        Assert.Equal(3, roles.Single(x => x.Code == SystemRoleCodes.Admin).Permissions.Count);
+        Assert.Equal(4, roles.Single(x => x.Code == SystemRoleCodes.Admin).Permissions.Count);
 
         var accessResponse = await controller.EffectiveAccess(userId, default);
         var access = Assert.IsType<InternalAccountAccessResponse>(Assert.IsType<OkObjectResult>(accessResponse.Result).Value);
