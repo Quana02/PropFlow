@@ -1,0 +1,294 @@
+@using PropFlow.Modules.Communication.Contracts
+@using PropFlow.Web.Client.Shared.Feedback
+@implements IAsyncDisposable
+@inject SupportChatApi Api
+@inject ISupportChatConnection Connection
+@inject IJSRuntime JS
+@inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
+@inject NavigationManager Navigation
+
+<div class="support-workspace">
+    @if (identityChanged)
+    { <p class="support-error" role="alert">Phiên đăng nhập đã thay đổi. Vui lòng tải lại trang để mở đúng cuộc trò chuyện của tài khoản hiện tại.</p> }
+    else
+    {
+    <header class="support-heading"><div><span class="support-eyebrow">KẾT NỐI TRỰC TIẾP</span><h1>@(ForManager ? "Chat với cư dân" : "Liên hệ Ban quản lý")</h1><p>@(ForManager ? "Tiếp nhận và hỗ trợ những cuộc trò chuyện được phân cho bạn." : "Mô tả nhu cầu của bạn để được kết nối với Manager đang sẵn sàng.")</p></div>
+        <span class="support-connection @(Connection.Connected ? "online" : "")">@(Connection.Connected ? "Đã kết nối trực tuyến" : "Đang kết nối lại…")</span></header>
+    @if (error is not null) { <div class="support-error" role="alert">@error <button type="button" disabled="@busy" @onclick="Reload">Tải lại</button></div> }
+    <div class="support-columns">
+        <aside class="support-list" aria-label="Danh sách cuộc trò chuyện">
+            <div class="support-list-heading"><h2>@(ForManager ? "Hộp thư của bạn" : "Lịch sử liên hệ")</h2>
+                @if (!ForManager) { <button type="button" disabled="@(busy || activeId is not null)" @onclick="New">+ Phiên mới</button> }</div>
+            @if (loading) { <p class="support-empty" role="status">Đang tải…</p> }
+            else if (conversations is null || conversations.Items.Count == 0) { <p class="support-empty">@(ForManager ? "Chưa có cuộc trò chuyện được phân. Bật sẵn sàng nhận chat ở thanh phía trên." : "Bạn chưa có cuộc trò chuyện nào. Hãy gửi nội dung cần hỗ trợ ở khung bên cạnh.")</p> }
+            @if (conversations is not null)
+            {
+                @foreach (var item in conversations.Items)
+                { <button type="button" class="conversation-link @(selected?.Id == item.Id ? "selected" : "")" disabled="@busy" @onclick="() => Select(item.Id)"><span><strong>@(ForManager ? item.ResidentName : item.ManagerName ?? "Ban quản lý")</strong><small>@Status(item.Status)</small></span><time>@Time(item.UpdatedAt)</time></button> }
+                <nav class="support-pagination" aria-label="Phân trang hội thoại"><button disabled="@(busy || page <= 1)" @onclick="Previous">Trước</button><span>Trang @(page)</span><button disabled="@(busy || page * 12 >= conversations.Total)" @onclick="Next">Sau</button></nav>
+            }
+        </aside>
+        <section class="support-chat" aria-label="Khung trò chuyện với Ban quản lý">
+            <header class="support-chat-heading"><div><h2>@(selected is null ? ForManager ? "Chọn cuộc trò chuyện" : "Trợ lý tiếp nhận BQL" : ForManager ? selected.ResidentName : selected.ManagerName ?? "Đang tìm Manager")</h2><small>@ConversationStatus</small></div>
+                @if (selected is { Status: not "CLOSED" }) { <button class="support-close" disabled="@busy" @onclick="CloseConversation">Kết thúc phiên</button> }</header>
+            @if (!ForManager)
+            { <p class="draft-disclosure">Khi đã kết nối, Manager phụ trách có thể xem trực tiếp nội dung bạn đang gõ trước khi bấm Gửi. Chỉ tin đã gửi được lưu vào lịch sử.</p> }
+            <div class="support-thread" @ref="thread" role="log" aria-live="polite" aria-relevant="additions text">
+                @if (hasMore) { <button class="support-older" disabled="@busy" @onclick="Older">Tải tin nhắn trước</button> }
+                @if (selected is null && !ForManager)
+                { <article class="support-bubble system"><small>Trợ lý tiếp nhận</small><p>Xin chào! Bạn cần Ban quản lý hỗ trợ việc gì? Hãy mô tả để mình kết nối với Manager đang sẵn sàng.</p></article> }
+                @foreach (var message in messages)
+                { <article @key="message.Id" class="support-bubble @BubbleClass(message)"><div><strong>@message.SenderName</strong><time>@Time(message.CreatedAt)</time></div><p>@message.Text</p></article> }
+                @if (!ForManager && selected is not null && Connection.IsTyping(selected.Id)) { <p class="support-typing" role="status">Manager đang nhập câu trả lời…</p> }
+            </div>
+            @if (ForManager && selected is { Status: "ACTIVE" } && Connection.Connected && Connection.Draft(selected.Id) is { } draft)
+            { <aside class="support-live-draft" aria-label="Bản nháp cư dân đang gõ"><strong>Cư dân đang soạn — chưa gửi</strong><p>@draft</p><small>Nội dung có thể thay đổi trước khi gửi và không được lưu.</small></aside> }
+            @if (selected?.Status == "CLOSED")
+            { <div class="support-ended">Phiên đã kết thúc. @if (!ForManager && activeId is null) { <button type="button" @onclick="New">Bắt đầu phiên mới</button> }</div> }
+            else if (!ForManager || selected is not null)
+            {
+                <form class="support-compose" @onsubmit="Send" @onsubmit:preventDefault>
+                    <label class="support-sr" for="support-message">Nội dung tin nhắn</label>
+                    <textarea id="support-message" value="@text" @oninput="Input" rows="3" maxlength="4000" disabled="@busy" placeholder="@(ForManager ? "Nhập câu trả lời cho cư dân…" : "Bạn cần Ban quản lý hỗ trợ điều gì?")"></textarea>
+                    <div><small>@text.Length / 4.000 ký tự · @DraftStatus</small><button type="submit" disabled="@(busy || string.IsNullOrWhiteSpace(text))">@(busy ? "Đang gửi…" : "Gửi tin nhắn")</button></div>
+                </form>
+            }
+        </section>
+    </div>
+    }
+</div>
+
+@if (!identityChanged && confirmation is { } action)
+{
+    <PropFlowConfirmationDialog Title="@(action.Close ? "Kết thúc cuộc trò chuyện?" : "Chuyển cuộc trò chuyện?")"
+        Message="@(action.Close ? "Các tin đã gửi vẫn được giữ trong lịch sử. Bản nháp chưa gửi sẽ bị xóa khi kết thúc phiên." : "Bản nháp đang soạn sẽ bị xóa khi chuyển sang cuộc trò chuyện khác.")"
+        ConfirmText="@(action.Close ? "Kết thúc phiên" : "Chuyển cuộc trò chuyện")" CancelText="Ở lại" Destructive="false"
+        Busy="@busy" OnConfirm="ConfirmAction" OnCancel="CancelConfirmation" />
+}
+
+@code {
+    [Parameter] public bool ForManager { get; set; }
+    [Parameter] public Guid? RequestedConversationId { get; set; }
+    private Guid? lastRequested;
+    private readonly CancellationTokenSource lifetime = new();
+    private readonly SemaphoreSlim refreshGate = new(1, 1);
+    private SupportConversationPage? conversations;
+    private SupportConversationView? selected;
+    private List<SupportMessageView> messages = [];
+    private Guid? activeId, pendingKey;
+    private PendingConfirmation? confirmation;
+    private sealed record PendingConfirmation(Guid ConversationId, bool Close);
+    private string text = "", timeZoneId = "Asia/Ho_Chi_Minh", pendingText = "";
+    private string? error;
+    private int page = 1;
+    private bool loading = true, busy, hasMore, disposed, scrollToEnd;
+    private bool reloadAgain;
+    private bool identityChanged;
+    private Guid? ownerUserId;
+    private Task? poll;
+    private Task? draftPump;
+    private long draftRevision;
+    private CancellationTokenSource? draftDebounce;
+    private IJSObjectReference? scrollModule;
+    private ElementReference thread;
+    private string ConversationStatus => selected?.Status switch {
+        "WAITING" => "Yêu cầu đang chờ Manager sẵn sàng. Bạn vẫn có thể gửi thêm nội dung.",
+        "ACTIVE" => selected.ManagerOnline ? "Đang trao đổi với Ban quản lý" : "Manager đang mất kết nối. Tin đã gửi vẫn được lưu; bạn có thể chờ hoặc kết thúc phiên.",
+        "CLOSED" => "Cuộc trò chuyện đã kết thúc", _ => ForManager ? "Chọn một phiên được phân để trả lời" : "Trợ lý sẽ tìm Manager sau khi bạn gửi nhu cầu hỗ trợ"
+    };
+    private string DraftStatus => ForManager ? "Tin nhắn gửi trực tiếp cho cư dân" : selected is { Status: "ACTIVE", ManagerOnline: true } && Connection.Connected
+        ? "Đang chia sẻ bản nháp với Manager" : "Bản nháp chưa được chia sẻ trực tiếp";
+    protected override async Task OnInitializedAsync()
+    {
+        ownerUserId = Session.User?.Id; Session.AuthenticationStateChanged += AuthenticationChanged;
+        Connection.Changed += Changed; Connection.TransientChanged += Transient; Connection.StateChanged += Transient;
+        await Connection.EnsureAsync(lifetime.Token); await Reload(); poll = Poll();
+    }
+    private void AuthenticationChanged(Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> state)
+    {
+        if (Session.User?.Id == ownerUserId) return;
+        identityChanged = true; confirmation = null; lifetime.Cancel(); draftDebounce?.Cancel(); text = ""; messages.Clear(); selected = null; conversations = null;
+        if (!disposed) _ = InvokeAsync(StateHasChanged);
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RequestedConversationId is Guid id && id != lastRequested && !busy)
+        { lastRequested = id; if (selected?.Id != id) await Select(id); }
+    }
+    private void Transient() { if (!disposed) _ = InvokeAsync(StateHasChanged); }
+    private Task Changed(Guid id) => InvokeAsync(Reload);
+    private async Task Reload()
+    {
+        if (disposed) return;
+        if (!await refreshGate.WaitAsync(0)) { reloadAgain = true; return; }
+        try
+        {
+            var list = await Api.List(page, lifetime.Token);
+            if (!list.IsSuccess || list.Data is null) { error = list.Message; return; }
+            error = null;
+            conversations = list.Data; timeZoneId = list.Data.TimeZoneId;
+            if (page == 1) activeId = conversations.Items.FirstOrDefault(x => x.Status != "CLOSED")?.Id;
+            var id = selected?.Id ?? RequestedConversationId ?? activeId ?? (ForManager ? conversations.Items.FirstOrDefault()?.Id : null);
+            if (id is Guid current) await LoadConversation(current, false);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally
+        {
+            loading = false; refreshGate.Release();
+            if (!disposed) { StateHasChanged(); if (reloadAgain) { reloadAgain = false; _ = InvokeAsync(Reload); } }
+        }
+    }
+    private async Task LoadConversation(Guid id, bool reset)
+    {
+        var detail = await Api.Get(id, lifetime.Token);
+        if (!detail.IsSuccess || detail.Data is null) { error = detail.Message; return; }
+        var history = await Api.Messages(id, null, lifetime.Token);
+        if (!history.IsSuccess || history.Data is null) { error = history.Message; return; }
+        var incoming = history.Data.Items;
+        var previousLastResident = messages.Where(m => m.Kind == "RESIDENT").Select(m => m.Sequence).DefaultIfEmpty().Max();
+        var changedSelection = selected?.Id != id;
+        var newTail = changedSelection || incoming.LastOrDefault()?.Sequence != messages.LastOrDefault()?.Sequence;
+        if (reset || changedSelection || (messages.Count > 0 && incoming.Count > 0 && incoming[0].Sequence > messages[^1].Sequence + 1)) messages.Clear();
+        selected = detail.Data; timeZoneId = history.Data.TimeZoneId;
+        messages = messages.Concat(incoming).DistinctBy(m => m.Id).OrderBy(m => m.Sequence).ToList();
+        if (reset || changedSelection || messages.Count == incoming.Count) hasMore = history.Data.HasMore;
+        if (messages.Where(m => m.Kind == "RESIDENT").Select(m => m.Sequence).DefaultIfEmpty().Max() > previousLastResident || selected.Status != "ACTIVE") Connection.ClearDraft(id);
+        scrollToEnd |= newTail || reset || changedSelection;
+    }
+    private async Task Select(Guid id)
+    {
+        if (busy || identityChanged || selected?.Id == id) return;
+        if (!string.IsNullOrWhiteSpace(text)) { confirmation = new(id, false); return; }
+        await SelectConversation(id);
+    }
+    private async Task SelectConversation(Guid id)
+    {
+        await ClearTransientForSelected(); text = ""; pendingKey = null; messages.Clear(); error = null;
+        if (ForManager && RequestedConversationId != id)
+        { Navigation.NavigateTo($"/manager/support-chat?conversation={id}"); return; }
+        await refreshGate.WaitAsync(lifetime.Token); try { await LoadConversation(id, true); } finally { refreshGate.Release(); }
+    }
+    private async Task New()
+    {
+        if (busy || activeId is not null) return;
+        await ClearTransientForSelected(); selected = null; messages.Clear(); text = ""; hasMore = false; error = null; pendingKey = null;
+    }
+    private async Task Send()
+    {
+        if (busy || string.IsNullOrWhiteSpace(text)) return;
+        busy = true; error = null; var value = text.Trim();
+        if (pendingKey is null || pendingText != value) { pendingKey = Guid.NewGuid(); pendingText = value; }
+        try
+        {
+            await ClearTransientForSelected();
+            if (selected is null)
+            {
+                var result = await Api.Start(new(pendingKey.Value, value), lifetime.Token);
+                if (!result.IsSuccess || result.Data is null) { error = result.Message; return; }
+                selected = result.Data;
+            }
+            else
+            {
+                var result = await Api.Send(selected.Id, new(pendingKey.Value, value), lifetime.Token);
+                if (!result.IsSuccess) { error = result.Message; return; }
+            }
+            text = ""; pendingKey = null; await Reload(); scrollToEnd = true;
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { busy = false; }
+    }
+    private void CloseConversation()
+    {
+        if (busy || identityChanged || selected is null || selected.Status == "CLOSED") return;
+        confirmation = new(selected.Id, true);
+    }
+    private void CancelConfirmation() { if (!busy) confirmation = null; }
+    private async Task ConfirmAction()
+    {
+        if (busy || identityChanged || confirmation is not { } action) return;
+        if (action.Close)
+        {
+            if (selected?.Id != action.ConversationId || selected.Status == "CLOSED") { confirmation = null; return; }
+            await EndConversation(action.ConversationId);
+        }
+        else { confirmation = null; await SelectConversation(action.ConversationId); }
+    }
+    private async Task EndConversation(Guid id)
+    {
+        busy = true;
+        try
+        {
+            await ClearTransientForSelected(); var result = await Api.Close(id, lifetime.Token);
+            if (!result.IsSuccess) { error = result.Message; return; }
+            selected = result.Data; text = ""; pendingKey = null; await Reload();
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { busy = false; confirmation = null; }
+    }
+    private async Task Older()
+    {
+        if (busy || selected is null || messages.Count == 0) return;
+        busy = true;
+        try { var result = await Api.Messages(selected.Id, messages[0].Sequence, lifetime.Token); if (result.IsSuccess && result.Data is not null) { messages = result.Data.Items.Concat(messages).DistinctBy(x => x.Id).OrderBy(x => x.Sequence).ToList(); hasMore = result.Data.HasMore; } else error = result.Message; }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { busy = false; }
+    }
+    private void Input(ChangeEventArgs args)
+    {
+        text = args.Value?.ToString() ?? ""; draftRevision++;
+        if (draftPump is { IsCompleted: false }) return;
+        draftDebounce?.Dispose(); draftDebounce = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        draftPump = SendDraftWhileTyping(draftDebounce.Token);
+    }
+    private async Task SendDraftWhileTyping(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(300, ct);
+                if (selected is not { Status: "ACTIVE" } current) return;
+                var revision = draftRevision; var value = text;
+                ct.ThrowIfCancellationRequested();
+                if (ForManager) await Connection.PublishTyping(current.Id, value.Length > 0);
+                else if (current.ManagerOnline) await Connection.PublishDraft(current.Id, value);
+                if (revision == draftRevision) return;
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+    private async Task ClearTransientForSelected()
+    {
+        draftDebounce?.Cancel();
+        if (draftPump is { IsCompleted: false }) await draftPump;
+        if (selected is null) return;
+        if (ForManager) await Connection.PublishTyping(selected.Id, false); else await Connection.PublishDraft(selected.Id, "");
+    }
+    private async Task Previous() { if (page > 1) { page--; await Reload(); } }
+    private async Task Next() { page++; await Reload(); }
+    private async Task Poll()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1)); var tick = 0;
+        try { while (await timer.WaitForNextTickAsync(lifetime.Token)) await InvokeAsync(async () => { if (++tick % 10 == 0 && !busy) await Reload(); else StateHasChanged(); }); }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!scrollToEnd) return; scrollToEnd = false;
+        scrollModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Features/Communication/SupportChat/SupportChatWorkspace.razor.js");
+        await scrollModule.InvokeVoidAsync("bottom", thread);
+    }
+    private string Time(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(timeZoneId)).ToString("dd/MM HH:mm");
+    private string BubbleClass(SupportMessageView message) => message.Kind == "SYSTEM" ? "system" : (message.Kind == "MANAGER") == ForManager ? "mine" : "theirs";
+    private static string Status(string value) => value switch { "WAITING" => "Đang chờ Manager", "ACTIVE" => "Đang trao đổi", "CLOSED" => "Đã kết thúc", _ => value };
+    public async ValueTask DisposeAsync()
+    {
+        Session.AuthenticationStateChanged -= AuthenticationChanged;
+        disposed = true; Connection.Changed -= Changed; Connection.TransientChanged -= Transient; Connection.StateChanged -= Transient;
+        await ClearTransientForSelected(); lifetime.Cancel(); draftDebounce?.Cancel();
+        if (poll is not null) await poll; if (draftPump is not null) await draftPump; draftDebounce?.Dispose();
+        if (!ForManager) await Connection.ReleaseResidentAsync();
+        if (scrollModule is not null) try { await scrollModule.DisposeAsync(); } catch (JSDisconnectedException) { }
+        lifetime.Dispose();
+    }
+}

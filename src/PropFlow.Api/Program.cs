@@ -59,9 +59,30 @@ using Npgsql;
 using PropFlow.Api.Composition;
 using PropFlow.Shared;
 using CloudinaryDotNet;
+using PropFlow.Modules.AiChatbot.Contracts;
+using PropFlow.Modules.AiChatbot.Application;
+using PropFlow.Modules.AiChatbot.Infrastructure;
+using PropFlow.Modules.AiChatbot.Infrastructure.Persistence;
+using PropFlow.Modules.Communication.Contracts;
+using PropFlow.Modules.Communication.Application.SupportChat;
+using PropFlow.Modules.Communication.Infrastructure;
+using PropFlow.Modules.Communication.Presentation;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddDataProtection().SetApplicationName("PropFlow");
+var knownProxyAddresses = builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>() ?? [];
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
+        Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    foreach (var address in knownProxyAddresses) options.KnownProxies.Add(System.Net.IPAddress.Parse(address));
+});
+var protection = builder.Services.AddDataProtection().SetApplicationName("PropFlow");
+var protectionPath = builder.Configuration["DataProtection:KeyPath"];
+if (!string.IsNullOrWhiteSpace(protectionPath))
+    protection.PersistKeysToFileSystem(Directory.CreateDirectory(protectionPath));
+else if (builder.Environment.IsProduction())
+    throw new InvalidOperationException("Cần cấu hình DataProtection:KeyPath trên ổ lưu trữ bền vững của máy chủ.");
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options =>
     options.JsonSerializerOptions.Converters.Insert(0, new FlexibleEnumJsonConverterFactory()));
 
@@ -91,6 +112,27 @@ builder.Services.AddHttpClient("MaintenanceEvidenceCloudinary", client => client
 // account-provisioning workflow can commit atomically across module DbContexts.
 builder.Services.AddScoped(services => new NpgsqlConnection(
     services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase")));
+
+builder.Services.AddDbContext<AiChatbotDbContext>((services, options) => options.UseNpgsql(
+    services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+    npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "ai_chatbot")));
+builder.Services.AddScoped<KnowledgeDocuments>();
+builder.Services.AddScoped<IKnowledgeDocuments>(services => services.GetRequiredService<KnowledgeDocuments>());
+builder.Services.AddScoped<IPublishedKnowledgeSource>(services => services.GetRequiredService<KnowledgeDocuments>());
+builder.Services.AddOptions<ChatAiOptions>().BindConfiguration("AiChatbot:OpenAI")
+    .Validate(options => options.Valid, "Cấu hình AI chatbot không hợp lệ.").ValidateOnStart();
+builder.Services.AddHttpClient("ResidentChatOpenAi", client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<IChatAi, OpenAiChat>();
+builder.Services.AddScoped<IResidentKnowledgeSearch, ResidentKnowledgeSearch>();
+builder.Services.AddScoped<IChatResidentScope, ChatResidentScope>();
+builder.Services.AddScoped<ResidentChat>();
+builder.Services.AddScoped<KnowledgeIndex>();
+builder.Services.AddHostedService<KnowledgeIndexWorker>();
+builder.Services.AddScoped<ISupportChatActors, SupportChatActors>();
+builder.Services.AddScoped<ISupportChat, SupportChatService>();
+builder.Services.AddSingleton<ISupportChatRealtime, SupportChatRealtime>();
+builder.Services.AddSingleton<SupportChatFrameGate>();
+builder.Services.AddHostedService<SupportChatDispatchWorker>();
 
 // Register Batch 1 DbContexts with schema-specific migration history tables
 builder.Services.AddDbContext<PropertyAssetsDbContext>((services, options) =>
@@ -208,6 +250,7 @@ builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentSta
 // Add services to the container.
 builder.Services.AddSignalR();
 builder.Services.AddControllers()
+    .AddApplicationPart(typeof(PropFlow.Modules.AiChatbot.Presentation.KnowledgeDocumentsController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Reporting.Presentation.AdministrationOverviewController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly)
@@ -237,14 +280,13 @@ builder.Services.AddHttpClient<IPaymentBankDirectory, VietQrBankDirectory>(clien
 });
 builder.Services.AddScoped<PaymentDestinationSettings>();
 builder.Services.AddScoped<ResidentServiceRequestPayments>();
-builder.Services.AddScoped<ISandboxPaymentDisplaySource, SandboxPaymentDisplaySource>();
-builder.Services.Configure<SePayOptions>(builder.Configuration.GetSection("Payments:SePay"));
+builder.Services.AddOptions<SePayOptions>().BindConfiguration("Payments:SePay")
+    .Validate(SePayLiveConfiguration.Valid, "SePay Live cần địa chỉ webhook HTTPS công khai và khóa xác thực hợp lệ (ít nhất 32 ký tự).")
+    .ValidateOnStart();
 builder.Services.Configure<SePayOAuthOptions>(builder.Configuration.GetSection("Payments:SePay:OAuth"));
 builder.Services.AddHttpClient<SePayOAuth>(client => client.Timeout = TimeSpan.FromSeconds(15))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<OAuthSePayBankAccounts>();
-builder.Services.AddHttpClient<SePaySandbox>(client => client.Timeout = TimeSpan.FromSeconds(15))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient<ISePayConnectionProbe, SePayConnectionProbe>(client => client.Timeout = TimeSpan.FromSeconds(15))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<SePayConnectionSettings>();
@@ -254,7 +296,6 @@ builder.Services.AddScoped<ISePayBankAccounts>(sp => sp.GetRequiredService<SePay
     ? sp.GetRequiredService<OAuthSePayBankAccounts>() : sp.GetRequiredService<SePayBankAccounts>());
 builder.Services.AddScoped<SePayAccountSelection>();
 builder.Services.AddScoped<SePayWebhook>();
-builder.Services.AddScoped<SePaySandboxWebhook>();
 builder.Services.AddScoped<SePayInbox>();
 builder.Services.AddScoped<BankTransferReview>();
 builder.Services.AddHostedService<SePayInboxWorker>();
@@ -290,6 +331,8 @@ builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewMa
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
 builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRequestInsightSource>();
 builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
+builder.Services.AddScoped<AdditionalCostConsentService>();
+builder.Services.AddScoped<ServiceRequestCostNoticeDispatcher>();
 builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
 builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
     client.Timeout = TimeSpan.FromSeconds(90));
@@ -307,6 +350,12 @@ builder.Services.AddScoped<IAdministrationTransaction, AdministrationTransaction
 builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoordinator>();
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy(KnowledgePolicies.Read, policy => policy.RequireAssertion(context => KnowledgePolicies.CanRead(context.User)));
+    options.AddPolicy(KnowledgePolicies.Manage, policy => policy.RequireAssertion(context => KnowledgePolicies.CanManage(context.User)));
+    options.AddPolicy(ResidentChatPolicy.Use, policy => policy.RequireAssertion(context => ResidentChatPolicy.Allowed(context.User)));
+    options.AddPolicy(SupportChatPolicies.Use, policy => policy.RequireAssertion(context => SupportChatPolicies.CanUse(context.User)));
+    options.AddPolicy(SupportChatPolicies.Manager, policy => policy.RequireAssertion(context => SupportChatPolicies.IsManager(context.User)));
+    options.AddPolicy(SupportChatPolicies.Resident, policy => policy.RequireAssertion(context => SupportChatPolicies.IsResident(context.User)));
     options.AddPolicy("finance.manage", policy => policy.RequireRole(SystemRoleCodes.Accountant).RequireClaim("permission", SystemPermissionCodes.ManageFinance));
     options.AddPolicy(PaymentSettingsAuthorizationPolicies.Manage,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManagePaymentDestination));
@@ -366,6 +415,13 @@ builder.Services.AddExceptionHandler<AuthExceptionHandler>();
 builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddPolicy(SupportChatPolicies.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
+            PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy(ResidentChatPolicy.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
+            PermitLimit = Math.Clamp(builder.Configuration.GetValue("AiChatbot:QuestionsPerMinute", 10), 1, 100),
+            Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.RejectionStatusCode = 429;
     options.OnRejected = async (context, ct) =>
     {
@@ -426,6 +482,7 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+if (knownProxyAddresses.Length > 0) app.UseForwardedHeaders();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
@@ -448,6 +505,7 @@ app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<SupportChatHub>("/hubs/support-chat", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

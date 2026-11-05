@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PropFlow.Web\PropFlow.Web.csproj" />
     <ProjectReference Include="..\..\src\PropFlow.Api\PropFlow.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\AiChatbot\PropFlow.Modules.AiChatbot.csproj" />
     <ProjectReference Include="..\..\src\Modules\Administration\PropFlow.Modules.Administration.csproj" />
     <ProjectReference Include="..\..\src\Modules\ServiceRequests\PropFlow.Modules.ServiceRequests.csproj" />
     <ProjectReference Include="..\..\src\Modules\Complaints\PropFlow.Modules.Complaints.csproj" />

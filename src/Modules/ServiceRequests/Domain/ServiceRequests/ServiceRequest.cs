@@ -85,6 +85,12 @@ public class ServiceRequest
     public decimal ProposedAdditionalCost { get; private set; }
     public string? AdditionalCostNote { get; private set; }
     public decimal ApprovedAdditionalCost { get; private set; }
+    public Guid? AdditionalCostProposalId { get; private set; }
+    public string AdditionalCostConsentStatus { get; private set; } = "NONE";
+    public DateTimeOffset? AdditionalCostProposedAt { get; private set; }
+    public DateTimeOffset? AdditionalCostRespondedAt { get; private set; }
+    public Guid? AdditionalCostRespondedBy { get; private set; }
+    public bool IsWaitingForCostConsent => AdditionalCostConsentStatus == "PENDING";
     public Guid? ServiceInvoiceId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -164,6 +170,8 @@ public class ServiceRequest
         EnsureMoney(amount, nameof(amount));
         if (Status != ServiceRequestStatus.IN_PROGRESS)
             throw new InvalidOperationException("Additional cost can only be proposed while work is in progress.");
+        if (ServiceInvoiceId is not null)
+            throw new InvalidOperationException("Không thể đổi phí khi đã phát hành hóa đơn.");
         var normalized = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
         if (amount > 0 && string.IsNullOrWhiteSpace(normalized))
             throw new ArgumentException("Additional cost note is required when the amount is greater than zero.", nameof(note));
@@ -172,7 +180,32 @@ public class ServiceRequest
         ProposedAdditionalCost = amount;
         AdditionalCostNote = normalized;
         ApprovedAdditionalCost = 0;
+        AdditionalCostProposalId = amount > 0 ? Guid.NewGuid() : null;
+        AdditionalCostConsentStatus = amount > 0 ? "PENDING" : "NONE";
+        AdditionalCostProposedAt = amount > 0 ? now : null;
+        AdditionalCostRespondedAt = null;
+        AdditionalCostRespondedBy = null;
         UpdatedAt = now;
+    }
+
+    public void RespondToAdditionalCost(Guid proposalId, Guid residentUserId, bool accepted, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        ThrowIfEmpty(residentUserId, nameof(residentUserId));
+        if (Status is not (ServiceRequestStatus.IN_PROGRESS or ServiceRequestStatus.ASSIGNED) ||
+            !IsWaitingForCostConsent || AdditionalCostProposalId != proposalId)
+            throw new InvalidOperationException("Đề xuất chi phí đã thay đổi hoặc đã được phản hồi.");
+        AdditionalCostConsentStatus = accepted ? "ACCEPTED" : "REJECTED";
+        AdditionalCostRespondedAt = now;
+        AdditionalCostRespondedBy = residentUserId;
+        if (!accepted) Cancel(now);
+        UpdatedAt = now;
+    }
+
+    public void EnsureCostConsent()
+    {
+        if (ProposedAdditionalCost > 0 && AdditionalCostConsentStatus != "ACCEPTED")
+            throw new InvalidOperationException("Cần được cư dân chấp thuận chi phí phát sinh trước khi tiếp tục công việc.");
     }
 
     public void ApproveAdditionalCost(decimal amount, DateTimeOffset now)
@@ -181,6 +214,7 @@ public class ServiceRequest
         EnsureMoney(amount, nameof(amount));
         if (Status != ServiceRequestStatus.IN_PROGRESS || amount > ProposedAdditionalCost)
             throw new InvalidOperationException("Approved additional cost must not exceed the staff proposal.");
+        EnsureCostConsent();
         ApprovedAdditionalCost = amount;
         UpdatedAt = now;
     }
@@ -197,6 +231,7 @@ public class ServiceRequest
     public void MarkInProgress(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
+        EnsureCostConsent();
         if (Status is not (ServiceRequestStatus.ASSIGNED or ServiceRequestStatus.IN_PROGRESS))
             throw new InvalidOperationException("Only assigned service requests can move in progress.");
 
@@ -207,6 +242,7 @@ public class ServiceRequest
     public void Resolve(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
+        EnsureCostConsent();
         if (Status is not (ServiceRequestStatus.ASSIGNED or ServiceRequestStatus.IN_PROGRESS))
             throw new InvalidOperationException("Only assigned or in-progress service requests can be resolved.");
 

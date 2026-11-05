@@ -42,34 +42,12 @@ public sealed class ResidentPaymentCardTests
     }
 
     [Fact]
-    public async Task SandboxShowsSimulationAndSuppressesRealQrEvenIfAUrlIsPresent()
-    {
-        var html = await RenderAsync(View(false, 100000) with { PaymentEnvironment = "SANDBOX", SandboxSimulationAvailable = true });
-        Assert.Contains("Lấy nội dung thanh toán SePay", html);
-        Assert.Contains("KHÔNG CHUYỂN TIỀN THẬT", html);
-        Assert.DoesNotContain("payment-qr", html);
-        Assert.DoesNotContain("NGUYEN VAN A", html);
-        Assert.DoesNotContain("Báo chuyển khoản cho kế toán", html);
-    }
-
-    [Fact]
     public async Task LiveNeverDisplaysSimulationControls()
     {
         var html = await RenderAsync(View(true, 100000));
         Assert.DoesNotContain("giả lập", html);
         Assert.DoesNotContain("SANDBOX", html);
         Assert.Contains("payment-qr", html);
-    }
-
-    [Fact]
-    public async Task SimulationSuccessIsDistinctFromConfirmedPaymentAndRating()
-    {
-        var html = await RenderAsync(View(false, 0) with { PaymentEnvironment = "SANDBOX", SimulatedTransferAmount = 100000 });
-        Assert.Contains("SePay đã xác nhận giao dịch thử", html);
-        Assert.Contains("Đã thanh toán trong Sandbox", html);
-        Assert.Contains("Đã thanh toán (Sandbox)", html);
-        Assert.DoesNotContain("Bạn có thể đánh giá dịch vụ", html);
-        Assert.DoesNotContain("Đã thanh toán đầy đủ", html);
     }
 
     private static ResidentServiceRequestPaymentView View(bool automatic, decimal remaining) => new(Guid.NewGuid(), Guid.NewGuid(), "DV-TEST", 100000,
@@ -89,7 +67,6 @@ public sealed class ResidentPaymentCardTests
     }
     private sealed class Api(ResidentServiceRequestPaymentView view) : IResidentServiceRequestApiClient
     {
-        public Task<ApiResult<ResidentServiceRequestPaymentView>> SimulateTransferAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ResidentServiceRequestPaymentView>(true, view with { SimulatedTransferAmount = view.OutstandingAmount }));
         public Task<ApiResult<ResidentServiceRequestPaymentView>> GetPaymentAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ResidentServiceRequestPaymentView>(true, view));
         public Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ApiFileContent>(true, new([137,80,78,71], "image/png")));
         public Task<ApiResult<IReadOnlyList<ResidentServiceRequestListItem>>> ListAsync(ResidentServiceRequestListQuery? query = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();

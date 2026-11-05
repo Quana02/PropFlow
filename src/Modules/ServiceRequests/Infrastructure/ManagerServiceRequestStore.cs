@@ -58,7 +58,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
                     .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
                 x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
-                x.ApprovedAdditionalCost, x.ServiceInvoiceId))
+                x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null))
             .ToArrayAsync(ct);
 
         var summary = await db.ServiceRequests.AsNoTracking().GroupBy(_ => 1).Select(group =>
@@ -85,7 +85,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
                 .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
             x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
-            x.ApprovedAdditionalCost, x.ServiceInvoiceId))
+            x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null))
         .SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceRequestActivityItem>> GetActivitiesAsync(Guid id, CancellationToken ct) =>
@@ -279,7 +279,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             .Include(x => x.Activities)
             .SingleOrDefaultAsync(x => x.Id == id, ct);
         if (request is null) return ManagerServiceRequestOutcome.NotFound;
-        if (request.Status != ServiceRequestStatus.IN_PROGRESS) return ManagerServiceRequestOutcome.Conflict;
+        if (request.Status != ServiceRequestStatus.IN_PROGRESS || request.IsWaitingForCostConsent || request.ProposedAdditionalCost > 0 && request.AdditionalCostConsentStatus != "ACCEPTED") return ManagerServiceRequestOutcome.Conflict;
 
         var latestWorkResult = request.Activities
             .Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED)

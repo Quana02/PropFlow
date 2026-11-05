@@ -14,6 +14,7 @@ public sealed class ServiceRequestPaymentTests
         request.MarkAssigned(now);
         request.MarkInProgress(now);
         request.ProposeAdditionalCost(80_000, "Thay van khóa nước", now);
+        request.RespondToAdditionalCost(request.AdditionalCostProposalId!.Value, Guid.NewGuid(), true, now);
         request.ApproveAdditionalCost(60_000, now);
         request.Resolve(now);
 

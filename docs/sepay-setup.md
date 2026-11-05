@@ -2,44 +2,13 @@
 
 PropFlow supports SePay bank-transfer webhooks for Service Request invoices. The receiver is disabled by default. No bank login credentials belong in PropFlow.
 
-## Admin setup: Sandbox and live SePay
+## Live-only payment setup
 
-The payment page has two independent setup areas:
+PropFlow now exposes only live SePay payment setup and bank-transfer reconciliation. Trial setup, simulation endpoints and trial balance overlays have been removed. Existing historical trial tables and migrations remain for audit; their records never reduce an invoice balance or block a real payment. No migration converts trial money into confirmed receipts.
 
-- **Sandbox**: enter an API Token obtained from **SePay Test mode → API Access**, check it, request email OTP, then save. Replacing or disconnecting the Sandbox token also requires email OTP. The saved token is encrypted with a distinct Data Protection purpose and is never returned to the browser. Connection checks and masked account synchronization call only `https://userapi-sandbox.sepay.vn/v2/bank-accounts`; redirects are disabled. Revoked/incorrect tokens produce actionable errors and never fall back to live credentials. Setup versions and an advisory lock protect concurrent changes. An unsuccessful replacement preserves the previous token.
-- **SePay thật**: keep the OAuth login/consent, receiving-bank selection and live webhook setup documented below. The application operator supplies the approved OAuth client credentials; building owners do not enter Merchant ID or Secret Key.
+The default connection uses a server-side Live API Token (`Payments:SePay:OAuth:Enabled=false`). OAuth is optional and requires an approved application. Configure a public HTTPS webhook, save the receiving bank with email OTP, then enable automatic confirmation. See [the deployment guide](sepay-live-deployment.md).
 
-After saving and verifying the Sandbox connection, an Admin can choose **Bật mô phỏng FE-05 bằng OTP**. This explicitly enables the resident demo experience; merely opening the Sandbox tab never changes the payment environment. Turning the demo off also requires email OTP. Environment selection is stored on the server, not inferred from the browser or ASP.NET Development mode.
-
-In demo mode the resident payment view returns `PaymentEnvironment=SANDBOX` and hides real QR/account details. Choose **Lấy nội dung thanh toán SePay** to prepare an immutable `PS` + 22 hex-character code and snapshot an active bank account fetched with the stored SePay Test mode API token. When multiple test accounts exist, preparation selects the first active account by provider ID; the resident screen shows that bank and account suffix so the same account can be selected in SePay. Preparing an instruction never credits a payment. The former `POST .../simulate-transfer` endpoint returns 410 and cannot self-confirm.
-
-Sandbox's display balance uses only `VerifiedAmount` received through an authenticated SePay Sandbox webhook, plus actual confirmed funds capped at the invoice total. Old internal demo `Amount` values are retained for audit but no longer count toward paid status. Existing internal demos must be prepared and paid through SePay Test mode again. Full verified payment updates the FE-05 card and manager/resident invoice lists to `PAID` in Sandbox. Read-only projection never changes actual collection/reconciliation, real receipts or feedback eligibility. Live balances are restored when demo mode is disabled.
-
-Real mode never renders the simulation action and rejects direct simulation requests. Turning the demo off restores the invoice's original payment destination and actual outstanding balance. Revoking/disconnecting a Sandbox token does not implicitly enable real payments: demo mode stays on, the simulation action becomes unavailable, and an Admin must explicitly disable demo with OTP to return to live payments. Live incoming bank notifications continue to reconcile genuine transfers normally.
-
-Apply `AddSePaySandboxWebhook` for encrypted Sandbox webhook credentials, receiving-account instructions and the dedicated `sandbox_sepay_receipts` inbox. Receipts are authenticated with a strong API Key distinct from both the API token and live credentials, encrypted and committed atomically with the verified amount before HTTP success. Duplicate transaction IDs never double-count; conflicting replays return 409. Incoming transfers must match one complete PS code, the pinned bank/account and remaining requested amount. Unknown codes, wrong accounts, outgoing transfers and overpayments are saved with diagnostic outcomes without crediting. No real payment receipt is created.
-
-### Configure the actual SePay Test mode webhook
-
-1. In PropFlow Admin → Sandbox, use **Lấy khóa webhook bằng OTP**. Copy the disclosed webhook API Key (not the SePay API token). Status GET never returns that key.
-2. In SePay **Test mode → Tích hợp Webhook → Thêm webhook**: choose incoming money, JSON, retry on errors and the test accounts. Turn **Chỉ gửi khi có mã thanh toán** off and leave prefix filters empty so raw PS memos are delivered.
-3. Set URL `https://YOUR_PUBLIC_API/api/v1/payments/webhooks/sepay/sandbox`. Choose **API Key** authentication and paste the key from PropFlow. Save the webhook.
-4. Enable FE-05 Sandbox with OTP. Open the resident invoice and prepare its SePay instruction. In SePay Test mode → Mô phỏng giao dịch, select the exact displayed bank/account, incoming funds, the outstanding amount and the complete PS memo. Submit.
-5. Verify the transaction appears in SePay and the webhook log reports HTTP 200 with outcome CONFIRMED. PropFlow polls and updates status. Other outcomes are visible in SePay's delivery response and do not count as payment.
-
-For a local demo, `scripts/sepay-sandbox-proxy.cjs` exposes only POST `/api/v1/payments/webhooks/sepay/sandbox` on `127.0.0.1:7151`, forwarding to HTTPS API port 7101 with the local development certificate. Other paths return 404. A temporary Cloudflare tunnel can target this proxy with `cloudflared tunnel --protocol http2 --url http://127.0.0.1:7151`. Keep the proxy, tunnel and API running. The public URL changes when creating a new tunnel; root/Swagger URLs intentionally return 404. This is for development, not permanent hosting.
-
-Sandbox here means **API/Webhooks Test mode**, not the separate Payment Gateway Sandbox checkout. Merchant ID/Secret Key are not used by this setup. To create test accounts, use **Test mode → Tài khoản ngân hàng → Thêm tài khoản**, then synchronize them in PropFlow. Keep all token entry in the Sandbox card; do not paste it into OAuth application settings.
-
-Apply Payments migration `AddSePaySandboxConnection` and restart API/web before using the new setup area. Default page entry opens Sandbox; OAuth's return link opens `?tab=payment&paymentEnvironment=live`.
-
-SePay setup endpoints use dedicated per-Admin limits: local status reads (120/minute), provider operations (20/minute), and OTP requests (5/15 minutes), configurable under `Payments:RateLimits:<policy-name>`. Policy names are `payment-settings-read`, `payment-settings-provider`, and `payment-settings-otp`; each supports `PermitLimit` and `WindowMinutes`. Status reads never consume the authentication or payment OTP allowance. The existing OTP expiry, resend cooldown and attempt controls still apply. If initial status loading fails, both setup cards offer a manual retry without automatically repeating requests.
-
-Official Sandbox API and account setup:
-- https://developer.sepay.vn/vi/tien-ich-khac/test-mode/api-access
-- https://developer.sepay.vn/vi/tien-ich-khac/test-mode/tai-khoan-ngan-hang
-
-## Connect a building owner's SePay account with OAuth (primary flow)
+## Connect a building owner's SePay account with OAuth (optional flow)
 
 PropFlow models one Current Building per deployment. The OAuth connection belongs to that building, not to the individual Admin who authorized it. Separate condominium deployments have separate databases, token encryption keys and receiving settings. This change does not introduce multi-tenant hosting or a building switcher.
 
@@ -100,7 +69,7 @@ Store these values in the API's user-secrets (local development) or environment 
 | `Payments__SePay__Gateway` | Optional legacy bank alias, e.g. `Vietcombank`; new selections use the bank on the pinned destination |
 | `Payments__SePay__BankCode` | Bank code corresponding to the optional legacy alias, e.g. `VCB` |
 
-## Legacy API-token connection (OAuth disabled only)
+## API-token connection (default; OAuth disabled)
 
 When OAuth is explicitly disabled, the legacy API token is used only by the server, with Bearer authentication to the fixed official endpoint `https://userapi.sepay.vn/v2/bank-accounts`. The client does not receive the token, account numbers, or balances during connection checks. HTTP redirects are disabled so the token cannot be forwarded to a different endpoint. Standard SePay API Access tokens currently have full API access; do not assume granular OAuth scopes apply to them. Never put a bank password in these settings.
 

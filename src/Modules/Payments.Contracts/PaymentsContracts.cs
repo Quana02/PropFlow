@@ -27,9 +27,7 @@ public sealed record ResidentServiceRequestPaymentView(
     string? QrImageUrl,
     bool AutomaticConfirmationEnabled = false,
     string? TransferCode = null,
-    string PaymentEnvironment = "LIVE",
-    bool SandboxSimulationAvailable = false,
-    decimal? SimulatedTransferAmount = null);
+    string PaymentEnvironment = "LIVE");
 
 public sealed record ReportResidentServiceRequestTransferRequest(
     string ReferenceNumber,

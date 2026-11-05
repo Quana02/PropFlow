@@ -55,8 +55,8 @@ public class ModuleBoundaryTests
             .Where(l => l.StartsWith("Project(") && !l.Contains(SolutionFolderGuid))
             .ToList();
 
-        Assert.Equal(30, projectLines.Count);
-        Assert.Equal(8, projectLines.Count(x => x.Contains(".Contracts.csproj")));
+        Assert.Equal(32, projectLines.Count);
+        Assert.Equal(10, projectLines.Count(x => x.Contains(".Contracts.csproj")));
     }
 
     [Fact]
@@ -396,6 +396,7 @@ public class ModuleBoundaryTests
             "../Modules/Payments.Contracts/PropFlow.Modules.Payments.Contracts.csproj",
             "../Modules/AiClassification/PropFlow.Modules.AiClassification.csproj",
             "../Modules/AiRecommendation/PropFlow.Modules.AiRecommendation.csproj",
+            "../Modules/AiChatbot/PropFlow.Modules.AiChatbot.csproj",
             "../Modules/Communication/PropFlow.Modules.Communication.csproj",
             "../Modules/Reporting/PropFlow.Modules.Reporting.csproj"
         };
@@ -980,7 +981,8 @@ public class ModuleBoundaryTests
 
         foreach (var pr in projectReferences)
         {
-            Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+            Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase) || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
+                $"Communication may reference public contracts, not a module implementation: {pr}");
         }
     }
 
@@ -1061,7 +1063,7 @@ public class ModuleBoundaryTests
             .ToList();
 
         Assert.Contains(projectReferences, pr => pr.Contains("Communication", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(projectReferences, pr => pr.Contains("AiChatbot", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(projectReferences, pr => pr.Contains("AiChatbot", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
