@@ -37,6 +37,7 @@ public static class AuthRegistration
         services.AddHostedService(sp => sp.GetRequiredService<AuthEmailQueue>());
         services.AddScoped<IAuthStore, AuthStore>();
         services.AddScoped<IInternalAccountDirectory, InternalAccountDirectory>();
+        services.AddScoped<IAuditActorLookup, InternalAccountDirectory>();
         services.AddScoped<IPrivilegedActionOtp, PrivilegedActionOtp>();
         services.AddScoped<AuthUseCases>();
         services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly);

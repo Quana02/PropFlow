@@ -1,36 +1,46 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.Apartments.Application;
 using PropFlow.Modules.Apartments.Domain.ApartmentUnits;
-using PropFlow.Modules.Apartments.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.Apartments.Presentation;
 
 [ApiController, Route("api/v1/apartment-unit-types")]
-public sealed class ApartmentUnitTypesController(ApartmentsDbContext db) : ControllerBase
+public sealed class ApartmentUnitTypesController(ApartmentUnitTypeService types) : ControllerBase
 {
     [HttpGet, Authorize(Policy = ApartmentsAuthorizationPolicies.Read)]
     public async Task<IReadOnlyList<ApartmentUnitTypeResponse>> List(CancellationToken ct) =>
-        await db.ApartmentUnitTypes.AsNoTracking().OrderBy(x => x.Name)
-            .Select(x => new ApartmentUnitTypeResponse(x.Id, x.Name)).ToArrayAsync(ct);
+        (await types.ListAsync(ct)).Select(Map).ToArray();
 
     [HttpPost, Authorize(Policy = ApartmentsAuthorizationPolicies.Manage)]
-    public ActionResult<ApartmentUnitTypeResponse> Create(CreateApartmentUnitTypeRequest request) => Conflict(FixedCatalog());
+    public async Task<ActionResult<ApartmentUnitTypeResponse>> Create(CreateApartmentUnitTypeRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var type = await types.SaveAsync(null, request.Name, request.DefaultUsableAreaM2, request.DefaultBedroomCount, request.DefaultBathroomCount, ct);
+            return Created($"/api/v1/apartment-unit-types/{type.Id}", Map(type));
+        }
+        catch (ApartmentUnitTypeException exception) { return Failure(exception); }
+    }
 
     [HttpPut("{id:guid}"), Authorize(Policy = ApartmentsAuthorizationPolicies.Manage)]
-    public ActionResult<ApartmentUnitTypeResponse> Update(Guid id, UpdateApartmentUnitTypeRequest request) => Conflict(FixedCatalog());
+    public async Task<ActionResult<ApartmentUnitTypeResponse>> Update(Guid id, UpdateApartmentUnitTypeRequest request, CancellationToken ct)
+    {
+        try { return Ok(Map(await types.SaveAsync(id, request.Name, request.DefaultUsableAreaM2, request.DefaultBedroomCount, request.DefaultBathroomCount, ct))); }
+        catch (ApartmentUnitTypeException exception) { return Failure(exception); }
+    }
 
     [HttpDelete("{id:guid}"), Authorize(Policy = ApartmentsAuthorizationPolicies.Manage)]
-    public IActionResult Delete(Guid id) => Conflict(FixedCatalog());
-
-    private static ProblemDetails FixedCatalog() => new()
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        Status = 409,
-        Title = "Danh mục loại căn hộ cố định",
-        Detail = "Sử dụng 4 loại: Căn hộ thông thường, Studio, Officetel, Penthouse.",
-        Extensions = { ["code"] = "APARTMENT_UNIT_TYPE_FIXED_CATALOG" }
-    };
+        try { await types.DeleteAsync(id, ct); return NoContent(); }
+        catch (ApartmentUnitTypeException exception) { return Failure(exception); }
+    }
+
+    private ObjectResult Failure(ApartmentUnitTypeException exception) => StatusCode(exception.StatusCode,
+        new ProblemDetails { Status = exception.StatusCode, Title = exception.Message, Extensions = { ["code"] = exception.Code } });
+    private static ApartmentUnitTypeResponse Map(ApartmentUnitType type) => new(type.Id, type.Name, type.DefaultUsableAreaM2, type.DefaultBedroomCount, type.DefaultBathroomCount);
 }
-public sealed record ApartmentUnitTypeResponse(Guid Id, string Name);
-public sealed record CreateApartmentUnitTypeRequest(string Name);
-public sealed record UpdateApartmentUnitTypeRequest(string Name);
+public sealed record ApartmentUnitTypeResponse(Guid Id, string Name, decimal? DefaultUsableAreaM2 = null, int? DefaultBedroomCount = null, int? DefaultBathroomCount = null);
+public sealed record CreateApartmentUnitTypeRequest(string Name, decimal? DefaultUsableAreaM2 = null, int? DefaultBedroomCount = null, int? DefaultBathroomCount = null);
+public sealed record UpdateApartmentUnitTypeRequest(string Name, decimal? DefaultUsableAreaM2 = null, int? DefaultBedroomCount = null, int? DefaultBathroomCount = null);

@@ -14,6 +14,7 @@ public interface IAdministrationApiClient
     Task<ApiResult<AdministrationRoleAccess[]>> GetRolesAsync(CancellationToken ct = default);
     Task<ApiResult<InternalAccountAccess>> GetEffectiveAccessAsync(Guid userId, CancellationToken ct = default);
     Task<ApiResult<PagedAdministrationActivities>> GetActivityAsync(string? action, int page, CancellationToken ct = default);
+    Task<ApiResult<PagedAdministrationActivities>> GetSystemActivityAsync(SystemActivityFilter filter, int page, CancellationToken ct = default);
     Task<ApiResult<PaymentDestinationState>> GetPaymentDestinationAsync(CancellationToken ct = default);
     Task<ApiResult<PaymentDestinationView[]>> GetPaymentDestinationHistoryAsync(CancellationToken ct = default);
     Task<ApiResult<BankOption[]>> GetPaymentBanksAsync(CancellationToken ct = default);

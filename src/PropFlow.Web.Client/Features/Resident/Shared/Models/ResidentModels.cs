@@ -7,7 +7,10 @@ public sealed record ResidentListItem(Guid Id, string ResidentCode, string FullN
 public sealed record ResidentApartmentRelationshipSummary(Guid ApartmentUnitId, string UnitNumber, int FloorNumber, bool IsCurrentOwner, bool IsCurrentResident);
 public sealed record ResidentDetailResponse(Guid Id, string ResidentCode, string FullName, DateOnly? DateOfBirth, string? Gender, string? Nationality, string? IdentityType, string? IdentityNumber, DateOnly? IdentityIssuedDate, DateOnly? IdentityExpiryDate, string? PhoneNumber, string? Email, string? Note, string Status, bool HasAccount, IReadOnlyList<OwnershipItem> Ownerships, IReadOnlyList<ResidencyItem> Residencies);
 public sealed record OwnershipItem(Guid Id, Guid ApartmentUnitId, string UnitNumber, int FloorNumber, DateOnly StartDate, DateOnly? EndDate);
-public sealed record ResidencyItem(Guid Id, Guid ApartmentUnitId, string UnitNumber, int FloorNumber, string HouseholdRole, string ResidencyType, Guid? HouseholdHeadResidencyId, string? HouseholdHeadName, string? HouseholdHeadResidentCode, string? RelationshipToHead, DateOnly StartDate, DateOnly? EndDate, string Status, string? Note);
+public sealed record ResidencyItem(Guid Id, Guid ApartmentUnitId, string UnitNumber, int FloorNumber, string HouseholdRole, string ResidencyType, Guid? HouseholdHeadResidencyId, string? HouseholdHeadName, string? HouseholdHeadResidentCode, string? RelationshipToHead, DateOnly StartDate, DateOnly? EndDate, string Status, string? Note)
+{
+    public bool IsActiveAt(DateOnly date) => Status == "ACTIVE" && StartDate <= date && (EndDate is null || EndDate >= date);
+}
 public sealed record ActiveApartmentOption(Guid Id, string UnitNumber, int FloorNumber);
 public sealed record EligibleHouseholdHead(Guid ResidencyId, Guid ResidentId, string FullName, string ResidentCode);
 public sealed class CreateResidencyRequest { public Guid ApartmentUnitId { get; set; } public string HouseholdRole { get; set; } = "HOUSEHOLD_HEAD"; public string ResidencyType { get; set; } = "OWNER_OCCUPIED"; public Guid? HouseholdHeadResidencyId { get; set; } public string? RelationshipToHead { get; set; } public DateOnly StartDate { get; set; } = DateOnly.FromDateTime(DateTime.Today); public string? Note { get; set; } }

@@ -172,6 +172,19 @@ namespace PropFlow.Modules.Apartments.Infrastructure.Persistence.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<int?>("DefaultBathroomCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("default_bathroom_count");
+
+                    b.Property<int?>("DefaultBedroomCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("default_bedroom_count");
+
+                    b.Property<decimal?>("DefaultUsableAreaM2")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("default_usable_area_m2");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -189,7 +202,14 @@ namespace PropFlow.Modules.Apartments.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("apartment_unit_types", "apartments");
+                    b.ToTable("apartment_unit_types", "apartments", t =>
+                        {
+                            t.HasCheckConstraint("ck_apartment_type_default_area", "default_usable_area_m2 IS NULL OR default_usable_area_m2 >= 25");
+
+                            t.HasCheckConstraint("ck_apartment_type_default_bathrooms", "default_bathroom_count IS NULL OR default_bathroom_count >= 0");
+
+                            t.HasCheckConstraint("ck_apartment_type_default_bedrooms", "default_bedroom_count IS NULL OR default_bedroom_count >= 0");
+                        });
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Apartments.Domain.ApartmentUnits.ApartmentOwnership", b =>
