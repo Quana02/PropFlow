@@ -80,6 +80,7 @@ public class ComplaintConfiguration : IEntityTypeConfiguration<Complaint>
             .IsRequired();
 
         builder.Property(complaint => complaint.UpdatedAt)
+            .IsConcurrencyToken()
             .HasColumnName("updated_at")
             .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("now()")

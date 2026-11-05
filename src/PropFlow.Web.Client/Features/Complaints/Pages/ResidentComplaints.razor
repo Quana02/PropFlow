@@ -1,0 +1,7 @@
+@page "/resident/complaints"
+@page "/resident/complaints/{Id:guid}"
+@layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
+@attribute [Authorize(Roles = "RESIDENT")]
+<PageTitle>Phản ánh của tôi - PropFlow</PageTitle>
+<PropFlow.Web.Client.Features.Complaints.Components.ComplaintWorkspace Role="RESIDENT" Id="Id" />
+@code { [Parameter] public Guid? Id { get; set; } }

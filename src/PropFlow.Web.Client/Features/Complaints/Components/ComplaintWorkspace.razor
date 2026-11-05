@@ -1,0 +1,176 @@
+@using PropFlow.Web.Client.Features.Complaints.Models
+@using PropFlow.Web.Client.Services.Api
+@inject PropFlow.Web.Client.Features.Complaints.Services.ComplaintApiClient Api
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<section class="complaint-workspace">
+    <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">@(Role == "RESIDENT" ? "Trang chủ" : "Vận hành")</a><span>/</span><strong>Phản ánh</strong></nav>
+    <header class="hero"><div><span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">feedback</span>Kết nối với Ban Quản lý</span><h1>@(Role == "RESIDENT" ? "Phản ánh của tôi" : Role == "STAFF" ? "Công việc phản ánh được giao" : "Quản lý phản ánh")</h1><p>Gửi ý kiến, theo dõi tiến độ và nhận phản hồi chính thức.</p></div>
+        @if (Role == "RESIDENT" && !Id.HasValue) { <button class="primary" disabled="@busy" @onclick="() => composing = !composing"><span class="material-symbols-outlined" aria-hidden="true">@(composing ? "close" : "add")</span>@(composing ? "Đóng soạn thảo" : "Gửi phản ánh mới")</button> }
+    </header>
+    @if (error is not null) { <div role="alert" class="feedback error">@error <button @onclick="LoadAsync" disabled="@busy">Tải lại</button></div> }
+    @if (success is not null) { <p role="status" class="feedback">@success</p> }
+    @if (busy) { <p role="status">Đang tải dữ liệu…</p> }
+    <fieldset disabled="@busy">
+    @if (detail is null)
+    {
+        @if (Role == "RESIDENT" && composing)
+        {
+            <form @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+                <h2>Gửi phản ánh mới</h2><p class="muted">Nêu rõ vấn đề và mong muốn của bạn để Ban Quản lý hỗ trợ phù hợp.</p><label>Tiêu đề <input @bind="subject" required maxlength="200" placeholder="Ví dụ: Tiếng ồn tại khu vực hành lang" /></label>
+                <label>Nội dung<textarea @bind="description" required rows="5" placeholder="Mô tả sự việc, thời gian, vị trí và nội dung cần hỗ trợ…"></textarea></label>
+                <button type="submit">Gửi phản ánh</button>
+            </form>
+        }
+        <section class="list-panel">
+        <header class="list-heading"><div><h2>Danh sách phản ánh</h2><p class="muted">Theo dõi tình trạng xử lý và phản hồi của từng phản ánh.</p></div><span class="total">@(items?.Total.ToString() ?? "—") phản ánh</span></header>
+        <form class="filters" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+            <label>Tìm kiếm<input @bind="search" maxlength="200" placeholder="Mã hoặc tiêu đề" /></label>
+            <label>Trạng thái<PropFlowSelect @bind-Value="status" Options="StatusOptions" Disabled="busy" AriaLabel="Trạng thái phản ánh" /></label>
+            <button type="submit">Tìm kiếm</button>
+        </form>
+        @if (items is not null)
+        {
+            @if (items.Total == 0) { <div class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">forum</span><h3>Chưa có phản ánh phù hợp</h3><p>Thử thay đổi bộ lọc hoặc gửi phản ánh mới để Ban Quản lý hỗ trợ.</p></div> }
+            else
+            {
+                <div class="table-scroll"><table><thead><tr><th>Mã phản ánh</th><th>Tiêu đề</th><th>Trạng thái</th><th></th></tr></thead><tbody>
+                    @foreach (var item in items.Items) { <tr><td>@item.ComplaintNumber</td><td>@item.Subject</td><td><span class="status-chip status-@item.Status.ToLowerInvariant()">@ComplaintLabels.Status(item.Status)</span></td><td><button @onclick="() => Open(item.Id)">Xem chi tiết</button></td></tr> }
+                </tbody></table></div>
+                <nav aria-label="Phân trang"><button disabled="@(page <= 1)" @onclick="PreviousAsync">Trước</button><span>Trang @(page) · @items.Total phản ánh</span><button disabled="@(page * items.PageSize >= items.Total)" @onclick="NextAsync">Sau</button></nav>
+            }
+        }
+        </section>
+    }
+    else
+    {
+        <button class="back-button" @onclick="Back"><span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>Về danh sách</button>
+        <article class="detail-card"><span class="kicker">@detail.ComplaintNumber</span><h2>@detail.Subject</h2><p><span class="status-chip status-@detail.Status.ToLowerInvariant()">@ComplaintLabels.Status(detail.Status)</span></p><p>Ngày gửi: @FormatTime(detail.SubmittedAt)</p><p class="content">@detail.Description</p>
+            @if (!string.IsNullOrWhiteSpace(detail.OfficialResponse)) { <div class="official-response"><h3>Phản hồi chính thức</h3><p class="content">@detail.OfficialResponse</p></div> }
+        </article>
+        @if (Role == "MANAGER" && detail.Status is not ("CLOSED" or "CANCELLED"))
+        {
+            @if (detail.Status == "SUBMITTED") { <button @onclick='() => ActAsync("review")'>Tiếp nhận và xem xét</button> }
+            <details><summary>Liên kết ngữ cảnh</summary>
+                <form @onsubmit="LoadOptionsAsync" @onsubmit:preventDefault><label>Tìm ngữ cảnh<input @bind="contextSearch" maxlength="100" /></label><button type="submit">Tìm ngữ cảnh</button></form>
+                <p>Chỉ cập nhật những liên kết bạn chọn. Có thể bỏ liên kết bằng mục “Không liên kết”.</p>
+                @if (options is not null)
+                {
+                    <form @onsubmit="SaveContextAsync" @onsubmit:preventDefault>
+                        <label>Căn hộ<PropFlowSelect Value="IdValue(apartmentId)" ValueChanged="v => apartmentId = ParseId(v)" Options="ContextChoices(options.Apartments, apartmentId)" Disabled="busy" AriaLabel="Căn hộ" /></label>
+                        <label>Yêu cầu dịch vụ (tùy chọn)<PropFlowSelect Value="IdValue(requestId)" ValueChanged="v => requestId = ParseId(v)" Options="ContextChoices(options.ServiceRequests, requestId)" Disabled="busy" AriaLabel="Yêu cầu dịch vụ" /></label>
+                        <label>Cơ sở vật chất<PropFlowSelect Value="IdValue(facilityId)" ValueChanged="v => facilityId = ParseId(v)" Options="ContextChoices(options.Facilities, facilityId)" Disabled="busy" AriaLabel="Cơ sở vật chất" /></label>
+                        <label>Thiết bị<PropFlowSelect Value="IdValue(equipmentId)" ValueChanged="v => equipmentId = ParseId(v)" Options="ContextChoices(options.Equipment, equipmentId)" Disabled="busy" AriaLabel="Thiết bị" /></label>
+                        <button type="submit">Lưu liên kết</button>
+                    </form>
+                }
+            </details>
+            @if (detail.Status is "UNDER_REVIEW" or "FOLLOW_UP")
+            {
+                <form @onsubmit="AssignAsync" @onsubmit:preventDefault><h3>Giao công việc hỗ trợ</h3>
+                    <label>Nhân viên<PropFlowSelect Value="IdValue(staffId)" ValueChanged="v => staffId = ParseId(v)" Options="StaffChoices" Disabled="busy" AriaLabel="Nhân viên được giao" /></label>
+                    <label>Công việc<input @bind="workTitle" required maxlength="200" /></label><label>Hướng dẫn nội bộ<textarea @bind="instruction"></textarea></label><button type="submit">Giao công việc</button>
+                </form>
+                <form @onsubmit="ResolveAsync" @onsubmit:preventDefault><h3>Kết quả giải quyết</h3><label>Phản hồi chính thức cho cư dân<textarea @bind="response" required rows="5"></textarea></label><button type="submit" disabled="@detail.Followups.Any(f => f.Status is "ASSIGNED" or "IN_PROGRESS")">Giải quyết phản ánh</button></form>
+            }
+            @if (detail.Status == "RESOLVED") { <button @onclick='() => ActAsync("close")'>Đóng phản ánh và thông báo cư dân</button> }
+        }
+        @foreach (var f in detail.Followups)
+        {
+            <article><h3>@f.Title</h3><p>@ComplaintLabels.Status(f.Status)</p><p class="content">@f.Instruction</p><p class="content">@f.Result</p>
+                @if (Role == "STAFF" && detail.Status == "FOLLOW_UP" && f.Status is "ASSIGNED" or "IN_PROGRESS")
+                {
+                    @if (f.Status == "ASSIGNED") { <button @onclick='() => ActAsync($"followups/{f.Id}", new { complete = false })'>Bắt đầu thực hiện</button> }
+                    <form @onsubmit='() => ActAsync($"followups/{f.Id}", new { complete = true, result = results.GetValueOrDefault(f.Id, "") })' @onsubmit:preventDefault>
+                        <label>Kết quả công việc<textarea required value="@results.GetValueOrDefault(f.Id, "")" @onchange='e => results[f.Id] = e.Value?.ToString() ?? ""'></textarea></label><button type="submit">Hoàn thành công việc</button>
+                    </form>
+                }
+            </article>
+        }
+        @if (detail.History.Count > 0)
+        {
+            <h3>Lịch sử xử lý</h3><ol>@foreach (var h in detail.History) { <li><time datetime="@h.CreatedAt.ToString("O")">@FormatTime(h.CreatedAt)</time> · @ComplaintLabels.Activity(h.Type) @if (h.ToStatus is not null) { <span> · @ComplaintLabels.Status(h.ToStatus)</span> }<p class="content">@h.Detail</p></li> }</ol>
+        }
+    }
+    </fieldset>
+</section>
+
+@code {
+    [Parameter] public string Role { get; set; } = "RESIDENT";
+    [Parameter] public Guid? Id { get; set; }
+    private readonly CancellationTokenSource cancellation = new();
+    private ComplaintPage? items;
+    private ComplaintDetail? detail;
+    private ComplaintContextOptions? options;
+    private IReadOnlyList<StaffOption> staff = [];
+    private readonly Dictionary<Guid, string> results = [];
+    private string? error, success;
+    private bool busy, composing;
+    private int page = 1;
+    private string search = "", status = "", subject = "", description = "", workTitle = "", instruction = "", response = "", contextSearch = "";
+    private Guid? staffId, apartmentId, requestId, facilityId, equipmentId;
+    private static string IdValue(Guid? id) => id?.ToString() ?? "";
+    private static Guid? ParseId(string value) => Guid.TryParse(value, out var id) ? id : null;
+    private static readonly PropFlowSelectOption[] StatusOptions = [new("", "Tất cả"), .. ComplaintLabels.Statuses.Select(s => new PropFlowSelectOption(s, ComplaintLabels.Status(s)))];
+    private IReadOnlyList<PropFlowSelectOption> StaffChoices => [new("", "Chọn nhân viên"), .. staff.Select(s => new PropFlowSelectOption(s.UserId.ToString(), $"{s.DisplayName} ({s.Username})"))];
+    private static IReadOnlyList<PropFlowSelectOption> ContextChoices(IReadOnlyList<ContextOption> source, Guid? id) => [new("", "Không liên kết"), .. WithCurrent(source, id).Select(o => new PropFlowSelectOption(o.Id.ToString(), o.Label))];
+    private string Root => Role == "MANAGER" ? "/manager/complaints" : Role == "STAFF" ? "/staff/complaints" : "/resident/complaints";
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        busy = true; error = null; detail = null;
+        try
+        {
+            if (Id.HasValue)
+            {
+                var result = await Api.GetAsync(Id.Value, cancellation.Token);
+                if (result.IsSuccess) { detail = result.Data; CopyContext(); }
+                else error = result.Message ?? "Không tải được phản ánh.";
+                if (Role == "MANAGER" && detail is not null)
+                {
+                    var people = await Api.StaffAsync(cancellation.Token);
+                    if (people.IsSuccess) staff = people.Data ?? []; else error = people.Message ?? "Không tải được danh sách nhân viên.";
+                    await LoadOptionsAsync();
+                }
+            }
+            else
+            {
+                var result = await Api.ListAsync(search, status, page, cancellation.Token);
+                items = result.IsSuccess ? result.Data : null;
+                if (!result.IsSuccess) error = result.Message ?? "Không tải được danh sách phản ánh.";
+            }
+        }
+        finally { busy = false; }
+    }
+    private void CopyContext() { apartmentId = detail!.Context.ApartmentUnitId; requestId = detail.Context.RelatedServiceRequestId; facilityId = detail.Context.FacilityId; equipmentId = detail.Context.EquipmentId; }
+    private string FormatTime(DateTimeOffset value) => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(value, detail!.TimeZoneId).ToString("dd/MM/yyyy HH:mm");
+    private async Task SubmitAsync()
+    {
+        busy = true; error = null; success = null;
+        try { var result = await Api.SubmitAsync(subject, description, cancellation.Token); if (result.IsSuccess && result.Data is not null) Open(result.Data.Id); else error = result.Message ?? "Không gửi được phản ánh."; }
+        finally { busy = false; }
+    }
+    private async Task ActAsync(string action, object? body = null)
+    {
+        busy = true; error = null; success = null;
+        try
+        {
+            var result = await Api.ActionAsync(detail!.Id, action, body, cancellation.Token);
+            if (result.IsSuccess) { detail = result.Data; CopyContext(); success = "Đã lưu thay đổi."; }
+            else error = result.Message ?? "Không thực hiện được thao tác.";
+        }
+        finally { busy = false; }
+    }
+    private Task AssignAsync() => ActAsync("followups", new { staffUserId = staffId, title = workTitle, instruction });
+    private Task ResolveAsync() => ActAsync("resolve", new { response });
+    private Task SaveContextAsync() => ActAsync("context", new ComplaintContext(apartmentId, requestId, facilityId, equipmentId));
+    private async Task LoadOptionsAsync() { var r = await Api.ContextAsync(contextSearch, cancellation.Token); if (r.IsSuccess) options = r.Data; else error = r.Message ?? "Không tải được ngữ cảnh liên kết."; }
+    private static IEnumerable<ContextOption> WithCurrent(IReadOnlyList<ContextOption> source, Guid? id) => id.HasValue && !source.Any(x => x.Id == id) ? source.Append(new(id.Value, "Liên kết hiện tại")) : source;
+    private void Open(Guid id) => Navigation.NavigateTo($"{Root}/{id}");
+    private void Back() => Navigation.NavigateTo(Root);
+    private Task SearchAsync() { page = 1; return LoadAsync(); }
+    private Task PreviousAsync() { page--; return LoadAsync(); }
+    private Task NextAsync() { page++; return LoadAsync(); }
+    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+}
