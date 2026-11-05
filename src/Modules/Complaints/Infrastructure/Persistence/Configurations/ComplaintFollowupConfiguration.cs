@@ -62,6 +62,7 @@ public class ComplaintFollowupConfiguration : IEntityTypeConfiguration<Complaint
             .IsRequired();
 
         builder.Property(followup => followup.UpdatedAt)
+            .IsConcurrencyToken()
             .HasColumnName("updated_at")
             .HasColumnType("timestamp with time zone")
             .HasDefaultValueSql("now()")

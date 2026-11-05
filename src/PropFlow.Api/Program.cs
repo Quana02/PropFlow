@@ -137,7 +137,7 @@ builder.Services.AddDbContext<ServiceRequestsDbContext>((services, options) =>
 
 builder.Services.AddDbContext<ComplaintsDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "complaints")));
@@ -179,7 +179,7 @@ builder.Services.AddDbContext<AiRecommendationDbContext>((services, options) =>
 
 builder.Services.AddDbContext<CommunicationDbContext>((services, options) =>
     options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "communication")));
@@ -191,6 +191,13 @@ builder.Services.AddScoped<IAssignedAssetSource, ServiceRequestAssignedAssetSour
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess, AssignedAssetReadAccess>();
 
 // Register Module Services
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintStore, PropFlow.Modules.Complaints.Infrastructure.Persistence.EfComplaintStore>();
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintCommitter, ComplaintCommitter>();
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintContextSource, ComplaintContextSource>();
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.ComplaintUseCases>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.IAnnouncementStore, EfAnnouncementStore>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.AnnouncementUseCases>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IComplaintClosureNotice, PropFlow.Modules.Communication.Infrastructure.ComplaintClosureNotice>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings.Services.IBuildingService, PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IPropertyAssetsStore, PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Facilities.Services.IFacilityService, PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService>();
@@ -213,6 +220,7 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Apartments.Presentation.ApartmentsController).Assembly)
     .AddApplicationPart(typeof(ResidentsController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.Complaints.Presentation.ComplaintsController).Assembly)
     .AddApplicationPart(typeof(ResidentServiceRequestsController).Assembly)
     .AddApplicationPart(typeof(MaintenanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
@@ -350,6 +358,21 @@ builder.Services.AddAuthorization(options =>
         (context.User.IsInRole(SystemRoleCodes.Accountant) && context.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
     options.AddPolicy(ServiceRequestsAuthorizationPolicies.SubmitAsResident,
         policy => policy.RequireRole(SystemRoleCodes.Resident));
+    options.AddPolicy("complaints.manage", policy => policy.RequireAuthenticatedUser().RequireRole(SystemRoleCodes.Manager)
+        .RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy("announcements.publish", policy => policy.RequireAuthenticatedUser().RequireRole(SystemRoleCodes.Manager)
+        .RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy("complaints.work", policy => policy.RequireAuthenticatedUser().RequireRole(SystemRoleCodes.Staff)
+        .RequireClaim("permission", SystemPermissionCodes.PerformAssignedOperations));
+    options.AddPolicy("complaints.access", policy => policy.RequireAuthenticatedUser().RequireAssertion(c =>
+        Guid.TryParse(c.User.FindFirst("sub")?.Value, out var actor) && actor != Guid.Empty &&
+        (c.User.IsInRole(SystemRoleCodes.Resident) ||
+         c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations) ||
+         c.User.IsInRole(SystemRoleCodes.Staff) && c.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations))));
+    options.AddPolicy("announcements.access", policy => policy.RequireAuthenticatedUser().RequireAssertion(c =>
+        Guid.TryParse(c.User.FindFirst("sub")?.Value, out var actor) && actor != Guid.Empty &&
+        (c.User.IsInRole(SystemRoleCodes.Resident) ||
+         c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations))));
 });
 builder.Services.AddScoped<IApartmentOverviewSource, ApartmentOverviewSource>();
 builder.Services.AddScoped<IApartmentResidentRelationshipSource, ApartmentResidentRelationshipSource>();
@@ -447,6 +470,7 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PropFlow.Modules.Communication.Presentation.AnnouncementHub>("/hubs/announcements", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
