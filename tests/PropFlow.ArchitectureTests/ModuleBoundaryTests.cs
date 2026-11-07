@@ -968,7 +968,7 @@ public class ModuleBoundaryTests
     }
 
     [Fact]
-    public void Communication_Module_ShouldNotReferenceOtherBusinessModules()
+    public void Communication_Module_ShouldOnlyReferenceRequiredPublicContracts()
     {
         var projectFile = Path.Combine(SolutionDirectory, "src/Modules/Communication/PropFlow.Modules.Communication.csproj");
         Assert.True(File.Exists(projectFile), $"Project file not found: {projectFile}");
@@ -983,6 +983,11 @@ public class ModuleBoundaryTests
         {
             Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase) || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
                 $"Communication may reference public contracts, not a module implementation: {pr}");
+            Assert.Contains(pr, new[]
+            {
+                "../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj",
+                "../PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj"
+            });
         }
     }
 

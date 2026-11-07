@@ -1,3 +1,4 @@
+using PropFlow.Api.Composition.Auditing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.SignalR;
@@ -133,95 +134,102 @@ builder.Services.AddScoped<ISupportChat, SupportChatService>();
 builder.Services.AddSingleton<ISupportChatRealtime, SupportChatRealtime>();
 builder.Services.AddSingleton<SupportChatFrameGate>();
 builder.Services.AddHostedService<SupportChatDispatchWorker>();
+builder.Services.AddScoped<AuditCapture>();
+builder.Services.AddScoped<SystemAuditInterceptor>();
+builder.Services.AddScoped<ISystemAuditWriter, SystemAuditWriter>();
 
 // Register Batch 1 DbContexts with schema-specific migration history tables
 builder.Services.AddDbContext<PropertyAssetsDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "property_assets")));
 
 builder.Services.AddDbContext<ApartmentsDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "apartments")));
 
 builder.Services.AddDbContext<AuthenticationDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "auth")));
 
 builder.Services.AddDbContext<ResidentsDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "residents")));
 
 builder.Services.AddDbContext<AdministrationDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "administration")));
 
 builder.Services.AddDbContext<ServiceRequestsDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "service_requests")));
 
 builder.Services.AddDbContext<ComplaintsDbContext>((services, options) =>
-    options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+    options.AddInterceptors(
+        services.GetRequiredService<SystemAuditInterceptor>())
+    .UseNpgsql(
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "complaints")));
 
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "maintenance")));
 
 builder.Services.AddDbContext<BillingDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "billing")));
 
 builder.Services.AddDbContext<PaymentsDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "payments")));
 
 builder.Services.AddDbContext<AiClassificationDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "ai_classification")));
 
 builder.Services.AddDbContext<AiRecommendationDbContext>((services, options) =>
-    options.UseNpgsql(
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "ai_recommendation")));
 
 builder.Services.AddDbContext<CommunicationDbContext>((services, options) =>
-    options.UseNpgsql(
-        services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
+    options.AddInterceptors(
+        services.GetRequiredService<SystemAuditInterceptor>())
+    .UseNpgsql(
+        services.GetRequiredService<NpgsqlConnection>(),
         npgsql => npgsql.MigrationsHistoryTable(
             "__EFMigrationsHistory",
             "communication")));
@@ -233,6 +241,13 @@ builder.Services.AddScoped<IAssignedAssetSource, ServiceRequestAssignedAssetSour
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess, AssignedAssetReadAccess>();
 
 // Register Module Services
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintStore, PropFlow.Modules.Complaints.Infrastructure.Persistence.EfComplaintStore>();
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintCommitter, ComplaintCommitter>();
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintContextSource, ComplaintContextSource>();
+builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.ComplaintUseCases>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.IAnnouncementStore, EfAnnouncementStore>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.AnnouncementUseCases>();
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IComplaintClosureNotice, PropFlow.Modules.Communication.Infrastructure.ComplaintClosureNotice>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Buildings.Services.IBuildingService, PropFlow.Modules.PropertyAssets.Application.Buildings.Services.BuildingService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IPropertyAssetsStore, PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Facilities.Services.IFacilityService, PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService>();
@@ -256,6 +271,7 @@ builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.PropertyAssets.Presentation.Controllers.FacilitiesController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Apartments.Presentation.ApartmentsController).Assembly)
     .AddApplicationPart(typeof(ResidentsController).Assembly)
+    .AddApplicationPart(typeof(PropFlow.Modules.Complaints.Presentation.ComplaintsController).Assembly)
     .AddApplicationPart(typeof(ResidentServiceRequestsController).Assembly)
     .AddApplicationPart(typeof(MaintenanceController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Billing.Presentation.BillingFinanceController).Assembly)
@@ -399,11 +415,27 @@ builder.Services.AddAuthorization(options =>
         (context.User.IsInRole(SystemRoleCodes.Accountant) && context.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
     options.AddPolicy(ServiceRequestsAuthorizationPolicies.SubmitAsResident,
         policy => policy.RequireRole(SystemRoleCodes.Resident));
+    options.AddPolicy("complaints.manage", policy => policy.RequireAuthenticatedUser().RequireRole(SystemRoleCodes.Manager)
+        .RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy("announcements.publish", policy => policy.RequireAuthenticatedUser().RequireRole(SystemRoleCodes.Manager)
+        .RequireClaim("permission", SystemPermissionCodes.ManageOperations));
+    options.AddPolicy("complaints.work", policy => policy.RequireAuthenticatedUser().RequireRole(SystemRoleCodes.Staff)
+        .RequireClaim("permission", SystemPermissionCodes.PerformAssignedOperations));
+    options.AddPolicy("complaints.access", policy => policy.RequireAuthenticatedUser().RequireAssertion(c =>
+        Guid.TryParse(c.User.FindFirst("sub")?.Value, out var actor) && actor != Guid.Empty &&
+        (c.User.IsInRole(SystemRoleCodes.Resident) ||
+         c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations) ||
+         c.User.IsInRole(SystemRoleCodes.Staff) && c.User.HasClaim("permission", SystemPermissionCodes.PerformAssignedOperations))));
+    options.AddPolicy("announcements.access", policy => policy.RequireAuthenticatedUser().RequireAssertion(c =>
+        Guid.TryParse(c.User.FindFirst("sub")?.Value, out var actor) && actor != Guid.Empty &&
+        (c.User.IsInRole(SystemRoleCodes.Resident) ||
+         c.User.IsInRole(SystemRoleCodes.Manager) && c.User.HasClaim("permission", SystemPermissionCodes.ManageOperations))));
 });
 builder.Services.AddScoped<IApartmentOverviewSource, ApartmentOverviewSource>();
 builder.Services.AddScoped<IApartmentResidentRelationshipSource, ApartmentResidentRelationshipSource>();
 builder.Services.AddScoped<IApartmentOwnershipCommand, PropFlow.Modules.Apartments.Application.ApartmentOwnershipCommand>();
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatusCommand, PropFlow.Modules.Apartments.Application.ApartmentStatusCommand>();
+builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.ApartmentUnitTypeService>();
 builder.Services.AddScoped<IResidentApartmentReadSource, ResidentApartmentReadSource>();
 builder.Services.AddScoped<ICurrentBuildingTimeZone, CurrentBuildingTimeZone>();
 builder.Services.AddScoped<ICurrentBuildingFloorLimit, CurrentBuildingFloorLimit>();
@@ -492,6 +524,8 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 }
 
 app.UseHttpsRedirection();
+app.UseRouting();
+app.UseMiddleware<SystemActivityMiddleware>();
 app.UseExceptionHandler();
 
 app.UseCors("PropFlowWebCors");
@@ -504,6 +538,7 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PropFlow.Modules.Communication.Presentation.AnnouncementHub>("/hubs/announcements", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<SupportChatHub>("/hubs/support-chat", options => options.CloseOnAuthenticationExpiration = true);
 

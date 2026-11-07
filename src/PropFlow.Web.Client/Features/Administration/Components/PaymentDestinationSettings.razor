@@ -131,6 +131,8 @@
 }
 
 @code {
+    [Parameter] public string? PaymentEnvironment { get; set; }
+    private string setupEnvironment = "SANDBOX";
     private PaymentDestinationView? current;
     private PaymentDestinationView[] history = [];
     private SePayBankAccountView[] accounts = [];

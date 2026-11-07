@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../Communication.Contracts/PropFlow.Modules.Communication.Contracts.csproj" />
+    <ProjectReference Include="../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj" />
+    <ProjectReference Include="../PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" />

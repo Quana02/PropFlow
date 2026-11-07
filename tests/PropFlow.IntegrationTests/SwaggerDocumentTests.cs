@@ -9,6 +9,10 @@ public sealed class SwaggerDocumentTests(PropFlowApiFactory factory) : IClassFix
         var response = await client.GetAsync("/swagger/v1/swagger.json");
 
         response.EnsureSuccessStatusCode();
-        Assert.Contains("/api/v1/apartments", await response.Content.ReadAsStringAsync());
+        var document = await response.Content.ReadAsStringAsync();
+        Assert.Contains("/api/v1/apartments", document);
+        Assert.Contains("defaultUsableAreaM2", document);
+        Assert.Contains("defaultBedroomCount", document);
+        Assert.Contains("defaultBathroomCount", document);
     }
 }

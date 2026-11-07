@@ -1,0 +1,7 @@
+@page "/resident/announcements"
+@attribute [Authorize(Roles = "RESIDENT")]
+@inject NavigationManager Navigation
+@code {
+    [SupplyParameterFromQuery(Name = "announcement")] public Guid? Announcement { get; set; }
+    protected override void OnParametersSet() => Navigation.NavigateTo("/resident?tab=notifications&category=general" + (Announcement.HasValue ? $"&announcement={Announcement}" : ""), replace: true);
+}

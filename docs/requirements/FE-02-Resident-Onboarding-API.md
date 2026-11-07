@@ -26,16 +26,12 @@ Với residency là `HOUSEHOLD_MEMBER`, request phải có household head hợp 
 - Create và Update dùng chung policy; Update loại trừ chính Resident đang sửa. Conflict trả HTTP 409 với `RESIDENT_IDENTITY_ALREADY_EXISTS` hoặc `RESIDENT_EMAIL_ALREADY_EXISTS` và field error tương ứng.
 - PostgreSQL advisory transaction lock bảo vệ hai khóa canonical trong luồng Create/Update, ngăn hai request đồng thời cùng commit. Toàn bộ onboarding Resident + ownership + residency vẫn rollback nguyên tử khi duplicate.
 
-### Audit dữ liệu 2026-10-03
-
-Duplicate `RES-000003` đã được reconcile vào survivor `RES-000002` trong DEV bằng script one-off có snapshot, precondition và transaction `SERIALIZABLE`. Ownership P202 trùng của duplicate bị xóa như một duplicate relationship; không remap, không gán `EndDate` và không tạo ownership history giả. Residency P202 của survivor được giữ nguyên.
-
 Migration `20261003103000_EnforceResidentCanonicalUniqueness` tạo hai PostgreSQL expression index:
 
 - `ux_residents_identity_canonical`: unique theo `upper(btrim(identity_type))` và `regexp_replace(identity_number, '[^0-9]', '', 'g')` khi cả hai canonical value không rỗng.
 - `ux_residents_email_canonical`: unique theo `lower(btrim(email))` khi email không null/rỗng.
 
-Phone tiếp tục không unique. Hai ownership history P302 tương tự của `RES-000002` là data-quality item riêng, còn tồn tại và không bị thay đổi trong reconciliation này.
+Phone tiếp tục không unique. Lịch sử reconciliation dữ liệu DEV không phải quy trình migration cho môi trường khác.
 
 ## Residency cardinality và lifecycle
 
@@ -52,4 +48,15 @@ Resident Detail hiển thị current ownership `0..N`, ownership history, curren
 
 ## Liên hệ với FE-01 Registration
 
-Self-registration phải khớp đúng cùng một Resident theo bốn giá trị normalized: email, phone, identity type và identity number. Resident phải `ACTIVE`, chưa liên kết tài khoản và có active residency hoặc current ownership. `OWNER_ONLY`, `RESIDENT_ONLY` và `OWNER_AND_RESIDENT` đều có thể đăng ký khi quan hệ hiện hành tương ứng còn hiệu lực; history đơn thuần không đủ. Quy tắc eligibility không tạo residency, không cấp quyền occupant/household và không thay thế authorization theo từng resource.
+Self-registration phải khớp đúng cùng một Resident theo bốn giá trị normalized: email, phone, identity type và identity number. Resident phải `ACTIVE`, chưa liên kết tài khoản và có current ownership hoặc active residency với vai trò `HOUSEHOLD_HEAD` (quyết định người dùng ngày 03/11/2026). Chủ hộ không sở hữu chỉ được đăng ký khi có cư trú `TENANT` hiện hành tại căn hộ không có chủ sở hữu hiện hành, tức thuê căn hộ của đơn vị vận hành. Chủ hộ thuê căn có chủ sở hữu khác không đủ điều kiện. Thành viên hộ không có quyền sở hữu không được tự đăng ký; history đơn thuần không đủ. Quy tắc eligibility không tạo residency, không cấp quyền occupant/household và không thay thế authorization theo từng resource.
+
+
+## Quy tắc ngày hiệu lực và thao tác đồng thời
+
+- Danh sách lấy toàn bộ cư trú hiện hành của Resident trong trang và hợp nhất với ownership; vẫn phân trang phía server.
+- Backend dùng timezone tòa nhà qua public contract của PropertyAssets. Cư trú hiện hành xét status cùng `StartDate`/`EndDate`; ngày đầu và cuối được tính trong khoảng. UI tách hiện hành, sắp tới và lịch sử thay vì chỉ xét `EndDate == null`.
+- Không kết thúc/chuyển head nếu còn member ACTIVE chưa hết hạn, bao gồm member có hạn và sắp bắt đầu. Member phải có khoảng thời gian nằm trong khoảng hiệu lực của head; head có hạn không nhận member vô thời hạn hoặc kéo dài quá head.
+- Kiểm tra trùng/head theo khoảng chồng lấn. Add/Move/End khóa giao dịch theo căn hộ; Move khóa các căn theo thứ tự cố định để tránh race làm member mất head.
+- End lại residency trả conflict và giữ nguyên lịch sử; ngày kết thúc trước ngày bắt đầu trả validation. Move thất bại phải rollback cả source và target.
+
+Giới hạn đã ghi nhận trong đợt sửa ngày 03/11/2026: UI chưa nhận business date từ response và còn phụ thuộc ngày máy người dùng. Nếu cần hỗ trợ máy ở múi giờ khác, phải chốt contract ngày/timezone; không coi kiểm thử backend là nghiệm thu toàn bộ UI.
