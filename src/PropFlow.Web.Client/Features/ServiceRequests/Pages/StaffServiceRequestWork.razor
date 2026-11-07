@@ -2,6 +2,8 @@
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "STAFF")]
 @implements IDisposable
+@using PropFlow.Modules.ServiceRequests.Contracts
+@inject PropFlow.Web.Client.Services.Api.AuthenticatedApiClient CostApi
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IStaffServiceRequestApiClient Api
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
 
@@ -26,6 +28,20 @@ else
         <div class="sla-card"><i></i><strong>@StatusLabel</strong><small>Cập nhật @UpdatedAtLabel</small></div>
     </section>
 
+    <section class="work-card cost-proposal-card">
+        <header><h2>Chi phí phát sinh</h2></header>
+        <p>Phí ban đầu: @($"{detail.BaseServiceCost:N0} đ"). Phải gửi đề xuất và chờ cư dân đồng ý trước khi thực hiện phần việc phát sinh.</p>
+        @if (detail.AdditionalCostConsent is { } consent)
+        {
+            <p><strong>@($"{consent.Amount:N0} đ")</strong> · @(consent.Status == "PENDING" ? "Đang chờ cư dân xác nhận — tạm dừng xử lý" : consent.Status == "ACCEPTED" ? "Cư dân đã đồng ý — được tiếp tục xử lý" : "Cư dân từ chối — yêu cầu đã tự động kết thúc")</p><p>@consent.Note</p>
+        }
+        @if (detail.Status == "IN_PROGRESS" && currentStep == 3)
+        {
+            <div class="cost-proposal-form"><label>Chi phí phát sinh (VND)<input type="number" min="1" step="1" @bind="proposalAmount" disabled="@costBusy" /></label><label>Lý do / vật tư cần thực hiện<textarea maxlength="1000" rows="3" @bind="proposalNote" disabled="@costBusy"></textarea></label><button type="button" disabled="@(costBusy || proposalAmount <= 0 || string.IsNullOrWhiteSpace(proposalNote))" @onclick="SendCostProposal">@(costBusy ? "Đang gửi…" : "Gửi cư dân xác nhận chi phí")</button></div>
+        }
+        @if (costError is not null) { <p class="evidence-error" role="alert">@costError</p> }
+    </section>
+
     <section class="work-card progress-card" aria-labelledby="progress-title">
         <header><div><i></i><h2 id="progress-title">Quy trình xử lý yêu cầu tại hiện trường</h2></div><span>Trạng thái: <strong>@CurrentProgressLabel</strong></span></header>
         <div class="progress-steps">
@@ -47,7 +63,7 @@ else
     <section class="work-action-bar">
         <div><i></i><span>Nhân sự thực hiện: <strong>Tài khoản Staff hiện tại</strong> · Chỉ thao tác trên yêu cầu được phân công</span></div>
         <div>
-            <button type="button" class="progress-action" disabled="@(!WorkStarted || WorkCompleted)" @onclick="OpenProgressDialog"><span class="material-symbols-outlined">edit_note</span>Cập nhật tiến độ</button>
+            <button type="button" class="progress-action" disabled="@(CostWorkBlocked || !WorkStarted || WorkCompleted)" @onclick="OpenProgressDialog"><span class="material-symbols-outlined">edit_note</span>Cập nhật tiến độ</button>
         </div>
     </section>
 
@@ -93,11 +109,7 @@ else
             </header>
             <div class="evidence-dialog-body">
                 <label><span>Tóm tắt kết quả xử lý</span><textarea rows="5" minlength="10" maxlength="4000" disabled="@(uploadingEvidence || currentStep == 4)" @bind="resultDraft" placeholder="Mô tả công việc đã xử lý và kết quả kiểm tra sau khi hoàn thành…"></textarea><small>Từ 10 đến 4000 ký tự.@(currentStep == 4 ? " Tóm tắt đã được lưu, vui lòng bổ sung ảnh để hoàn tất." : null)</small></label>
-                <label><span>Chi phí phát sinh (VND, có thể bằng 0)</span><input type="number" min="0" step="1" disabled="@(uploadingEvidence || currentStep == 4)" @bind="additionalCost" /><small>Chi phí ban đầu Manager đã ghi: @($"{(detail?.BaseServiceCost ?? 0):N0} ₫")</small></label>
-                @if (additionalCost > 0)
-                {
-                    <label><span>Lý do chi phí phát sinh</span><textarea rows="3" maxlength="1000" disabled="@(uploadingEvidence || currentStep == 4)" @bind="additionalCostNote" placeholder="Nêu vật tư, hạng mục hoặc nguyên nhân phát sinh…"></textarea></label>
-                }
+                <p>Chi phí phát sinh đã được cư dân chấp thuận: @($"{detail?.ProposedAdditionalCost ?? 0:N0} đ"). Muốn đổi phí, hãy gửi đề xuất mới trước khi báo hoàn thành.</p>
                 <label class="evidence-picker">
                     <InputFile OnChange="SelectEvidence" accept="image/jpeg,image/png,image/webp" multiple disabled="@uploadingEvidence" />
                     <span class="material-symbols-outlined">cloud_upload</span>
@@ -199,12 +211,27 @@ else
 
     public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
+    private bool CostWorkBlocked => detail?.AdditionalCostConsent?.Status is "PENDING" or "REJECTED" || detail?.Status == "CANCELLED";
+    private decimal proposalAmount;
+    private string proposalNote = "";
+    private bool costBusy;
+    private string? costError;
+    private async Task SendCostProposal()
+    {
+        if (detail is null || costBusy) return;
+        costBusy = true; costError = null;
+        try {
+            var result = await CostApi.SendAsync<AdditionalCostConsentView>(HttpMethod.Post, $"api/v1/staff/service-requests/{detail.Id}/additional-cost", new ProposeAdditionalCostRequest(proposalAmount, proposalNote, detail.AdditionalCostConsent?.ProposalId));
+            if (!result.IsSuccess) { costError = result.Message ?? "Chưa thể gửi đề xuất chi phí."; return; }
+            proposalAmount = 0; proposalNote = ""; await LoadAsync();
+        } finally { costBusy = false; }
+    }
     private bool WorkStarted => currentStep >= 3;
     private bool WorkCompleted => currentStep >= 4;
     private bool SubmittedForReview => currentStep >= 5;
     private bool CombinedWorkCompleted => currentStep >= 5;
     private bool ManagerReviewCompleted => currentStep >= 6;
-    private bool CanSubmitCombinedWork => currentStep is 3 or 4;
+    private bool CanSubmitCombinedWork => !CostWorkBlocked && currentStep is (3 or 4);
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestActivityItem> Activities => detail?.Activities ?? [];
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestEvidenceItem> Evidence => detail?.Evidence ?? [];
     private string RequestTitle => detail?.Title ?? "Yêu cầu dịch vụ";
@@ -212,11 +239,11 @@ else
     private string Equipment => detail?.EquipmentName ?? "Chưa gắn thiết bị";
     private string ServiceArea => detail?.ServiceAreaCode ?? "Chưa gắn khu vực";
     private string PriorityLabel => detail?.PriorityCode switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", _ => "Tiêu chuẩn" };
-    private string StatusLabel => detail?.Status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", _ => detail?.Status ?? "Không xác định" };
+    private string StatusLabel => detail?.AdditionalCostConsent?.Status == "PENDING" ? "Chờ cư dân xác nhận phí" : detail?.AdditionalCostConsent?.Status == "REJECTED" ? "Cư dân đã từ chối dịch vụ" : detail?.Status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", _ => detail?.Status ?? "Không xác định" };
     private string AssignedAtLabel => detail is null ? "Chưa xác định" : detail.AssignedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string UpdatedAtLabel => detail is null ? "Chưa xác định" : detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string PreferredSchedule => detail?.PreferredDate is null ? "Chưa đăng ký" : $"{detail.PreferredDate:dd/MM/yyyy} · {detail.PreferredTimeCode ?? "Chưa chọn khung giờ"}";
-    private string CurrentProgressLabel => currentStep switch { 2 => "Chờ tiếp nhận · Bước 2/4", 3 => "Đang thực hiện · Bước 3/4", 4 => "Thiếu ảnh bằng chứng · Bước 3/4", 5 => "Chờ Manager nghiệm thu · Bước 4/4", 6 => "Đã hoàn tất · Bước 4/4", _ => "Đã phân công · Bước 1/4" };
+    private string CurrentProgressLabel => CostWorkBlocked ? detail?.Status == "CANCELLED" ? "Đã từ chối dịch vụ" : "Chờ cư dân xác nhận phí" : currentStep switch { 2 => "Chờ tiếp nhận · Bước 2/4", 3 => "Đang thực hiện · Bước 3/4", 4 => "Thiếu ảnh bằng chứng · Bước 3/4", 5 => "Chờ Manager nghiệm thu · Bước 4/4", 6 => "Đã hoàn tất · Bước 4/4", _ => "Đã phân công · Bước 1/4" };
     private string LatestProgressTime => Activities.FirstOrDefault() is { } activity ? $"{activity.CreatedAt.ToLocalTime():HH:mm} hôm nay" : "Chưa cập nhật";
     private string LatestProgressSummary => Activities.FirstOrDefault()?.Title ?? "Chưa có tiến độ";
     private string ResultSummary => LatestWorkResult()?.WorkResult ?? "Bản nháp kết quả đang được Staff hoàn thiện trước khi gửi Ban Quản lý nghiệm thu.";
@@ -228,7 +255,7 @@ else
 
     private bool IsStepComplete(int step) => currentStep > step;
     private bool IsStepLocked(int step) => currentStep < step;
-    private bool CanConfirmStep(int step) => currentStep == step;
+    private bool CanConfirmStep(int step) => !CostWorkBlocked && currentStep == step;
     private string StepClass(int step) => IsStepComplete(step) ? "done" : CanConfirmStep(step) ? "active" : "locked";
     private string StepIcon(int step, string activeIcon) => IsStepComplete(step) ? "check" : IsStepLocked(step) ? "lock" : activeIcon;
 
@@ -265,7 +292,7 @@ else
         evidencePreviewSource = $"data:{result.Data.ContentType};base64,{Convert.ToBase64String(result.Data.Bytes)}";
     }
     private void CloseEvidencePreview(){ showEvidencePreview = false; evidencePreviewSource = null; evidencePreviewError = null; }
-    private void OpenProgressDialog(){ progressNote = null; showProgressDialog = true; }
+    private void OpenProgressDialog(){ if (CostWorkBlocked) return; progressNote = null; showProgressDialog = true; }
     private void CloseProgressDialog() => showProgressDialog = false;
     private async Task SaveProgress(){ if(string.IsNullOrWhiteSpace(progressNote) || detail is null) return; var result = await Api.ProgressAsync(detail.Id, new(progressNote.Trim())); if (ApplyResult(result, "Đã lưu cập nhật tiến độ.")) showProgressDialog = false; }
     private void OpenSubmitDialog(){ if (!CanSubmitCombinedWork || detail is null) return; resultDraft = currentStep == 4 ? LatestWorkResult()?.WorkResult ?? string.Empty : string.Empty; additionalCost = detail.ProposedAdditionalCost; additionalCostNote = detail.AdditionalCostNote; selectedEvidence.Clear(); evidenceError = null; showSubmitDialog = true; }

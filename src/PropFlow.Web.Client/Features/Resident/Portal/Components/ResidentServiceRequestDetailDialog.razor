@@ -77,7 +77,8 @@
                         }
                     </section>
 
-                    @if (HasCharge)
+                    <ResidentAdditionalCostConsent RequestId="_requestId" BaseCost="_request.BaseServiceCost" Consent="_request.AdditionalCostConsent" Changed="LoadAsync" />
+                    @if (HasCharge && _request.Status != "CANCELLED")
                     {
                         <ResidentServiceRequestPaymentCard @key="_requestId" RequestId="_requestId" Completed="IsCompleted" Changed="PaymentChanged" />
                     }
@@ -205,7 +206,6 @@
 
     private void PaymentChanged(ResidentServiceRequestPaymentView payment)
     {
-        if (payment.PaymentEnvironment == "SANDBOX") return;
         if (_request is not null && _request.Id == payment.ServiceRequestId)
             _request = _request with { Settlement = new(payment.InvoiceId, payment.InvoiceNumber, payment.TotalAmount,
                 payment.ConfirmedPaidAmount, payment.OutstandingAmount, payment.SettlementStatus) };

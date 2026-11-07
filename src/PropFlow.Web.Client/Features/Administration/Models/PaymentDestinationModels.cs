@@ -40,8 +40,3 @@ public sealed record SePayOAuthState(bool Available, bool Connected, bool Requir
 public sealed record SePayOAuthConfirm(Guid ChallengeId, string Code);
 public sealed record SePayOAuthCallbackRequest(string State, string? Code, string? Error);
 public sealed record SePayOAuthStart(string AuthorizationUrl);
-public sealed record SePaySandboxState(bool Configured, bool Verified, int Version, int AccountCount, DateTimeOffset? CheckedAt, DateTimeOffset? UpdatedAt, bool DemoEnabled = false, bool WebhookKeyConfigured = false, string? WebhookApiKey = null);
-public sealed record SePaySandboxDraft(string Action, string? ApiToken, int ExpectedVersion);
-public sealed record SePaySandboxConfirm(string Action, string? ApiToken, int ExpectedVersion, Guid ChallengeId, string Code);
-public sealed record SePaySandboxProbe(bool Connected, string Code, string Message, int AccountCount = 0);
-public sealed record SePaySandboxAccount(string Id, string BankName, string BankCode, string MaskedAccountNumber, string AccountName, bool Active);

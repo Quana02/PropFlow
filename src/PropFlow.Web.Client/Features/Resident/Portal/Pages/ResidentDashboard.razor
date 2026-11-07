@@ -99,7 +99,7 @@
                         }
                     </div>
                 </div>
-                <footer class="service-card-footer"><span><i></i>Tổng đài hỗ trợ trực tuyến 24/7</span><strong>1900 8899</strong></footer>
+                <footer class="service-card-footer"><span><i></i>Kết nối với Manager đang sẵn sàng</span><a href="/resident/contact-management">Liên hệ BQL →</a></footer>
             </article>
 
             <PropFlow.Web.Client.Features.Communication.Components.ResidentAnnouncementCard />
@@ -163,15 +163,6 @@
 <ResidentServiceRequestDialog @ref="_serviceRequestModal" RequestCreated="HandleRequestCreatedAsync" />
 <ResidentServiceRequestDetailDialog @ref="_requestDetailModal" FeedbackSaved="LoadRequestsAsync" />
 
-<div class="resident-ai-widget" id="aiWidget">
-    <section class="ai-chat-window glass-panel" id="aiChatWindow" hidden>
-        <header><span class="ai-logo">⚡</span><span><strong>PropFlow Copilot <em>AI 24/7</em></strong><small>Trợ lý ảo • @ProfileContext.ApartmentLabel</small></span><button type="button" aria-label="Thu nhỏ" aria-controls="aiChatWindow" aria-expanded="false" onclick="window.propFlowResident.toggleAssistant()">⌄</button></header>
-        <div class="ai-quick-actions"><button type="button">🔧 Báo hỏng điện nước</button><button type="button">🧾 Tra cứu hóa đơn T09</button><button type="button">🚗 Thẻ xe cư dân</button></div>
-        <div class="ai-thread"><div class="ai-message"><span>AI</span><p>Xin chào <strong>@DisplayName</strong>! Em là trợ lý AI PropFlow đồng hành cùng hồ sơ <strong>@ProfileContext.ApartmentLabel</strong>. Anh/chị cần hỗ trợ việc gì hôm nay?</p></div><div class="ai-message user"><p>Kiểm tra giúp tôi hóa đơn tháng 9 đã thanh toán chưa?</p><span>@Initials</span></div><div class="ai-message"><span>AI</span><p>Vui lòng mở mục hóa đơn để xem trạng thái authoritative mới nhất.</p></div></div>
-        <footer><input id="chatInputBox" type="text" placeholder="Hỏi bất kỳ điều gì hoặc gửi yêu cầu cho BQL..." /><button type="button">➤</button></footer>
-    </section>
-    <button class="ai-toggle" type="button" aria-label="Mở trợ lý ảo PropFlow Copilot" aria-controls="aiChatWindow" aria-expanded="false" title="PropFlow AI Copilot 24/7" onclick="window.propFlowResident.toggleAssistant()"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-5l-5 5v-5Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><i></i></button>
-</div>
 
 @code {
     protected override void OnInitialized()
@@ -218,7 +209,7 @@
         new("MOVING", "Chuyển đồ / Chuyển nhà", "Chuyển đồ", "Đăng ký vận chuyển đồ qua tòa nhà", "📦", "purple", ["chuyển nhà", "vận chuyển", "thang hàng"]),
         new("CONSTRUCTION", "Đăng ký thi công nội thất", "Thi công", "Đăng ký sửa chữa và thi công căn hộ", "🔨", "rose", ["nội thất", "cải tạo", "khoan", "xây dựng"]),
         new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "💳", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
-        new("OTHER", "Yêu cầu hỗ trợ Ban Quản Lý", "Hotline BQL", "Gửi yêu cầu hỗ trợ khác đến Ban Quản Lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "khác"])
+        new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"])
     ];
 
     protected override async Task OnInitializedAsync() =>
@@ -300,6 +291,7 @@
 
     private void OpenService(string categoryCode, string title)
     {
+        if (categoryCode == "CONTACT") { Navigation.NavigateTo("/resident/contact-management"); return; }
         if (categoryCode == "BILLING") { Navigation.NavigateTo("/resident/billing"); return; }
         _serviceRequestModal?.Open(categoryCode, title);
     }

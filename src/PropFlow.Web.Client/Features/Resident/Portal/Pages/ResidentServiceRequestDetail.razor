@@ -63,7 +63,8 @@ else if (_detail is not null)
             }
         </section>
 
-        @if (HasCharge)
+        <PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentAdditionalCostConsent RequestId="Id" BaseCost="_detail.BaseServiceCost" Consent="_detail.AdditionalCostConsent" Changed="LoadAsync" />
+        @if (HasCharge && _detail.Status != "CANCELLED")
         {
             <PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentServiceRequestPaymentCard @key="Id" RequestId="Id" Completed="@(_detail.Status is "RESOLVED" or "CLOSED")" Changed="PaymentChanged" />
         }
@@ -171,7 +172,6 @@ else if (_detail is not null)
     private Task OpenFeedbackAsync() => feedbackDialog?.OpenAsync(Id) ?? Task.CompletedTask;
     private void PaymentChanged(ResidentServiceRequestPaymentView payment)
     {
-        if (payment.PaymentEnvironment == "SANDBOX") return;
         if (_detail is not null && _detail.Id == payment.ServiceRequestId)
             _detail = _detail with { Settlement = new(payment.InvoiceId, payment.InvoiceNumber, payment.TotalAmount,
                 payment.ConfirmedPaidAmount, payment.OutstandingAmount, payment.SettlementStatus) };

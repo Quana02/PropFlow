@@ -7,9 +7,9 @@
     <header class="payment-header">
         <div class="payment-title">
             <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
-            <div><span class="eyebrow">THANH TOÁN SEPAY</span><h1>Kết nối ngân hàng &amp; nhận thanh toán</h1><p>Thiết lập Sandbox để thử nghiệm hoặc kết nối SePay thật để nhận tiền. Xác nhận OTP email để lưu thay đổi.</p></div>
+            <div><span class="eyebrow">THANH TOÁN SEPAY</span><h1>Kết nối ngân hàng &amp; nhận thanh toán</h1><p>Kết nối tài khoản SePay để nhận thanh toán và tự động đối soát hóa đơn. Xác nhận OTP email để lưu thay đổi.</p></div>
         </div>
-        @if (setupEnvironment == "LIVE" && current is not null && !editing)
+        @if (current is not null && !editing)
         {
             <button type="button" class="primary-action" @onclick="BeginEdit"><span class="material-symbols-outlined">edit</span>Thay đổi cấu hình</button>
         }
@@ -26,16 +26,6 @@
     }
     else
     {
-        <div class="environment-picker" role="group" aria-label="Chọn phần cấu hình SePay">
-            <button type="button" class="@(setupEnvironment == "SANDBOX" ? "selected" : null)" aria-pressed="@(setupEnvironment == "SANDBOX")" disabled="@(busy || challenge is not null)" @onclick='() => setupEnvironment = "SANDBOX"'><span class="material-symbols-outlined">science</span><span><strong>Sandbox</strong><small>Kết nối thử nghiệm</small></span></button>
-            <button type="button" class="@(setupEnvironment == "LIVE" ? "selected" : null)" aria-pressed="@(setupEnvironment == "LIVE")" disabled="@(busy || challenge is not null)" @onclick='() => setupEnvironment = "LIVE"'><span class="material-symbols-outlined">account_balance</span><span><strong>SePay thật</strong><small>Nhận thanh toán thực tế</small></span></button>
-        </div>
-        @if (setupEnvironment == "SANDBOX")
-        {
-            <SePaySandboxConnect />
-        }
-        else
-        {
         <article class="connection-card">
             @if (connection?.OAuthEnabled == true)
             {
@@ -132,7 +122,6 @@
                 <div class="history-table"><table><thead><tr><th>Phiên bản</th><th>Ngân hàng</th><th>Tài khoản</th><th>Người nhận</th><th>Nguồn</th><th>Xác nhận lúc</th><th>Trạng thái</th></tr></thead><tbody>@foreach (var item in history) { <tr><td><strong>#@item.Version</strong></td><td>@item.BankCode<small>@item.BankName</small></td><td>@item.MaskedAccountNumber</td><td>@item.AccountName</td><td>@(item.SePayAccountId.HasValue ? "SePay" : "Cấu hình cũ")<small>@item.SePayAccountId</small></td><td>@((item.CreatedAt ?? item.UpdatedAt).ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</td><td><span class="history-status @(item.IsActive ? "active" : null)">@(item.IsActive ? "Đang dùng" : "Đã đóng")</span></td></tr> }</tbody></table></div>
             }
         </article>
-        }
     }
 </section>
 
@@ -162,11 +151,7 @@
         ? "Kết nối SePay bằng tài khoản của chủ chung cư hoặc ban quản lý."
         : connection?.ApiTokenConfigured == true ? "Thông tin kết nối đã có. Kiểm tra để xác nhận quyền đọc tài khoản." : "Thiết lập kết nối SePay để lấy tài khoản ngân hàng đã liên kết.");
 
-    protected override Task OnInitializedAsync()
-    {
-        setupEnvironment = string.Equals(PaymentEnvironment, "live", StringComparison.OrdinalIgnoreCase) ? "LIVE" : "SANDBOX";
-        return LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
