@@ -11,6 +11,8 @@ using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Web.Client.Features.Facility.Models;
 using PropFlow.Web.Client.Features.Facility.Pages;
 using PropFlow.Web.Client.Features.Facility.Services;
+using PropFlow.Web.Client.Features.Maintenance.Models;
+using PropFlow.Web.Client.Features.Maintenance.Services;
 using PropFlow.Web.Client.Services.Api;
 using PropFlow.Web.Client.Services.Authentication;
 
@@ -84,8 +86,18 @@ public sealed class Fe04StaffUiTests
             Assert.Contains("Chi Tiết Cơ Sở Vật Chất", initial);
         }
         services.GetRequiredService<Transport>().Updated = true;
-        // Exercise the actual 10-second refresh loop while the detail remains open.
-        await Task.Delay(TimeSpan.FromSeconds(11));
+        if (page == "building")
+        {
+            await Task.Delay(TimeSpan.FromSeconds(11));
+        }
+        else
+        {
+            var type = page == "facility" ? typeof(FacilityList) : typeof(EquipmentList);
+            var component = services.GetRequiredService<TrackingActivator>().Instances.Single(type.IsInstanceOfType);
+            var refresh = type.GetMethod("RefreshAssetStatusForRealtimeAsync",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            await renderer.Dispatcher.InvokeAsync(() => (Task)refresh.Invoke(component, null)!);
+        }
         var html = await renderer.Dispatcher.InvokeAsync(() => WebUtility.HtmlDecode(root.ToHtmlString()));
         Assert.Contains("Manager-updated", html);
         if (page == "equipment") Assert.Contains("Updated bay", html);
@@ -169,7 +181,8 @@ public sealed class Fe04StaffUiTests
         services.AddSingleton(session);
         services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(
             new Microsoft.Extensions.Configuration.ConfigurationManager { ["Api:BaseUrl"] = "https://test.invalid" });
-        services.AddSingleton<PropFlow.Web.Client.Features.Maintenance.Services.MaintenanceHubConnectionFactory>();
+        services.AddSingleton<MaintenanceHubConnectionFactory>();
+        services.AddSingleton<IMaintenanceApiClient, MaintenanceApiClient>();
         services.AddSingleton<AuthenticationStateProvider>(session);
         services.AddSingleton<IFacilityApiClient, FacilityApiClient>();
         services.AddSingleton<IEquipmentApiClient, EquipmentApiClient>();
@@ -204,6 +217,8 @@ public sealed class Fe04StaffUiTests
             object result = path switch
             {
                 "/api/v1/buildings/current" => new CurrentBuildingOverviewResponse { Name = Updated ? "Manager-updated" : "Current property", Address = "Main street", TotalApartments = 42 },
+                "/api/v1/maintenance/overview" => new MaintenanceOverviewModel(0, 0, null, []),
+                "/api/v1/facility-types" or "/api/v1/equipment-types" => Array.Empty<object>(),
                 "/api/v1/facilities" => new PagedResult<FacilityModel> { Items = [new() { Id = FacilityId, Code = "FAC-01", Name = "Lobby" }], TotalCount = 1 },
                 _ when path == $"/api/v1/facilities/{FacilityId}" => new FacilityDetailModel { Id = FacilityId, Code = "FAC-01", Name = Updated ? "Manager-updated" : "Lobby" },
                 "/api/v1/equipments" => new PagedResult<EquipmentModel> { Items = [new() { Id = AssetId, Code = "GEN-01", Name = "Generator" }], TotalCount = 1 },

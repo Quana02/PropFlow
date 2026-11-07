@@ -49,7 +49,7 @@ else if (Tab == "activity")
 }
 else if (Tab == "payment")
 {
-    <PaymentDestinationSettings PaymentEnvironment="@PaymentEnvironment" />
+    <PaymentDestinationSettings />
 }
 else
 {
@@ -78,7 +78,6 @@ else
     [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
     // Keep query subscriptions on the routed page: tabs mount/unmount their children
     // while .NET 8's query provider is notifying subscribers during navigation.
-    [SupplyParameterFromQuery(Name = "paymentEnvironment")] public string? PaymentEnvironment { get; set; }
     private string Tab => AdminDashboardTabs.Normalize(RequestedTab);
     private InternalAccountSummary? summary; private PagedInternalAccounts? pageData; private InternalAccount[] accounts = []; private AdministrationOverview? overview; private AdministrationRoleAccess[] roleAccess = []; private InternalAccountAccess? accountAccess;
     private string role = "ALL", search = "", status = "", createUsername = "", createName = "", createEmail = "", createPassword = "", createRole = "STAFF", nextRole = "", nextStatus = "ACTIVE";

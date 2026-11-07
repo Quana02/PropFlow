@@ -3,32 +3,6 @@
 <AuthorizeView Roles="ADMIN">
     <nav class="admin-nav" aria-label="Điều hướng quản trị hệ thống">
         <NavLink href="/knowledge/documents" class="admin-nav-link" ActiveClass="is-selected" aria-label="Tài liệu chung cư" title="Tài liệu chung cư"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span></NavLink>
-        <a href="/admin/dashboard?tab=overview" class="admin-nav-link @(IsTab("overview") ? "is-selected" : "")" aria-label="Tổng quan" title="Tổng quan" aria-current="@(IsTab("overview") ? "page" : null)"><span class="material-symbols-outlined" aria-hidden="true">dashboard</span></a>
-        <a href="/admin/dashboard?tab=accounts" class="admin-nav-link @(IsTab("accounts") ? "is-selected" : "")" aria-label="Tài khoản Ban quản lý" title="Tài khoản Ban quản lý" aria-current="@(IsTab("accounts") ? "page" : null)"><span class="material-symbols-outlined" aria-hidden="true">group</span></a>
-        <a href="/admin/dashboard?tab=activity" class="admin-nav-link @(IsTab("activity") ? "is-selected" : "")" aria-label="Nhật ký quản trị" title="Nhật ký quản trị" aria-current="@(IsTab("activity") ? "page" : null)"><span class="material-symbols-outlined" aria-hidden="true">history</span></a>
-        <a href="/admin/dashboard?tab=payment" class="admin-nav-link @(IsTab("payment") ? "is-selected" : "")" aria-label="Cấu hình thanh toán" title="Cấu hình thanh toán" aria-current="@(IsTab("payment") ? "page" : null)"><span class="material-symbols-outlined" aria-hidden="true">account_balance</span></a>
-    </nav>
-</AuthorizeView>
-
-@code {
-    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
-
-    private bool IsTab(string tab)
-    {
-        if (!new Uri(Navigation.Uri).AbsolutePath.Equals("/admin/dashboard", StringComparison.OrdinalIgnoreCase)) return false;
-        var query = new Uri(Navigation.Uri).Query.TrimStart('?');
-        var tabParameter = query.Split('&', StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault(part => part.StartsWith("tab=", StringComparison.OrdinalIgnoreCase));
-        var requested = tabParameter is null ? null : Uri.UnescapeDataString(tabParameter[4..]);
-        var current = AdminDashboardTabs.Normalize(requested);
-        return current == tab;
-    }
-
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) =>
-        _ = InvokeAsync(StateHasChanged);
-
-    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
-}
         <AdminTabLink Tab="overview" href="/admin/dashboard?tab=overview" class="admin-nav-link" aria-label="Tổng quan" title="Tổng quan"><span class="material-symbols-outlined" aria-hidden="true">dashboard</span></AdminTabLink>
         <AdminTabLink Tab="accounts" href="/admin/dashboard?tab=accounts" class="admin-nav-link" aria-label="Tài khoản Ban quản lý" title="Tài khoản Ban quản lý"><span class="material-symbols-outlined" aria-hidden="true">group</span></AdminTabLink>
         <AdminTabLink Tab="activity" href="/admin/dashboard?tab=activity" class="admin-nav-link" aria-label="Nhật ký hệ thống" title="Nhật ký hệ thống"><span class="material-symbols-outlined" aria-hidden="true">history</span></AdminTabLink>

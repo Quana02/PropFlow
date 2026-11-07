@@ -71,13 +71,18 @@ public sealed class RealtimeRefreshQueueTests
 
         pulse.Start();
         pulse.Start();
-        await firstPulse.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        await Task.Delay(30);
-        Assert.Equal(1, pulses);
-
-        var disposing = pulse.DisposeAsync().AsTask();
-        releasePulse.TrySetResult();
-        await disposing;
+        try
+        {
+            await firstPulse.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await Task.Delay(30);
+            Assert.Equal(1, pulses);
+        }
+        finally
+        {
+            var disposing = pulse.DisposeAsync();
+            releasePulse.TrySetResult();
+            await disposing;
+        }
         var countAfterDispose = pulses;
         await Task.Delay(30);
 

@@ -47,12 +47,17 @@ public sealed class Fe04PostgresQueryTests
             var now = DateTimeOffset.UtcNow;
             var staff = Guid.NewGuid();
             var other = Guid.NewGuid();
-            var facility = new Facility("FAC", "Plant", now, "Utility", "Basement");
+            var utility = new FacilityType("Utility", other, now);
+            var water = new EquipmentType("Water", other, now);
+            var power = new EquipmentType("Power", other, now);
+            var facility = new Facility("FAC", "Plant", now, utility.Id, "Basement");
             var hiddenFacility = new Facility("HIDDEN", "Hidden facility", now);
-            var equipment = new Equipment("PUMP", "Pump", now, facility.Id, "Water", locationDescription: "Bay 2");
-            var hidden = new Equipment("HIDDEN", "Hidden pump", now, facility.Id, "Water");
-            var standalone = new Equipment("GEN", "Generator", now, equipmentType: "Power");
-            assets.Buildings.Add(new Building("CURRENT", "Current property", "Address", now));
+            var equipment = new Equipment("PUMP", "Pump", now, facility.Id, water.Id, locationDescription: "Bay 2");
+            var hidden = new Equipment("HIDDEN", "Hidden pump", now, facility.Id, water.Id);
+            var standalone = new Equipment("GEN", "Generator", now, equipmentTypeId: power.Id);
+            assets.Buildings.Add(new Building("Current property", "Address", now));
+            assets.FacilityTypes.Add(utility);
+            assets.EquipmentTypes.AddRange(water, power);
             assets.Facilities.AddRange(facility, hiddenFacility);
             assets.Equipment.AddRange(equipment, hidden, standalone);
             await assets.SaveChangesAsync();
@@ -74,8 +79,8 @@ public sealed class Fe04PostgresQueryTests
             Assert.Empty(await maintenanceSource.GetActiveAssignmentsAsync(other, default));
             Assert.Empty(await requestSource.GetActiveAssignmentsAsync(other, default));
             var store = new EfPropertyAssetsStore(assets, new ReadAccess(references.Select(r => r.EquipmentId!.Value).ToArray()));
-            Assert.Equal(facility.Id, Assert.Single((await store.FacilitiesAsync(new FacilityFilterQuery(FacilityType: "Utility"), default)).Items).Id);
-            Assert.Equal(equipment.Id, Assert.Single((await store.EquipmentAsync(new EquipmentFilterQuery(SearchKeyword: "pump", EquipmentType: "Water"), default)).Items).Id);
+            Assert.Equal(facility.Id, Assert.Single((await store.FacilitiesAsync(new FacilityFilterQuery(FacilityTypeId: utility.Id), default)).Items).Id);
+            Assert.Equal(equipment.Id, Assert.Single((await store.EquipmentAsync(new EquipmentFilterQuery(SearchKeyword: "pump", EquipmentTypeId: water.Id), default)).Items).Id);
             Assert.Equal(standalone.Id, Assert.Single((await store.EquipmentAsync(new EquipmentFilterQuery(BuildingLevelOnly: true), default)).Items).Id);
             var detail = await store.FacilityAsync(facility.Id, false, true, default);
             Assert.NotNull(detail);
@@ -93,8 +98,7 @@ public sealed class Fe04PostgresQueryTests
         finally
         {
             // Never target configured databases or names not generated above.
-            Assert.StartsWith("propflow_fe04_test_", database);
-            Assert.Equal(50, database.Length);
+            Assert.Matches("^propflow_fe04_test_[0-9a-f]{32}$", database);
             NpgsqlConnection.ClearAllPools();
             await using var drop = new NpgsqlCommand($"DROP DATABASE \"{database}\" WITH (FORCE)", admin);
             await drop.ExecuteNonQueryAsync();

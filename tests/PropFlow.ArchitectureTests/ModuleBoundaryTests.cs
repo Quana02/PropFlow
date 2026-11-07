@@ -985,6 +985,7 @@ public class ModuleBoundaryTests
                 $"Communication may reference public contracts, not a module implementation: {pr}");
             Assert.Contains(pr, new[]
             {
+                "../Communication.Contracts/PropFlow.Modules.Communication.Contracts.csproj",
                 "../Residents.Contracts/PropFlow.Modules.Residents.Contracts.csproj",
                 "../PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj"
             });

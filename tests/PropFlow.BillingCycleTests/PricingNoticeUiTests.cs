@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -68,6 +69,37 @@ public sealed class PricingNoticeUiTests
         if (pricing) { Assert.DoesNotContain("Xem hóa đơn / phiếu thu", html); Assert.DoesNotContain("Ban Kế toán", html); }
         else if (!compact) Assert.Contains("Xem hóa đơn / phiếu thu", html);
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Service_complaint_and_payment_notices_each_link_to_their_own_detail_once(bool cards)
+    {
+        var state = new ResidentFinanceNoticeState(new FinanceCycleApi(new AuthenticatedApiClient(new HttpClient(), NullLogger<ApiClient>.Instance)));
+        var actions = new[]
+        {
+            (Source: "SERVICE_REQUEST", Path: $"/resident/service-requests/{Guid.NewGuid()}", Label: "Xem yêu cầu và xác nhận chi phí"),
+            (Source: "COMPLAINT", Path: $"/resident/complaints/{Guid.NewGuid()}", Label: "Xem kết quả phản ánh"),
+            (Source: "PAYMENT", Path: $"/resident/billing?invoice={Guid.NewGuid()}", Label: "Xem hóa đơn / phiếu thu")
+        };
+        foreach (var action in actions)
+            state.Receive(new(Guid.NewGuid(), action.Source, "Nội dung thông báo", action.Path, false, DateTimeOffset.UtcNow, action.Source));
+
+        var services = new ServiceCollection().AddLogging();
+        services.AddSingleton(state).AddSingleton<NavigationManager, Navigation>();
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var root = await renderer.RenderComponentAsync<ResidentFinanceNotifications>(
+                ParameterView.FromDictionary(new Dictionary<string, object?> { ["Cards"] = cards }));
+            return WebUtility.HtmlDecode(root.ToHtmlString());
+        });
+
+        Assert.Equal(actions.Length, Regex.Matches(html, "<a\\b").Count);
+        foreach (var action in actions)
+            Assert.Matches($"<a\\b[^>]*href=\"{Regex.Escape(action.Path)}\"[^>]*>{Regex.Escape(action.Label)}</a>", html);
+    }
+
     [Fact]
     public void Pricing_messages_show_whole_vnd_units_effective_date_and_rental_scope()
     {

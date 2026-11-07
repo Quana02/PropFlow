@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using PropFlow.Modules.Apartments.Application;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceAssignments;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceTasks;
@@ -30,21 +31,23 @@ using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 namespace PropFlow.IntegrationTests;
 
 // Real HTTP routing, authorization, scope composition, assignment readers, services and EF queries.
-// Only authentication and database transport are replaced; no external database is required.
+// Read-only scenarios use in-memory data. Building updates exercise the PostgreSQL lock.
 public sealed class Fe04StaffHttpTests
 {
     private static readonly Guid Staff = Guid.NewGuid();
     private static readonly Guid OtherStaff = Guid.NewGuid();
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
 
-    private sealed class Factory : WebApplicationFactory<Program>
+    private sealed class Factory(bool usePostgresForAssets = false) : WebApplicationFactory<Program>
     {
         private readonly string database = Guid.NewGuid().ToString();
-        public Facility Parent { get; } = new("F-PARENT", "Plant room", Now, "Utility", "Basement");
-        public Facility AssignedFacility { get; } = new("F-ASSIGNED", "Lobby", Now, "Common", "Ground floor");
-        public Facility HiddenFacility { get; } = new("F-HIDDEN", "Private plant", Now, "Utility", "Roof");
+        private string? assetsConnectionString;
+        private string? assetsDatabase;
+        public Facility Parent { get; } = new("F-PARENT", "Plant room", Now, locationDescription: "Basement");
+        public Facility AssignedFacility { get; } = new("F-ASSIGNED", "Lobby", Now, locationDescription: "Ground floor");
+        public Facility HiddenFacility { get; } = new("F-HIDDEN", "Private plant", Now, locationDescription: "Roof");
         public Equipment Linked { get; private set; } = null!;
-        public Equipment Standalone { get; } = new("E-BUILDING", "Generator", Now, equipmentType: "Power", locationDescription: "Roof");
+        public Equipment Standalone { get; } = new("E-BUILDING", "Generator", Now, locationDescription: "Roof");
         public Equipment Hidden { get; private set; } = null!;
         public Equipment FacilityOnlyChild { get; private set; } = null!;
         public Equipment Ended { get; } = new("E-ENDED", "Former task asset", Now);
@@ -78,7 +81,9 @@ public sealed class Fe04StaffHttpTests
                 services.RemoveAll<PropertyAssetsDbContext>();
                 services.RemoveAll<MaintenanceDbContext>();
                 services.RemoveAll<ServiceRequestsDbContext>();
-                services.AddScoped(_ => new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>().UseInMemoryDatabase(database + "assets").Options));
+                services.AddScoped(_ => new PropertyAssetsDbContext(assetsConnectionString is { } connection
+                    ? new DbContextOptionsBuilder<PropertyAssetsDbContext>().UseNpgsql(connection).Options
+                    : new DbContextOptionsBuilder<PropertyAssetsDbContext>().UseInMemoryDatabase(database + "assets").Options));
                 services.AddScoped(_ => new MaintenanceDbContext(new DbContextOptionsBuilder<MaintenanceDbContext>().UseInMemoryDatabase(database + "maintenance").Options));
                 services.AddScoped(_ => new ServiceRequestsDbContext(new DbContextOptionsBuilder<ServiceRequestsDbContext>().UseInMemoryDatabase(database + "requests").Options));
                 services.RemoveAll<IApartmentStatisticsReader>();
@@ -88,12 +93,27 @@ public sealed class Fe04StaffHttpTests
 
         public async Task SeedAsync()
         {
+            if (usePostgresForAssets)
+            {
+                var connection = new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString()) { Database = "postgres", Pooling = false };
+                var name = "propflow_fe04_http_test_" + Guid.NewGuid().ToString("N");
+                await using var admin = new NpgsqlConnection(connection.ConnectionString);
+                await admin.OpenAsync();
+                await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);
+                await create.ExecuteNonQueryAsync();
+                assetsDatabase = name;
+                connection.Database = name;
+                assetsConnectionString = connection.ConnectionString;
+            }
+
             using var scope = Services.CreateScope();
             var assets = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>();
-            Linked = new Equipment("E-LINKED", "Pump", Now, Parent.Id, "Water", serialNumber: "SN-01", locationDescription: "Basement bay 2");
-            Hidden = new Equipment("E-HIDDEN", "Other pump", Now.AddMinutes(1), Parent.Id, "Water");
+            if (usePostgresForAssets)
+                await assets.Database.ExecuteSqlRawAsync(assets.Database.GenerateCreateScript());
+            Linked = new Equipment("E-LINKED", "Pump", Now, Parent.Id, serialNumber: "SN-01", locationDescription: "Basement bay 2");
+            Hidden = new Equipment("E-HIDDEN", "Other pump", Now.AddMinutes(1), Parent.Id);
             FacilityOnlyChild = new Equipment("E-FACILITY", "Lobby sensor", Now, AssignedFacility.Id);
-            assets.Buildings.Add(new Building("CURRENT", "Current condominium", "123 Main Street", Now));
+            assets.Buildings.Add(new Building("Current condominium", "123 Main Street", Now));
             assets.Facilities.AddRange(Parent, AssignedFacility, HiddenFacility);
             assets.Equipment.AddRange(Linked, Standalone, Hidden, FacilityOnlyChild, Ended);
             await assets.SaveChangesAsync();
@@ -121,6 +141,24 @@ public sealed class Fe04StaffHttpTests
             requests.ServiceRequests.AddRange(request, facilityRequest);
             requests.ServiceRequestAssignments.AddRange(new ServiceRequestAssignment(request.Id, Staff, OtherStaff, Now), new ServiceRequestAssignment(facilityRequest.Id, Staff, OtherStaff, Now));
             await requests.SaveChangesAsync();
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            try { await base.DisposeAsync(); }
+            finally
+            {
+                if (assetsDatabase is { } name)
+                {
+                    Assert.Matches("^propflow_fe04_http_test_[0-9a-f]{32}$", name);
+                    var connection = new NpgsqlConnectionStringBuilder(assetsConnectionString) { Database = "postgres" };
+                    await using var admin = new NpgsqlConnection(connection.ConnectionString);
+                    await admin.OpenAsync();
+                    await using var drop = new NpgsqlCommand($"DROP DATABASE \"{name}\"", admin);
+                    await drop.ExecuteNonQueryAsync();
+                    assetsDatabase = null;
+                }
+            }
         }
 
         public HttpClient Client(string role = "STAFF", string? permission = "PERFORM_ASSIGNED_OPERATIONS", Guid? id = null)
@@ -294,7 +332,7 @@ public sealed class Fe04StaffHttpTests
     [Fact]
     public async Task Manager_keeps_full_read_create_update_and_status_workflows()
     {
-        await using var factory = new Factory();
+        await using var factory = new Factory(usePostgresForAssets: true);
         await factory.SeedAsync();
         using var client = factory.Client("MANAGER", "MANAGE_OPERATIONS");
         Assert.Equal(5, (await Read(client, "equipments")).GetProperty("totalCount").GetInt32());
@@ -302,11 +340,11 @@ public sealed class Fe04StaffHttpTests
         Assert.Equal(42, (await Read(client, "buildings/current")).GetProperty("totalApartments").GetInt32());
         Assert.Equal(2, (await Read(client, $"facilities/{factory.Parent.Id}")).GetProperty("totalEquipment").GetInt32());
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/v1/buildings/current", new { name = "Updated", address = "Address", timeZoneId = "UTC", numberOfFloors = 10 })).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/v1/facilities", new { code = "NEW-F", name = "New facility", facilityType = "Common" })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/v1/facilities/{factory.Parent.Id}", new { name = "Updated plant", facilityType = "Utility" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/v1/facilities", new { name = "New facility", locationDescription = "Ground floor" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/v1/facilities/{factory.Parent.Id}", new { name = "Updated plant" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PatchAsJsonAsync($"/api/v1/facilities/{factory.Parent.Id}/status", new { status = 1 })).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/v1/equipments", new { code = "NEW-E", name = "New equipment", equipmentType = "Power" })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/v1/equipments/{factory.Linked.Id}", new { name = "Updated pump", equipmentType = "Water", facilityId = factory.Parent.Id })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/v1/equipments", new { name = "New equipment" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/v1/equipments/{factory.Linked.Id}", new { name = "Updated pump", facilityId = factory.Parent.Id })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PatchAsJsonAsync($"/api/v1/equipments/{factory.Linked.Id}/status", new { status = 1 })).StatusCode);
     }
 
@@ -320,16 +358,16 @@ public sealed class Fe04StaffHttpTests
     [Fact]
     public async Task Staff_reads_manager_updates_from_same_asset_records_without_scope_expansion()
     {
-        await using var factory = new Factory();
+        await using var factory = new Factory(usePostgresForAssets: true);
         await factory.SeedAsync();
         using var staff = factory.Client();
         using var manager = factory.Client("MANAGER", "MANAGE_OPERATIONS");
         await Read(staff, $"equipments/{factory.Linked.Id}");
         Assert.Equal(HttpStatusCode.OK, (await manager.PutAsJsonAsync($"/api/v1/equipments/{factory.Linked.Id}",
-            new { name = "Updated pump", equipmentType = "Water", facilityId = factory.Parent.Id, locationDescription = "New bay" })).StatusCode);
+            new { name = "Updated pump", facilityId = factory.Parent.Id, locationDescription = "New bay" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await manager.PatchAsJsonAsync($"/api/v1/equipments/{factory.Linked.Id}/status", new { status = 1 })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await manager.PutAsJsonAsync($"/api/v1/facilities/{factory.Parent.Id}",
-            new { name = "Updated plant", facilityType = "Utility", locationDescription = "New floor" })).StatusCode);
+            new { name = "Updated plant", locationDescription = "New floor" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await manager.PutAsJsonAsync("/api/v1/buildings/current",
             new { name = "Updated property", address = "New address", timeZoneId = "UTC", numberOfFloors = 5 })).StatusCode);
         var equipment = await Read(staff, $"equipments/{factory.Linked.Id}");

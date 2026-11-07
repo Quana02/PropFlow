@@ -88,7 +88,7 @@ public static class AuthRegistration
                     if ((context.HttpContext.Request.Path.StartsWithSegments("/hubs/maintenance") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/service-requests") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/resident-notifications") ||
-                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/support-chat")) &&
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/support-chat") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/announcements")) &&
                         context.Request.Query.TryGetValue("access_token", out var accessToken))
                     {
