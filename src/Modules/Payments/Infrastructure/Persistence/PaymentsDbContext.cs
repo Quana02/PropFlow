@@ -13,6 +13,7 @@ public class PaymentsDbContext : DbContext
     }
 
     public DbSet<Payment> Payments => Set<Payment>();
+    // Historical trial records are retained for audit only; no application service reads them for settlement.
     public DbSet<PropFlow.Modules.Payments.Infrastructure.ResidentPayments.SandboxSePayReceipt> SandboxSePayReceipts => Set<PropFlow.Modules.Payments.Infrastructure.ResidentPayments.SandboxSePayReceipt>();
     public DbSet<PropFlow.Modules.Payments.Infrastructure.ResidentPayments.SandboxPaymentSimulation> SandboxPaymentSimulations => Set<PropFlow.Modules.Payments.Infrastructure.ResidentPayments.SandboxPaymentSimulation>();
     public DbSet<PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthConnection> SePayConnections => Set<PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthConnection>();

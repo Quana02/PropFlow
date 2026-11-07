@@ -23,7 +23,6 @@ public interface IResidentServiceRequestApiClient
         RateResidentServiceRequestRequest request,
         CancellationToken cancellationToken = default);
     Task<ApiResult<ResidentServiceRequestPaymentView>> GetPaymentAsync(Guid serviceRequestId, CancellationToken cancellationToken = default);
-    Task<ApiResult<ResidentServiceRequestPaymentView>> SimulateTransferAsync(Guid serviceRequestId, CancellationToken cancellationToken = default);
     Task<ApiResult<ResidentServiceRequestPaymentView>> ReportTransferAsync(Guid serviceRequestId, ReportResidentServiceRequestTransferRequest request, CancellationToken cancellationToken = default);
     Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid serviceRequestId, CancellationToken cancellationToken = default);
 }
@@ -97,7 +96,4 @@ public sealed class ResidentServiceRequestApiClient(AuthenticatedApiClient api)
     public Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid serviceRequestId, CancellationToken cancellationToken = default) =>
         api.GetFileAsync($"api/v1/resident/service-requests/{serviceRequestId}/payment/qr", cancellationToken);
 
-    public Task<ApiResult<ResidentServiceRequestPaymentView>> SimulateTransferAsync(Guid serviceRequestId, CancellationToken cancellationToken = default) =>
-        api.SendAsync<ResidentServiceRequestPaymentView>(HttpMethod.Post,
-            $"api/v1/resident/service-requests/{serviceRequestId}/payment/sandbox-instruction", ct: cancellationToken);
 }

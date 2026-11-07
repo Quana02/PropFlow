@@ -33,7 +33,8 @@ public sealed record StaffServiceRequestCore(
     DateTimeOffset UpdatedAt,
     decimal BaseServiceCost,
     decimal ProposedAdditionalCost,
-    string? AdditionalCostNote);
+    string? AdditionalCostNote,
+    AdditionalCostConsentView? AdditionalCostConsent = null);
 
 public sealed record StaffServiceRequestPage(
     IReadOnlyList<StaffServiceRequestCore> Items,
@@ -237,7 +238,7 @@ public sealed class StaffServiceRequestHandler(
             apartment?.UnitNumber, apartment?.FloorNumber, facility?.Name, equipment?.Name,
             item.Status, item.PriorityCode, item.ServiceAreaCode, item.PreferredDate, item.PreferredTimeCode,
             item.AssignedAt, item.StartedAt, item.UpdatedAt, activities, evidence,
-            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote));
+            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote, item.AdditionalCostConsent));
     }
 
     private async Task<Dictionary<Guid, MaintenanceAssetReference>> AssetMapAsync(IEnumerable<StaffServiceRequestCore> items, CancellationToken ct)

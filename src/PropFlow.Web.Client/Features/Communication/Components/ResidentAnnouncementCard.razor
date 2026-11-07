@@ -1,0 +1,65 @@
+@using PropFlow.Web.Client.Features.Communication.Services
+@using PropFlow.Web.Client.Features.ServiceRequests.Services
+@inject AnnouncementApiClient Api
+@inject AnnouncementRealtimeClient Realtime
+@implements IDisposable
+
+<article class="announcement-card glass-panel">
+    <header><div><h2>Thông báo ban quản lý</h2><small>Bản tin chính thức dành cho cư dân</small></div>@if (data is not null) { <span class="total">@data.Total thông báo</span> }</header>
+    <div class="notice-list" aria-live="polite">
+        @if (loading && data is null) { <p role="status">Đang tải thông báo…</p> }
+        else if (error is not null) { <p role="alert">@error</p><button type="button" @onclick="ReloadAsync">Thử lại</button> }
+        else if (data is null || data.Items.Count == 0) { <p>Chưa có thông báo từ Ban Quản lý.</p> }
+        else
+        {
+            @foreach (var item in data.Items.Take(3))
+            {
+                <a class="notice" href="@($"/resident?tab=notifications&category=general&announcement={item.Id}")"><span><em>Ban quản lý</em><small>@PublishedTime(item)</small></span><strong>@item.Title</strong><p>@item.Content</p></a>
+            }
+        }
+    </div>
+    <footer><a href="/resident?tab=notifications&amp;category=general">Xem tất cả thông báo <span aria-hidden="true">›</span></a></footer>
+</article>
+
+@code {
+    private readonly CancellationTokenSource cancellation = new();
+    private AnnouncementPage? data;
+    private string? error;
+    private bool loading, disposed;
+    private RealtimeRefreshQueue? refresh;
+    protected override async Task OnInitializedAsync()
+    {
+        refresh = new(() => InvokeAsync(LoadAsync), afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += OnChangedAsync;
+        await ReloadAsync();
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { await Realtime.EnsureStartedAsync(cancellation.Token); await ReloadAsync(); }
+    }
+    private string PublishedTime(AnnouncementView item) => item.PublishedAt.HasValue && data is not null
+        ? TimeZoneInfo.ConvertTimeBySystemTimeZoneId(item.PublishedAt.Value, data.TimeZoneId).ToString("dd/MM/yyyy HH:mm") : "";
+    private Task ReloadAsync() => refresh?.RefreshNowAsync() ?? Task.CompletedTask;
+    private Task OnChangedAsync(Guid _) => disposed ? Task.CompletedTask : refresh?.RequestAsync() ?? Task.CompletedTask;
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.ListAsync(1, cancellation.Token);
+            if (disposed) return;
+            data = result.IsSuccess ? result.Data : null;
+            error = result.IsSuccess ? null : result.StatusCode == 403
+                ? "Cần liên kết và xác minh cư trú để xem thông báo. Vui lòng liên hệ Ban Quản lý."
+                : result.Message ?? "Không tải được thông báo.";
+        }
+        finally { loading = false; }
+    }
+    public void Dispose()
+    {
+        disposed = true;
+        Realtime.Changed -= OnChangedAsync;
+        refresh?.Dispose();
+        cancellation.Cancel(); cancellation.Dispose();
+    }
+}

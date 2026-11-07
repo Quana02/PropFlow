@@ -28,11 +28,6 @@ public sealed class ResidentServiceRequestPaymentsController(ResidentServiceRequ
     { Status = failure.Status, Title = failure.Message, Extensions = { ["code"] = failure.Code, ["traceId"] = HttpContext.TraceIdentifier } })
     { StatusCode = failure.Status };
 
-    [HttpPost("sandbox-instruction"), Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(PaymentSettingsRateLimitPolicies.Provider)]
-    public async Task<ActionResult<ResidentServiceRequestPaymentView>> Simulate(Guid serviceRequestId, CancellationToken ct)
-    { try { return Ok(await payments.PrepareSandboxAsync(serviceRequestId, UserId, ct)); } catch (ResidentPaymentFailure failure) { return Failure(failure); } }
 
-    [HttpPost("simulate-transfer")]
-    public IActionResult LegacySimulation() => StatusCode(410, new ProblemDetails { Status = 410,
-        Title = "Giả lập nội bộ đã được tắt. Hãy chuẩn bị nội dung thanh toán rồi tạo giao dịch trong SePay Test mode." });
+
 }

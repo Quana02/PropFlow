@@ -36,15 +36,15 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
                 x.ApartmentUnitId, x.FacilityId, x.EquipmentId, x.Status.ToString(), x.FinalPriorityCode,
                 x.ServiceAreaCode, x.PreferredDate, x.PreferredTimeCode,
                 x.Assignments.Where(a => a.StaffUserId == staffUserId &&
-                        (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
+                        (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED"))
                     .OrderByDescending(a => a.AssignedAt).Select(a => a.Id).First(),
                 x.Assignments.Where(a => a.StaffUserId == staffUserId &&
-                        (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
+                        (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED"))
                     .OrderByDescending(a => a.AssignedAt).Select(a => a.AssignedAt).First(),
                 x.Assignments.Where(a => a.StaffUserId == staffUserId &&
-                        (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
+                        (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED"))
                     .OrderByDescending(a => a.AssignedAt).Select(a => a.StartedAt).FirstOrDefault(),
-                x.UpdatedAt, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote))
+                x.UpdatedAt, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null))
             .ToArrayAsync(ct);
 
         var all = VisibleRequests(staffUserId);
@@ -112,7 +112,7 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
     {
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
-        if (state.Request.Status != ServiceRequestStatus.ASSIGNED || state.Assignment.Status != AssignmentStatus.ASSIGNED)
+        if (state.Request.Status != ServiceRequestStatus.ASSIGNED || state.Assignment.Status != AssignmentStatus.ASSIGNED || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
             return StaffServiceRequestOutcome.Conflict;
         state.Assignment.Start(now);
         state.Request.MarkInProgress(now);
@@ -126,8 +126,9 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
     {
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
-        if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS)
+        if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
             return StaffServiceRequestOutcome.Conflict;
+        state.Request.MarkInProgress(now);
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(id, ServiceActivityType.PROGRESS_UPDATED, now,
             state.Assignment.Id, title: "Staff cập nhật tiến độ", detail: detail, performedBy: staffUserId));
         return await SaveAsync(ct);
@@ -138,7 +139,7 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
     {
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
-        if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS)
+        if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
             return StaffServiceRequestOutcome.Conflict;
         var latestResult = state.Request.Activities.Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).FirstOrDefault();
@@ -146,7 +147,9 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).FirstOrDefault();
         if (latestResult is not null && (latestRework is null || latestResult.CreatedAt > latestRework.CreatedAt))
             return StaffServiceRequestOutcome.Conflict;
-        state.Request.ProposeAdditionalCost(additionalCost, additionalCostNote, now);
+        if (additionalCost != state.Request.ProposedAdditionalCost || state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED")
+            return StaffServiceRequestOutcome.Conflict;
+        state.Request.MarkInProgress(now);
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(id, ServiceActivityType.WORK_RESULT_ADDED, now,
             state.Assignment.Id, title: "Staff xác nhận hoàn thành công việc", workResult: workResult, performedBy: staffUserId));
         return await SaveAsync(ct);
@@ -157,7 +160,7 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
     {
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
-        if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS)
+        if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
             return StaffServiceRequestOutcome.Conflict;
         var pendingId = await PendingWorkResultActivityIdAsync(staffUserId, id, ct);
         if (pendingId != activityId) return StaffServiceRequestOutcome.Conflict;
@@ -170,7 +173,7 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
 
     private IQueryable<ServiceRequest> VisibleRequests(Guid staffUserId) => db.ServiceRequests.AsNoTracking().Where(x =>
         x.Assignments.Any(a => a.StaffUserId == staffUserId &&
-            (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED)));
+            (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED")));
 
     private IQueryable<ServiceRequest> ActiveRequestAsync(Guid staffUserId, Guid id) => db.ServiceRequests.AsNoTracking().Where(x => x.Id == id &&
         x.Assignments.Any(a => a.StaffUserId == staffUserId &&
@@ -181,15 +184,15 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
             x.ApartmentUnitId, x.FacilityId, x.EquipmentId, x.Status.ToString(), x.FinalPriorityCode,
             x.ServiceAreaCode, x.PreferredDate, x.PreferredTimeCode,
             x.Assignments.Where(a => a.StaffUserId == staffUserId &&
-                    (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
+                    (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED"))
                 .OrderByDescending(a => a.AssignedAt).Select(a => a.Id).First(),
             x.Assignments.Where(a => a.StaffUserId == staffUserId &&
-                    (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
+                    (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED"))
                 .OrderByDescending(a => a.AssignedAt).Select(a => a.AssignedAt).First(),
             x.Assignments.Where(a => a.StaffUserId == staffUserId &&
-                    (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED))
+                    (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED"))
                 .OrderByDescending(a => a.AssignedAt).Select(a => a.StartedAt).FirstOrDefault(), x.UpdatedAt,
-            x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote));
+            x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null));
 
     private async Task<(ServiceRequest? Request, ServiceRequestAssignment? Assignment)> CurrentAsync(Guid staffUserId, Guid id, CancellationToken ct)
     {

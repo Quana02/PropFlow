@@ -10,10 +10,7 @@ public sealed record ResidentPortalProfileContext(
     public static ResidentPortalProfileContext Loading { get; } = new(null, true, null);
 
     public ResidencyItem? CurrentResidency => Profile?.Residencies
-        .Where(item =>
-            string.Equals(item.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase) &&
-            item.StartDate <= DateOnly.FromDateTime(DateTime.Today) &&
-            item.EndDate is null)
+        .Where(item => item.IsActiveAt(DateOnly.FromDateTime(DateTime.Today)))
         .OrderByDescending(item => item.StartDate)
         .FirstOrDefault();
 

@@ -11,7 +11,7 @@
     <span class="material-symbols-outlined" aria-hidden="true">@(working ? "sync" : success ? "check_circle" : "error")</span>
     <h1>@(working ? "Đang hoàn tất kết nối SePay" : success ? "Đã kết nối SePay" : "Chưa thể kết nối SePay")</h1>
     <p>@message</p>
-    @if (!working) { <a href="/admin/dashboard?tab=payment&amp;paymentEnvironment=live">Quay lại cấu hình thanh toán SePay thật</a> }
+    @if (!working) { <a href="/admin/dashboard?tab=payment">Quay lại cấu hình thanh toán SePay thật</a> }
 </section>
 
 @code {

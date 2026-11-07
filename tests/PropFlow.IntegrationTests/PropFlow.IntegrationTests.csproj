@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.11" />
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
@@ -24,6 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PropFlow.Web\PropFlow.Web.csproj" />
     <ProjectReference Include="..\..\src\PropFlow.Api\PropFlow.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\AiChatbot\PropFlow.Modules.AiChatbot.csproj" />
     <ProjectReference Include="..\..\src\Modules\Administration\PropFlow.Modules.Administration.csproj" />
     <ProjectReference Include="..\..\src\Modules\ServiceRequests\PropFlow.Modules.ServiceRequests.csproj" />
     <ProjectReference Include="..\..\src\Modules\Complaints\PropFlow.Modules.Complaints.csproj" />

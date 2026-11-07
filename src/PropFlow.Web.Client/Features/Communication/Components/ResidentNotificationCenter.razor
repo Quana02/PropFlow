@@ -1,0 +1,30 @@
+@inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState Notices
+@implements IDisposable
+
+<section class="notification-center" aria-labelledby="notification-center-title">
+    <header><div><span class="eyebrow">Cập nhật dành cho bạn</span><h2 id="notification-center-title">Thông báo</h2><p>Bản tin Ban Quản lý và thông tin tài chính, dịch vụ của bạn.</p></div></header>
+    <div class="categories" role="group" aria-label="Loại thông báo">
+        <button type="button" class="@(!personal ? "active" : "")" aria-pressed="@(!personal)" @onclick="() => personal = false"><span class="material-symbols-outlined" aria-hidden="true">feed</span><span>Thông báo chung<small>Bản tin từ Ban Quản lý</small></span></button>
+        <button type="button" class="@(personal ? "active" : "")" aria-pressed="@personal" @onclick="() => personal = true"><span class="material-symbols-outlined" aria-hidden="true">receipt_long</span><span>Tài chính &amp; cá nhân<small>Phí dịch vụ, thanh toán, phản ánh</small></span>@if (Notices.UnreadCount > 0) { <b>@Notices.UnreadCount mới</b> }</button>
+    </div>
+    <div hidden="@personal">
+        <PropFlow.Web.Client.Features.Communication.Components.AnnouncementWorkspace Embedded="true" />
+    </div>
+    <section hidden="@(!personal)" aria-label="Thông báo tài chính và cá nhân">
+        <div class="personal-heading"><span>@Notices.UnreadCount thông báo cá nhân chưa đọc</span><button type="button" disabled="@(Notices.Loading || Notices.UnreadCount == 0)" @onclick="Notices.ReadAllAsync">Đánh dấu tất cả đã đọc</button></div>
+        <div class="personal-list"><PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentFinanceNotifications Cards="true" /></div>
+    </section>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
+    private string? previousCategory;
+    private bool personal = true;
+    protected override void OnInitialized() => Notices.Changed += Refresh;
+    protected override void OnParametersSet()
+    {
+        if (Category != previousCategory) { personal = Category != "general"; previousCategory = Category; }
+    }
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Notices.Changed -= Refresh;
+}

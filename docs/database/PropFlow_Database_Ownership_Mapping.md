@@ -78,6 +78,8 @@ Consumer module
 
 ## 6. Migration policy
 
+FE-03 bổ sung `default_usable_area_m2 numeric(10,2)`, `default_bedroom_count int`, `default_bathroom_count int` vào `apartments.apartment_unit_types`. Cả ba nullable để giữ nguyên loại cũ chưa có thông số; không backfill số liệu suy đoán. Diện tích khi có dùng giới hạn FE-03 hiện hành >= 25 m²; số phòng >= 0. Manager quản lý loại qua endpoint hiện có. Frontend sao chép defaults khi chọn loại cho căn hộ mới, cho phép sửa thủ công; `apartment_units` tiếp tục lưu thông số thực tế và giữ FK đến loại. Sửa loại không cập nhật các căn hộ đã lưu.
+
 - Giữ historical migrations để EF Core nâng cấp database theo chuỗi; `building_id` trong migration cũ chỉ phản ánh lịch sử schema, không phải khả năng chọn nhiều chung cư của live model.
 - Model snapshot và migration đích phải khớp `PropFlow.dbml` hiện hành.
 - Trước khi áp dụng migration xóa building scope lên database cũ, phải xác nhận dữ liệu đã chuẩn hóa về đúng một Building; không được âm thầm trộn dữ liệu nhiều Building.

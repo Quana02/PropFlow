@@ -99,20 +99,10 @@
                         }
                     </div>
                 </div>
-                <footer class="service-card-footer"><span><i></i>Tổng đài hỗ trợ trực tuyến 24/7</span><strong>1900 8899</strong></footer>
+                <footer class="service-card-footer"><span><i></i>Kết nối với Manager đang sẵn sàng</span><a href="/resident/contact-management">Liên hệ BQL →</a></footer>
             </article>
 
-            <article class="resident-dashboard-card glass-panel" data-purpose="announcements-card">
-                <div>
-                    <header class="card-heading"><span><h2>Thông báo ban quản lý</h2><small>Bản tin cư dân tòa nhà</small></span><em class="badge badge-rose">@NoticeState.UnreadCount thông báo mới</em></header>
-                    <div class="resident-card-list notice-list">
-                        <button class="glass-inner notice-list-item" type="button"><span><em class="notice-kind important"><i></i>[Quan trọng]</em><small>20 phút trước</small></span><strong>Bảo trì hệ thống thang máy Tháp B 13:00 – 15:00</strong><p>Kính đề nghị cư dân sử dụng thang hàng hoặc thang Tháp A...</p></button>
-                        <ResidentFinanceNotifications Compact="true" />
-                        <button class="glass-inner notice-list-item" type="button"><span><em class="notice-kind"><i></i>[Kế hoạch]</em><small>Hôm qua</small></span><strong>Kiểm tra định kỳ chuông báo cháy tầng 15 – 20</strong><p>Thời gian diễn tập thử nghiệm diễn ra trong khoảng 15 phút.</p></button>
-                    </div>
-                </div>
-                <footer class="card-actions"><button class="resident-text-action" type="button" onclick="window.propFlowResident.switchTab('notifications')">Mở bảng tin thông báo chi tiết <span>›</span></button><button class="resident-muted-action" type="button" @onclick="NoticeState.ReadAllAsync">Đánh dấu đã đọc</button></footer>
-            </article>
+            <PropFlow.Web.Client.Features.Communication.Components.ResidentAnnouncementCard />
         </div>
     </div>
 
@@ -165,13 +155,7 @@
 
     <div class="resident-tab-panel" id="tabNotificationsContent" hidden>
         <article class="resident-detail-panel glass-panel">
-            <header class="detail-heading"><span><h2>🔔 Bản tin thông báo &amp; Hoạt động cư dân</h2><p>Thông tin vận hành chính thức từ Ban Quản Lý Vinhomes / PropFlow</p></span><button class="resident-muted-action" type="button" @onclick="NoticeState.ReadAllAsync">Đánh dấu tất cả là đã đọc</button></header>
-            <div class="announcement-grid">
-                <article class="glass-inner announcement rose"><em>Khẩn cấp • Vận hành</em><h3>Bảo trì hệ thống thang máy Tháp B</h3><p>Để đảm bảo an toàn tuyệt đối, đội ngũ Schindler sẽ tiến hành bảo dưỡng định kỳ hệ thống cáp tải từ 13:00 - 15:00 ngày 25/10/2024.</p><footer><span>Người gửi: Kỹ sư trưởng BQL</span><span>20 phút trước</span></footer></article>
-                <ResidentFinanceNotifications Cards="true" />
-                <article class="glass-inner announcement amber"><em>An toàn • PCCC</em><h3>Kiểm tra định kỳ hệ thống PCCC tầng 15 - 20</h3><p>Ban Quản lý phối hợp kiểm tra áp lực nước đầu phun sprinkler và chuông báo động tầng 18 vào 09:30 ngày 26/10.</p><footer><span>Ban An ninh Tòa nhà</span><span>Hôm qua</span></footer></article>
-                <article class="glass-inner announcement purple"><em>Cộng đồng • Tiện ích</em><h3>Mở đăng ký khu tiệc nướng BBQ ngoài trời</h3><p>Khu vườn nướng Sky BBQ tầng thượng tháp Landmark đã hoàn tất nâng cấp và mở lịch đặt trước 48 giờ.</p><footer><span>Ban Tiện ích Cư dân</span><span>2 ngày trước</span></footer></article>
-            </div>
+            <PropFlow.Web.Client.Features.Communication.Components.ResidentNotificationCenter />
         </article>
     </div>
 </section>
@@ -179,15 +163,6 @@
 <ResidentServiceRequestDialog @ref="_serviceRequestModal" RequestCreated="HandleRequestCreatedAsync" />
 <ResidentServiceRequestDetailDialog @ref="_requestDetailModal" FeedbackSaved="LoadRequestsAsync" />
 
-<div class="resident-ai-widget" id="aiWidget">
-    <section class="ai-chat-window glass-panel" id="aiChatWindow" hidden>
-        <header><span class="ai-logo">⚡</span><span><strong>PropFlow Copilot <em>AI 24/7</em></strong><small>Trợ lý ảo • @ProfileContext.ApartmentLabel</small></span><button type="button" aria-label="Thu nhỏ" aria-controls="aiChatWindow" aria-expanded="false" onclick="window.propFlowResident.toggleAssistant()">⌄</button></header>
-        <div class="ai-quick-actions"><button type="button">🔧 Báo hỏng điện nước</button><button type="button">🧾 Tra cứu hóa đơn T09</button><button type="button">🚗 Thẻ xe cư dân</button></div>
-        <div class="ai-thread"><div class="ai-message"><span>AI</span><p>Xin chào <strong>@DisplayName</strong>! Em là trợ lý AI PropFlow đồng hành cùng hồ sơ <strong>@ProfileContext.ApartmentLabel</strong>. Anh/chị cần hỗ trợ việc gì hôm nay?</p></div><div class="ai-message user"><p>Kiểm tra giúp tôi hóa đơn tháng 9 đã thanh toán chưa?</p><span>@Initials</span></div><div class="ai-message"><span>AI</span><p>Vui lòng mở mục hóa đơn để xem trạng thái authoritative mới nhất.</p></div></div>
-        <footer><input id="chatInputBox" type="text" placeholder="Hỏi bất kỳ điều gì hoặc gửi yêu cầu cho BQL..." /><button type="button">➤</button></footer>
-    </section>
-    <button class="ai-toggle" type="button" aria-label="Mở trợ lý ảo PropFlow Copilot" aria-controls="aiChatWindow" aria-expanded="false" title="PropFlow AI Copilot 24/7" onclick="window.propFlowResident.toggleAssistant()"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-5l-5 5v-5Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg><i></i></button>
-</div>
 
 @code {
     protected override void OnInitialized()
@@ -234,15 +209,17 @@
         new("MOVING", "Chuyển đồ / Chuyển nhà", "Chuyển đồ", "Đăng ký vận chuyển đồ qua tòa nhà", "📦", "purple", ["chuyển nhà", "vận chuyển", "thang hàng"]),
         new("CONSTRUCTION", "Đăng ký thi công nội thất", "Thi công", "Đăng ký sửa chữa và thi công căn hộ", "🔨", "rose", ["nội thất", "cải tạo", "khoan", "xây dựng"]),
         new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "💳", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
-        new("OTHER", "Yêu cầu hỗ trợ Ban Quản Lý", "Hotline BQL", "Gửi yêu cầu hỗ trợ khác đến Ban Quản Lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "khác"])
+        new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"])
     ];
 
     protected override async Task OnInitializedAsync() =>
         await Task.WhenAll(LoadRequestsAsync(), ServiceRequestRealtime.EnsureStartedAsync());
 
+    private string? lastSyncedUri;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (lastSyncedUri == Navigation.Uri) return;
+        lastSyncedUri = Navigation.Uri;
 
         var query = new Uri(Navigation.Uri).Query;
         if (query.Contains("tab=processing", StringComparison.OrdinalIgnoreCase))
@@ -314,6 +291,7 @@
 
     private void OpenService(string categoryCode, string title)
     {
+        if (categoryCode == "CONTACT") { Navigation.NavigateTo("/resident/contact-management"); return; }
         if (categoryCode == "BILLING") { Navigation.NavigateTo("/resident/billing"); return; }
         _serviceRequestModal?.Open(categoryCode, title);
     }
