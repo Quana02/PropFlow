@@ -124,7 +124,7 @@ public sealed class ResidentChatDatabaseTests(KnowledgeDatabaseFixture database)
         public bool Ready { get; set; }
         public string EmbeddingKey => "index-test:2";
         public List<string> Inputs = [];
-        public Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct)
+        public Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct, ChatEmbeddingPurpose purpose = ChatEmbeddingPurpose.Document)
         { Inputs.AddRange(texts); return Task.FromResult(texts.Select(_ => new float[] { 1, 0 }).ToArray()); }
         public Task<GroundedAnswer?> AnswerAsync(string question, IReadOnlyList<RetrievedPassage> passages, CancellationToken ct) => Task.FromResult<GroundedAnswer?>(null);
     }

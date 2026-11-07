@@ -22,21 +22,24 @@ public sealed class KnowledgeIndex(AiChatbotDbContext db, IChatAi ai)
             await db.SaveChangesAsync(ct);
         }
         if (!ai.Ready) return;
+        var embeddingKey = ai.EmbeddingKey;
         var before = DateTimeOffset.UtcNow.AddHours(-1);
         var pending = await (from c in db.Chunks
                              join d in db.Documents on new { Id = c.DocumentId, c.Revision } equals new { Id = d.Id, Revision = d.PublishedRevision ?? 0 }
                              join r in db.Revisions on new { Id = c.DocumentId, Number = c.Revision } equals new { Id = r.DocumentId, r.Number }
-                             where r.Audience == "RESIDENT" && (c.EmbeddingModel != ai.EmbeddingKey || c.Embedding == null)
-                                 && (c.AttemptedAt == null || c.AttemptedAt < before)
+                             where r.Audience == "RESIDENT" && (c.EmbeddingModel != embeddingKey || c.Embedding == null)
+                                 && (c.EmbeddingModel != embeddingKey || c.AttemptedAt == null || c.AttemptedAt < before)
                              orderby c.DocumentId, c.Revision, c.Number
                              select new { Chunk = c, r.Title }).Take(8).ToArrayAsync(ct);
         if (pending.Length == 0) return;
-        foreach (var item in pending) item.Chunk.Attempt(DateTimeOffset.UtcNow);
+        // A provider/model change gets one immediate attempt; failures then retain
+        // the normal cooldown for that target rather than retrying every tick.
+        foreach (var item in pending) item.Chunk.Attempt(DateTimeOffset.UtcNow, embeddingKey);
         await db.SaveChangesAsync(ct);
         float[][] vectors;
         try { vectors = await ai.EmbedAsync(pending.Select(x => KnowledgeText.Redact(x.Title + "\n" + x.Chunk.Content)).ToArray(), ct); }
         catch (ChatAiUnavailableException) { return; }
-        for (var i = 0; i < pending.Length; i++) pending[i].Chunk.SetEmbedding(vectors[i], ai.EmbeddingKey);
+        for (var i = 0; i < pending.Length; i++) pending[i].Chunk.SetEmbedding(vectors[i], embeddingKey);
         await db.SaveChangesAsync(ct);
     }
 }

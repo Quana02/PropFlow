@@ -119,10 +119,10 @@ builder.Services.AddDbContext<AiChatbotDbContext>((services, options) => options
 builder.Services.AddScoped<KnowledgeDocuments>();
 builder.Services.AddScoped<IKnowledgeDocuments>(services => services.GetRequiredService<KnowledgeDocuments>());
 builder.Services.AddScoped<IPublishedKnowledgeSource>(services => services.GetRequiredService<KnowledgeDocuments>());
-builder.Services.AddOptions<ChatAiOptions>().BindConfiguration("AiChatbot:OpenAI")
+builder.Services.AddOptions<ChatAiOptions>().BindConfiguration("AiChatbot:Gemini")
     .Validate(options => options.Valid, "Cấu hình AI chatbot không hợp lệ.").ValidateOnStart();
-builder.Services.AddHttpClient("ResidentChatOpenAi", client => client.Timeout = Timeout.InfiniteTimeSpan);
-builder.Services.AddSingleton<IChatAi, OpenAiChat>();
+builder.Services.AddHttpClient("ResidentChatGemini", client => client.Timeout = Timeout.InfiniteTimeSpan);
+builder.Services.AddSingleton<IChatAi, GeminiChat>();
 builder.Services.AddScoped<IResidentKnowledgeSearch, ResidentKnowledgeSearch>();
 builder.Services.AddScoped<IChatResidentScope, ChatResidentScope>();
 builder.Services.AddScoped<ResidentChat>();

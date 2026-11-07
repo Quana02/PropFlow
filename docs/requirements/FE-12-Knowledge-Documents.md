@@ -23,7 +23,7 @@ API `/api/v1/knowledge/documents` có GET phân trang 12 mục/tìm tiêu đề 
 
 `IPublishedKnowledgeSource.FindResidentSourceAsync` chỉ trả bản đang xuất bản có phạm vi RESIDENT. Nháp, tài liệu nội bộ và tài liệu ngừng xuất bản không được dùng làm nguồn cư dân. Khi bổ sung chỉ mục vector, phải kiểm tra lại publication/audience qua nguồn này trước khi đưa đoạn trích vào câu trả lời; không tin chỉ mục cũ.
 
-Luồng chatbot RAG được bổ sung sau kho tài liệu, xem `docs/chatbot-rag-setup.md`. Xuất bản tạo các đoạn nguồn trong cùng giao dịch; worker tạo embedding ngoài giao dịch khi OpenAI đã được cấu hình. UI hiển thị số đoạn thực tế và không báo đã xử lý nếu chưa có vector. Nội quy mẫu trong `docs/knowledge-drafts/noi-quy-chung-cu.md` vẫn là bản nháp, không tự nhập hoặc xuất bản.
+Luồng chatbot RAG được bổ sung sau kho tài liệu, xem `docs/chatbot-rag-setup.md`. Xuất bản tạo các đoạn nguồn trong cùng giao dịch; worker tạo embedding ngoài giao dịch khi Gemini đã được cấu hình. Mặc định dùng `gemini-3.1-flash-lite` để trả lời và `gemini-embedding-001`, 768 chiều cho tìm kiếm ngữ nghĩa; cấu hình trả lời này đã được kiểm tra qua API thật sau khi `gemini-2.5-flash` trả `404 NOT_FOUND`. Theo yêu cầu chuyển provider ngày 06/11/2026, API đọc `AiChatbot:Gemini`; key OpenAI cũ không được dùng cho Gemini. Worker xử lý lại vector cũ bằng khóa provider/model/số chiều, không trộn vector giữa các provider; thay provider không cần migration hoặc xóa tài liệu. UI hiển thị số đoạn thực tế và không báo đã xử lý nếu chưa có vector. Nội quy mẫu trong `docs/knowledge-drafts/noi-quy-chung-cu.md` vẫn là bản nháp, không tự nhập hoặc xuất bản.
 
 ## Dữ liệu và triển khai
 

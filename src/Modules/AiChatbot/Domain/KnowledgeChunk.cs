@@ -17,7 +17,14 @@ public sealed class KnowledgeChunk
     public float[]? Embedding { get; private set; }
     public string? EmbeddingModel { get; private set; }
     public DateTimeOffset? AttemptedAt { get; private set; }
-    public void Attempt(DateTimeOffset now) => AttemptedAt = now;
+    public void Attempt(DateTimeOffset now, string model)
+    {
+        // A null vector means this model was attempted, not that indexing succeeded.
+        // Retire the previous model's vector before a replacement call can fail.
+        if (EmbeddingModel != model) Embedding = null;
+        EmbeddingModel = model;
+        AttemptedAt = now;
+    }
     public void SetEmbedding(float[] vector, string model)
     {
         if (vector.Length == 0 || vector.Any(x => !float.IsFinite(x)) || vector.All(x => x == 0))

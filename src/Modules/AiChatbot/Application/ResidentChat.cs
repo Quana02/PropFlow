@@ -6,11 +6,12 @@ namespace PropFlow.Modules.AiChatbot.Application;
 
 public sealed record RetrievedPassage(Guid DocumentId, int Revision, int Chunk, string Title, string Content);
 public sealed record GroundedAnswer(bool Supported, string Answer, int[] Citations);
+public enum ChatEmbeddingPurpose { Document, Query }
 public interface IChatAi
 {
     bool Ready { get; }
     string EmbeddingKey { get; }
-    Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct);
+    Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct, ChatEmbeddingPurpose purpose = ChatEmbeddingPurpose.Document);
     Task<GroundedAnswer?> AnswerAsync(string question, IReadOnlyList<RetrievedPassage> passages, CancellationToken ct);
 }
 public interface IResidentKnowledgeSearch
@@ -38,7 +39,7 @@ public sealed partial class ResidentChat(IResidentKnowledgeSearch search, IChatA
         float[]? vector = null;
         if (ai.Ready)
         {
-            try { vector = (await ai.EmbedAsync([safeQuestion], ct)).Single(); }
+            try { vector = (await ai.EmbedAsync([safeQuestion], ct, ChatEmbeddingPurpose.Query)).Single(); }
             catch (ChatAiUnavailableException) { }
         }
         var passages = await search.SearchAsync(safeQuestion, vector, ai.EmbeddingKey, ct);

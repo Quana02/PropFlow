@@ -91,6 +91,7 @@ public sealed class ResidentChatTests
         await fixture.Chat.AskAsync(Guid.NewGuid(), "Hỏi nội quy. Email test@example.com, điện thoại 0901234567", default);
         Assert.DoesNotContain("test@example.com", fixture.ProviderQuestion);
         Assert.DoesNotContain("0901234567", fixture.ProviderQuestion);
+        Assert.Equal(ChatEmbeddingPurpose.Query, fixture.LastEmbeddingPurpose);
     }
 
     [Fact]
@@ -127,6 +128,7 @@ public sealed class ResidentChatTests
         public bool Ready { get; set; } = true;
         public string EmbeddingKey => "test:2";
         public int Searches, Answers, Embeddings;
+        public ChatEmbeddingPurpose? LastEmbeddingPurpose;
         public string ProviderQuestion = "";
         public GroundedAnswer? Answer = new(true, "Đồng ý trước khi làm [1].", [1]);
         public IReadOnlyList<RetrievedPassage> Passages = [new(Guid.NewGuid(), 1, 1, "Nội quy", "Cư dân cần đồng ý chi phí phát sinh trước khi thực hiện.")];
@@ -136,8 +138,8 @@ public sealed class ResidentChatTests
         public Task<PublishedKnowledgeSource?> SourceAsync(Guid id, int revision, CancellationToken ct) => Task.FromResult<PublishedKnowledgeSource?>(null);
         public Task<IReadOnlyList<RetrievedPassage>> SearchAsync(string question, float[]? embedding, string embeddingKey, CancellationToken ct)
         { Searches++; return Task.FromResult(Passages); }
-        public Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct)
-        { Embeddings++; ProviderQuestion = texts[0]; if (Throw) throw new ChatAiUnavailableException(); return Task.FromResult(new float[][] { [1, 0] }); }
+        public Task<float[][]> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct, ChatEmbeddingPurpose purpose = ChatEmbeddingPurpose.Document)
+        { Embeddings++; LastEmbeddingPurpose = purpose; ProviderQuestion = texts[0]; if (Throw) throw new ChatAiUnavailableException(); return Task.FromResult(new float[][] { [1, 0] }); }
         public Task<GroundedAnswer?> AnswerAsync(string question, IReadOnlyList<RetrievedPassage> passages, CancellationToken ct)
         { Answers++; ProviderQuestion = question; if (Throw) throw new ChatAiUnavailableException(); return Task.FromResult(Answer); }
     }

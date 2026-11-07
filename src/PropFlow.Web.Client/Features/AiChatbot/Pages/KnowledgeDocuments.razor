@@ -71,7 +71,7 @@
                     </div>
                     <div class="source-note"><strong>Nguồn chatbot cư dân</strong>
                         @if (indexStatus is not null)
-                        { <p>@indexStatus.Chunks đoạn sẵn sàng tìm kiếm · @indexStatus.EmbeddedChunks đoạn đã xử lý ngữ nghĩa.</p><p>@(indexStatus.AiConfigured ? "Đã cấu hình OpenAI. Các đoạn chờ được xử lý tự động." : "Chưa cấu hình OpenAI. Cư dân vẫn có thể tìm và đọc trích đoạn tài liệu.")</p> }
+                        { <p>@indexStatus.Chunks đoạn sẵn sàng tìm kiếm · @indexStatus.EmbeddedChunks đoạn đã xử lý ngữ nghĩa.</p><p>@(indexStatus.AiConfigured ? "Đã cấu hình Gemini. Các đoạn chờ được xử lý tự động." : "Chưa cấu hình Gemini. Cư dân vẫn có thể tìm và đọc trích đoạn tài liệu.")</p> }
                         <p>Tài liệu nội bộ và bản nháp được loại khỏi nguồn chatbot. Chỉ xuất bản nội dung phù hợp để cung cấp cho cư dân.</p>
                         <button type="button" disabled="@InteractionBlocked" @onclick="RefreshIndex">Kiểm tra trạng thái nguồn</button>
                     </div>
