@@ -15,12 +15,13 @@ public sealed class ResidentAccountEligibility(ResidentsDbContext db, IApartment
         var ownership = (await apartments.GetOwnershipsAsync([residentId], ct))
             .Where(x => x.StartDate <= date && x.EndDate == null).OrderBy(x => x.UnitNumber, StringComparer.Ordinal).FirstOrDefault();
         if (ownership is not null) return ownership.ApartmentUnitId;
-        var heads = await db.ResidentApartments.AsNoTracking().Where(x => x.ResidentId == residentId
-            && x.HouseholdRole == HouseholdRole.HOUSEHOLD_HEAD && x.Status == ResidencyStatus.ACTIVE
+        var rentedApartments = await db.ResidentApartments.AsNoTracking().Where(x => x.ResidentId == residentId
+            && x.HouseholdRole == HouseholdRole.HOUSEHOLD_HEAD && x.ResidencyType == ResidencyType.TENANT && x.Status == ResidencyStatus.ACTIVE
             && x.StartDate <= date && (x.EndDate == null || x.EndDate >= date))
             .OrderBy(x => x.ApartmentUnitId).Select(x => x.ApartmentUnitId).ToArrayAsync(ct);
-        foreach (var apartment in heads)
-            if ((await apartments.GetCurrentOwnerResidentIdsAsync(apartment, date, ct)).Count == 0) return apartment;
+        foreach (var apartmentId in rentedApartments)
+            if ((await apartments.GetCurrentOwnerResidentIdsAsync(apartmentId, date, ct)).Count == 0)
+                return apartmentId;
         return null;
     }
 }

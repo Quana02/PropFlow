@@ -1,0 +1,161 @@
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Features.Administration.Services
+@using PropFlow.Web.Client.Shared.Forms
+@inject IAdministrationApiClient Api
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<section class="system-audit">
+    <header class="panel-heading"><span class="material-symbols-outlined">history</span><div><h1>Nhật ký hệ thống</h1><p>Thao tác và thay đổi dữ liệu trên các phân hệ · Chỉ đọc</p></div></header>
+    <div class="audit-toolbar">
+        <button type="button" class="secondary filter-toggle" aria-haspopup="dialog" aria-expanded="@showFilters" @onclick="OpenFilters" disabled="@loading"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Bộ lọc @if (ActiveFilterCount > 0) { <strong>@ActiveFilterCount</strong> }</button>
+        @if (ActiveFilterCount > 0) { <button type="button" class="secondary" @onclick="ResetAsync" disabled="@loading">Xóa bộ lọc</button> }
+        <button type="button" class="secondary" @onclick="LoadAsync" disabled="@loading"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Làm mới</button>
+        <span class="audit-count">@(data?.Total ?? 0) hoạt động</span>
+    </div>
+    <p class="audit-note">Ghi nhận từ khi tính năng được triển khai; giữ nguyên lịch sử quản trị tài khoản trước đó. Nội dung nhạy cảm được ẩn.</p>
+    @if (loading) { <p class="audit-empty" role="status">Đang tải nhật ký hệ thống…</p> }
+    else if (error is not null) { <div class="audit-empty" role="alert"><p>@error</p><button type="button" @onclick="LoadAsync">Thử lại</button></div> }
+    else if (data?.Items.Length is not > 0) { <p class="audit-empty">Không có hoạt động phù hợp với bộ lọc.</p> }
+    else
+    {
+        <div class="audit-table-wrap"><table><thead><tr><th>Thời gian</th><th>Phân hệ</th><th>Hành động</th><th>Người thực hiện</th><th>Đối tượng</th><th>Kết quả</th><th>Chi tiết</th></tr></thead><tbody>
+        @foreach (var item in data.Items)
+        {
+            <tr><td><time datetime="@item.Timestamp.ToString("O")">@LocalTime(item.Timestamp).ToString("dd/MM/yyyy")<small>@LocalTime(item.Timestamp).ToString("HH:mm:ss")</small></time></td>
+            <td>@ModuleLabel(item.Module)</td><td>@ActionLabel(item)</td><td>@ActorLabel(item)</td>
+            <td>@EntityLabel(item.EntityType)@if (item.TargetUsername is not null) { <small>@item.TargetUsername</small> }</td>
+            <td><span class="result @item.Outcome.ToLowerInvariant()">@OutcomeLabel(item.Outcome)</span></td>
+            <td><button type="button" class="detail-button" aria-label="Xem chi tiết @ActionLabel(item) lúc @LocalTime(item.Timestamp).ToString("HH:mm:ss")" @onclick="() => selected = item"><span class="material-symbols-outlined">visibility</span></button></td></tr>
+        }
+        </tbody></table></div>
+        <footer class="table-footer">
+            <span>@data.Total hoạt động</span>
+            <nav class="table-pagination" aria-label="Phân trang nhật ký hệ thống">
+                <button type="button" disabled="@(data.Page <= 1)" title="Trang trước" aria-label="Trang trước" @onclick="PreviousAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+                <span class="page-number" aria-current="page">@data.Page</span>
+                <button type="button" disabled="@(data.Page * data.PageSize >= data.Total)" title="Trang sau" aria-label="Trang sau" @onclick="NextAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+            </nav>
+        </footer>
+    }
+</section>
+@if (showFilters)
+{
+    <div class="audit-overlay" @onclick="CloseFilters" @onkeydown="FilterKey"><section class="audit-dialog filter-dialog" role="dialog" aria-modal="true" aria-labelledby="audit-filter-title" tabindex="-1" @ref="filterDialog" @onclick:stopPropagation>
+        <header><div><h2 id="audit-filter-title">Bộ lọc nhật ký hệ thống</h2><p>Chọn điều kiện để thu hẹp danh sách hoạt động.</p></div><button type="button" class="secondary" data-autofocus aria-label="Đóng bộ lọc" @onclick="CloseFilters">Đóng</button></header>
+        <form @onsubmit="ApplyAsync" @onsubmit:preventDefault>
+            <div class="audit-filters">
+                <label>Phân hệ<PropFlowSelect Value="@module" ValueChanged="v => module = v" Options="ModuleOptions" Placeholder="Tất cả phân hệ" AriaLabel="Lọc theo phân hệ" /></label>
+                <label>Hành động<PropFlowSelect Value="@action" ValueChanged="v => action = v" Options="ActionOptions" Placeholder="Tất cả hành động" AriaLabel="Lọc theo hành động" /></label>
+                <label>Kết quả<PropFlowSelect Value="@outcome" ValueChanged="v => outcome = v" Options="OutcomeOptions" Placeholder="Tất cả kết quả" AriaLabel="Lọc theo kết quả" /></label>
+                <label>Người thực hiện<input @bind="actor" @bind:event="oninput" placeholder="Tên tài khoản, họ tên hoặc mã người dùng" maxlength="100" /></label>
+                <label>Từ ngày<input type="date" @bind="dateFrom" /></label>
+                <label>Đến ngày<input type="date" @bind="dateTo" /></label>
+            </div>
+            @if (filterError is not null) { <p class="filter-error" role="alert">@filterError</p> }
+            <footer class="filter-actions"><button type="button" class="secondary" @onclick="ResetDraft">Đặt lại</button><button type="button" class="secondary" @onclick="CloseFilters">Hủy</button><button type="submit" disabled="@loading">Áp dụng</button></footer>
+        </form>
+    </section></div>
+}
+@if (selected is not null)
+{
+    <div class="audit-overlay" @onclick="Close" @onkeydown="ModalKey"><section class="audit-dialog" role="dialog" aria-modal="true" aria-labelledby="audit-detail-title" tabindex="-1" @ref="dialog" @onclick:stopPropagation>
+        <header><div><h2 id="audit-detail-title">Chi tiết hoạt động</h2><p>@ActionLabel(selected) · @ModuleLabel(selected.Module)</p></div><button type="button" class="secondary" data-autofocus aria-label="Đóng chi tiết hoạt động" @onclick="Close">Đóng</button></header>
+        <dl><dt>Thời gian</dt><dd>@LocalTime(selected.Timestamp).ToString("dd/MM/yyyy · HH:mm:ss")</dd><dt>Người thực hiện</dt><dd>@ActorLabel(selected)</dd>
+        <dt>Đối tượng</dt><dd>@EntityLabel(selected.EntityType) @selected.TargetUsername</dd><dt>Kết quả</dt><dd>@OutcomeLabel(selected.Outcome) @if(selected.HttpStatus.HasValue){<small>HTTP @selected.HttpStatus</small>}</dd></dl>
+        @if (selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
+        { <div class="legacy-change">@(selected.Action == "internal_account_created" ? "Tài khoản nội bộ được tạo" : Transition(selected.OldRole ?? selected.OldStatus, selected.NewRole ?? selected.NewStatus))</div> }
+        @if (selected.Changes?.Length > 0)
+        {
+            <div class="audit-table-wrap"><table class="changes"><thead><tr><th>Trường thay đổi</th><th>Trước</th><th>Sau</th></tr></thead><tbody>
+            @foreach (var change in selected.Changes) { <tr><td>@FieldLabel(change.Field)</td><td>@(change.Before ?? "—")</td><td>@(change.After ?? "—")</td></tr> }
+            </tbody></table></div>
+        }
+        else if (!selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
+        { <p class="audit-note">Bản ghi kết quả thao tác; không lưu nội dung yêu cầu hoặc thông tin xác thực.</p> }
+        <details><summary tabindex="0">Mã tham chiếu</summary><dl><dt>Đối tượng</dt><dd class="reference">@(selected.EntityId?.ToString() ?? selected.TargetAccountId?.ToString() ?? "Không có")</dd><dt>Người dùng</dt><dd class="reference">@(selected.ActorUserId?.ToString() ?? "Chưa xác định")</dd><dt>Liên kết thao tác</dt><dd class="reference">@(selected.CorrelationId ?? selected.Id.ToString())</dd></dl></details>
+    </section></div>
+}
+
+@code {
+    private PagedAdministrationActivities? data;
+    private AdministrationActivity? selected, lastFocused;
+    private ElementReference dialog;
+    private ElementReference filterDialog;
+    private IJSObjectReference? focusModule;
+    private bool loading;
+    private bool showFilters, filterFocused;
+    private string? filterError;
+    private string? error;
+    private string module = "", action = "", outcome = "", actor = "";
+    private DateOnly? dateFrom, dateTo;
+    private int page = 1;
+    private SystemActivityFilter applied = new();
+    private int ActiveFilterCount => new[] { !string.IsNullOrWhiteSpace(applied.Module), !string.IsNullOrWhiteSpace(applied.Action), !string.IsNullOrWhiteSpace(applied.Outcome), !string.IsNullOrWhiteSpace(applied.Actor), applied.DateFrom.HasValue, applied.DateTo.HasValue }.Count(x => x);
+    private readonly CancellationTokenSource lifetime = new();
+    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (showFilters && !filterFocused)
+        {
+            filterFocused = true;
+            focusModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2");
+            await focusModule.InvokeVoidAsync("open", filterDialog);
+        }
+        if (selected is not null && selected != lastFocused)
+        {
+            lastFocused = selected;
+            focusModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2");
+            await focusModule.InvokeVoidAsync("open", dialog);
+        }
+    }
+    private async Task LoadAsync()
+    {
+        loading = true; error = null;
+        var result = await Api.GetSystemActivityAsync(applied, page, lifetime.Token);
+        if (lifetime.IsCancellationRequested) return;
+        loading = false;
+        if (result.IsSuccess) { data = result.Data; page = data?.Page ?? 1; }
+        else { data = null; error = result.Message ?? "Không thể tải nhật ký hệ thống. Vui lòng thử lại."; }
+    }
+    private async Task ApplyAsync() { if (dateFrom > dateTo) { filterError = "Ngày bắt đầu không được sau ngày kết thúc."; return; } applied = new(module, action, outcome, actor.Trim(), dateFrom, dateTo); page = 1; await CloseFilters(); await LoadAsync(); }
+    private void OpenFilters() { module = applied.Module ?? ""; action = applied.Action ?? ""; outcome = applied.Outcome ?? ""; actor = applied.Actor ?? ""; dateFrom = applied.DateFrom; dateTo = applied.DateTo; filterError = null; showFilters = true; }
+    private async Task CloseFilters() { if (focusModule is not null && filterFocused) await focusModule.InvokeVoidAsync("close", filterDialog); showFilters = false; filterFocused = false; filterError = null; }
+    private Task FilterKey(KeyboardEventArgs e) => e.Key == "Escape" ? CloseFilters() : Task.CompletedTask;
+    private void ResetDraft() { module = action = outcome = actor = ""; dateFrom = dateTo = null; filterError = null; }
+    private Task ResetAsync() { module = action = outcome = actor = ""; dateFrom = dateTo = null; applied = new(); page = 1; return LoadAsync(); }
+    private Task PreviousAsync() { page--; return LoadAsync(); }
+    private Task NextAsync() { page++; return LoadAsync(); }
+    private async Task Close() { if (focusModule is not null) await focusModule.InvokeVoidAsync("close", dialog); selected = null; lastFocused = null; }
+    private Task ModalKey(KeyboardEventArgs e) => e.Key == "Escape" ? Close() : Task.CompletedTask;
+    private DateTimeOffset LocalTime(DateTimeOffset value) => data?.TimeZoneId is { } zone ? TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(zone)) : value.ToUniversalTime();
+    public async ValueTask DisposeAsync()
+    {
+        lifetime.Cancel(); lifetime.Dispose();
+        if (focusModule is null) return;
+        try { if (filterFocused) await focusModule.InvokeVoidAsync("close", filterDialog); if (selected is not null) await focusModule.InvokeVoidAsync("close", dialog); await focusModule.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+    private static string OutcomeLabel(string value) => value switch { "SUCCESS" => "Thành công", "DENIED" => "Bị từ chối", _ => "Thất bại" };
+    private static string ActorLabel(AdministrationActivity item) => item.ActorDisplayName ?? item.ActorUsername ?? (item.ActorUserId.HasValue ? "Không có thông tin tài khoản" : "Chưa xác định");
+    private static string Transition(string? before, string? after) => $"{before ?? "—"} → {after ?? "—"}";
+    private static string ActionLabel(AdministrationActivity item) => item.Label ?? item.Action switch { "internal_account_created" => "Tạo tài khoản", "internal_account_role_changed" => "Đổi vai trò", "internal_account_status_changed" => "Đổi trạng thái tài khoản", _ => "Thao tác hệ thống" };
+    private static string ModuleLabel(string value) => ModuleOptions.FirstOrDefault(x => x.Value == value)?.Label ?? "Hệ thống";
+    private static string EntityLabel(string? value) => value switch {
+        "Resident" or "Residents" => "Hồ sơ cư dân", "ResidentApartment" => "Quan hệ cư trú", "ResidentProfileAttachment" => "Tệp hồ sơ cư dân",
+        "ApartmentUnit" or "ApartmentUnits" => "Căn hộ", "ApartmentUnitType" or "ApartmentUnitTypes" => "Loại căn hộ", "ApartmentOwnership" or "ApartmentOwnerships" => "Quyền sở hữu căn hộ",
+        "InternalAccount" => "Tài khoản nội bộ", "Auth" => "Tài khoản", "Building" or "Buildings" => "Tòa nhà",
+        "Facility" or "Facilities" => "Tiện ích", "Equipment" or "Equipments" => "Thiết bị", "ServiceRequest" or "ServiceRequests" => "Yêu cầu dịch vụ",
+        "Complaint" or "Complaints" => "Khiếu nại", "MaintenanceTask" or "Maintenance" => "Công việc bảo trì", "MaintenanceSchedule" => "Lịch bảo trì",
+        "Invoice" or "InvoiceItem" => "Hóa đơn", "Payment" => "Thanh toán", "FeeRateRule" => "Cấu hình phí", "Announcement" => "Thông báo", "SystemConfiguration" => "Cấu hình hệ thống", _ => "Dữ liệu phân hệ" };
+    private static string FieldLabel(string value) => value switch {
+        "Status" => "Trạng thái", "FullName" => "Họ tên", "Name" => "Tên", "Email" => "Email", "PhoneNumber" => "Số điện thoại", "IdentityNumber" => "Số giấy tờ",
+        "HouseholdRole" => "Vai trò trong hộ", "ResidencyType" => "Hình thức cư trú", "RelationshipToHead" => "Quan hệ với chủ hộ", "StartDate" => "Ngày bắt đầu", "EndDate" => "Ngày kết thúc",
+        "IsActive" => "Đang hoạt động", "Area" => "Diện tích", "Bedrooms" => "Số phòng ngủ", "Bathrooms" => "Số phòng tắm", "UnitNumber" => "Số căn hộ", "FloorNumber" => "Tầng",
+        "ApartmentUnitId" => "Mã căn hộ", "ResidentId" => "Mã cư dân", "HouseholdHeadResidencyId" => "Mã quan hệ chủ hộ", "AssignedStaffId" => "Mã nhân viên được giao",
+        "UsableAreaM2" => "Diện tích", "BedroomCount" => "Số phòng ngủ", "BathroomCount" => "Số phòng tắm",
+        "DefaultArea" or "DefaultUsableAreaM2" => "Diện tích mặc định", "DefaultBedrooms" or "DefaultBedroomCount" => "Phòng ngủ mặc định", "DefaultBathrooms" or "DefaultBathroomCount" => "Phòng tắm mặc định", "Priority" => "Mức ưu tiên", "PaymentMethod" => "Hình thức thanh toán", _ => "Trường " + value };
+    private static readonly PropFlowSelectOption[] ModuleOptions = [new("", "Tất cả phân hệ"),new("Authentication","Tài khoản & bảo mật"),new("Administration","Quản trị"),new("Residents","Cư dân"),new("Apartments","Căn hộ"),new("PropertyAssets","Tòa nhà & tài sản"),new("ServiceRequests","Yêu cầu dịch vụ"),new("Complaints","Khiếu nại"),new("Maintenance","Bảo trì"),new("Billing","Phí & hóa đơn"),new("Payments","Thanh toán"),new("Communication","Thông báo"),new("AiClassification","AI phân loại"),new("AiRecommendation","AI đề xuất")];
+    private static readonly PropFlowSelectOption[] ActionOptions = [new("","Tất cả hành động"),new("created","Tạo dữ liệu"),new("updated","Cập nhật dữ liệu"),new("deleted","Xóa dữ liệu"),new("operation","Thao tác nghiệp vụ"),new("security_event","Tài khoản & bảo mật"),new("internal_account_created","Tạo tài khoản nội bộ"),new("internal_account_role_changed","Đổi vai trò"),new("internal_account_status_changed","Đổi trạng thái tài khoản")];
+    private static readonly PropFlowSelectOption[] OutcomeOptions = [new("","Tất cả kết quả"),new("SUCCESS","Thành công"),new("FAILED","Thất bại"),new("DENIED","Bị từ chối")];
+}

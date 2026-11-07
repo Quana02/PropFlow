@@ -2,6 +2,7 @@
 @implements IAsyncDisposable
 @inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState FinanceNotices
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 @using Microsoft.AspNetCore.SignalR.Client
 @using PropFlow.Web.Client.Features.Finance.Services
 @inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentNotificationConnectionFactory NotificationConnections
@@ -9,7 +10,7 @@
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 
 <HeadContent>
-    <link rel="stylesheet" href="css/resident-portal.css?v=20261015-4" />
+    <link rel="stylesheet" href="css/resident-portal.css?v=20261105-1" />
 </HeadContent>
 
 <div class="resident-portal">
@@ -36,6 +37,8 @@
             </footer>
 
             <ResidentNavigation />
+            @if (!Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/contact-management", StringComparison.OrdinalIgnoreCase))
+            { <PropFlow.Web.Client.Features.AiChatbot.Components.ResidentChatWidget /> }
         </div>
     </CascadingValue>
 </div>
@@ -48,6 +51,7 @@
     private HubConnection? _noticeConnection;
     protected override async Task OnInitializedAsync()
     {
+        Navigation.LocationChanged += ContactLocationChanged;
         FinanceNotices.Reset();
         await Task.WhenAll(LoadProfileAsync(), FinanceNotices.ReloadAsync());
     }
@@ -62,12 +66,14 @@
     }
     public async ValueTask DisposeAsync()
     {
+        Navigation.LocationChanged -= ContactLocationChanged;
         _noticeCancellation.Cancel();
         if (_noticeRefresh is not null) await _noticeRefresh;
         if (_noticeConnection is not null) await _noticeConnection.DisposeAsync();
         FinanceNotices.Reset();
         _noticeCancellation.Dispose();
     }
+    private void ContactLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) => _ = InvokeAsync(StateHasChanged);
 
     private async Task LoadProfileAsync()
     {
@@ -98,4 +104,3 @@
         }
     }
 }
-

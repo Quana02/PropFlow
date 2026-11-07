@@ -114,6 +114,9 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         // Initial schemas must exist before the cross-module integrity migrations run.
         await services.GetRequiredService<AuthenticationDbContext>().GetService<IMigrator>().MigrateAsync("20260914101250_CorrectAuthenticationEmailOtpVerification");
         await services.GetRequiredService<PropertyAssetsDbContext>().Database.MigrateAsync();
+        var property = services.GetRequiredService<PropertyAssetsDbContext>();
+        property.Buildings.Add(new Building("Chung cư kiểm thử", "Địa chỉ kiểm thử", DateTimeOffset.UtcNow, numberOfFloors: 100));
+        await property.SaveChangesAsync();
         await services.GetRequiredService<ApartmentsDbContext>().Database.MigrateAsync();
         await services.GetRequiredService<ResidentsDbContext>().GetService<IMigrator>().MigrateAsync("20260914063807_InitialResidents");
         await services.GetRequiredService<AdministrationDbContext>().Database.MigrateAsync();
@@ -224,7 +227,7 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
                 resident.Id,
                 apartment.Id,
                 HouseholdRole.HOUSEHOLD_HEAD,
-                ResidencyType.OWNER_OCCUPIED,
+                currentOwnership ? ResidencyType.OWNER_OCCUPIED : ResidencyType.TENANT,
                 DateOnly.FromDateTime(now.AddDays(-5).DateTime),
                 now);
             if (endedResidency)
@@ -275,6 +278,26 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         if (csrf) { var token = await client.GetFromJsonAsync<CsrfResponse>("api/v1/auth/csrf"); request.Headers.Add("X-CSRF-TOKEN", token!.Token); }
         return await client.SendAsync(request);
     }
+
+    [Fact]
+    public async Task Query_access_token_authenticates_both_resident_hubs_but_not_rest_endpoints()
+    {
+        using var client = Client();
+        var email = $"hub-auth-{Guid.NewGuid():N}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var (_, session) = await RegisterActivateAndLoginAsync(client, email);
+        var accessToken = Uri.EscapeDataString(session.AccessToken);
+
+        foreach (var hub in new[] { "support-chat", "announcements" })
+        {
+            using var negotiation = await client.PostAsync($"/hubs/{hub}/negotiate?negotiateVersion=1&access_token={accessToken}", null);
+            Assert.Equal(HttpStatusCode.OK, negotiation.StatusCode);
+        }
+
+        using var profile = await client.GetAsync($"api/v1/auth/me?access_token={accessToken}");
+        Assert.Equal(HttpStatusCode.Unauthorized, profile.StatusCode);
+    }
+
     private async Task<RegisterRequest> RegistrationRequestAsync(string username, string displayName, string email, string password = Password)
     {
         using var scope = database.Factory.Services.CreateScope();
@@ -774,6 +797,25 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         Assert.Equal(HttpStatusCode.NoContent, (await Post(client, "password/change", new ChangePasswordRequest(newPassword, Password), true)).StatusCode);
         client.DefaultRequestHeaders.Authorization = null;
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { }, true)).StatusCode);
+    }
+
+    [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
+    public async Task Tenant_head_cannot_activate_if_apartment_gains_an_owner_after_registration()
+    {
+        using var client = Client();
+        var username = "tenant_" + Guid.NewGuid().ToString("N")[..12];
+        var email = username + "@example.invalid";
+        var head = await database.SeedRegistrationResidentAsync(email, activeResidency: true);
+        using var registration = await Post(client, "register", await RegistrationRequestAsync(username, "Chủ hộ thuê", email));
+        Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
+        var challenge = (await registration.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+        Assert.NotEqual(Guid.Empty, challenge.ChallengeId);
+
+        await database.SeedRegistrationResidentAsync($"new-owner-{Guid.NewGuid():N}@example.invalid", currentOwnership: true, apartmentId: head.ApartmentId);
+        using var verification = await Post(client, "registration/verify", new VerifyChallengeRequest(challenge.ChallengeId, database.Factory.Mail.Codes[email]));
+        await AssertConflictAsync(verification, "eligibility_changed", "Thông tin cư dân không khớp hoặc chưa đủ điều kiện đăng ký tài khoản.");
+        using var scope = database.Factory.Services.CreateScope();
+        Assert.Null((await scope.ServiceProvider.GetRequiredService<ResidentsDbContext>().Residents.AsNoTracking().SingleAsync(x => x.Id == head.ResidentId)).UserId);
     }
 
     [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]

@@ -24,7 +24,7 @@ public sealed class SePayRateLimitTests
         using var client = server.CreateClient();
         for (var i = 0; i < 12; i++)
         {
-            using var response = await client.GetAsync(i % 2 == 0 ? "/sandbox/status" : "/oauth/status");
+            using var response = await client.GetAsync(i % 2 == 0 ? "/connection/status" : "/oauth/status");
             Assert.True(response.StatusCode == HttpStatusCode.OK, $"Status request {i + 1} returned {(int)response.StatusCode}; browsing SePay setup must not spend the authentication/OTP allowance.");
         }
     }
@@ -37,7 +37,7 @@ public sealed class SePayRateLimitTests
         using var client = server.CreateClient();
         for (var i = 0; i < 5; i++) Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/auth-entry", null)).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsync("/auth-entry", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/sandbox/status")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/connection/status")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/oauth/status")).StatusCode);
     }
 
@@ -47,14 +47,14 @@ public sealed class SePayRateLimitTests
         using var factory = new RateLimitFactory();
         using var server = Server(factory);
         using var client = server.CreateClient();
-        for (var i = 0; i < 10; i++) Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/sandbox/status")).StatusCode);
-        for (var i = 0; i < 2; i++) Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/sandbox/challenge", null)).StatusCode);
+        for (var i = 0; i < 10; i++) Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/connection/status")).StatusCode);
+        for (var i = 0; i < 2; i++) Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/accounts/challenge", null)).StatusCode);
         using var rejected = await client.PostAsync("/oauth/challenge", null);
         Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
         Assert.NotNull(rejected.Headers.RetryAfter);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/oauth/status")).StatusCode);
         client.DefaultRequestHeaders.Add("X-Test-Actor", "admin-two");
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/sandbox/challenge", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/accounts/challenge", null)).StatusCode);
     }
 
     [Fact]
@@ -63,10 +63,10 @@ public sealed class SePayRateLimitTests
         using var factory = new RateLimitFactory();
         using var server = Server(factory);
         using var client = server.CreateClient();
-        for (var i = 0; i < 3; i++) Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/sandbox/preview", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsync("/sandbox/preview", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/sandbox/status")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/sandbox/challenge", null)).StatusCode);
+        for (var i = 0; i < 3; i++) Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/accounts/preview", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsync("/accounts/preview", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/connection/status")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/accounts/challenge", null)).StatusCode);
     }
 
     private sealed class RateLimitFactory : PropFlowApiFactory
@@ -107,10 +107,10 @@ public sealed class SePayRateLimitTests
                 app.UseRouting(); app.UseRateLimiter();
                 app.UseEndpoints(endpoints =>
                 {
-                    endpoints.MapGet("/sandbox/status", _ => Task.CompletedTask).WithMetadata(Metadata<SePaySandboxController>("State"));
+                    endpoints.MapGet("/connection/status", _ => Task.CompletedTask).WithMetadata(Metadata<SePayConnectionController>("Current"));
                     endpoints.MapGet("/oauth/status", _ => Task.CompletedTask).WithMetadata(Metadata<SePayOAuthController>("State"));
-                    endpoints.MapPost("/sandbox/preview", _ => Task.CompletedTask).WithMetadata(Metadata<SePaySandboxController>("Preview"));
-                    endpoints.MapPost("/sandbox/challenge", _ => Task.CompletedTask).WithMetadata(Metadata<SePaySandboxController>("Challenge"));
+                    endpoints.MapPost("/accounts/preview", _ => Task.CompletedTask).WithMetadata(Metadata<SePayAccountsController>("Preview"));
+                    endpoints.MapPost("/accounts/challenge", _ => Task.CompletedTask).WithMetadata(Metadata<SePayAccountsController>("Challenge"));
                     endpoints.MapPost("/oauth/challenge", _ => Task.CompletedTask).WithMetadata(Metadata<SePayOAuthController>("Challenge"));
                     endpoints.MapPost("/auth-entry", _ => Task.CompletedTask).RequireRateLimiting("auth-entry");
                 });

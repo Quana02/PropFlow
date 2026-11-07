@@ -8,7 +8,7 @@
             <div><h2 id="payment-otp-title">Xác nhận bằng email OTP</h2><p>Mã đã được gửi tới <strong>@Challenge.MaskedEmail</strong></p></div>
         </header>
         <div class="otp-body">
-            <p>Nhập mã gồm 6 chữ số để @(Action == "SANDBOX_WEBHOOK_KEY" ? "lấy khóa nhận thông báo giao dịch SePay Sandbox" : Action == "SANDBOX_DEMO_ON" ? "bật thanh toán thử qua SePay và ẩn QR thật" : Action == "SANDBOX_DEMO_OFF" ? "tắt mô phỏng và trở về thanh toán thật" : Action == "SANDBOX_CONNECT" ? "lưu kết nối Sandbox" : Action == "SANDBOX_DISCONNECT" ? "ngắt kết nối Sandbox" : Action == "CONNECT" ? "kết nối tài khoản SePay" : Action == "WEBHOOK" ? "thiết lập nhận thông báo giao dịch" : Action == "DEACTIVATE" ? "vô hiệu hóa cấu hình nhận tiền" : "kích hoạt cấu hình nhận tiền").</p>
+            <p>Nhập mã gồm 6 chữ số để @(Action == "CONNECT" ? "kết nối tài khoản SePay" : Action == "WEBHOOK" ? "thiết lập nhận thông báo giao dịch" : Action == "DEACTIVATE" ? "vô hiệu hóa cấu hình nhận tiền" : "kích hoạt cấu hình nhận tiền").</p>
             <label>Mã xác minh
                 <input inputmode="numeric" autocomplete="one-time-code" maxlength="6" value="@otpCode" @oninput="OnCodeInput" disabled="@Busy" autofocus />
             </label>

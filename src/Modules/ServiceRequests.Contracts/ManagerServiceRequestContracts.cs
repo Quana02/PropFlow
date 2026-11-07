@@ -113,7 +113,8 @@ public sealed record ManagerServiceRequestDetailResponse(
     decimal ProposedAdditionalCost = 0,
     string? AdditionalCostNote = null,
     decimal ApprovedAdditionalCost = 0,
-    Guid? ServiceInvoiceId = null);
+    Guid? ServiceInvoiceId = null,
+    AdditionalCostConsentView? AdditionalCostConsent = null);
 
 public sealed record ReviewManagerServiceRequestRequest(string? Note = null);
 

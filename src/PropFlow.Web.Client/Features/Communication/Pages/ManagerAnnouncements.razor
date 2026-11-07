@@ -1,0 +1,6 @@
+@page "/manager/announcements"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "MANAGER")]
+<PageTitle>Thông báo chung - PropFlow</PageTitle>
+<PropFlow.Web.Client.Features.Communication.Components.AnnouncementWorkspace Manager="true" />
+

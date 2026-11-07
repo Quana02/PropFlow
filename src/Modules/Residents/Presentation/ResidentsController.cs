@@ -39,7 +39,7 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
                 || (r.Email != null && r.Email.ToUpper().Contains(term)) || (r.PhoneNumber != null && r.PhoneNumber.Contains(term)));
         }
         if (status is not null) query = query.Where(r => r.Status == status);
-        var filterDate = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
+        var filterDate = await residencyService.BusinessDateAsync(ct);
         var needsOwnerFilter = apartmentUnitId.HasValue || relationshipKind.HasValue;
         IReadOnlyList<Guid> currentOwnerIds = [];
         if (needsOwnerFilter)
@@ -70,13 +70,15 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
         var total = await query.CountAsync(ct);
         pageIndex = Math.Min(pageIndex, Math.Max(1, (int)Math.Ceiling(total / (double)pageSize)));
         var residents = await query.OrderBy(r => r.FullName).ThenBy(r => r.Id).Skip((pageIndex - 1) * pageSize).Take(pageSize)
-            .Select(r => new ResidentListProjection(r.Id, r.ResidentCode, r.FullName, r.PhoneNumber, r.Email, r.Status, r.UserId != null,
-                db.ResidentApartments.Where(a => a.ResidentId == r.Id && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate))
-                    .OrderByDescending(a => a.HouseholdRole == HouseholdRole.HOUSEHOLD_HEAD).Select(a => (Guid?)a.ApartmentUnitId).FirstOrDefault()))
+            .Select(r => new ResidentListProjection(r.Id, r.ResidentCode, r.FullName, r.PhoneNumber, r.Email, r.Status, r.UserId != null))
             .ToListAsync(ct);
         var residentIds = residents.Select(r => r.Id).ToArray();
         var ownerships = await apartmentRelationships.GetOwnershipsAsync(residentIds, ct);
-        var residencyApartmentIds = residents.Where(r => r.CurrentApartmentUnitId.HasValue).Select(r => r.CurrentApartmentUnitId!.Value).Distinct().ToArray();
+        var currentResidencies = await db.ResidentApartments.AsNoTracking()
+            .Where(a => residentIds.Contains(a.ResidentId) && a.Status == ResidencyStatus.ACTIVE
+                && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate))
+            .Select(a => new { a.ResidentId, a.ApartmentUnitId }).ToListAsync(ct);
+        var residencyApartmentIds = currentResidencies.Select(a => a.ApartmentUnitId).Distinct().ToArray();
         var apartmentReferences = await apartmentRelationships.GetApartmentsAsync(residencyApartmentIds, ct);
         var apartmentById = apartmentReferences.ToDictionary(x => x.Id);
         var today = filterDate;
@@ -86,8 +88,9 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
             var relations = ownerships.Where(x => x.ResidentId == resident.Id && x.StartDate <= today && x.EndDate is null)
                 .Select(x => new ResidentApartmentRelationshipSummary(x.ApartmentUnitId, x.UnitNumber, x.FloorNumber, true, false))
                 .ToDictionary(x => x.ApartmentUnitId);
-            if (resident.CurrentApartmentUnitId is { } apartmentId && apartmentById.TryGetValue(apartmentId, out var apartment))
+            foreach (var apartmentId in currentResidencies.Where(a => a.ResidentId == resident.Id).Select(a => a.ApartmentUnitId))
             {
+                if (!apartmentById.TryGetValue(apartmentId, out var apartment)) continue;
                 if (relations.TryGetValue(apartmentId, out var existing)) relations[apartmentId] = existing with { IsCurrentResident = true };
                 else relations[apartmentId] = new(apartment.Id, apartment.UnitNumber, apartment.FloorNumber, false, true);
             }
@@ -237,7 +240,8 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
 
     [HttpGet("apartments/{apartmentUnitId:guid}/eligible-household-heads")]
     [Authorize(Policy = ResidentsAuthorizationPolicies.Manage)]
-    public Task<IReadOnlyList<EligibleHouseholdHead>> EligibleHouseholdHeads(Guid apartmentUnitId, CancellationToken ct) => residencyService.EligibleHeadsAsync(apartmentUnitId, DateOnly.FromDateTime(clock.GetLocalNow().DateTime), ct);
+    public async Task<IReadOnlyList<EligibleHouseholdHead>> EligibleHouseholdHeads(Guid apartmentUnitId, CancellationToken ct) =>
+        await residencyService.EligibleHeadsAsync(apartmentUnitId, await residencyService.BusinessDateAsync(ct), ct);
 
     private Guid? ActorId() => Guid.TryParse(User.FindFirst("sub")?.Value, out var id) ? id : null;
 
@@ -364,7 +368,7 @@ public sealed record ResidentApartmentRelationshipSummary(Guid ApartmentUnitId, 
 public sealed record ResidentDetailResponse(Guid Id, string ResidentCode, string FullName, DateOnly? DateOfBirth, string? Gender, string? Nationality, string? IdentityType, string? IdentityNumber, DateOnly? IdentityIssuedDate, DateOnly? IdentityExpiryDate, string? PhoneNumber, string? Email, string? Note, string Status, bool HasAccount, IReadOnlyList<OwnershipItem> Ownerships, IReadOnlyList<ResidencyItem> Residencies);
 public sealed record OwnershipItem(Guid Id, Guid ApartmentUnitId, string UnitNumber, int FloorNumber, DateOnly StartDate, DateOnly? EndDate);
 public sealed record ResidencyItem(Guid Id, Guid ApartmentUnitId, string UnitNumber, int FloorNumber, string HouseholdRole, string ResidencyType, Guid? HouseholdHeadResidencyId, string? HouseholdHeadName, string? HouseholdHeadResidentCode, string? RelationshipToHead, DateOnly StartDate, DateOnly? EndDate, string Status, string? Note);
-file sealed record ResidentListProjection(Guid Id, string ResidentCode, string FullName, string? PhoneNumber, string? Email, ResidentStatus Status, bool HasAccount, Guid? CurrentApartmentUnitId);
+file sealed record ResidentListProjection(Guid Id, string ResidentCode, string FullName, string? PhoneNumber, string? Email, ResidentStatus Status, bool HasAccount);
 file sealed record ResidentProfileProjection(Guid Id, string ResidentCode, string FullName, DateOnly? DateOfBirth, string? Gender, string? Nationality, string? IdentityType, string? IdentityNumber, DateOnly? IdentityIssuedDate, DateOnly? IdentityExpiryDate, string? PhoneNumber, string? Email, string? Note, ResidentStatus Status, bool HasAccount);
 file sealed record ResidencyProjection(Guid Id, Guid ApartmentUnitId, HouseholdRole HouseholdRole, ResidencyType ResidencyType, Guid? HouseholdHeadResidencyId, HouseholdRelationship? RelationshipToHead, DateOnly StartDate, DateOnly? EndDate, ResidencyStatus Status, string? Note);
 file sealed record HouseholdHeadProjection(Guid ResidencyId, Guid ResidentId, string FullName, string ResidentCode);

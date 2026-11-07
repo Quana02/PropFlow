@@ -1,0 +1,117 @@
+@using PropFlow.Web.Client.Features.Apartment.Models
+@using PropFlow.Web.Client.Features.Apartment.Services
+@using PropFlow.Web.Client.Shared.Feedback
+@inject IApartmentApiClient Apartments
+
+<div class="type-backdrop" @onclick="Close">
+    <section class="type-dialog" role="dialog" aria-modal="true" aria-labelledby="unit-type-title" @onclick:stopPropagation="true">
+        <header><div><h2 id="unit-type-title">Loại căn hộ</h2><p>Cấu hình thông số để điền nhanh khi tạo căn hộ. Căn hộ đã lưu giữ nguyên thông số thực tế.</p></div><button type="button" aria-label="Đóng loại căn hộ" disabled="@busy" @onclick="Close">×</button></header>
+        <div class="type-body">
+            @if (Loading) { <p role="status">Đang tải loại căn hộ…</p> }
+            else if (Error is not null) { <p class="type-error" role="alert">@Error</p><button type="button" @onclick="Reload">Thử lại</button> }
+            else
+            {
+                @if (!showEditor)
+                {
+                <div class="type-toolbar"><strong>@Items.Count loại căn hộ</strong><button type="button" disabled="@busy" @onclick="NewType">＋ Thêm loại căn hộ</button></div>
+                @if (Items.Count == 0) { <p>Chưa có loại căn hộ. Hãy tạo loại đầu tiên.</p> }
+                <div class="type-list">
+                    @foreach (var item in Items)
+                    {
+                        <article><div><h3>@item.Name</h3><p>@AreaLabel(item.DefaultUsableAreaM2) · @CountLabel(item.DefaultBedroomCount, "phòng ngủ") · @CountLabel(item.DefaultBathroomCount, "phòng tắm")</p></div><div class="type-actions"><button type="button" disabled="@busy" aria-label="Chỉnh sửa loại @item.Name" @onclick="() => Edit(item)">Sửa</button><button type="button" class="danger" disabled="@busy" aria-label="Xóa loại @item.Name" @onclick="() => deleteTarget = item">Xóa</button></div></article>
+                    }
+                </div>
+                }
+                @if (showEditor)
+                {
+                    <div class="type-editor"><h3>@(editingId.HasValue ? "Chỉnh sửa loại căn hộ" : "Thêm loại căn hộ")</h3>
+                        <div class="type-fields">
+                            <label>Tên loại căn hộ *<input @ref="nameInput" aria-label="Tên loại căn hộ" maxlength="80" @bind="name" /></label>
+                            <label>Diện tích sử dụng mặc định (m²)<input aria-label="Diện tích sử dụng mặc định" type="text" inputmode="decimal" @bind="areaText" @bind:event="oninput" placeholder="Chưa thiết lập" /></label>
+                            <label>Số phòng ngủ mặc định<input aria-label="Số phòng ngủ mặc định" type="number" min="0" step="1" @bind="bedrooms" placeholder="Chưa thiết lập" /></label>
+                            <label>Số phòng tắm mặc định<input aria-label="Số phòng tắm mặc định" type="number" min="0" step="1" @bind="bathrooms" placeholder="Chưa thiết lập" /></label>
+                        </div>
+                        <small>Có thể để trống thông số chưa xác định. Diện tích dùng giới hạn hiện tại từ 25 m²; Studio có thể có 0 phòng ngủ.</small>
+                        @if (saveError is not null) { <p class="type-error" role="alert">@saveError</p> }
+                        <footer><button type="button" disabled="@busy" @onclick="CancelEdit">Hủy chỉnh sửa</button><button type="button" class="primary" disabled="@busy" @onclick="Save">@(busy ? "Đang lưu…" : "Lưu loại căn hộ")</button></footer>
+                    </div>
+                }
+            }
+        </div>
+    </section>
+</div>
+@if (deleteTarget is not null)
+{
+    <PropFlowConfirmationDialog Title="Xóa loại căn hộ?" Message="@($"Bạn có chắc muốn xóa loại “{deleteTarget.Name}”? Loại đang được căn hộ sử dụng sẽ không thể xóa.")" Busy="@busy" ConfirmText="Xóa loại" OnConfirm="Delete" OnCancel="CancelDelete" />
+}
+@if (notice is not null) { <PropFlowToast @key="noticeVersion" Message="@notice" Severity="@noticeSeverity" OnDismiss="() => notice = null" /> }
+
+@code {
+    [Parameter] public IReadOnlyList<ApartmentUnitTypeResponse> Items { get; set; } = [];
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public EventCallback Reload { get; set; }
+    [Parameter] public EventCallback Closed { get; set; }
+    private Guid? editingId;
+    private string name = "", areaText = "";
+    private int? bedrooms, bathrooms;
+    private bool showEditor, busy;
+    private string? saveError, notice;
+    private string noticeSeverity = "success";
+    private int noticeVersion;
+    private ApartmentUnitTypeResponse? deleteTarget;
+    private ElementReference nameInput;
+    private bool focusEditor;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusEditor || !showEditor || Loading || Error is not null) return;
+        focusEditor = false;
+        await nameInput.FocusAsync();
+    }
+    private void NewType() { editingId = null; name = areaText = ""; bedrooms = bathrooms = null; saveError = null; showEditor = true; focusEditor = true; }
+    private void Edit(ApartmentUnitTypeResponse item) { editingId = item.Id; name = item.Name; areaText = ApartmentAreaInput.Format(item.DefaultUsableAreaM2); bedrooms = item.DefaultBedroomCount; bathrooms = item.DefaultBathroomCount; saveError = null; showEditor = true; focusEditor = true; }
+    private void CancelEdit() { if (!busy) showEditor = false; }
+    private Task Close() => busy ? Task.CompletedTask : Closed.InvokeAsync();
+    private void CancelDelete() { if (!busy) deleteTarget = null; }
+    private void Notify(string text, string severity = "success") { notice = text; noticeSeverity = severity; noticeVersion++; }
+    private async Task Save()
+    {
+        if (busy) return;
+        saveError = null;
+        var area = ApartmentAreaInput.Parse(areaText);
+        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 80) { saveError = "Nhập tên loại căn hộ, tối đa 80 ký tự."; return; }
+        if (!string.IsNullOrWhiteSpace(areaText) && (area is null or < 25 or > 99999999.99m || decimal.Round(area.Value, 2) != area.Value)) { saveError = "Diện tích mặc định phải từ 25 m², tối đa 99.999.999,99 m² và không quá 2 chữ số thập phân."; return; }
+        if (bedrooms is < 0 || bathrooms is < 0) { saveError = "Số phòng phải là số nguyên không âm."; return; }
+        busy = true;
+        try
+        {
+            var result = editingId.HasValue
+                ? await Apartments.UpdateUnitTypeAsync(editingId.Value, new() { Name = name.Trim(), DefaultUsableAreaM2 = area, DefaultBedroomCount = bedrooms, DefaultBathroomCount = bathrooms })
+                : await Apartments.CreateUnitTypeAsync(new() { Name = name.Trim(), DefaultUsableAreaM2 = area, DefaultBedroomCount = bedrooms, DefaultBathroomCount = bathrooms });
+            if (!result.IsSuccess) { saveError = result.Message ?? "Không thể lưu loại căn hộ."; return; }
+            showEditor = false;
+            await Changed.InvokeAsync();
+            Notify("Đã lưu loại căn hộ.");
+        }
+        finally { busy = false; }
+    }
+    private async Task Delete()
+    {
+        if (busy || deleteTarget is null) return;
+        busy = true;
+        try
+        {
+            var id = deleteTarget.Id;
+            var result = await Apartments.DeleteUnitTypeAsync(id);
+            deleteTarget = null;
+            if (!result.IsSuccess) { Notify(result.Message ?? "Không thể xóa loại căn hộ.", "error"); return; }
+            if (editingId == id) showEditor = false;
+            await Changed.InvokeAsync();
+            Notify("Đã xóa loại căn hộ.");
+        }
+        finally { busy = false; }
+    }
+    private static string AreaLabel(decimal? area) => area.HasValue ? $"{ApartmentAreaInput.Format(area)} m²" : "Chưa có diện tích";
+    private static string CountLabel(int? count, string label) => count.HasValue ? $"{count} {label}" : $"Chưa có số {label}";
+}

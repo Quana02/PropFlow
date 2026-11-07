@@ -6,8 +6,14 @@ using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.Authentication.Infrastructure;
 
-public sealed class InternalAccountDirectory(AuthenticationDbContext db, IAuthSecrets secrets) : IInternalAccountDirectory
+public sealed class InternalAccountDirectory(AuthenticationDbContext db, IAuthSecrets secrets) : IInternalAccountDirectory, IAuditActorLookup
 {
+    public async Task<IReadOnlyList<Guid>> FindIdsAsync(string search, CancellationToken ct)
+    {
+        var term = search.Trim().ToUpperInvariant();
+        return await db.UserAccounts.AsNoTracking().Where(x => x.Username.ToUpper().Contains(term) || x.DisplayName.ToUpper().Contains(term))
+            .Select(x => x.Id).ToArrayAsync(ct);
+    }
     public async Task<IReadOnlyList<InternalAccountRecord>> GetAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct) =>
         await db.UserAccounts.AsNoTracking().Where(x => userIds.Contains(x.Id))
             .Select(x => new InternalAccountRecord(x.Id, x.Username, x.DisplayName, x.Email, x.Status.ToString())).ToArrayAsync(ct);

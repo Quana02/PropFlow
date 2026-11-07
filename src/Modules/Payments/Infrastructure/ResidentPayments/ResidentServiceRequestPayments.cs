@@ -25,25 +25,11 @@ public sealed class ResidentServiceRequestPayments(
     IPaymentAccountProtector protector,
     TimeProvider clock,
     IOptions<SePayOptions>? options = null,
-    IOptions<PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthOptions>? oauth = null,
-    PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePaySandbox? sandboxSetup = null)
+    IOptions<PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthOptions>? oauth = null)
 {
     public async Task<ResidentServiceRequestPaymentView> GetAsync(Guid serviceRequestId, Guid userId, CancellationToken ct)
     {
         var settlement = await OwnedSettlementAsync(serviceRequestId, userId, ct);
-        var sandbox = await db.SePaySandboxConnections.AsNoTracking().SingleOrDefaultAsync(ct);
-        if (sandbox?.DemoEnabled == true)
-        {
-            var simulation = await db.SandboxPaymentSimulations.AsNoTracking().SingleOrDefaultAsync(x => x.InvoiceId == settlement.InvoiceId && x.UserId == userId, ct);
-            var display = SandboxPaymentDisplay.Balance(settlement.TotalAmount, settlement.ConfirmedPaidAmount, simulation?.VerifiedAmount ?? 0);
-            return new(serviceRequestId, settlement.InvoiceId, settlement.InvoiceNumber, settlement.TotalAmount,
-                display.Paid, display.Outstanding, display.Status,
-                simulation?.VerifiedAmount > 0 ? "SANDBOX_VERIFIED" : "SANDBOX_PENDING", null, null, null,
-                simulation?.BankName, simulation?.BankCode, simulation?.AccountLast4 is { } last4 ? "******" + last4 : null, simulation?.AccountName, null,
-                TransferCode: simulation?.TransferCode,
-                PaymentEnvironment: "SANDBOX", SandboxSimulationAvailable: sandbox.ProtectedApiToken is not null && sandbox.LastCheckSucceeded && sandbox.ProtectedWebhookKey is not null,
-                SimulatedTransferAmount: simulation?.VerifiedAmount > 0 ? simulation.VerifiedAmount : null);
-        }
         var payment = await LatestAsync(settlement.InvoiceId, userId, ct);
         var destination = await DestinationAsync(settlement.InvoiceId, ct);
         var automatic = await AutomaticAsync(destination, ct);
@@ -62,7 +48,6 @@ public sealed class ResidentServiceRequestPayments(
     public async Task<byte[]> QrAsync(Guid serviceRequestId, Guid userId, CancellationToken ct)
     {
         var settlement = await OwnedSettlementAsync(serviceRequestId, userId, ct);
-        await EnsureLiveAsync(ct);
         if (settlement.OutstandingAmount <= 0)
             throw new ResidentPaymentFailure(409, "invoice_already_paid", "Hóa đơn đã được thanh toán.");
         var destination = await DestinationAsync(settlement.InvoiceId, ct)
@@ -88,7 +73,6 @@ public sealed class ResidentServiceRequestPayments(
     public async Task<ResidentServiceRequestPaymentView> ReportAsync(
         Guid serviceRequestId, Guid userId, ReportResidentServiceRequestTransferRequest request, CancellationToken ct)
     {
-        await EnsureLiveAsync(ct);
         var reference = request.ReferenceNumber?.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(reference) || reference.Length > 100)
             throw new ResidentPaymentFailure(400, "invalid_transfer_reference", "Vui lòng nhập mã giao dịch hợp lệ.");
@@ -123,47 +107,6 @@ public sealed class ResidentServiceRequestPayments(
         }
         if (transaction is not null) await transaction.CommitAsync(ct);
         return await GetAsync(serviceRequestId, userId, ct);
-    }
-
-    public async Task<ResidentServiceRequestPaymentView> PrepareSandboxAsync(Guid serviceRequestId, Guid userId, CancellationToken ct)
-    {
-        var settlement = await OwnedSettlementAsync(serviceRequestId, userId, ct);
-        var version = await db.SePaySandboxConnections.AsNoTracking().Select(x => (int?)x.Version).SingleOrDefaultAsync(ct);
-        if (sandboxSetup is null) throw new ResidentPaymentFailure(409, "sandbox_setup_required", "Cần cấu hình kết nối và khóa webhook Sandbox trước.");
-        PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SandboxReceivingAccount account;
-        try { account = await sandboxSetup.ReceivingAccountAsync(ct); }
-        catch (PaymentSettingsFailure e) { throw new ResidentPaymentFailure(e.Status, e.Code, e.Message); }
-        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
-        if (db.Database.IsNpgsql()) await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(728405193)", ct);
-        var sandbox = await db.SePaySandboxConnections.AsNoTracking().SingleOrDefaultAsync(ct);
-        if (sandbox?.DemoEnabled != true || sandbox.Version != version || sandbox.ProtectedApiToken is null || !sandbox.LastCheckSucceeded || sandbox.ProtectedWebhookKey is null)
-            throw new ResidentPaymentFailure(409, "sandbox_simulation_disabled", "Cấu hình Sandbox đã thay đổi hoặc chưa sẵn sàng. Vui lòng tải lại.");
-        if (settlement.OutstandingAmount <= 0) throw new ResidentPaymentFailure(409, "invoice_already_paid", "Hóa đơn đã được thanh toán.");
-        var existing = await db.SandboxPaymentSimulations.SingleOrDefaultAsync(x => x.InvoiceId == settlement.InvoiceId, ct);
-        if (existing is null)
-        {
-            existing = new() { InvoiceId = settlement.InvoiceId, ServiceRequestId = serviceRequestId, UserId = userId, CreatedAt = clock.GetUtcNow() };
-            db.SandboxPaymentSimulations.Add(existing);
-        }
-        if (existing.UserId != userId) throw new ResidentPaymentFailure(409, "sandbox_owner_changed", "Hóa đơn thử nghiệm đã được gắn với tài khoản khác.");
-        if (existing.TransferCode is null)
-        {
-            existing.TransferCode = "PS" + Guid.NewGuid().ToString("N")[..22].ToUpperInvariant();
-            existing.RequestedAmount = settlement.OutstandingAmount; existing.VerifiedAmount = 0;
-            existing.ProtectedAccountNumber = protector.Protect(account.AccountNumber);
-            existing.AccountLast4 = account.AccountNumber[^4..]; existing.AccountName = account.AccountName;
-            existing.BankName = account.BankName; existing.BankCode = account.BankCode;
-            existing.GatewayAliases = System.Text.Json.JsonSerializer.Serialize(new[] { account.BankCode, account.BankName, account.ShortName }.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray());
-        }
-        await db.SaveChangesAsync(ct);
-        if (tx is not null) await tx.CommitAsync(ct);
-        return await GetAsync(serviceRequestId, userId, ct);
-    }
-
-    private async Task EnsureLiveAsync(CancellationToken ct)
-    {
-        if (await db.SePaySandboxConnections.AsNoTracking().AnyAsync(x => x.DemoEnabled, ct))
-            throw new ResidentPaymentFailure(409, "sandbox_real_transfer_disabled", "Đang bật mô phỏng Sandbox. Chức năng QR và báo chuyển khoản thật được tạm ẩn.");
     }
 
     private async Task<ServiceRequestSettlementSnapshot> OwnedSettlementAsync(Guid serviceRequestId, Guid userId, CancellationToken ct)

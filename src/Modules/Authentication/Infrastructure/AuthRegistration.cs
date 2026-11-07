@@ -37,6 +37,7 @@ public static class AuthRegistration
         services.AddHostedService(sp => sp.GetRequiredService<AuthEmailQueue>());
         services.AddScoped<IAuthStore, AuthStore>();
         services.AddScoped<IInternalAccountDirectory, InternalAccountDirectory>();
+        services.AddScoped<IAuditActorLookup, InternalAccountDirectory>();
         services.AddScoped<IPrivilegedActionOtp, PrivilegedActionOtp>();
         services.AddScoped<AuthUseCases>();
         services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly);
@@ -86,7 +87,9 @@ public static class AuthRegistration
                 {
                     if ((context.HttpContext.Request.Path.StartsWithSegments("/hubs/maintenance") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/service-requests") ||
-                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/resident-notifications")) &&
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/resident-notifications") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/support-chat") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/announcements")) &&
                         context.Request.Query.TryGetValue("access_token", out var accessToken))
                     {
                         context.Token = accessToken;
