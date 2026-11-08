@@ -55,6 +55,8 @@ public sealed class AuthTestMail : IAuthEmail
         Codes[email] = code;
         return Task.CompletedTask;
     }
+    public Task SendEmailChangeCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct) =>
+        SendCodeAsync(email, code, false, expiryMinutes, ct);
 }
 public sealed class AuthTestClock : TimeProvider
 {

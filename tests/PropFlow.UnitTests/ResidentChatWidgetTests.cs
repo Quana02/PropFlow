@@ -19,7 +19,7 @@ public sealed class ResidentChatWidgetTests
     public async Task ResidentCanOpenAskReadEscapedExcerptsAndClearTheSession()
     {
         var capture = new Capture();
-        using var services = new ServiceCollection().AddLogging().AddSingleton<IComponentActivator>(capture)
+        using var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IComponentActivator>(capture)
             .AddSingleton<AuthenticatedApiClient>(sp => new(new HttpClient(new Responses()) { BaseAddress = new("https://test.invalid") }, sp.GetRequiredService<ILogger<ApiClient>>()))
             .AddSingleton<ResidentChatApiClient>().BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());

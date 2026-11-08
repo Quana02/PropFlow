@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Complaints.Models
 @using PropFlow.Web.Client.Services.Api
 @inject PropFlow.Web.Client.Features.Complaints.Services.ComplaintApiClient Api
@@ -10,7 +11,7 @@
         @if (Role == "RESIDENT" && !Id.HasValue) { <button class="primary" disabled="@busy" @onclick="() => composing = !composing"><span class="material-symbols-outlined" aria-hidden="true">@(composing ? "close" : "add")</span>@(composing ? "Đóng soạn thảo" : "Gửi phản ánh mới")</button> }
     </header>
     @if (error is not null) { <div role="alert" class="feedback error">@error <button @onclick="LoadAsync" disabled="@busy">Tải lại</button></div> }
-    @if (success is not null) { <p role="status" class="feedback">@success</p> }
+
     @if (busy) { <p role="status">Đang tải dữ liệu…</p> }
     <fieldset disabled="@busy">
     @if (detail is null)
@@ -97,6 +98,8 @@
 </section>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public string Role { get; set; } = "RESIDENT";
     [Parameter] public Guid? Id { get; set; }
     private readonly CancellationTokenSource cancellation = new();
@@ -105,7 +108,7 @@
     private ComplaintContextOptions? options;
     private IReadOnlyList<StaffOption> staff = [];
     private readonly Dictionary<Guid, string> results = [];
-    private string? error, success;
+    private string? error;
     private bool busy, composing;
     private int page = 1;
     private string search = "", status = "", subject = "", description = "", workTitle = "", instruction = "", response = "", contextSearch = "";
@@ -147,18 +150,22 @@
     private string FormatTime(DateTimeOffset value) => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(value, detail!.TimeZoneId).ToString("dd/MM/yyyy HH:mm");
     private async Task SubmitAsync()
     {
-        busy = true; error = null; success = null;
-        try { var result = await Api.SubmitAsync(subject, description, cancellation.Token); if (result.IsSuccess && result.Data is not null) Open(result.Data.Id); else error = result.Message ?? "Không gửi được phản ánh."; }
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        busy = true; error = null;
+        try { var result = await Api.SubmitAsync(subject, description, cancellation.Token); if (result.IsSuccess && result.Data is not null && operationFeedback.IsCurrent) { operationFeedback.Publish(() => Toasts.SuccessAfterNavigation("Đã gửi phản ánh", "Phản ánh đã được tiếp nhận.", $"{Root}/{result.Data.Id}")); Open(result.Data.Id); } else { if (result.ValidationErrors?.Count > 0) error = string.Join(" ", result.ValidationErrors.Values.SelectMany(value => value)); else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không gửi được phản ánh.")); } }
         finally { busy = false; }
     }
     private async Task ActAsync(string action, object? body = null)
     {
-        busy = true; error = null; success = null;
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        busy = true; error = null;
         try
         {
             var result = await Api.ActionAsync(detail!.Id, action, body, cancellation.Token);
-            if (result.IsSuccess) { detail = result.Data; CopyContext(); success = "Đã lưu thay đổi."; }
-            else error = result.Message ?? "Không thực hiện được thao tác.";
+            if (result.IsSuccess) { detail = result.Data; CopyContext(); operationFeedback.Publish(() => Toasts.Success("Đã lưu thay đổi.")); }
+            else { if (result.ValidationErrors?.Count > 0) error = string.Join(" ", result.ValidationErrors.Values.SelectMany(value => value)); else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thực hiện được thao tác.")); }
         }
         finally { busy = false; }
     }
@@ -172,5 +179,5 @@
     private Task SearchAsync() { page = 1; return LoadAsync(); }
     private Task PreviousAsync() { page--; return LoadAsync(); }
     private Task NextAsync() { page++; return LoadAsync(); }
-    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  cancellation.Cancel(); cancellation.Dispose(); }
 }

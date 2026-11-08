@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.AiChatbot.Contracts
 @using PropFlow.Web.Client.Features.AiChatbot.Services
 @implements IDisposable
@@ -51,6 +52,9 @@
 </div>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime chatFeedback = new();
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private static readonly string[] Suggestions = ["Khi có chi phí sửa chữa phát sinh thì làm thế nào?", "Nội quy sử dụng khu vực chung là gì?", "Làm thế nào để gửi yêu cầu dịch vụ?"];
     private readonly CancellationTokenSource lifetime = new();
     private readonly List<Turn> turns = [];
@@ -59,11 +63,11 @@
     private bool open, busy, configured, blocked, loadingSource, checkedStatus;
     private PublishedKnowledgeSource? source;
     private sealed record Turn(string Question, ResidentChatReply? Reply);
-    private void Close() => open = false;
+    private void Close() { chatFeedback.Invalidate(); open = false; }
     private void Clear() { turns.Clear(); question = ""; error = null; source = null; }
     private async Task Toggle()
     {
-        open = !open;
+        open = !open; if (!open) chatFeedback.Invalidate();
         if (!open || checkedStatus) return;
         busy = true;
         try
@@ -78,6 +82,8 @@
     private async Task Suggest(string text) { question = text; await Send(); }
     private async Task Send()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, chatFeedback);
+
         if (busy || blocked || question.Trim().Length < 2) return;
         var text = question.Trim(); busy = true; error = null; question = "";
         if (turns.Count == 20) turns.RemoveAt(0);
@@ -85,8 +91,9 @@
         try
         {
             var result = await Api.AskAsync(text, lifetime.Token);
+            if (lifetime.IsCancellationRequested) return;
             if (result.IsSuccess && result.Data is not null) turns[^1] = new(text, result.Data);
-            else { error = result.Message; question = text; turns.RemoveAt(turns.Count - 1); }
+            else { if (result.StatusCode is 401 or 403 || result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); question = text; turns.RemoveAt(turns.Count - 1); }
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { busy = false; }
@@ -103,5 +110,5 @@
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { loadingSource = false; }
     }
-    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  lifetime.Cancel(); lifetime.Dispose(); }
 }

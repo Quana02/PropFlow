@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/login"
 @layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
 @inject AuthSession Session
@@ -7,10 +9,7 @@
 <h2>Đăng Nhập Hệ Thống</h2>
 <p class="auth-form-description">Truy cập tài khoản PropFlow của bạn.</p>
 @if (Session.Notice != null) { <p class="feedback" role="status">@Session.Notice</p> }
-@if (!string.IsNullOrWhiteSpace(toastMessage))
-{
-    <PropFlowToast @key="toastVersion" Message="@toastMessage" Severity="error" DurationMs="4000" OnDismiss="DismissToast" />
-}
+
 <EditForm Model="form" OnValidSubmit="Submit" OnInvalidSubmit="HandleInvalidSubmit">
     <DataAnnotationsValidator />
     <label for="username">Tên đăng nhập</label>
@@ -28,31 +27,34 @@
 <nav class="auth-links auth-links-login"><span>Chưa có tài khoản?</span><a href="/register">Tạo tài khoản</a><a class="auth-resume" href="/registration/resume">Đã đăng ký? Tiếp tục xác minh</a></nav>
 @if (Session.Notice?.Contains("chưa xác nhận") == true) { <button class="secondary" disabled="@busy" @onclick="RetryLogout">Thử thu hồi phiên lại</button> }
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private readonly LoginForm form = new();
     private bool busy;
     private bool showPassword;
-    private string? toastMessage;
-    private int toastVersion;
 
     private void HandleInvalidSubmit(EditContext _)
         => ShowToast("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.");
 
     private async Task Submit()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy) return;
 
-        DismissToast();
         busy = true;
         try
         {
             var result = await Session.LoginAsync(new(form.Username, form.Password));
+            if (!operationFeedback.IsCurrent) return;
             if (result.IsSuccess)
             {
                 Navigation.NavigateTo(RoleHomeNavigation.Home(Session.User?.Role));
                 return;
             }
 
-            ShowToast(GetErrorMessage(result));
+            operationFeedback.Publish(() => ShowToast(GetErrorMessage(result)));
         }
         finally
         {
@@ -63,11 +65,13 @@
 
     private async Task RetryLogout()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         busy = true;
         try
         {
             var result = await Session.LogoutAsync();
-            if (!result.IsSuccess) ShowToast(GetErrorMessage(result));
+            if (!result.IsSuccess) operationFeedback.Publish(() => ShowToast(GetErrorMessage(result)));
         }
         finally
         {
@@ -75,13 +79,7 @@
         }
     }
 
-    private void ShowToast(string message)
-    {
-        toastMessage = message;
-        toastVersion++;
-    }
-
-    private void DismissToast() => toastMessage = null;
+    private void ShowToast(string message) => Toasts.Error(message);
 
     private static string GetErrorMessage(ApiResult result)
     {

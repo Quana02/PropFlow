@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @implements IDisposable
 @page "/finance/invoices/unpaid"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
@@ -56,11 +57,14 @@
 </div>
 
 @if (collecting is not null) { <CollectPaymentDialog @key="collecting.Id" Invoice="collecting" Saved="CollectionSaved" Closed="() => collecting = null" /> }
-@if (collectionNotice is not null) { <PropFlow.Web.Client.Shared.Feedback.PropFlowToast Message="@collectionNotice" Severity="success" DurationMs="2000" OnDismiss="() => collectionNotice = null" /> }
 @code {
-    private string? collectionNotice;
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
+
     private InvoiceBalance? collecting;
-    private async Task CollectionSaved() { collecting = null; await ReloadAsync(); collectionNotice = "Đã ghi nhận khoản thu vào tổng thu. Hóa đơn còn dư nợ tiếp tục nằm trong danh sách chưa thu hoặc nợ quá hạn."; }
+    private async Task CollectionSaved() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+ collecting = null; await ReloadAsync(); operationFeedback.Publish(() => Toasts.Success("Đã ghi nhận khoản thu vào tổng thu. Hóa đơn còn dư nợ tiếp tục nằm trong danh sách chưa thu hoặc nợ quá hạn.")); }
     private PagedFinanceResult<InvoiceBalance>? data;
     private bool loading;
     private string? error;
@@ -93,7 +97,7 @@
         }, delayMs);
     }
     private Task SearchChanged() => LoadAsync(1, 350);
-    public void Dispose() => requests.Dispose();
+    public void Dispose() { toastLifetime.Dispose(); requests.Dispose(); }
     private Task ReloadAsync() => LoadAsync(page);
     private Task PreviousPage() => LoadAsync(page - 1);
     private Task NextPage() => LoadAsync(page + 1);

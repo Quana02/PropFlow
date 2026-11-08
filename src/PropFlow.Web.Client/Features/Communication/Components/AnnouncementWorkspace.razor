@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Communication.Services
 @inject AnnouncementApiClient Api
 @inject AnnouncementRealtimeClient Realtime
@@ -16,11 +17,11 @@
     </header>
     }
     @if (error is not null) { <div class="notice error" role="alert">@error <button @onclick="LoadAsync" disabled="@busy">Tải lại danh sách</button></div> }
-    @if (success is not null) { <div class="notice success" role="status"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span>@success</div> }
+
     @if (Manager && composing)
     {
         <section class="panel composer" aria-labelledby="compose-title">
-            <header class="panel-heading"><div><h2 id="compose-title">Soạn thông báo mới</h2><p>Thông báo sẽ được gửi đến tất cả cư dân được phép truy cập.</p></div><button disabled="@publishing" @onclick="CloseComposer">Đóng soạn thảo</button></header>
+            <header class="panel-heading"><div><h2 id="compose-title">Soạn thông báo mới</h2><p>Thông báo sẽ được gửi đến tất cả cư dân được phép truy cập.</p></div><button disabled="@publishing" @onclick="CancelComposerFeedbackCloseComposer">Đóng soạn thảo</button></header>
             <form @onsubmit="PublishAsync" @onsubmit:preventDefault>
                 <fieldset disabled="@publishing">
                     @if (!preview)
@@ -79,6 +80,11 @@
 </section>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime composerFeedback = new();
+    private void CancelComposerFeedbackCloseComposer() { CloseComposer(); if (!composing) composerFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public bool Manager { get; set; }
     [Parameter] public bool Embedded { get; set; }
     [SupplyParameterFromQuery(Name = "announcement")] public Guid? RequestedAnnouncement { get; set; }
@@ -87,7 +93,7 @@
     private Guid? appliedAnnouncement;
     private readonly CancellationTokenSource cancellation = new();
     private string title = "", content = "";
-    private string? error, success;
+    private string? error;
     private AnnouncementPage? data;
     private AnnouncementView? selected;
     private int page = 1;
@@ -118,7 +124,7 @@
     private string PublishedTime(AnnouncementView item) => item.PublishedAt.HasValue && data is not null
         ? TimeZoneInfo.ConvertTimeBySystemTimeZoneId(item.PublishedAt.Value, data.TimeZoneId).ToString("dd/MM/yyyy · HH:mm") : "Chưa có ngày đăng";
     private void Select(AnnouncementView item) { selected = item; mobileReading = true; }
-    private void OpenComposer() { composing = true; preview = false; success = null; }
+    private void OpenComposer() { composing = true; preview = false;  }
     private void CloseComposer() { composing = false; preview = false; }
     private void TogglePreview() => preview = !preview;
     private async Task LoadCoreAsync()
@@ -136,8 +142,10 @@
     }
     private async Task PublishAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, composerFeedback);
+
         if (busy || !CanPublish) return;
-        publishing = true; error = null; success = null;
+        publishing = true; error = null;
         try
         {
             var result = await Api.PublishAsync(title, content, cancellation.Token);
@@ -145,14 +153,14 @@
             {
                 title = ""; content = ""; page = 1; composing = false; preview = false; mobileReading = false;
                 selected = result.Data;
-                success = "Đã đăng thông báo cho cư dân.";
+                operationFeedback.Publish(() => Toasts.Success("Đã đăng thông báo cho cư dân."));
                 await LoadAsync();
             }
-            else { error = result.Message ?? "Không đăng được thông báo."; preview = false; }
+            else { { if (result.ValidationErrors?.Count > 0) error = string.Join(" ", result.ValidationErrors.Values.SelectMany(value => value)); else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không đăng được thông báo.")); } preview = false; }
         }
         finally { publishing = false; }
     }
     private Task PreviousAsync() { page--; mobileReading = false; return LoadAsync(); }
     private Task NextAsync() { page++; mobileReading = false; return LoadAsync(); }
-    public void Dispose() { disposed = true; Realtime.Changed -= OnRealtimeAsync; refresh?.Dispose(); cancellation.Cancel(); cancellation.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= OnRealtimeAsync; refresh?.Dispose(); cancellation.Cancel(); cancellation.Dispose(); }
 }

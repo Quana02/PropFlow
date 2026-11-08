@@ -82,11 +82,7 @@
 .context-state p { color:#73839a; font-size:.8rem; }
 .context-state button { margin-top:.5rem; background:#0284c7; color:white; }
 .context-state.is-error .material-symbols-outlined { color:#e11d48; }
-.context-toast { position:fixed; z-index:20; left:50%; bottom:2rem; transform:translateX(-50%); display:flex; align-items:center; gap:.7rem; width:min(92vw,33rem); padding:.8rem 1rem; border:1px solid #334155; border-radius:1rem; background:#0f172a; color:white; box-shadow:0 18px 50px rgba(15,23,42,.35); }
-.context-toast > .material-symbols-outlined { color:#34d399; font-size:1.7rem; }
-.context-toast strong { font-size:.75rem; }
-.context-toast p { margin:.15rem 0 0; color:#cbd5e1; font-size:.65rem; }
-.context-toast button { margin-left:auto; border:1px solid #475569; border-radius:.65rem; padding:.5rem .7rem; background:#1e293b; color:white; font-size:.65rem; font-weight:800; cursor:pointer; white-space:nowrap; }
+
 .form-error { display:flex; align-items:center; gap:.4rem; margin:.8rem 0 0; padding:.65rem .75rem; border:1px solid #fecdd3; border-radius:.75rem; background:#fff1f2; color:#be123c; font-size:.7rem; font-weight:700; }
 .form-error .material-symbols-outlined { font-size:1rem; }
 @media (max-width:1050px) { .context-grid { grid-template-columns:1fr; } }

@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.Communication.Contracts
 @using PropFlow.Web.Client.Shared.Feedback
 @implements IAsyncDisposable
@@ -67,6 +68,8 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public bool ForManager { get; set; }
     [Parameter] public Guid? RequestedConversationId { get; set; }
     private Guid? lastRequested;
@@ -173,8 +176,16 @@
         if (busy || activeId is not null) return;
         await ClearTransientForSelected(); selected = null; messages.Clear(); text = ""; hasMore = false; error = null; pendingKey = null;
     }
+    private void OperationError(PropFlow.Web.Client.Services.Api.ApiResult result)
+    {
+        if (lifetime.IsCancellationRequested) return;
+        if (result.StatusCode is 401 or 403 || result.ValidationErrors?.Count > 0) error = result.Message;
+        else Toasts.Error(result.Message);
+    }
     private async Task Send()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy || string.IsNullOrWhiteSpace(text)) return;
         busy = true; error = null; var value = text.Trim();
         if (pendingKey is null || pendingText != value) { pendingKey = Guid.NewGuid(); pendingText = value; }
@@ -184,13 +195,13 @@
             if (selected is null)
             {
                 var result = await Api.Start(new(pendingKey.Value, value), lifetime.Token);
-                if (!result.IsSuccess || result.Data is null) { error = result.Message; return; }
+                if (!result.IsSuccess || result.Data is null) { operationFeedback.Publish(() => OperationError(result)); return; }
                 selected = result.Data;
             }
             else
             {
                 var result = await Api.Send(selected.Id, new(pendingKey.Value, value), lifetime.Token);
-                if (!result.IsSuccess) { error = result.Message; return; }
+                if (!result.IsSuccess) { operationFeedback.Publish(() => OperationError(result)); return; }
             }
             text = ""; pendingKey = null; await Reload(); scrollToEnd = true;
         }
@@ -215,12 +226,14 @@
     }
     private async Task EndConversation(Guid id)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         busy = true;
         try
         {
             await ClearTransientForSelected(); var result = await Api.Close(id, lifetime.Token);
-            if (!result.IsSuccess) { error = result.Message; return; }
-            selected = result.Data; text = ""; pendingKey = null; await Reload();
+            if (!result.IsSuccess) { operationFeedback.Publish(() => OperationError(result)); return; }
+            selected = result.Data; text = ""; pendingKey = null; await Reload(); operationFeedback.Publish(() => Toasts.Success("Đã kết thúc cuộc trò chuyện."));
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { busy = false; confirmation = null; }
@@ -282,7 +295,7 @@
     private string BubbleClass(SupportMessageView message) => message.Kind == "SYSTEM" ? "system" : (message.Kind == "MANAGER") == ForManager ? "mine" : "theirs";
     private static string Status(string value) => value switch { "WAITING" => "Đang chờ Manager", "ACTIVE" => "Đang trao đổi", "CLOSED" => "Đã kết thúc", _ => value };
     public async ValueTask DisposeAsync()
-    {
+    { toastLifetime.Dispose();
         Session.AuthenticationStateChanged -= AuthenticationChanged;
         disposed = true; Connection.Changed -= Changed; Connection.TransientChanged -= Transient; Connection.StateChanged -= Transient;
         await ClearTransientForSelected(); lifetime.Cancel(); draftDebounce?.Cancel();

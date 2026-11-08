@@ -39,9 +39,19 @@ public sealed class AccessTokenStateValidatorTests
         Assert.False(await validator.IsCurrentAsync(principal, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task IsCurrentAsync_rejects_token_issued_before_email_changed()
+    {
+        var id = Guid.NewGuid();
+        var validator = new AccessTokenStateValidator(
+            new Accounts(new InternalAccountRecord(id, "admin", "Admin", "new@example.com", "ACTIVE")),
+            new Access(new AccountAccess("ADMIN", [])));
+        Assert.False(await validator.IsCurrentAsync(Principal(id, "ADMIN", []), CancellationToken.None));
+    }
+
     private static ClaimsPrincipal Principal(Guid userId, string role, IEnumerable<string> permissions)
     {
-        var claims = new List<Claim> { new("sub", userId.ToString()), new("role", role) };
+        var claims = new List<Claim> { new("sub", userId.ToString()), new("role", role), new("email", "admin@example.com") };
         claims.AddRange(permissions.Select(permission => new Claim("permission", permission)));
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
     }

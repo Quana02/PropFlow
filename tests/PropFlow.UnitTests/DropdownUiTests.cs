@@ -52,10 +52,10 @@ public sealed class DropdownUiTests
         Assert.DoesNotContain("Số giấy tờ@if", source, StringComparison.Ordinal);
         Assert.Contains("CreateResidentRequest form=new()", source, StringComparison.Ordinal);
         Assert.Contains("creating=saving=false", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("@onclick=\"Close\" disabled=\"@saving\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("@onclick=\"CancelCreateFeedbackClose\" disabled=\"@saving\"", source, StringComparison.Ordinal);
         Assert.Contains("@onclick:stopPropagation=\"true\"", source, StringComparison.Ordinal);
-        Assert.Contains("<button type=\"button\" class=\"resident-modal-close\" @onclick=\"Close\" aria-label=\"Đóng\">×</button>", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("@onpointerdown=\"Close\"", source, StringComparison.Ordinal);
+        Assert.Contains("<button type=\"button\" class=\"resident-modal-close\" @onclick=\"CancelCreateFeedbackClose\" aria-label=\"Đóng\">×</button>", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("@onpointerdown=\"CancelCreateFeedbackClose\"", source, StringComparison.Ordinal);
         Assert.Contains(".resident-modal-form-shell ::deep form", styles, StringComparison.Ordinal);
         Assert.Contains(".resident-modal-body{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto", styles, StringComparison.Ordinal);
         Assert.Contains(".resident-modal-header>button{border:0;background:none;color:#94a3b8;font-size:1.45rem;cursor:pointer}", styles, StringComparison.Ordinal);
@@ -259,7 +259,7 @@ public sealed class DropdownUiTests
         var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
         Assert.Contains(
-            "if(r.IsSuccess&&r.Data is not null){Close();await LoadAsync();return;}",
+            "if(r.IsSuccess&&r.Data is not null){Close();await LoadAsync();",
             source,
             StringComparison.Ordinal);
     }

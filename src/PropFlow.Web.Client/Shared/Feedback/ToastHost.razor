@@ -1,0 +1,34 @@
+@implements IDisposable
+@inject ToastService Toasts
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Routing
+
+@foreach (var message in Toasts.Messages)
+{
+    <PropFlowToast @key="message.Id" Title="@message.Title" Message="@message.Message" Severity="@message.Severity"
+                   DurationMs="message.DurationMs" OnDismiss="() => Toasts.Dismiss(message.Id)" />
+}
+
+@code {
+    private bool disposed;
+    protected override void OnInitialized()
+    {
+        Toasts.Changed += OnChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+    private void OnChanged() { if (!disposed) _ = RefreshAsync(); }
+    private async Task RefreshAsync()
+    {
+        try { await InvokeAsync(() => { if (!disposed) StateHasChanged(); }); }
+        catch (ObjectDisposedException) when (disposed) { }
+    }
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+        => Toasts.NavigationChanged(Navigation.ToBaseRelativePath(args.Location));
+    public void Dispose()
+    {
+        disposed = true;
+        Toasts.Changed -= OnChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+        Toasts.Clear();
+    }
+}

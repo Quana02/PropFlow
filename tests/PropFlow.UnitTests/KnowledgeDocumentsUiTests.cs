@@ -34,7 +34,7 @@ public sealed class KnowledgeDocumentsUiTests
     }
     private static async Task<string> Render(string role, bool forbidden)
     {
-        using var services = new ServiceCollection().AddLogging()
+        using var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging()
             .AddSingleton<AuthenticationStateProvider>(new Authentication(role))
             .AddSingleton<IJSRuntime, NoJavaScript>()
             .AddSingleton<AuthenticatedApiClient>(sp => new(new HttpClient(new Response(forbidden)) { BaseAddress = new("https://test.invalid") }, sp.GetRequiredService<ILogger<ApiClient>>()))

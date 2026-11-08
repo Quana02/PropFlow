@@ -89,6 +89,14 @@ public sealed class AuthController(AuthUseCases auth, IAntiforgery antiforgery, 
     [HttpGet("me"), Authorize]
     public async Task<ActionResult<AccountResponse>> Me(CancellationToken ct) => Ok(await auth.GetAccountAsync(UserId, ct));
 
+    [HttpPost("email/change"), Authorize(Roles = "ADMIN"), EnableRateLimiting("auth-login")]
+    public async Task<ActionResult<ChallengeResponse>> RequestEmailChange(ChangeEmailRequest request, CancellationToken ct)
+    { await CheckCsrfAsync(); return Ok(await auth.RequestEmailChangeAsync(UserId, request, ct)); }
+
+    [HttpPost("email/verify"), Authorize(Roles = "ADMIN"), EnableRateLimiting("auth-login"), ProducesResponseType(204)]
+    public async Task<IActionResult> VerifyEmailChange(VerifyEmailChangeRequest request, CancellationToken ct)
+    { await CheckCsrfAsync(); await auth.VerifyEmailChangeAsync(UserId, request, ct); ClearCookie(); return NoContent(); }
+
     [HttpPut("me"), Authorize, EnableRateLimiting("auth-session")]
     public async Task<ActionResult<AccountResponse>> Update(UpdateProfileRequest request, CancellationToken ct)
         => Ok(await auth.UpdateAccountAsync(UserId, request, ct));

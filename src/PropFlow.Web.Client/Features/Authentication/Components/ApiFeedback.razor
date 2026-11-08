@@ -1,4 +1,6 @@
-@if (Result is { IsSuccess: false })
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
+
+@if (Result is { IsSuccess: false } && (Operation?.IsCurrent ?? true) && !IsTransient)
 {
     <div class="feedback error" role="alert">
         <p>@Result.Message</p>
@@ -9,4 +11,20 @@
         @if (!string.IsNullOrWhiteSpace(Result.TraceId)) { <small>Mã hỗ trợ: @Result.TraceId</small> }
     </div>
 }
-@code { [Parameter] public ApiResult? Result { get; set; } }
+@code {
+    [Parameter] public ApiResult? Result { get; set; }
+    [Parameter] public PropFlow.Web.Client.Shared.Feedback.ToastOperation? Operation { get; set; }
+    private ApiResult? previous;
+    // Credential, challenge and throttling guidance remains beside the authentication form.
+    private bool IsTransient => Result is { IsSuccess: false } result &&
+        result.ValidationErrors?.Count is not > 0 && result.StatusCode is null or 0 or >= 500;
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(previous, Result) && IsTransient)
+        {
+            if (Operation is { } feedback) feedback.Publish(() => Toasts.Error(Result?.Message));
+            else Toasts.Error(Result?.Message);
+        }
+        previous = Result;
+    }
+}

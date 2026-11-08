@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
@@ -101,6 +103,9 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private const string NormalPriority = "NORMAL";
     private const string UrgentPriority = "URGENT";
     private readonly SubmitServiceRequestForm _form = new();
@@ -163,6 +168,8 @@
 
     private async Task SubmitAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (_form.PreferredDate is { } date && date < DateOnly.FromDateTime(DateTime.Today))
         {
             _result = new(false, Message: "Ngày hẹn không thể nằm trong quá khứ.");
@@ -184,6 +191,11 @@
             if (_result.IsSuccess)
             {
                 _created = _result.Data;
+            }
+            else if (_result is { IsSuccess: false } && _result.ValidationErrors?.Count is not > 0)
+            {
+                operationFeedback.Publish(() => Toasts.Error(_result.Message));
+                _result = null;
             }
         }
         finally
