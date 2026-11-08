@@ -32,6 +32,7 @@
         </div>
     </section>
 
+    @if (detail?.AdditionalCostConsent is { } consent) { <section class="cost-consent-summary" role="status"><strong>Chi phí phát sinh: @Money(consent.Amount)</strong><p>@consent.Note</p><p>@(consent.Status == "PENDING" ? "Đang chờ cư dân xác nhận. Staff chưa được tiếp tục và Manager chưa được nghiệm thu." : consent.Status == "ACCEPTED" ? "Cư dân đã đồng ý chi phí phát sinh." : "Cư dân từ chối chi phí; yêu cầu đã được tự động từ chối.")</p></section> }
     <section class="signal-strip" aria-label="Tóm tắt xử lý">
         <article><span class="signal-icon sky"><span class="material-symbols-outlined">schedule</span></span><div><small>Thời gian từ khi gửi</small><strong>@ElapsedLabel()</strong></div></article>
         <article><span class="signal-icon amber"><span class="material-symbols-outlined">priority_high</span></span><div><small>Mức ưu tiên</small><strong>@PriorityLabel(detail?.PriorityCode)</strong></div></article>
@@ -194,7 +195,7 @@
                 </section>
 
                 <label class="note-field result-note"><span>Ghi chú nghiệm thu</span><textarea rows="3" maxlength="2000" @bind="reviewDecisionNote" placeholder="Nhập nhận xét cho Staff hoặc ghi chú nghiệm thu…"></textarea></label>
-                <label class="note-field result-note"><span>Chi phí phát sinh được duyệt (VND)</span><input type="number" min="0" step="1" @bind="approvedAdditionalCost" /><small>Staff đề xuất: @Money(detail?.ProposedAdditionalCost ?? 0). Có thể duyệt thấp hơn nhưng không được vượt mức đề xuất.</small></label>
+                <label class="note-field result-note"><span>Chi phí phát sinh được duyệt (VND)</span><input type="number" min="0" step="1" @bind="approvedAdditionalCost" /><small>Staff đề xuất: @Money(detail?.ProposedAdditionalCost ?? 0). Chỉ được nghiệm thu sau khi cư dân đồng ý. Có thể duyệt thấp hơn, không vượt mức cư dân đã chấp thuận.</small></label>
                 @if (!string.IsNullOrWhiteSpace(resultActionNotice))
                 {
                     <p class="result-action-notice" role="status"><span class="material-symbols-outlined">info</span>@resultActionNotice</p>
@@ -354,7 +355,7 @@
     private bool CanAssign => detail?.Status is "UNDER_REVIEW" or "ASSIGNED" or "IN_PROGRESS";
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestEvidenceItem> SelectedEvidence =>
         selectedActivity is null ? [] : detail?.Evidence.Where(x => x.ActivityId == selectedActivity.Id).ToArray() ?? [];
-    private bool CanReviewStaffResult => selectedActivity?.ActivityType == "WORK_RESULT_ADDED" && detail?.Status == "IN_PROGRESS" && SelectedEvidence.Count > 0;
+    private bool CanReviewStaffResult => selectedActivity?.ActivityType == "WORK_RESULT_ADDED" && detail?.Status == "IN_PROGRESS" && (detail.ProposedAdditionalCost == 0 || detail.AdditionalCostConsent?.Status == "ACCEPTED") && SelectedEvidence.Count > 0;
     private IEnumerable<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption> FilteredStaff =>
         string.IsNullOrWhiteSpace(staffSearch)
             ? staffOptions

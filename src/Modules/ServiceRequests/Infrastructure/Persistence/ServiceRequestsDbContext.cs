@@ -16,6 +16,7 @@ public class ServiceRequestsDbContext : DbContext
     }
 
     public DbSet<ServiceRequestCategory> ServiceRequestCategories => Set<ServiceRequestCategory>();
+    public DbSet<PropFlow.Shared.Messaging.OutboxEvent> ResidentEvents => Set<PropFlow.Shared.Messaging.OutboxEvent>();
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
     public DbSet<ServiceRequestAssignment> ServiceRequestAssignments => Set<ServiceRequestAssignment>();
     public DbSet<ServiceRequestActivity> ServiceRequestActivities => Set<ServiceRequestActivity>();

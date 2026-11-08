@@ -446,3 +446,7 @@ html.dark .resident-profile-alert button,html[data-theme="dark"] .resident-profi
 
 /* Keep notification content inside its grid column, including long invoice codes. */
 .resident-dashboard-card,.resident-card-list,.notice-list,.notice-list-item{min-width:0;max-width:100%;box-sizing:border-box}.notice-list-item{overflow:hidden}.notice-list-item>span{min-width:0}.notice-list-item>span small{flex-shrink:0}.notice-list-item strong,.notice-list-item p{max-width:100%}.announcement{min-width:0;overflow-wrap:anywhere}
+
+/* Shared feature components use the portal palette in both themes. */
+.resident-portal{--app-text:var(--resident-ink);--app-muted:var(--resident-muted);--app-surface:rgba(255,255,255,.9);--app-line:rgba(203,213,225,.6);--app-accent:#0284c7}
+html.dark .resident-portal,html[data-theme="dark"] .resident-portal{--app-text:#f1f5f9;--app-muted:#94a3b8;--app-surface:rgba(13,20,36,.95);--app-line:rgba(148,163,184,.22);--app-accent:#0ea5e9}

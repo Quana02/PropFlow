@@ -4,28 +4,30 @@
 @inject NavigationManager Navigation
 @if (Compact) {
     <button class="glass-inner notice-list-item" type="button" @onclick="OpenLatest">
-        <span><em class="notice-kind finance"><i></i>@(IsManagement(notices.FirstOrDefault()) ? "[Ban quản lý]" : "[Tài chính]")</em><small>@(notices.FirstOrDefault()?.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy") ?? "Hóa đơn")</small></span>
+        <span><em class="notice-kind finance"><i></i>@(notices.FirstOrDefault()?.SourceType == "SERVICE_REQUEST" ? "[Dịch vụ]" : IsManagement(notices.FirstOrDefault()) ? "[Ban quản lý]" : "[Tài chính]")</em><small>@(notices.FirstOrDefault()?.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy") ?? "Hóa đơn")</small></span>
         <strong>@(notices.FirstOrDefault()?.Title ?? "Hóa đơn và thanh toán của tôi")</strong><p>@(notices.FirstOrDefault()?.Message ?? "Xem hóa đơn, trạng thái thanh toán và phiếu xác nhận.")</p>
     </button>
 } else if (Cards) {
+    @if (loading) { <p role="status">Đang tải thông báo cá nhân…</p> }
+    @if (error is not null) { <div role="alert"><p>@error</p><button class="pricing-read" type="button" @onclick="Load" disabled="@loading">Thử lại</button></div> }
     @foreach (var n in notices) {
-        <article class="glass-inner announcement sky"><em>@(IsManagement(n) ? "Ban quản lý" : "Tài chính") • @(!n.IsRead ? "Mới" : "Đã đọc")</em><h3>@n.Title</h3><p>@n.Message</p>
-            @if (!IsManagement(n)) { <a href="@n.ActionPath" @onclick="() => Read(n.Id)">Xem hóa đơn / phiếu thu</a> }
+        <article class="glass-inner announcement sky"><em>@(n.SourceType == "SERVICE_REQUEST" ? "Dịch vụ cư dân" : IsManagement(n) ? "Ban quản lý" : "Tài chính") • @(!n.IsRead ? "Mới" : "Đã đọc")</em><h3>@n.Title</h3><p>@n.Message</p>
+            @if (GetAction(n) is { } action) { <a href="@action.Path" @onclick="() => Read(n.Id)">@action.Label</a> }
             else if (!n.IsRead) { <button class="pricing-read" type="button" @onclick="() => Read(n.Id)">Đánh dấu đã đọc</button> }
-            <footer><span>@(IsManagement(n) ? "Ban Quản lý Tòa nhà" : "Ban Kế toán Tòa nhà")</span><span>@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span></footer>
+            <footer><span>@(n.SourceType == "SERVICE_REQUEST" ? "Bộ phận xử lý yêu cầu" : IsManagement(n) ? "Ban Quản lý Tòa nhà" : "Ban Kế toán Tòa nhà")</span><span>@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span></footer>
         </article>
     }
-    @if (!loading && notices.Length == 0) {
-        <article class="glass-inner announcement sky"><em>Tài chính • Phí dịch vụ</em><h3>Hóa đơn và thanh toán của tôi</h3><p>@(error ?? "Chưa có thông báo tài chính mới.")</p><a href="/resident/billing">Xem hóa đơn</a></article>
+    @if (!loading && notices.Length == 0 && error is null) {
+        <article class="glass-inner announcement sky"><h3>Chưa có thông báo cá nhân</h3><p>Thông báo về yêu cầu dịch vụ, hóa đơn, thanh toán và phản ánh của bạn sẽ xuất hiện tại đây.</p></article>
     }
 } else {
 <section class="glass-panel resident-finance-notices">
-    <h2>Thông báo ban quản lý và tài chính</h2><button @onclick="Load" disabled="@loading">Tải lại</button>
+    <h2>Thông báo cá nhân</h2><button @onclick="Load" disabled="@loading">Tải lại</button>
     @if (error is not null) { <p role="alert">@error</p> }
     @if (!loading && notices.Length == 0 && error is null) { <p>Chưa có thông báo.</p> }
     @foreach (var n in notices) { <article class="glass-inner">
         <h3>@n.Title @if (!n.IsRead) { <small>• Mới</small> }</h3><p>@n.Message</p><small>@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
-        @if (n.ActionPath?.StartsWith("/resident/billing", StringComparison.Ordinal) == true) { <a href="@n.ActionPath">Xem hóa đơn / phiếu thu</a> }
+        @if (GetAction(n) is { } action) { <a href="@action.Path">@action.Label</a> }
         @if (!n.IsRead) { <button @onclick="() => Read(n.Id)">Đánh dấu đã đọc</button> }
     </article> }
 </section>
@@ -40,12 +42,24 @@
     private void Refresh() => _ = InvokeAsync(StateHasChanged);
     private Task Load() => NoticeState.ReloadAsync();
     private Task Read(Guid id) => NoticeState.ReadAsync(id);
-    private static bool IsManagement(ResidentNotice? notice) => notice?.SourceType is "PRICING" or "ASSET_STATUS" or "MAINTENANCE";
+    private static bool IsComplaint(ResidentNotice? notice) => notice?.SourceType == "COMPLAINT";
+    private static bool IsManagement(ResidentNotice? notice) => IsComplaint(notice) || notice?.SourceType is "PRICING" or "ASSET_STATUS" or "MAINTENANCE";
+    private static (string Path, string Label)? GetAction(ResidentNotice? notice)
+    {
+        if (notice?.ActionPath is not { } path) return null;
+        if (notice.SourceType == "SERVICE_REQUEST" && path.StartsWith("/resident/service-requests/", StringComparison.Ordinal))
+            return (path, "Xem yêu cầu và xác nhận chi phí");
+        if (IsComplaint(notice) && path.StartsWith("/resident/complaints/", StringComparison.Ordinal))
+            return (path, "Xem kết quả phản ánh");
+        if (!IsManagement(notice) && (path == "/resident/billing" || path.StartsWith("/resident/billing?", StringComparison.Ordinal)))
+            return (path, "Xem hóa đơn / phiếu thu");
+        return null;
+    }
     private async Task OpenLatest()
     {
         var latest = notices.FirstOrDefault();
         if (latest is not null) await Read(latest.Id);
-        Navigation.NavigateTo(IsManagement(latest) ? "/resident?tab=notifications" : latest?.ActionPath?.StartsWith("/resident/billing", StringComparison.Ordinal) == true ? latest.ActionPath : "/resident/billing");
+        Navigation.NavigateTo(GetAction(latest)?.Path ?? (IsManagement(latest) ? "/resident?tab=notifications" : "/resident/billing"));
     }
     public void Dispose() => NoticeState.Changed -= Refresh;
 }

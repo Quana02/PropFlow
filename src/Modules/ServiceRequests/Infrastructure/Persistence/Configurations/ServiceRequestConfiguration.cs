@@ -8,7 +8,11 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
 {
     public void Configure(EntityTypeBuilder<ServiceRequest> builder)
     {
-        builder.ToTable("service_requests", "service_requests");
+        builder.ToTable("service_requests", "service_requests", table => table.HasCheckConstraint("ck_service_request_cost_consent",
+            "additional_cost_consent_status IN ('NONE','PENDING','ACCEPTED','REJECTED') AND " +
+            "(additional_cost_consent_status = 'NONE' OR (additional_cost_proposal_id IS NOT NULL AND proposed_additional_cost > 0 AND additional_cost_proposed_at IS NOT NULL)) AND " +
+            "(additional_cost_consent_status NOT IN ('ACCEPTED','REJECTED') OR (additional_cost_responded_at IS NOT NULL AND additional_cost_responded_by IS NOT NULL)) AND " +
+            "(additional_cost_consent_status <> 'REJECTED' OR status = 'CANCELLED')"));
 
         builder.HasKey(request => request.Id);
         builder.Property(request => request.Id).HasColumnName("id");
@@ -92,6 +96,12 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
         builder.Property(request => request.ProposedAdditionalCost).HasColumnName("proposed_additional_cost")
             .HasColumnType("numeric(18,0)").HasDefaultValue(0m).IsRequired();
         builder.Property(request => request.AdditionalCostNote).HasColumnName("additional_cost_note").HasMaxLength(1000);
+        builder.Ignore(request => request.IsWaitingForCostConsent);
+        builder.Property(request => request.AdditionalCostProposalId).HasColumnName("additional_cost_proposal_id");
+        builder.Property(request => request.AdditionalCostConsentStatus).HasColumnName("additional_cost_consent_status").HasMaxLength(20).HasDefaultValue("NONE").IsRequired();
+        builder.Property(request => request.AdditionalCostProposedAt).HasColumnName("additional_cost_proposed_at");
+        builder.Property(request => request.AdditionalCostRespondedAt).HasColumnName("additional_cost_responded_at");
+        builder.Property(request => request.AdditionalCostRespondedBy).HasColumnName("additional_cost_responded_by");
         builder.Property(request => request.ApprovedAdditionalCost).HasColumnName("approved_additional_cost")
             .HasColumnType("numeric(18,0)").HasDefaultValue(0m).IsRequired();
         builder.Property(request => request.ServiceInvoiceId).HasColumnName("service_invoice_id");

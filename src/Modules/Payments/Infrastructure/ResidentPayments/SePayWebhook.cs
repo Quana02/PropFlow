@@ -25,6 +25,15 @@ public sealed class SePayOptions
     public static readonly Guid AuditActor = Guid.Parse("7bba1639-1f4c-46c3-9716-3792634925ca");
 }
 
+public static class SePayLiveConfiguration
+{
+    public static bool Valid(SePayOptions options) => !options.Enabled ||
+        SePayVerification.HasCredential(options) &&
+        Uri.TryCreate(options.WebhookPublicBaseUrl, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps && !uri.IsLoopback && string.IsNullOrEmpty(uri.UserInfo) &&
+        string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) && uri.AbsolutePath == "/";
+}
+
 public sealed record SePayTransfer(long Id, string? Gateway, string? AccountNumber, string? TransferType,
     decimal TransferAmount, string? Code, string? Content, string? ReferenceCode,
     string? TransactionDate = null, string? SubAccount = null);

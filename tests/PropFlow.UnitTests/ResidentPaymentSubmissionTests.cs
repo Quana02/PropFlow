@@ -18,21 +18,6 @@ namespace PropFlow.UnitTests;
 public sealed class ResidentPaymentSubmissionTests
 {
     [Fact]
-    public async Task SandboxRejectsRealSubmissionWithoutWritingPaymentsAndKeepsOwnershipCheck()
-    {
-        await using var db = new PaymentsDbContext(new DbContextOptionsBuilder<PaymentsDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-        db.SePaySandboxConnections.Add(new SePaySandboxConnection { DemoEnabled = true });
-        await db.SaveChangesAsync();
-        var owner = Guid.NewGuid();
-        var store = new PaymentFinanceStore(db, new OwnedInvoice(owner));
-        var request = new CollectPaymentRequest(Guid.NewGuid(), 1000, "BANK_TRANSFER", "REF", null);
-        Assert.Equal(MutationOutcome.NotFound, (await store.SubmitAsync(request, "other", Guid.NewGuid(), default)).Outcome);
-        Assert.Equal(MutationOutcome.SandboxEnabled, (await store.SubmitAsync(request, "owner", owner, default)).Outcome);
-        Assert.Empty(db.Payments); Assert.Empty(db.PaymentOperations); Assert.Empty(db.PaymentStatusHistory);
-    }
-
-    [Fact]
     public async Task DecoratedResidentSubmissionDelegatesAndNotifiesCommittedPayment()
     {
         var actor = Guid.NewGuid(); var request = new CollectPaymentRequest(Guid.NewGuid(), 1000, "BANK_TRANSFER", "REF", null);
@@ -46,26 +31,10 @@ public sealed class ResidentPaymentSubmissionTests
         Assert.Equal(request.InvoiceId, Assert.Single(probe.Notified));
         probe.Fail = true;
         Assert.Equal(MutationOutcome.Success, (await decorated.SubmitAsync(request, "retry", actor, default)).Outcome);
-        store.Outcome = MutationOutcome.SandboxEnabled;
+        store.Outcome = MutationOutcome.Conflict;
         probe.Notified.Clear();
-        Assert.Equal(MutationOutcome.SandboxEnabled, (await decorated.SubmitAsync(request, "blocked", actor, default)).Outcome);
+        Assert.Equal(MutationOutcome.Conflict, (await decorated.SubmitAsync(request, "blocked", actor, default)).Outcome);
         Assert.Empty(probe.Notified);
-    }
-
-    [Fact]
-    public async Task ResidentEndpointExplainsSandboxConflict()
-    {
-        var cycle = DispatchProxy.Create<IBillingCycle, BillingProbe>();
-        var decorated = new PaymentFinanceNotifications(new SubmissionStore { Outcome = MutationOutcome.SandboxEnabled },
-            cycle, NullLogger<PaymentFinanceNotifications>.Instance);
-        var controller = new ResidentPaymentsController(new PaymentFinanceUseCases(decorated))
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext
-            { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", Guid.NewGuid().ToString())], "test")) } }
-        };
-        var response = Assert.IsType<ObjectResult>(await controller.Submit(new(Guid.NewGuid(), 1000, "BANK_TRANSFER", "REF", null), "key", default));
-        Assert.Equal(409, response.StatusCode);
-        Assert.Contains("Sandbox", Assert.IsType<ProblemDetails>(response.Value).Title!);
     }
 
     public class BillingProbe : DispatchProxy
