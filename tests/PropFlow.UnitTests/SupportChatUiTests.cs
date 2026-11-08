@@ -133,7 +133,7 @@ public sealed class SupportChatUiTests
             Session = new(new ApiClient(new HttpClient(Http) { BaseAddress = new("https://test.invalid") }, logger.CreateLogger<ApiClient>()));
             Session.Accept(new("test-token", DateTimeOffset.UtcNow.AddHours(1), new(Guid.NewGuid(), "demo", "Người kiểm thử", null, null, "ACTIVE", true,
                 manager ? "MANAGER" : "RESIDENT", [manager ? "MANAGE_OPERATIONS" : "USE_RESIDENT_SERVICES"])));
-            services = new ServiceCollection().AddLogging().AddSingleton<IComponentActivator>(this).AddSingleton(Session)
+            services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IComponentActivator>(this).AddSingleton(Session)
                 .AddSingleton<NavigationManager, TestNavigation>()
                 .AddSingleton<ISupportChatConnection>(Transport).AddSingleton<IJSRuntime, NoJavaScript>()
                 .AddSingleton<AuthenticatedApiClient>(sp => new(new HttpClient(Http) { BaseAddress = new("https://test.invalid") }, sp.GetRequiredService<ILogger<ApiClient>>()))

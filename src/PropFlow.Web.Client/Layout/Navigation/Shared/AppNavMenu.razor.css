@@ -6,8 +6,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    max-height: min(85vh, 40rem);
-    overflow-y: auto;
+    --app-nav-item-size: 2.75rem;
+    --app-nav-gap: 0.5rem;
+    max-height: calc(100dvh - 1.5rem);
+    overflow: visible;
     border: 2px solid var(--app-line, #dce8f1);
     border-radius: 1.4rem;
     background: transparent;
@@ -21,6 +23,7 @@
     place-items: center;
     width: 100%;
     min-height: 2.25rem;
+    flex: 0 0 2.25rem;
     color: var(--app-muted, #64748b);
     cursor: grab;
     touch-action: none;
@@ -175,7 +178,45 @@
         top: auto;
         right: 0.75rem;
         bottom: 0.75rem;
-        max-height: min(70vh, 32rem);
+        max-height: calc(100dvh - 1.5rem);
         transform: none;
     }
+}
+
+/* Six equal icon rows plus five gaps and the menu's vertical padding.
+   The handle never scrolls; the viewport cap also works on short screens. */
+.app-nav-scroll {
+    min-height: 0;
+    max-height: min(calc(6 * var(--app-nav-item-size) + 5 * var(--app-nav-gap) + 1.05rem), calc(100dvh - 5rem));
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    border-radius: 1rem;
+}
+.app-nav-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.app-nav-scroll ::deep .operations-nav,
+.app-nav-scroll ::deep .admin-nav,
+.app-nav-scroll ::deep .app-rail,
+.app-nav-scroll ::deep .rail-links,
+.app-nav-scroll ::deep .rail-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--app-nav-gap);
+    flex: none;
+}
+.app-nav-scroll ::deep a.operations-link,
+.app-nav-scroll ::deep a.admin-nav-link,
+.app-nav-scroll ::deep a.rail-link {
+    box-sizing: border-box;
+    width: var(--app-nav-item-size);
+    height: var(--app-nav-item-size);
+    min-height: var(--app-nav-item-size);
+    flex: none;
+}
+.app-nav-scroll ::deep a:focus-visible {
+    outline: 2px solid var(--app-accent, #0284c7);
+    outline-offset: -2px;
 }

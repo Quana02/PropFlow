@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.Payments.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @implements IDisposable
@@ -40,6 +41,8 @@
 </section>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public Guid RequestId { get; set; }
     [Parameter] public bool Completed { get; set; }
     [Parameter] public EventCallback<ResidentServiceRequestPaymentView> Changed { get; set; }
@@ -92,19 +95,23 @@
     }
     private async Task ReportAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (reporting || string.IsNullOrWhiteSpace(reference)) return;
         reporting = true;
         try
         {
             var result = await Api.ReportTransferAsync(RequestId, new(reference.Trim(), Note: note), cancellation.Token);
-            if (!result.IsSuccess || result.Data is null) { error = result.Message ?? "Không thể gửi thông tin đối soát."; return; }
+            if (cancellation.IsCancellationRequested) return;
+            if (!result.IsSuccess || result.Data is null) { if (result.ValidationErrors?.Count > 0) error = result.Message ?? "Không thể gửi thông tin đối soát."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể gửi thông tin đối soát.")); return; }
             payment = result.Data; error = null;
+            operationFeedback.Publish(() => Toasts.Success("Đã gửi thông tin đối soát thanh toán."));
             if (payment.QrImageUrl is null) { qr = null; qrAmount = null; }
-            await Changed.InvokeAsync(payment);
+            if (operationFeedback.IsCurrent) await Changed.InvokeAsync(payment);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         finally { reporting = false; }
     }
     private static string Money(decimal value) => $"{value:N0} ₫";
-    public void Dispose() { cancellation.Cancel(); cancellation.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  cancellation.Cancel(); cancellation.Dispose(); }
 }

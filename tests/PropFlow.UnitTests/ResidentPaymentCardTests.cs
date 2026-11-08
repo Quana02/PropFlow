@@ -56,7 +56,7 @@ public sealed class ResidentPaymentCardTests
 
     private static async Task<string> RenderAsync(ResidentServiceRequestPaymentView view)
     {
-        using var services = new ServiceCollection().AddLogging().AddSingleton<IResidentServiceRequestApiClient>(new Api(view)).BuildServiceProvider();
+        using var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IResidentServiceRequestApiClient>(new Api(view)).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         return await renderer.Dispatcher.InvokeAsync(async () =>
         {

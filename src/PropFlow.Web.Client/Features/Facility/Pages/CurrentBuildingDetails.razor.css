@@ -8,7 +8,7 @@ h1 { margin-top:.24rem; font-size:clamp(1.35rem,2vw,1.65rem); }
 .primary-action { display:inline-flex; align-items:center; gap:.45rem; padding:.7rem 1rem; border:1px solid #0284c7; border-radius:.75rem; background:#0284c7; color:#fff; font-size:.78rem; font-weight:750; white-space:nowrap; }
 .primary-action .material-symbols-outlined { font-size:1rem; }
 .feedback { display:flex; align-items:center; gap:.65rem; padding:.8rem 1rem; border:1px solid; border-radius:.85rem; font-size:.75rem; }
-.feedback.success { border-color:#a7f3d0; background:#ecfdf5; color:#047857; }
+
 .feedback.error { border-color:#fecaca; background:#fff1f2; color:#be123c; }
 .feedback button { margin-left:auto; border:0; background:transparent; color:inherit; font-weight:750; }
 .metrics-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
@@ -51,4 +51,4 @@ dt { color:var(--admin-muted,#64748b); font-size:.65rem; font-weight:800; text-t
 .app-shell-dark .page-header { background:linear-gradient(135deg,rgba(13,23,40,.98),rgba(16,31,51,.94)); }.app-shell-dark h1,.app-shell-dark .section-header h2,.app-shell-dark dd,.app-shell-dark .state-panel strong { color:var(--detail-text); }.app-shell-dark .page-header p,.app-shell-dark .section-header p,.app-shell-dark dt,.app-shell-dark .metric-card div span,.app-shell-dark .metric-card small,.app-shell-dark .building-description,.app-shell-dark .building-note,.app-shell-dark .state-panel { color:var(--detail-muted); }
 .app-shell-dark .metric-icon { background:rgba(8,47,73,.8); color:#38bdf8; }.app-shell-dark .facilities .metric-icon { background:rgba(6,78,59,.62); color:#5eead4; }.app-shell-dark .equipment .metric-icon { background:rgba(49,46,129,.52); color:#a5b4fc; }.app-shell-dark .metric-card strong { color:#38bdf8; }.app-shell-dark .facilities small { color:#5eead4; }.app-shell-dark .equipment small { color:#fbbf24; }
 .app-shell-dark .section-header,.app-shell-dark .building-note { border-color:var(--detail-border); }.app-shell-dark .field-grid div { background:var(--detail-surface-secondary); }.app-shell-dark .section-icon { background:rgba(8,47,73,.76); color:#38bdf8; }.app-shell-dark .section-icon.operation { background:rgba(6,78,59,.62); color:#5eead4; }.app-shell-dark .section-icon.system { background:rgba(120,53,15,.52); color:#fbbf24; }.app-shell-dark .building-note span { background:#22d3ee; }
-.app-shell-dark .feedback.success { border-color:rgba(52,211,153,.26); background:rgba(6,78,59,.45); color:#6ee7b7; }.app-shell-dark .feedback.error { border-color:rgba(251,113,133,.28); background:rgba(136,19,55,.3); color:#fda4af; }
+.app-shell-dark .feedback.error { border-color:rgba(251,113,133,.28); background:rgba(136,19,55,.3); color:#fda4af; }

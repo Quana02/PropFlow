@@ -13,6 +13,101 @@ namespace PropFlow.UnitTests;
 
 public sealed class ToastServiceTests
 {
+    [Fact]
+    public void Persistent_message_is_not_evicted_by_new_transient_feedback()
+    {
+        var service = new ToastService();
+        service.Show("Cần xử lý", severity: "error", durationMs: 0);
+        var critical = Assert.Single(service.Messages);
+        service.Success("Một"); service.Info("Hai"); service.Warning("Ba");
+        Assert.Equal(3, service.Messages.Count);
+        Assert.Contains(critical, service.Messages);
+    }
+
+    [Fact]
+    public void Full_persistent_stack_queues_deduplicated_messages_until_manual_dismiss()
+    {
+        var service = new ToastService();
+        for (var i = 1; i <= 3; i++) service.Show($"Quan trọng {i}", severity: "error", durationMs: 0);
+        var original = service.Messages.ToArray();
+        service.Show("Chờ xử lý", severity: "error", durationMs: 0);
+        service.Show("Chờ xử lý", severity: "error", durationMs: 0);
+        Assert.Equal(original, service.Messages);
+        service.Dismiss(original[0].Id);
+        Assert.Equal(new[] { "Quan trọng 2", "Quan trọng 3", "Chờ xử lý" }, service.Messages.Select(x => x.Title));
+        service.Dismiss(service.Messages.Last().Id);
+        Assert.Equal(2, service.Messages.Count);
+    }
+
+    [Fact]
+    public void Navigation_preserves_unresolved_persistent_messages_including_queued_ones()
+    {
+        var service = new ToastService();
+        for (var i = 1; i <= 3; i++) service.Show($"Quan trọng {i}", durationMs: 0);
+        var first = service.Messages[0].Id;
+        service.Info("Phản hồi cũ");
+        service.Show("Quan trọng chờ", durationMs: 0);
+        service.NavigationChanged("next");
+        Assert.Equal(new[] { "Quan trọng 1", "Quan trọng 2", "Quan trọng 3" }, service.Messages.Select(x => x.Title));
+        service.Dismiss(first);
+        Assert.Equal(new[] { "Quan trọng 2", "Quan trọng 3", "Quan trọng chờ" }, service.Messages.Select(x => x.Title));
+    }
+
+    [Fact]
+    public void Persistent_duplicate_upgrades_a_transient_instead_of_being_silently_lost()
+    {
+        var service = new ToastService();
+        service.Show("Cần xử lý", "Chi tiết", "error");
+        service.Show("Cần xử lý", "Chi tiết", "error", 0);
+        Assert.Equal(0, Assert.Single(service.Messages).DurationMs);
+        service.Show("Cần xử lý", "Chi tiết", "error");
+        Assert.Equal(0, Assert.Single(service.Messages).DurationMs);
+    }
+
+    [Fact]
+    public void Transient_queue_limit_does_not_remove_a_queued_persistent_message()
+    {
+        var service = new ToastService();
+        for (var i = 0; i < 3; i++) service.Show($"Quan trọng {i}", durationMs: 0);
+        var first = service.Messages[0].Id;
+        service.Show("Quan trọng đang chờ", durationMs: 0);
+        for (var i = 0; i < 25; i++) service.Info($"Phản hồi {i}");
+        service.Dismiss(first);
+        Assert.Equal("Quan trọng đang chờ", service.Messages.Last().Title);
+        Assert.Equal(3, service.Messages.Count);
+    }
+
+    [Fact]
+    public void Explicit_clear_discards_queued_messages_as_well_as_visible_ones()
+    {
+        var service = new ToastService();
+        for (var i = 0; i < 4; i++) service.Show($"Quan trọng {i}", durationMs: 0);
+        var first = service.Messages[0].Id;
+        service.Clear(); service.Dismiss(first); service.Success("Kết quả mới");
+        Assert.Equal("Kết quả mới", Assert.Single(service.Messages).Message);
+    }
+
+    [Theory]
+    [InlineData("success", 3000)]
+    [InlineData("info", 4000)]
+    [InlineData("warning", 6000)]
+    [InlineData("error", 8000)]
+    public void Repeated_active_feedback_is_deduplicated_without_extending_its_lifetime(string kind, int duration)
+    {
+        var service = new ToastService();
+        var changes = 0;
+        service.Changed += () => changes++;
+        service.Notify("Kết quả thao tác", kind);
+        var first = Assert.Single(service.Messages);
+        service.Notify("Kết quả thao tác", kind);
+        Assert.Equal(first, Assert.Single(service.Messages));
+        Assert.Equal(duration, first.DurationMs);
+        Assert.Equal(1, changes);
+        service.Dismiss(first.Id);
+        service.Notify("Kết quả thao tác", kind);
+        Assert.NotEqual(first.Id, Assert.Single(service.Messages).Id);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

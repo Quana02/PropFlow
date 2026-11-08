@@ -38,7 +38,7 @@ public sealed class ComplaintAnnouncementUiTests
         => Services(new Transport(response));
     private static ServiceProvider Services(HttpMessageHandler transport)
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>();
         services.AddLogging();
         services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         services.AddSingleton(new ApiClient(new HttpClient(transport) { BaseAddress = new Uri("https://example.invalid/") }, NullLogger<ApiClient>.Instance));

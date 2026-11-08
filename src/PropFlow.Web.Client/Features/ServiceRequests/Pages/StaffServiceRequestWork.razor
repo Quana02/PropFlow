@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/staff/service-requests/{Code}"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "STAFF")]
@@ -67,11 +68,6 @@ else
         </div>
     </section>
 
-    @if (!string.IsNullOrWhiteSpace(uiNotice))
-    {
-        <p class="work-notice" role="status"><span class="material-symbols-outlined">check_circle</span>@uiNotice</p>
-    }
-
     <div class="work-columns">
         <div class="work-main-column">
             <section class="work-card result-card">
@@ -96,7 +92,7 @@ else
 
 @if (showProgressDialog)
 {
-    <div class="work-dialog-backdrop" @onclick="CloseProgressDialog"><section class="work-dialog" role="dialog" aria-modal="true" aria-labelledby="progress-dialog-title" @onclick:stopPropagation="true"><header><div><span class="card-icon"><span class="material-symbols-outlined">edit_note</span></span><div><h2 id="progress-dialog-title">Cập nhật tiến độ hiện trường</h2><p>#@Code · @Location</p></div></div><button type="button" aria-label="Đóng" @onclick="CloseProgressDialog"><span class="material-symbols-outlined">close</span></button></header><label><span>Nội dung cập nhật</span><textarea rows="5" maxlength="2000" @bind="progressNote" placeholder="Ví dụ: Đã khóa van tổng, tháo van cũ và kiểm tra đường ống…"></textarea></label><footer><button type="button" class="cancel" @onclick="CloseProgressDialog">Thoát</button><button type="button" class="confirm" disabled="@(string.IsNullOrWhiteSpace(progressNote))" @onclick="SaveProgress">Lưu tiến độ</button></footer></section></div>
+    <div class="work-dialog-backdrop" @onclick="CancelProgressFeedbackCloseProgressDialog"><section class="work-dialog" role="dialog" aria-modal="true" aria-labelledby="progress-dialog-title" @onclick:stopPropagation="true"><header><div><span class="card-icon"><span class="material-symbols-outlined">edit_note</span></span><div><h2 id="progress-dialog-title">Cập nhật tiến độ hiện trường</h2><p>#@Code · @Location</p></div></div><button type="button" aria-label="Đóng" @onclick="CancelProgressFeedbackCloseProgressDialog"><span class="material-symbols-outlined">close</span></button></header><label><span>Nội dung cập nhật</span><textarea rows="5" maxlength="2000" aria-describedby="staff-progress-error" aria-invalid="@(progressError is not null)" @bind="progressNote" placeholder="Ví dụ: Đã khóa van tổng, tháo van cũ và kiểm tra đường ống…"></textarea>@if (progressError is not null) { <small id="staff-progress-error" class="evidence-error" role="alert">@progressError</small> }</label><footer><button type="button" class="cancel" @onclick="CancelProgressFeedbackCloseProgressDialog">Thoát</button><button type="button" class="confirm" disabled="@(string.IsNullOrWhiteSpace(progressNote))" @onclick="SaveProgress">Lưu tiến độ</button></footer></section></div>
 }
 
 @if (showSubmitDialog)
@@ -152,6 +148,11 @@ else
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime progressFeedback = new();
+    private void CancelProgressFeedbackCloseProgressDialog() { CloseProgressDialog(); if (!showProgressDialog) progressFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public string? Code { get; set; }
     private int currentStep = 3;
     private bool loading;
@@ -162,7 +163,8 @@ else
     private bool uploadingEvidence;
     private bool loadingEvidencePreview;
     private string? progressNote;
-    private string? uiNotice;
+    private string? progressError;
+
     private string? evidenceError;
     private string? evidencePreviewName;
     private string? evidencePreviewSource;
@@ -192,7 +194,7 @@ else
     {
         loading = true;
         loadError = null;
-        uiNotice = null;
+
         var result = await Api.GetAsync(Code ?? string.Empty);
         loading = false;
         if (!result.IsSuccess || result.Data is null)
@@ -209,7 +211,7 @@ else
             ? Task.CompletedTask
             : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
 
-    public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private bool CostWorkBlocked => detail?.AdditionalCostConsent?.Status is "PENDING" or "REJECTED" || detail?.Status == "CANCELLED";
     private decimal proposalAmount;
@@ -218,11 +220,13 @@ else
     private string? costError;
     private async Task SendCostProposal()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (detail is null || costBusy) return;
         costBusy = true; costError = null;
         try {
             var result = await CostApi.SendAsync<AdditionalCostConsentView>(HttpMethod.Post, $"api/v1/staff/service-requests/{detail.Id}/additional-cost", new ProposeAdditionalCostRequest(proposalAmount, proposalNote, detail.AdditionalCostConsent?.ProposalId));
-            if (!result.IsSuccess) { costError = result.Message ?? "Chưa thể gửi đề xuất chi phí."; return; }
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count is not > 0 && result.StatusCode is null or 0 or >= 500) operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Chưa thể gửi đề xuất chi phí.")); else costError = result.Message ?? "Chưa thể gửi đề xuất chi phí."; return; }
             proposalAmount = 0; proposalNote = ""; await LoadAsync();
         } finally { costBusy = false; }
     }
@@ -261,9 +265,11 @@ else
 
     private async Task ConfirmReception()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (!CanConfirmStep(2) || detail is null) return;
         var result = await Api.AcceptAsync(detail.Id);
-        if (!ApplyResult(result, "Đã xác nhận bước 2. Bước 3 đã được mở.")) return;
+        if (!operationFeedback.Apply(() => ApplyResult(result, "Đã xác nhận bước 2. Bước 3 đã được mở."))) return;
     }
 
     private void SelectEvidence(InputFileChangeEventArgs args)
@@ -292,13 +298,30 @@ else
         evidencePreviewSource = $"data:{result.Data.ContentType};base64,{Convert.ToBase64String(result.Data.Bytes)}";
     }
     private void CloseEvidencePreview(){ showEvidencePreview = false; evidencePreviewSource = null; evidencePreviewError = null; }
-    private void OpenProgressDialog(){ if (CostWorkBlocked) return; progressNote = null; showProgressDialog = true; }
+    private void OpenProgressDialog(){ if (CostWorkBlocked) return; progressNote = progressError = null; showProgressDialog = true; }
     private void CloseProgressDialog() => showProgressDialog = false;
-    private async Task SaveProgress(){ if(string.IsNullOrWhiteSpace(progressNote) || detail is null) return; var result = await Api.ProgressAsync(detail.Id, new(progressNote.Trim())); if (ApplyResult(result, "Đã lưu cập nhật tiến độ.")) showProgressDialog = false; }
+    private async Task SaveProgress()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, progressFeedback);
+
+        if (string.IsNullOrWhiteSpace(progressNote) || detail is null) return;
+        progressError = null;
+        var result = await Api.ProgressAsync(detail.Id, new(progressNote.Trim()));
+        if (disposed) return;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            if (result.ValidationErrors?.Count > 0) progressError = string.Join(" ", result.ValidationErrors.Values.SelectMany(value => value));
+            else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể lưu cập nhật tiến độ."));
+            return;
+        }
+        Apply(result.Data); operationFeedback.Publish(() => Toasts.Success("Đã lưu cập nhật tiến độ.")); showProgressDialog = false;
+    }
     private void OpenSubmitDialog(){ if (!CanSubmitCombinedWork || detail is null) return; resultDraft = currentStep == 4 ? LatestWorkResult()?.WorkResult ?? string.Empty : string.Empty; additionalCost = detail.ProposedAdditionalCost; additionalCostNote = detail.AdditionalCostNote; selectedEvidence.Clear(); evidenceError = null; showSubmitDialog = true; }
     private void CloseSubmitDialog(){ if (uploadingEvidence) return; showSubmitDialog = false; selectedEvidence.Clear(); evidenceError = null; }
     private async Task SubmitForReview()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         var normalizedResult = resultDraft.Trim();
         if (normalizedResult.Length is < 10 or > 4000 || selectedEvidence.Count == 0 || additionalCost < 0 || (additionalCost > 0 && string.IsNullOrWhiteSpace(additionalCostNote)) || !CanSubmitCombinedWork || detail is null || uploadingEvidence) return;
         uploadingEvidence = true;
@@ -308,14 +331,14 @@ else
             if (currentStep == 3)
             {
                 var completion = await Api.CompleteAsync(detail.Id, new(normalizedResult, additionalCost, additionalCostNote));
-                if (!completion.IsSuccess || completion.Data is null) { evidenceError = completion.Message ?? "Không thể lưu tóm tắt kết quả."; return; }
+                if (!completion.IsSuccess || completion.Data is null) { if (completion.ValidationErrors?.Count > 0) evidenceError = completion.Message ?? "Không thể lưu tóm tắt kết quả."; else operationFeedback.Publish(() => Toasts.Error(completion.Message ?? "Không thể lưu tóm tắt kết quả.")); return; }
                 Apply(completion.Data);
             }
 
             var evidence = await Api.UploadEvidenceAsync(detail.Id, selectedEvidence);
-            if (!evidence.IsSuccess || evidence.Data is null) { evidenceError = evidence.Message ?? "Không thể lưu ảnh bằng chứng."; return; }
+            if (!evidence.IsSuccess || evidence.Data is null) { if (evidence.ValidationErrors?.Count > 0) evidenceError = evidence.Message ?? "Không thể lưu ảnh bằng chứng."; else operationFeedback.Publish(() => Toasts.Error(evidence.Message ?? "Không thể lưu ảnh bằng chứng.")); return; }
             Apply(evidence.Data);
-            uiNotice = "Đã lưu kết quả và ảnh bằng chứng. Hồ sơ đang chờ Manager nghiệm thu.";
+            operationFeedback.Publish(() => Toasts.Success("Đã lưu kết quả và ảnh bằng chứng. Hồ sơ đang chờ Manager nghiệm thu."));
             showSubmitDialog = false;
             selectedEvidence.Clear();
         }
@@ -327,8 +350,9 @@ else
 
     private bool ApplyResult(PropFlow.Web.Client.Services.Api.ApiResult<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse> result, string success)
     {
-        if (!result.IsSuccess || result.Data is null) { uiNotice = result.Message ?? "Không thể cập nhật yêu cầu."; return false; }
-        Apply(result.Data); uiNotice = success; return true;
+        if (disposed) return false;
+        if (!result.IsSuccess || result.Data is null) { Toasts.Error(result.ValidationErrors?.Values.SelectMany(value => value).FirstOrDefault() ?? result.Message ?? "Không thể cập nhật yêu cầu."); return false; }
+        Apply(result.Data); Toasts.Success(success); return true;
     }
 
     private void Apply(PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse value)

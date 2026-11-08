@@ -132,7 +132,7 @@
 }
 .fe07-alert > .material-symbols-outlined { font-size: 1rem; }
 .fe07-alert button { margin-left: auto; border: 0; background: transparent; color: inherit; font-family: 'Material Symbols Outlined'; font-size: 1rem; cursor: pointer; }
-.fe07-alert-success { border-color: rgba(5, 150, 105, 0.4); background: rgba(5, 150, 105, 0.1); color: #10b981; }
+
 .fe07-alert-error   { border-color: rgba(225, 29, 72, 0.4); background: rgba(225, 29, 72, 0.1); color: #f43f5e; }
 
 /* ════════════════════════════════════════════

@@ -23,7 +23,7 @@ public sealed class UiFixRenderTests
     [Fact]
     public async Task Resident_paging_and_calendar_render_with_accessible_controls()
     {
-        var services = new ServiceCollection().AddLogging();
+        var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging();
         var http = new HttpClient(new Transport()) { BaseAddress = new("https://test.invalid") };
         services.AddSingleton(new ApiClient(http, NullLogger<ApiClient>.Instance));
         services.AddSingleton(new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance));

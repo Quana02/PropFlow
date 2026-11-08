@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Shared.Forms
 @using PropFlow.Web.Client.Features.Finance.Models
 @using PropFlow.Web.Client.Features.Finance.Services
@@ -49,6 +51,9 @@
     }
 </section>
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     [Parameter] public bool CanWrite { get; set; }
     private static readonly System.Globalization.CultureInfo Vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
     private FeeView[] fees = []; private RateView[] rates = [];
@@ -64,8 +69,16 @@
     private async Task Load() { loading = true; var f = await Api.GetAsync<FeeView[]>("fees"); var r = await Api.GetAsync<RateView[]>("rates"); fees = f.Data ?? []; rates = r.Data ?? []; if (!f.IsSuccess || !r.IsSuccess) error = f.Message ?? r.Message; loading = false; }
     private void Edit(FeeView f) { editing = f.Id; code = f.Code; name = f.Name; method = f.CalculationMethod; frequency = f.BillingFrequency; description = f.Description ?? ""; }
     private void Reset() { editing = null; code = name = description = ""; method = "FIXED"; frequency = "MONTHLY"; }
-    private async Task SaveFee() { if (busy || !CanWrite) return; busy = true; error = null; var r = await Api.SaveAsync<SavedId>(editing.HasValue ? $"fees/{editing}" : "fees", new FeeInput(code, name, method, frequency, description), editing.HasValue ? HttpMethod.Put : HttpMethod.Post); if (r.IsSuccess) { Reset(); await Load(); } else error = r.Message; busy = false; }
-    private async Task SaveRate() { if (busy || !CanWrite) return; if (unitRate is null) { error = "Vui lòng nhập đơn giá hợp lệ."; return; } if (!effectiveFrom.HasValue || !effectiveFromValid || !effectiveToValid) { error = "Ngày hiệu lực không hợp lệ."; return; } busy = true; error = null; var r = await Api.SaveAsync<SavedId>("rates", new RateInput(feeId, rateName, unitRate.Value, unitName, effectiveFrom.Value, effectiveTo)); if (r.IsSuccess) { rateName = ""; await Load(); } else error = r.Message; busy = false; }
-    private async Task SetActive(FeeView f) { busy = true; error = null; var r = await Api.SaveAsync<EmptyResponse>($"fees/{f.Id}/active", new { active = f.Status != "ACTIVE" }, HttpMethod.Patch); if (r.IsSuccess) await Load(); else error = r.Message; busy = false; }
-    private async Task SetRateActive(RateView r) { busy = true; error = null; var result = await Api.SaveAsync<EmptyResponse>($"rates/{r.Id}/active", new { active = !r.IsActive }, HttpMethod.Patch); if (result.IsSuccess) await Load(); else error = result.Message; busy = false; }
+    private async Task SaveFee() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+ if (busy || !CanWrite) return; busy = true; error = null; var r = await Api.SaveAsync<SavedId>(editing.HasValue ? $"fees/{editing}" : "fees", new FeeInput(code, name, method, frequency, description), editing.HasValue ? HttpMethod.Put : HttpMethod.Post); if (r.IsSuccess) { Reset(); await Load(); operationFeedback.Publish(() => Toasts.Success("Đã lưu loại phí.")); } else if (r.ValidationErrors?.Count > 0) error = r.Message; else operationFeedback.Publish(() => Toasts.Error(r.Message)); busy = false; }
+    private async Task SaveRate() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+ if (busy || !CanWrite) return; if (unitRate is null) { error = "Vui lòng nhập đơn giá hợp lệ."; return; } if (!effectiveFrom.HasValue || !effectiveFromValid || !effectiveToValid) { error = "Ngày hiệu lực không hợp lệ."; return; } busy = true; error = null; var r = await Api.SaveAsync<SavedId>("rates", new RateInput(feeId, rateName, unitRate.Value, unitName, effectiveFrom.Value, effectiveTo)); if (r.IsSuccess) { rateName = ""; await Load(); operationFeedback.Publish(() => Toasts.Success("Đã lưu đơn giá.")); } else if (r.ValidationErrors?.Count > 0) error = r.Message; else operationFeedback.Publish(() => Toasts.Error(r.Message)); busy = false; }
+    private async Task SetActive(FeeView f) {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+ busy = true; error = null; var r = await Api.SaveAsync<EmptyResponse>($"fees/{f.Id}/active", new { active = f.Status != "ACTIVE" }, HttpMethod.Patch); if (r.IsSuccess) { await Load(); operationFeedback.Publish(() => Toasts.Success("Đã cập nhật trạng thái loại phí.")); } else if (r.ValidationErrors?.Count > 0) error = r.Message; else operationFeedback.Publish(() => Toasts.Error(r.Message)); busy = false; }
+    private async Task SetRateActive(RateView r) {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+ busy = true; error = null; var result = await Api.SaveAsync<EmptyResponse>($"rates/{r.Id}/active", new { active = !r.IsActive }, HttpMethod.Patch); if (result.IsSuccess) { await Load(); operationFeedback.Publish(() => Toasts.Success("Đã cập nhật trạng thái đơn giá.")); } else if (result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); busy = false; }
 }

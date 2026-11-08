@@ -195,7 +195,7 @@ html.dark .resident-request-state.error, html[data-theme="dark"] .resident-reque
 .request-activity-timeline time { flex: none; color: #64748b; font-size: .6rem; }
 .request-activity-timeline p { margin: .3rem 0; color: #475569; font-size: .68rem; line-height: 1.45; }
 .request-activity-timeline small { color: #0284c7; font-size: .6rem; font-weight: 700; }
-.request-feedback-error { margin: 0; color: #dc2626; font-size: .7rem; }.request-feedback-success { margin: 0; color: #059669; font-size: .7rem; }
+.request-feedback-error { margin: 0; color: #dc2626; font-size: .7rem; }
 html.dark .request-detail-summary h3, html.dark .request-feedback-section h3, html.dark .request-detail-summary dd, html[data-theme="dark"] .request-detail-summary h3, html[data-theme="dark"] .request-feedback-section h3, html[data-theme="dark"] .request-detail-summary dd { color: #f8fafc; }
 html.dark .request-feedback-section label, html[data-theme="dark"] .request-feedback-section label { color: #cbd5e1; }
 html.dark .request-feedback-section textarea, html[data-theme="dark"] .request-feedback-section textarea { background: rgba(15,23,42,.72); color: #f8fafc; }

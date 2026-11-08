@@ -3,7 +3,7 @@ let themeObserver;
 const variables = ["--app-accent", "--app-surface", "--app-text", "--app-muted", "--app-line"];
 
 function position() {
-    const shell = document.querySelector(".app-shell");
+    const shell = document.querySelector(".app-shell, .resident-portal");
     const theme = shell ? getComputedStyle(shell) : null;
     const gap = 12;
     let top = Math.min(88, window.innerHeight * .15);
@@ -30,11 +30,10 @@ export function show(toast, id) {
     observer.observe(toast);
     if (active.size === 1) {
         window.addEventListener("resize", position);
-        const shell = document.querySelector(".app-shell");
-        if (shell) {
-            themeObserver = new MutationObserver(position);
-            themeObserver.observe(shell, { attributes: true, attributeFilter: ["class"] });
-        }
+        const shell = document.querySelector(".app-shell, .resident-portal");
+        themeObserver = new MutationObserver(position);
+        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+        if (shell) themeObserver.observe(shell, { attributes: true, attributeFilter: ["class"] });
     }
     position();
 }

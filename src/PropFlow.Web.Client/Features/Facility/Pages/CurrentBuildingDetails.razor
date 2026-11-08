@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/buildings"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
@@ -15,7 +16,6 @@
     <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
 }
 
-
 <main class="building-details" aria-labelledby="building-page-title">
     <header class="page-header">
         <div>
@@ -32,10 +32,6 @@
         }
     </header>
 
-    @if (!string.IsNullOrWhiteSpace(SuccessMessage))
-    {
-        <div class="feedback success" role="status"><span aria-hidden="true">✓</span><span>@SuccessMessage</span></div>
-    }
     @if (!string.IsNullOrWhiteSpace(ErrorMessage) && !IsEditDialogOpen)
     {
         <div class="feedback error" role="alert">
@@ -128,16 +124,21 @@
 
     @if (CanEdit && IsEditDialogOpen)
     {
-        <BuildingFormDialog IsOpen="true" Building="Building" OnClose="CloseEditDialog" OnSave="SaveAsync" IsSaving="IsSaving" ErrorMessage="@ErrorMessage" />
+        <BuildingFormDialog IsOpen="true" Building="Building" OnClose="CancelEditFeedbackCloseEditDialog" OnSave="SaveAsync" IsSaving="IsSaving" ErrorMessage="@ErrorMessage" />
     }
 </main>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime editFeedback = new();
+    private void CancelEditFeedbackCloseEditDialog() { CloseEditDialog(); if (!IsEditDialogOpen) editFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private CurrentBuildingOverviewResponse? Building;
     private bool IsLoading = true;
     private bool IsEditDialogOpen;
     private bool IsSaving;
-    private string? SuccessMessage;
+
     private string? ErrorMessage;
     private bool CanEdit => Session.User?.Role == "MANAGER" && Session.User.Permissions.Contains("MANAGE_OPERATIONS");
 
@@ -167,7 +168,7 @@
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
     }
 
-    public void Dispose() => RefreshCancellation.Cancel();
+    public void Dispose() { toastLifetime.Dispose(); RefreshCancellation.Cancel(); }
 
     private Task LoadAsync() => ReloadAsync(true, RefreshCancellation.Token);
 
@@ -197,26 +198,28 @@
     {
         if (!CanEdit) return;
         ErrorMessage = null;
-        SuccessMessage = null;
+
         IsEditDialogOpen = true;
     }
     private void CloseEditDialog() => IsEditDialogOpen = false;
 
     private async Task SaveAsync(UpdateCurrentBuildingModel model)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, editFeedback);
+
         if (!CanEdit) return;
         IsSaving = true;
         ErrorMessage = null;
-        SuccessMessage = null;
+
         try
         {
             var result = await BuildingApiClient.UpdateCurrentBuildingAsync(model);
-            if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể cập nhật thông tin chung cư."; return; }
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể cập nhật thông tin chung cư."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể cập nhật thông tin chung cư.")); return; }
             IsEditDialogOpen = false;
-            SuccessMessage = Building is null ? "Đã thiết lập hồ sơ chung cư." : "Đã cập nhật thông tin chung cư.";
+            operationFeedback.Publish(() => Toasts.Success(Building is null ? "Đã thiết lập hồ sơ chung cư." : "Đã cập nhật thông tin chung cư."));
             await LoadAsync();
         }
-        catch { ErrorMessage = "Không thể kết nối để cập nhật thông tin chung cư. Vui lòng thử lại."; }
+        catch { operationFeedback.Publish(() => Toasts.Error("Không thể kết nối để cập nhật thông tin chung cư. Vui lòng thử lại.")); }
         finally { IsSaving = false; }
     }
 

@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/resident/billing"
 @attribute [Authorize(Roles = "RESIDENT")]
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
@@ -31,14 +33,18 @@
 </section>
 <ResidentFinanceNotifications />
 @if (selected is not null) { <ResidentPaymentDialog @key="selected.Id" Invoice="selected" Saved="PaymentSubmitted" Closed="() => selected = null" /> }
-@if (toast is not null) { <PropFlowToast @key="toastVersion" Message="toast" Severity="success" DurationMs="2000" OnDismiss="() => toast = null" /> }
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private HouseholdInvoice[] invoices = []; private ResidentPayment[] payments = [];
     private bool loading; private string? error;
-    private HouseholdInvoice? selected; private string filter = "ALL"; private string? toast; private int toastVersion;
+    private HouseholdInvoice? selected; private string filter = "ALL";
     private bool HasPending(HouseholdInvoice invoice) => payments.Any(x => x.InvoiceId == invoice.Id && x.Status == "PENDING");
     private IEnumerable<HouseholdInvoice> FilteredInvoices => invoices.Where(i => filter switch { "UNPAID" => i.Outstanding > 0, "PENDING" => HasPending(i), "PAID" => i.Outstanding == 0, _ => true });
-    private async Task PaymentSubmitted() { selected = null; filter = "PENDING"; await Load(); toast = "Đã gửi xác nhận thanh toán. Vui lòng chờ kế toán kiểm tra."; toastVersion++; }
+    private async Task PaymentSubmitted() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+ selected = null; filter = "PENDING"; await Load(); operationFeedback.Publish(() => Toasts.Success("Đã gửi xác nhận thanh toán. Vui lòng chờ kế toán kiểm tra.")); }
     protected override Task OnInitializedAsync() => Load();
     private async Task Load() { loading = true; try {
         var i = await Api.GetAsync<HouseholdInvoice[]>("api/v1/resident/billing/invoices");

@@ -25,12 +25,14 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
         if (result.IsSuccess) session.UpdateUser(result.Data!);
         return result;
     }
-    public async Task<ApiResult<EmptyResponse>> ChangePasswordAsync(ChangePasswordRequest request)
+    public async Task<ApiResult<EmptyResponse>> ChangePasswordAsync(ChangePasswordRequest request, ToastOperation? feedback = null)
     {
+        var operationFeedback = feedback ?? toasts.BeginOperation();
+
         var result = await privateApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/password/change", request, csrf: true);
         if (result.IsSuccess)
         {
-            toasts.SuccessAfterNavigation("Đổi mật khẩu thành công", "Vui lòng đăng nhập lại bằng mật khẩu mới.", "login");
+            operationFeedback.Publish(() => toasts.SuccessAfterNavigation("Đổi mật khẩu thành công", "Vui lòng đăng nhập lại bằng mật khẩu mới.", "login"));
             session.Clear();
         }
         return result;
@@ -38,12 +40,14 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
     public Task<ApiResult<ChallengeResponse>> RequestEmailChangeAsync(ChangeEmailRequest request) =>
         privateApi.SendAsync<ChallengeResponse>(HttpMethod.Post, "api/v1/auth/email/change", request, csrf: true);
 
-    public async Task<ApiResult<EmptyResponse>> VerifyEmailChangeAsync(VerifyEmailChangeRequest request)
+    public async Task<ApiResult<EmptyResponse>> VerifyEmailChangeAsync(VerifyEmailChangeRequest request, ToastOperation? feedback = null)
     {
+        var operationFeedback = feedback ?? toasts.BeginOperation();
+
         var result = await privateApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/email/verify", request, csrf: true);
         if (result.IsSuccess)
         {
-            toasts.SuccessAfterNavigation("Đổi email thành công", "Vui lòng đăng nhập lại bằng tên đăng nhập hiện tại.", "login");
+            operationFeedback.Publish(() => toasts.SuccessAfterNavigation("Đổi email thành công", "Vui lòng đăng nhập lại bằng tên đăng nhập hiện tại.", "login"));
             session.Clear();
         }
         return result;

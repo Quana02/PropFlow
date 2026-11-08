@@ -18,7 +18,7 @@ public sealed class ResidentPaymentDialogTests
     [InlineData(800000, 700000, 100000, "100.000")]
     public async Task Resident_payment_popup_prefills_remaining_amount_and_allows_editing(decimal total, decimal paid, decimal outstanding, string expected)
     {
-        var services = new ServiceCollection().AddLogging();
+        var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging();
         services.AddSingleton<IJSRuntime, NoJs>();
         services.AddSingleton(new AuthenticatedApiClient(new HttpClient(new Transport()) { BaseAddress = new Uri("https://test.invalid") }, NullLogger<ApiClient>.Instance));
         services.AddSingleton<FinanceCycleApi>();

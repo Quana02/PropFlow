@@ -88,7 +88,8 @@ public sealed class AuthSession(ApiClient api) : AuthenticationStateProvider
         try
         {
             var result = await api.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/logout", csrf: true);
-            Clear(result.IsSuccess ? "Bạn đã đăng xuất." : "Đã xóa phiên trên trang này nhưng máy chủ chưa xác nhận thu hồi phiên. Vui lòng thử đăng xuất lại.");
+            // Successful logout is silent, including subsequent login-form renders.
+            Clear(result.IsSuccess ? null : "Đã xóa phiên trên trang này nhưng máy chủ chưa xác nhận thu hồi phiên. Vui lòng thử đăng xuất lại.");
             return result;
         }
         finally { refreshLock.Release(); }

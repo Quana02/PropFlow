@@ -39,14 +39,14 @@ public sealed class AdminNavMenuTests
     private sealed class AdminAuthentication : AuthenticationStateProvider
     {
         public override Task<AuthenticationState> GetAuthenticationStateAsync() => Task.FromResult(new AuthenticationState(
-            new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "Test admin"), new Claim(ClaimTypes.Role, "ADMIN")], "test"))));
+            new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "Test admin"), new Claim(ClaimTypes.Role, "ADMIN"), new Claim("permission", "MANAGE_INTERNAL_ACCOUNTS")], "test"))));
     }
 
     [Fact]
     public async Task Query_navigation_updates_exactly_one_active_link_without_recreating_the_menu()
     {
         var navigation = new TestNavigation();
-        using var services = new ServiceCollection().AddLogging().AddAuthorizationCore()
+        using var services = new ServiceCollection().AddLogging().AddAuthorizationCore(options => options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read, policy => policy.RequireAssertion(context => PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.CanRead(context.User))))
             .AddSingleton<NavigationManager>(navigation).AddSingleton<AuthenticationStateProvider, AdminAuthentication>().BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>

@@ -1,7 +1,9 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<aside id="@toastId" @ref="toast" popover="manual" class="pf-toast pf-toast--@Kind @(closing ? "pf-toast--leaving" : "")"
+<aside id="@toastId" @ref="toast" popover="manual" class="pf-toast pf-toast--@Kind @(closing ? "pf-toast--leaving" : "") @(hovered || focused ? "pf-toast--paused" : "")"
+       @onmouseenter="() => SetPaused(true, focused)" @onmouseleave="() => SetPaused(false, focused)"
+       @onfocusin="() => SetPaused(hovered, true)" @onfocusout="() => SetPaused(hovered, false)"
        role="@(Kind == "error" ? "alert" : "status")" aria-live="@(Kind == "error" ? "assertive" : "polite")" aria-atomic="true">
     <span class="pf-toast-icon material-symbols-outlined" aria-hidden="true">@Icon</span>
     <div class="pf-toast-copy">
@@ -19,11 +21,14 @@
     [Parameter] public int DurationMs { get; set; } = 3000;
     [Parameter] public EventCallback OnDismiss { get; set; }
     private readonly CancellationTokenSource lifetime = new();
-    private readonly CancellationTokenSource timer = new();
+    private CancellationTokenSource? timer;
+    private long countdownStarted;
+    private int remainingMs;
+    private bool hovered, focused;
     private readonly string toastId = "pf-toast-" + Guid.NewGuid().ToString("N");
     private ElementReference toast;
     private IJSObjectReference? module;
-    private bool disposed, closing;
+    private bool disposed, closing, initialized;
     private string Kind => Severity.ToLowerInvariant();
     private string Icon => Kind switch { "success" => "check_circle", "error" => "error", "warning" => "warning", _ => "info" };
 
@@ -32,21 +37,40 @@
         if (!firstRender || disposed) return;
         try
         {
-            var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowToast.razor.js?v=20261108.4");
+            var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowToast.razor.js?v=20261108.5");
             if (disposed) { await imported.DisposeAsync(); return; }
             module = imported;
             await module.InvokeVoidAsync("show", toast, toastId);
-            if (!disposed && DurationMs > 0) _ = DismissLaterAsync(timer.Token);
+            remainingMs = DurationMs; initialized = true;
+            if (!disposed && DurationMs > 0) StartCountdown();
         }
         catch (JSDisconnectedException) { }
         catch (ObjectDisposedException) when (disposed) { }
     }
-    private async Task DismissLaterAsync(CancellationToken cancellationToken)
+    private void StartCountdown()
+    {
+        if (!initialized || disposed || closing || hovered || focused || DurationMs <= 0) return;
+        timer = new(); countdownStarted = Environment.TickCount64;
+        _ = DismissLaterAsync(remainingMs, timer.Token);
+    }
+    private void SetPaused(bool hover, bool focus)
+    {
+        if (disposed || closing) return;
+        hovered = hover; focused = focus;
+        if ((hovered || focused) && timer is not null)
+        {
+            remainingMs = Math.Max(0, remainingMs - (int)(Environment.TickCount64 - countdownStarted));
+            timer.Cancel(); timer.Dispose(); timer = null;
+        }
+        else if (!hovered && !focused && timer is null) StartCountdown();
+    }
+    private async Task DismissLaterAsync(int delayMs, CancellationToken cancellationToken)
     {
         try
         {
-            await Task.Delay(DurationMs, cancellationToken);
-            if (!disposed) await InvokeAsync(DismissAsync);
+            await Task.Delay(delayMs, cancellationToken);
+            if (!disposed && !cancellationToken.IsCancellationRequested)
+                await InvokeAsync(async () => { if (!disposed && !cancellationToken.IsCancellationRequested) await DismissAsync(); });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
@@ -54,7 +78,7 @@
     {
         if (disposed || closing) return;
         closing = true;
-        timer.Cancel();
+        timer?.Cancel();
         StateHasChanged();
         try
         {
@@ -70,12 +94,12 @@
     {
         if (disposed) return;
         disposed = true;
-        timer.Cancel(); lifetime.Cancel();
+        timer?.Cancel(); lifetime.Cancel();
         if (module is not null)
         {
             try { await module.InvokeVoidAsync("hide", toastId); await module.DisposeAsync(); }
             catch (JSDisconnectedException) { }
         }
-        timer.Dispose(); lifetime.Dispose();
+        timer?.Dispose(); lifetime.Dispose();
     }
 }

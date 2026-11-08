@@ -120,6 +120,8 @@
 </div>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private readonly ProfileForm form = new();
     private EditContext editContext = default!;
     private ApiValidationMessages serverValidation = default!;
@@ -136,6 +138,8 @@
 
     private async Task Load()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         loading = true;
         try
         {
@@ -143,13 +147,15 @@
             if (disposed) return;
             account = response.Data;
             if (account is not null) SetForm(account);
-            else Toasts.Show("Chưa tải được tài khoản", response.Message ?? "Vui lòng thử lại sau.", "error");
+            else operationFeedback.Publish(() => Toasts.Show("Chưa tải được tài khoản", response.Message ?? "Vui lòng thử lại sau.", "error"));
         }
         finally { if (!disposed) loading = false; }
     }
 
     private async Task Save()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy || !HasChanges) return;
         busy = true;
         serverValidation.Clear();
@@ -161,12 +167,12 @@
             {
                 account = response.Data;
                 SetForm(account);
-                Toasts.Show("Cập nhật thành công", "Thông tin tài khoản đã được lưu.", "success");
+                operationFeedback.Publish(() => Toasts.Show("Cập nhật thành công", "Thông tin tài khoản đã được lưu.", "success"));
             }
             else
             {
                 serverValidation.Apply(response);
-                Toasts.Show("Chưa lưu được thông tin", response.Message ?? "Vui lòng thử lại sau.", response.StatusCode == 429 ? "warning" : "error");
+                operationFeedback.Publish(() => Toasts.Show("Chưa lưu được thông tin", response.Message ?? "Vui lòng thử lại sau.", response.StatusCode == 429 ? "warning" : "error"));
             }
         }
         finally { if (!disposed) busy = false; }
@@ -177,7 +183,7 @@
     {
         editContext.NotifyFieldChanged(new FieldIdentifier(form, field));
     }
-    public void Dispose() { disposed = true; serverValidation.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; serverValidation.Dispose(); }
     private async Task Logout()
     {
         if (busy) return;

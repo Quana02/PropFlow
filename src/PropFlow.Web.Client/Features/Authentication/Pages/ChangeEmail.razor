@@ -44,6 +44,9 @@ else
 <nav class="auth-links"><a href="/account">Quay lại tài khoản</a></nav>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime emailFeedback = new();
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private readonly ChangeEmailForm form = new();
     private readonly OtpForm otp = new();
     private ChallengeResponse? challenge;
@@ -61,6 +64,8 @@ else
 
     private async Task RequestCode()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, emailFeedback);
+
         if (busy) return;
         busy = true;
         formValidation.Clear();
@@ -73,33 +78,36 @@ else
                 pendingEmail = form.NewEmail.Trim();
                 challenge = response.Data;
                 otp.Code = "";
-                Toasts.Show("Đã gửi mã xác minh", "Vui lòng kiểm tra hộp thư của email mới.", "info");
+                operationFeedback.Publish(() => Toasts.Show("Đã gửi mã xác minh", "Vui lòng kiểm tra hộp thư của email mới.", "info"));
             }
-            else { formValidation.Apply(response); ShowError(response); }
+            else { formValidation.Apply(response); operationFeedback.Publish(() => ShowError(response)); }
         }
         finally { form.CurrentPassword = ""; if (!disposed) busy = false; }
     }
 
     private async Task Verify()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, emailFeedback);
+
         if (busy || challenge is null) return;
         busy = true;
         otpValidation.Clear();
         try
         {
-            var response = await Auth.VerifyEmailChangeAsync(new(challenge.ChallengeId, pendingEmail, otp.Code));
-            if (response.IsSuccess) Navigation.NavigateTo("/login");
-            else if (!disposed) { otpValidation.Apply(response); ShowError(response); }
+            var response = await Auth.VerifyEmailChangeAsync(new(challenge.ChallengeId, pendingEmail, otp.Code), operationFeedback);
+            if (response.IsSuccess && operationFeedback.IsCurrent) Navigation.NavigateTo("/login");
+            else if (!disposed) { otpValidation.Apply(response); operationFeedback.Publish(() => ShowError(response)); }
         }
         finally { otp.Code = ""; if (!disposed) busy = false; }
     }
 
     private void StartAgain()
     {
+        emailFeedback.Invalidate();
         challenge = null;
         otp.Code = "";
         formValidation.Clear(); otpValidation.Clear();
     }
     private void ShowError(ApiResult response) => Toasts.Show("Chưa đổi được email", response.Message ?? "Vui lòng thử lại sau.", response.StatusCode == 429 ? "warning" : "error");
-    public void Dispose() { disposed = true; formValidation.Dispose(); otpValidation.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; formValidation.Dispose(); otpValidation.Dispose(); }
 }
