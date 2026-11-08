@@ -195,7 +195,7 @@ html.dark .resident-request-state.error, html[data-theme="dark"] .resident-reque
 .request-activity-timeline time { flex: none; color: #64748b; font-size: .6rem; }
 .request-activity-timeline p { margin: .3rem 0; color: #475569; font-size: .68rem; line-height: 1.45; }
 .request-activity-timeline small { color: #0284c7; font-size: .6rem; font-weight: 700; }
-.request-feedback-error { margin: 0; color: #dc2626; font-size: .7rem; }.request-feedback-success { margin: 0; color: #059669; font-size: .7rem; }
+.request-feedback-error { margin: 0; color: #dc2626; font-size: .7rem; }
 html.dark .request-detail-summary h3, html.dark .request-feedback-section h3, html.dark .request-detail-summary dd, html[data-theme="dark"] .request-detail-summary h3, html[data-theme="dark"] .request-feedback-section h3, html[data-theme="dark"] .request-detail-summary dd { color: #f8fafc; }
 html.dark .request-feedback-section label, html[data-theme="dark"] .request-feedback-section label { color: #cbd5e1; }
 html.dark .request-feedback-section textarea, html[data-theme="dark"] .request-feedback-section textarea { background: rgba(15,23,42,.72); color: #f8fafc; }
@@ -446,3 +446,7 @@ html.dark .resident-profile-alert button,html[data-theme="dark"] .resident-profi
 
 /* Keep notification content inside its grid column, including long invoice codes. */
 .resident-dashboard-card,.resident-card-list,.notice-list,.notice-list-item{min-width:0;max-width:100%;box-sizing:border-box}.notice-list-item{overflow:hidden}.notice-list-item>span{min-width:0}.notice-list-item>span small{flex-shrink:0}.notice-list-item strong,.notice-list-item p{max-width:100%}.announcement{min-width:0;overflow-wrap:anywhere}
+
+/* Shared feature components use the portal palette in both themes. */
+.resident-portal{--app-text:var(--resident-ink);--app-muted:var(--resident-muted);--app-surface:rgba(255,255,255,.9);--app-line:rgba(203,213,225,.6);--app-accent:#0284c7}
+html.dark .resident-portal,html[data-theme="dark"] .resident-portal{--app-text:#f1f5f9;--app-muted:#94a3b8;--app-surface:rgba(13,20,36,.95);--app-line:rgba(148,163,184,.22);--app-accent:#0ea5e9}

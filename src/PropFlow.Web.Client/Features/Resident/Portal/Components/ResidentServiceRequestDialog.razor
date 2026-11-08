@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using Microsoft.AspNetCore.Components.Forms
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
@@ -167,6 +169,9 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     [CascadingParameter]
     private ResidentPortalProfileContext ProfileContext { get; set; } = ResidentPortalProfileContext.Loading;
 
@@ -300,6 +305,8 @@
 
     private async Task SubmitAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (_form.PreferredDate is { } date && date < DateOnly.FromDateTime(DateTime.Today))
         {
             _result = new(false, Message: "Ngày hẹn không thể nằm trong quá khứ.");
@@ -328,7 +335,12 @@
             if (_result.IsSuccess && _result.Data is not null)
             {
                 _created = _result.Data;
-                await RequestCreated.InvokeAsync(_created);
+                { if (operationFeedback.IsCurrent) await RequestCreated.InvokeAsync(_created); }
+            }
+            else if (_result is { IsSuccess: false } && _result.ValidationErrors?.Count is not > 0)
+            {
+                operationFeedback.Publish(() => Toasts.Error(_result.Message));
+                _result = null;
             }
         }
         finally

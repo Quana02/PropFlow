@@ -25,12 +25,32 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredServ
 builder.Services.AddAuthorizationCore(options => options.AddPolicy(AssetPermissions.ViewPolicy,
     policy => policy.RequireAssertion(context => AssetPermissions.CanView(context.User))));
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddAuthorizationCore(options =>
+{
+    options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read,
+        policy => policy.RequireAssertion(context => PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.CanRead(context.User)));
+    options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Manage,
+        policy => policy.RequireAssertion(context => PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.CanManage(context.User)));
+    options.AddPolicy(PropFlow.Modules.Communication.Contracts.SupportChatPolicies.Manager,
+        policy => policy.RequireAssertion(context => PropFlow.Modules.Communication.Contracts.SupportChatPolicies.IsManager(context.User)));
+    options.AddPolicy(PropFlow.Modules.Communication.Contracts.SupportChatPolicies.Resident,
+        policy => policy.RequireAssertion(context => PropFlow.Modules.Communication.Contracts.SupportChatPolicies.IsResident(context.User)));
+});
+builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.KnowledgeApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.ResidentChatApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatApi>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatConnection>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.ISupportChatConnection>(sp => sp.GetRequiredService<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatConnection>());
 builder.Services.AddScoped(sp =>
 {
     var handler = new AuthHttpHandler(sp.GetRequiredService<AuthSession>(), sp.GetRequiredService<NavigationManager>()) { InnerHandler = new HttpClientHandler() };
     return new AuthenticatedApiClient(new HttpClient(handler) { BaseAddress = apiBase }, sp.GetRequiredService<ILogger<ApiClient>>());
 });
 builder.Services.AddScoped<AuthenticationService>();
+builder.Services.AddScoped<PropFlow.Web.Client.Shared.Feedback.ToastService>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Complaints.Services.ComplaintApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.Services.AnnouncementApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.Services.AnnouncementRealtimeClient>();
 builder.Services.AddScoped<OnboardingState>();
 
 builder.Services.AddScoped<IBuildingApiClient, BuildingApiClient>();

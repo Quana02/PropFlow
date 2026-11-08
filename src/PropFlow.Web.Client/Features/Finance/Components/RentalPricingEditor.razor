@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Finance.Services
 @inject FinanceCycleApi Api
 <section class="rental-pricing">
@@ -21,6 +23,9 @@
     }
 </section>
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private ApartmentType[] apartmentTypes = []; private Version[] versions = [];
     private Guid apartmentId; private const string basis = "MONTHLY"; private decimal? amount;
     private DateOnly? effectiveFrom = DateOnly.FromDateTime(DateTime.Today); private bool effectiveFromValid = true; private bool busy, open, validate; private string? message;
@@ -42,12 +47,14 @@
         if(current is not null) Edit(current);
     }
     private void Edit(Version v) { amount = v.UnitRate; effectiveFrom = v.EffectiveFrom; effectiveFromValid = true; }
-    private async Task Save() { if(busy) return; validate = true; message = null;
+    private async Task Save() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+ if(busy) return; validate = true; message = null;
         if (apartmentId == Guid.Empty || amount is null || effectiveFrom is null || !effectiveFromValid) { message = "Vui lòng kiểm tra các ô được báo lỗi."; return; }
         busy = true; try {
         var r = await Api.PostAsync<object>("api/v1/billing/rental-pricing", new { apartmentUnitId = Guid.Empty, apartmentTypeId = apartmentId, basis, unitRate = amount.Value, effectiveFrom = effectiveFrom.Value });
-        if(r.IsSuccess) { await LoadVersions(); message = "Đã lưu đơn giá thuê. Hóa đơn đã phát hành được giữ nguyên."; }
-        else message = r.Message;
+        if(r.IsSuccess) { await LoadVersions(); operationFeedback.Publish(() => Toasts.Success("Đã lưu đơn giá thuê. Hóa đơn đã phát hành được giữ nguyên.")); }
+        else { if (r.ValidationErrors?.Count > 0) message = string.Join(" ", r.ValidationErrors.Values.SelectMany(value => value)); else operationFeedback.Publish(() => Toasts.Error(r.Message)); }
     } finally { busy = false; } }
     private sealed record Apartment(Guid Id, string UnitNumber, Guid? ApartmentTypeId, string? ApartmentTypeName);
     private sealed record ApartmentType(Guid Id, string Name);

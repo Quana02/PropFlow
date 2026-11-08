@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using PropFlow.Web.Client.Features.Authentication.Components
 <AuthBootstrap>
+<PropFlow.Web.Client.Shared.Feedback.ToastHost />
 <Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.LandingLayout)">

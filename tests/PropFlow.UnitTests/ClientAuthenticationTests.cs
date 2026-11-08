@@ -151,6 +151,44 @@ public sealed class ClientAuthenticationTests
         Assert.Null(session.AccessToken); Assert.Null(session.User); Assert.True((await logout).IsSuccess);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Delayed_logout_success_is_silent_and_failure_keeps_retry_warning(bool serverFailure)
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = 0;
+        var session = CreateSession(async request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("csrf")) return Json(new CsrfResponse("csrf"));
+            attempts++;
+            if (attempts == 1)
+            {
+                started.TrySetResult();
+                await release.Task;
+                if (serverFailure) return new(HttpStatusCode.ServiceUnavailable);
+            }
+            return new(HttpStatusCode.NoContent);
+        });
+        session.Accept(Session("old"));
+        var logout = session.LogoutAsync();
+        await started.Task;
+        Assert.Null(session.AccessToken);
+        Assert.Null(session.Notice);
+        release.TrySetResult();
+        var result = await logout;
+        Assert.Equal(!serverFailure, result.IsSuccess);
+        Assert.Null(session.User);
+        if (serverFailure)
+        {
+            Assert.Contains("chưa xác nhận", session.Notice);
+            Assert.True((await session.LogoutAsync()).IsSuccess);
+            Assert.Equal(2, attempts);
+        }
+        Assert.Null(session.Notice);
+    }
+
     [Fact]
     public void Recovery_proof_expires_and_cannot_be_used_twice()
     {

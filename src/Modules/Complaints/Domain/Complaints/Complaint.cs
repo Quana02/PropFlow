@@ -92,6 +92,16 @@ public class Complaint
         UpdatedAt = now;
     }
 
+    public void AssociateContext(Guid? apartmentUnitId, Guid? serviceRequestId, Guid? facilityId, Guid? equipmentId, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        ApartmentUnitId = apartmentUnitId;
+        RelatedServiceRequestId = serviceRequestId;
+        FacilityId = facilityId;
+        EquipmentId = equipmentId;
+        UpdatedAt = now;
+    }
+
     public void MarkUnderReview(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();

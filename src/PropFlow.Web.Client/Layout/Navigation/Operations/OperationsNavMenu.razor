@@ -25,6 +25,11 @@
         <span class="operations-label">Hồ sơ thiết bị</span>
     </NavLink>
     <AuthorizeView Roles="MANAGER">
+        <NavLink href="/manager/support-chat" class="operations-link" title="Chat với cư dân" aria-label="Chat với cư dân">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">forum</span><span class="operations-label">Chat với cư dân</span>
+        </NavLink>
+        <NavLink href="/manager/complaints" class="operations-link" title="Quản lý phản ánh" aria-label="Quản lý phản ánh"><span class="material-symbols-outlined operations-icon" aria-hidden="true">feedback</span><span class="operations-label">Quản lý phản ánh</span></NavLink>
+        <NavLink href="/manager/announcements" class="operations-link" title="Thông báo chung" aria-label="Thông báo chung"><span class="material-symbols-outlined operations-icon" aria-hidden="true">campaign</span><span class="operations-label">Thông báo chung</span></NavLink>
         <NavLink href="/manager/service-requests" Match="NavLinkMatch.Prefix" class="operations-link" title="Yêu cầu dịch vụ" aria-label="Yêu cầu dịch vụ">
             <span class="material-symbols-outlined operations-icon" aria-hidden="true">support_agent</span>
             <span class="operations-label">Yêu cầu dịch vụ</span>
@@ -35,6 +40,7 @@
         </NavLink>
     </AuthorizeView>
     <AuthorizeView Roles="STAFF">
+        <NavLink href="/staff/complaints" class="operations-link" title="Công việc phản ánh" aria-label="Công việc phản ánh"><span class="material-symbols-outlined operations-icon" aria-hidden="true">feedback</span><span class="operations-label">Công việc phản ánh</span></NavLink>
         <NavLink href="/staff/service-requests" Match="NavLinkMatch.Prefix" class="operations-link" title="Yêu cầu được giao" aria-label="Yêu cầu được giao">
             <span class="material-symbols-outlined operations-icon" aria-hidden="true">support_agent</span>
             <span class="operations-label">Yêu cầu được giao</span>
@@ -47,6 +53,12 @@
     <AuthorizeView Roles="MANAGER">
         <NavLink href="/operations/service-fee" class="operations-link" title="Đơn giá và hóa đơn" aria-label="Đơn giá và hóa đơn">
             <span class="material-symbols-outlined operations-icon" aria-hidden="true">receipt_long</span><span class="operations-label">Đơn giá và hóa đơn</span>
+        </NavLink>
+    </AuthorizeView>
+    <AuthorizeView Policy="@PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read">
+        <NavLink href="/knowledge/documents" class="operations-link" title="Tài liệu chung cư" aria-label="Tài liệu chung cư">
+            <span class="material-symbols-outlined operations-icon" aria-hidden="true">menu_book</span>
+            <span class="operations-label">Tài liệu chung cư</span>
         </NavLink>
     </AuthorizeView>
 </nav>

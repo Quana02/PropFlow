@@ -398,6 +398,154 @@ namespace PropFlow.Modules.Communication.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PropFlow.Modules.Communication.Domain.SupportChat.SupportConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ManagerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("ManagerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResidentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResidentName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("ResidentUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ManagerUserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'ACTIVE'");
+
+                    b.HasIndex("ResidentUserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('WAITING','ACTIVE')");
+
+                    b.HasIndex("ManagerUserId", "UpdatedAt");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("support_conversations", "communication", t =>
+                        {
+                            t.HasCheckConstraint("ck_support_state", "\"Status\" IN ('WAITING','ACTIVE','CLOSED') AND ((\"Status\" = 'CLOSED') = (\"ClosedAt\" IS NOT NULL)) AND (\"Status\" <> 'ACTIVE' OR \"ManagerUserId\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Communication.Domain.SupportChat.SupportManagerConnection", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ManagerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ManagerUserId", "ExpiresAt");
+
+                    b.ToTable("support_manager_connections", "communication");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Communication.Domain.SupportChat.SupportManagerPresence", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Available")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LastAssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("support_manager_presence", "communication");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Communication.Domain.SupportChat.SupportMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("SenderUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId", "Sequence")
+                        .IsUnique();
+
+                    b.HasIndex("SenderUserId", "ClientMessageId")
+                        .IsUnique()
+                        .HasFilter("\"SenderUserId\" IS NOT NULL");
+
+                    b.ToTable("support_messages", "communication", t =>
+                        {
+                            t.HasCheckConstraint("ck_support_message", "length(btrim(\"Text\")) BETWEEN 1 AND 4000 AND \"Sequence\" > 0 AND \"Kind\" IN ('SYSTEM','RESIDENT','MANAGER') AND ((\"Kind\" = 'SYSTEM') = (\"SenderUserId\" IS NULL))");
+                        });
+                });
+
             modelBuilder.Entity("PropFlow.Modules.Communication.Domain.Announcements.AnnouncementAudience", b =>
                 {
                     b.HasOne("PropFlow.Modules.Communication.Domain.Announcements.Announcement", "Announcement")
@@ -418,6 +566,15 @@ namespace PropFlow.Modules.Communication.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Announcement");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Communication.Domain.SupportChat.SupportMessage", b =>
+                {
+                    b.HasOne("PropFlow.Modules.Communication.Domain.SupportChat.SupportConversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropFlow.Modules.Communication.Domain.Announcements.Announcement", b =>

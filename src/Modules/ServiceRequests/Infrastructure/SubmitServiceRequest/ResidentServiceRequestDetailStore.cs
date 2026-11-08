@@ -36,6 +36,7 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 item.ClosedAt,
                 item.BaseServiceCost,
                 item.ApprovedAdditionalCost,
+                item.AdditionalCostProposalId, item.ProposedAdditionalCost, item.AdditionalCostNote, item.AdditionalCostConsentStatus, item.AdditionalCostProposedAt, item.AdditionalCostRespondedAt,
                 Rating = db.ServiceRequestFeedbacks
                     .Where(feedback => feedback.ServiceRequestId == item.Id)
                     .Select(feedback => (int?)feedback.Rating)
@@ -94,7 +95,7 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 activity.ToStatus?.ToString(),
                 activity.CreatedAt)).ToArray(),
             request.BaseServiceCost,
-            request.ApprovedAdditionalCost);
+            request.ApprovedAdditionalCost, AdditionalCostConsent: request.AdditionalCostProposalId.HasValue ? new(request.AdditionalCostProposalId.Value, request.ProposedAdditionalCost, request.AdditionalCostNote, request.AdditionalCostConsentStatus, request.AdditionalCostProposedAt, request.AdditionalCostRespondedAt) : null);
     }
 
     private static ResidentServiceRequestActivityItem ToResidentActivity(
@@ -106,6 +107,9 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
     {
         var (title, description) = type switch
         {
+            ServiceActivityType.ADDITIONAL_COST_PROPOSED => ("Cần xác nhận chi phí phát sinh", "Bộ phận xử lý đang chờ bạn chấp nhận chi phí trước khi tiếp tục công việc."),
+            ServiceActivityType.ADDITIONAL_COST_ACCEPTED => ("Đã đồng ý chi phí phát sinh", "Bạn đã chấp nhận chi phí; bộ phận xử lý được tiếp tục công việc."),
+            ServiceActivityType.ADDITIONAL_COST_REJECTED => ("Đã từ chối chi phí phát sinh", "Yêu cầu dịch vụ đã tự động bị từ chối theo phản hồi của bạn."),
             ServiceActivityType.CREATED => ("Đã gửi yêu cầu", "Yêu cầu đã được ghi nhận và đang chờ Ban Quản lý tiếp nhận."),
             ServiceActivityType.STATUS_CHANGED => ("Cập nhật trạng thái", StatusDescription(toStatus)),
             ServiceActivityType.ASSIGNED => ("Đã phân công xử lý", "Ban Quản lý đã chuyển yêu cầu đến bộ phận phụ trách."),

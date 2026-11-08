@@ -30,4 +30,13 @@ public sealed class AuthEmailQueueTests
             await queue.SendCodeAsync("queue-test@example.invalid", "000000", false, 10, CancellationToken.None);
         return queue;
     }
+
+    [Fact]
+    public async Task Full_email_change_queue_reports_delivery_failure()
+    {
+        using var queue = await FullQueueAsync();
+        var failure = await Assert.ThrowsAsync<AuthFailure>(() => queue.SendEmailChangeCodeAsync(
+            "queue-test@example.invalid", "000000", 5, CancellationToken.None));
+        Assert.Equal(503, failure.Status);
+    }
 }

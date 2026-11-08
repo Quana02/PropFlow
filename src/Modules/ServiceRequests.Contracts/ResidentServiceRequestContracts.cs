@@ -68,7 +68,8 @@ public sealed record ResidentServiceRequestDetailResponse(
     IReadOnlyList<ResidentServiceRequestActivityItem> Activities,
     decimal BaseServiceCost = 0,
     decimal ApprovedAdditionalCost = 0,
-    ResidentServiceRequestSettlement? Settlement = null);
+    ResidentServiceRequestSettlement? Settlement = null,
+    AdditionalCostConsentView? AdditionalCostConsent = null);
 
 public sealed record ResidentServiceRequestSettlement(
     Guid InvoiceId,

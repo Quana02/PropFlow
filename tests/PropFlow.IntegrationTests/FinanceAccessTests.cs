@@ -8,7 +8,7 @@ namespace PropFlow.IntegrationTests;
 public sealed class FinanceAccessTests
 {
     [Fact]
-    public void Resident_simulation_endpoint_requires_resident_role()
+    public void Resident_payment_endpoint_requires_resident_role()
     {
         var authorization = typeof(PropFlow.Modules.Payments.Presentation.ResidentServiceRequestPaymentsController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
@@ -26,14 +26,6 @@ public sealed class FinanceAccessTests
         Assert.Equal("ADMIN", callback.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single().Roles);
     }
 
-    [Fact]
-    public void Sepay_sandbox_setup_requires_admin_and_payment_destination_permission()
-    {
-        var authorization = typeof(PropFlow.Modules.Payments.Presentation.SePaySandboxController)
-            .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single();
-        Assert.Equal("ADMIN", authorization.Roles);
-        Assert.Equal("payment-settings.manage", authorization.Policy);
-    }
     [Fact]
     public void Bank_transfer_review_api_requires_accountant_and_finance_permission()
     {

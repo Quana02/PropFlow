@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Administration.Models
 @using PropFlow.Web.Client.Features.Administration.Services
 @using PropFlow.Web.Client.Services.Api
@@ -7,17 +9,17 @@
     <header class="payment-header">
         <div class="payment-title">
             <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
-            <div><span class="eyebrow">THANH TOÁN SEPAY</span><h1>Kết nối ngân hàng &amp; nhận thanh toán</h1><p>Thiết lập Sandbox để thử nghiệm hoặc kết nối SePay thật để nhận tiền. Xác nhận OTP email để lưu thay đổi.</p></div>
+            <div><span class="eyebrow">THANH TOÁN SEPAY</span><h1>Kết nối ngân hàng &amp; nhận thanh toán</h1><p>Kết nối tài khoản SePay để nhận thanh toán và tự động đối soát hóa đơn. Xác nhận OTP email để lưu thay đổi.</p></div>
         </div>
-        @if (setupEnvironment == "LIVE" && current is not null && !editing)
+        @if (current is not null && !editing)
         {
             <button type="button" class="primary-action" @onclick="BeginEdit"><span class="material-symbols-outlined">edit</span>Thay đổi cấu hình</button>
         }
     </header>
 
-    @if (!string.IsNullOrWhiteSpace(notice))
+    @if (!string.IsNullOrWhiteSpace(loadError))
     {
-        <div class="notice @(noticeError ? "error" : "success")" role="@(noticeError ? "alert" : "status")"><span class="material-symbols-outlined">@(noticeError ? "error" : "check_circle")</span>@notice</div>
+        <div class="notice error" role="alert">@loadError <button type="button" disabled="@loading" @onclick="LoadAsync">Thử lại</button></div>
     }
 
     @if (loading)
@@ -26,16 +28,6 @@
     }
     else
     {
-        <div class="environment-picker" role="group" aria-label="Chọn phần cấu hình SePay">
-            <button type="button" class="@(setupEnvironment == "SANDBOX" ? "selected" : null)" aria-pressed="@(setupEnvironment == "SANDBOX")" disabled="@(busy || challenge is not null)" @onclick='() => setupEnvironment = "SANDBOX"'><span class="material-symbols-outlined">science</span><span><strong>Sandbox</strong><small>Kết nối thử nghiệm</small></span></button>
-            <button type="button" class="@(setupEnvironment == "LIVE" ? "selected" : null)" aria-pressed="@(setupEnvironment == "LIVE")" disabled="@(busy || challenge is not null)" @onclick='() => setupEnvironment = "LIVE"'><span class="material-symbols-outlined">account_balance</span><span><strong>SePay thật</strong><small>Nhận thanh toán thực tế</small></span></button>
-        </div>
-        @if (setupEnvironment == "SANDBOX")
-        {
-            <SePaySandboxConnect />
-        }
-        else
-        {
         <article class="connection-card">
             @if (connection?.OAuthEnabled == true)
             {
@@ -86,7 +78,7 @@
             </article>
 
             <article class="editor-card @(editing ? "is-editing" : null)">
-                <header><div><span class="section-label">Bước 2 · Chọn tài khoản</span><h2>Tài khoản ngân hàng từ SePay</h2></div>@if (editing && current is not null) { <button type="button" class="icon-button" title="Đóng" aria-label="Đóng biểu mẫu" @onclick="CancelEdit"><span class="material-symbols-outlined">close</span></button> }</header>
+                <header><div><span class="section-label">Bước 2 · Chọn tài khoản</span><h2>Tài khoản ngân hàng từ SePay</h2></div>@if (editing && current is not null) { <button type="button" class="icon-button" title="Đóng" aria-label="Đóng biểu mẫu" @onclick="CancelConfigFeedbackCancelEdit"><span class="material-symbols-outlined">close</span></button> }</header>
                 @if (!editing)
                 {
                     <div class="locked-editor"><span class="material-symbols-outlined">verified_user</span><p>Nhấn “Thay đổi cấu hình” để chọn tài khoản khác từ SePay. Tài khoản nhận tiền chỉ thay đổi khi xác nhận OTP thành công.</p></div>
@@ -132,18 +124,24 @@
                 <div class="history-table"><table><thead><tr><th>Phiên bản</th><th>Ngân hàng</th><th>Tài khoản</th><th>Người nhận</th><th>Nguồn</th><th>Xác nhận lúc</th><th>Trạng thái</th></tr></thead><tbody>@foreach (var item in history) { <tr><td><strong>#@item.Version</strong></td><td>@item.BankCode<small>@item.BankName</small></td><td>@item.MaskedAccountNumber</td><td>@item.AccountName</td><td>@(item.SePayAccountId.HasValue ? "SePay" : "Cấu hình cũ")<small>@item.SePayAccountId</small></td><td>@((item.CreatedAt ?? item.UpdatedAt).ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</td><td><span class="history-status @(item.IsActive ? "active" : null)">@(item.IsActive ? "Đang dùng" : "Đã đóng")</span></td></tr> }</tbody></table></div>
             }
         </article>
-        }
     }
 </section>
 
 @if (challenge is not null)
 {
-    <PaymentDestinationOtpDialog Challenge="challenge" Action="pendingAction" Busy="busy" Error="otpError" OnConfirm="ConfirmOtpAsync" OnResend="ResendOtpAsync" OnCancel="CloseOtp" />
+    <PaymentDestinationOtpDialog Challenge="challenge" Action="pendingAction" Busy="busy" Error="otpError" OnConfirm="ConfirmOtpAsync" OnResend="ResendOtpAsync" OnCancel="CancelOtpFeedbackCloseOtp" />
 }
 
 @code {
-    [Parameter] public string? PaymentEnvironment { get; set; }
-    private string setupEnvironment = "SANDBOX";
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime otpFeedback = new();
+    private void CancelOtpFeedbackCloseOtp() { CloseOtp(); if (challenge is null) otpFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime configFeedback = new();
+    private void CancelConfigFeedbackCancelEdit() { CancelEdit(); if (!editing) configFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private PaymentDestinationView? current;
     private PaymentDestinationView[] history = [];
     private SePayBankAccountView[] accounts = [];
@@ -156,21 +154,17 @@
     private PaymentDestinationPreview? preview;
     private PrivilegedActionChallengeResult? challenge;
     private string pendingAction = "UPSERT";
-    private string? notice, formError, otpError;
-    private bool loading, editing, busy, noticeError, confirmDeactivate;
+    private string? loadError, formError, otpError;
+    private bool loading, editing, busy, confirmDeactivate;
     private string ConnectionLabel => connection?.ApiCheck?.Message ?? (connection?.OAuthEnabled == true
         ? "Kết nối SePay bằng tài khoản của chủ chung cư hoặc ban quản lý."
         : connection?.ApiTokenConfigured == true ? "Thông tin kết nối đã có. Kiểm tra để xác nhận quyền đọc tài khoản." : "Thiết lập kết nối SePay để lấy tài khoản ngân hàng đã liên kết.");
 
-    protected override Task OnInitializedAsync()
-    {
-        setupEnvironment = string.Equals(PaymentEnvironment, "live", StringComparison.OrdinalIgnoreCase) ? "LIVE" : "SANDBOX";
-        return LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
-        loading = true; notice = null;
+        loading = true; loadError = null;
         var destinationResult = await Api.GetPaymentDestinationAsync();
         var historyResult = await Api.GetPaymentDestinationHistoryAsync();
         var connectionResult = await Api.GetSePayConnectionAsync();
@@ -178,13 +172,13 @@
         if (historyResult.IsSuccess) history = historyResult.Data ?? [];
         if (connectionResult.IsSuccess) connection = connectionResult.Data;
         var failure = new ApiResult?[] { destinationResult, historyResult, connectionResult }.FirstOrDefault(result => result?.IsSuccess == false);
-        if (failure is not null) ShowNotice(Friendly(failure, "Không thể tải đầy đủ cấu hình thanh toán."), true);
+        if (failure is not null) loadError = Friendly(failure, "Không thể tải đầy đủ cấu hình thanh toán.");
         editing = current is null;
         loading = false;
     }
 
-    private void BeginCreate() { editing = true; formError = null; notice = null; }
-    private void BeginEdit() { editing = true; selectedId = null; preview = null; formError = null; notice = null; }
+    private void BeginCreate() { editing = true; formError = null; loadError = null; }
+    private void BeginEdit() { editing = true; selectedId = null; preview = null; formError = null; loadError = null; }
     private void CancelEdit() { editing = false; selectedId = null; preview = null; formError = null; }
     private void SelectAccount(Guid id) { selectedId = id; preview = null; formError = null; }
 
@@ -222,31 +216,39 @@
 
     private async Task PreviewAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, configFeedback);
+
         var selection = Selection(); if (selection is null) return;
         busy = true; var result = await Api.PreviewSePayAccountAsync(selection); busy = false;
-        if (result.IsSuccess) preview = result.Data; else formError = Friendly(result, "Không thể tạo QR mẫu lúc này.");
+        if (result.IsSuccess) preview = result.Data; else if (result.ValidationErrors?.Count > 0) formError = Friendly(result, "Không thể tạo QR mẫu lúc này."); else operationFeedback.Publish(() => Toasts.Error(Friendly(result, "Không thể tạo QR mẫu lúc này.")));
     }
 
     private async Task RequestSaveOtpAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, configFeedback);
+
         var selection = Selection(); if (selection is null) return;
         pendingAccountId = selection.AccountId; pendingVersion = selection.ExpectedVersion;
         pendingAction = "UPSERT"; busy = true; otpError = null;
         var result = await Api.RequestSePayAccountChallengeAsync(selection); busy = false;
-        if (result.IsSuccess) challenge = result.Data; else formError = Friendly(result, "Không thể gửi OTP xác nhận.");
+        if (result.IsSuccess) challenge = result.Data; else if (result.ValidationErrors?.Count > 0) formError = Friendly(result, "Không thể gửi OTP xác nhận."); else operationFeedback.Publish(() => Toasts.Error(Friendly(result, "Không thể gửi OTP xác nhận.")));
     }
 
     private async Task RequestDeactivateOtpAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (current is null) return;
         pendingAction = "DEACTIVATE"; busy = true; otpError = null;
         var marker = new PaymentDestinationDraft("", "", "", "", "", current.Version);
         var result = await Api.RequestPaymentDestinationChallengeAsync(new(pendingAction, marker)); busy = false;
-        if (result.IsSuccess) challenge = result.Data; else ShowNotice(Friendly(result, "Không thể gửi OTP xác nhận."), true);
+        if (result.IsSuccess) challenge = result.Data; else operationFeedback.Publish(() => ShowNotice(Friendly(result, "Không thể gửi OTP xác nhận."), true));
     }
 
     private async Task ConfirmOtpAsync(string code)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, configFeedback, otpFeedback);
+
         if (challenge is null) return;
         busy = true; otpError = null;
         ApiResult result;
@@ -264,7 +266,7 @@
         var action = pendingAction;
         CloseOtp(); CancelEdit(); confirmDeactivate = false;
         await LoadAsync();
-        ShowNotice(action == "DEACTIVATE" ? "Đã vô hiệu hóa cấu hình nhận tiền." : "Đã xác minh và kích hoạt cấu hình nhận tiền.");
+        operationFeedback.Publish(() => ShowNotice(action == "DEACTIVATE" ? "Đã vô hiệu hóa cấu hình nhận tiền." : "Đã xác minh và kích hoạt cấu hình nhận tiền."));
     }
 
     private async Task ResendOtpAsync()
@@ -273,7 +275,7 @@
         if (pendingAction == "DEACTIVATE") await RequestDeactivateOtpAsync(); else await RequestSaveOtpAsync();
     }
     private void CloseOtp() { challenge = null; otpError = null; }
-    private void ShowNotice(string message, bool error = false) { notice = message; noticeError = error; }
+    private void ShowNotice(string message, bool error = false) => Toasts.Notify(message, error ? "error" : "success");
     private static string Initials(string value) => string.Concat(value.Where(char.IsLetterOrDigit).Take(3)).ToUpperInvariant();
     private static string Friendly(ApiResult result, string fallback) => result.ValidationErrors?.Values.SelectMany(value => value).FirstOrDefault() ?? result.Message ?? fallback;
 }

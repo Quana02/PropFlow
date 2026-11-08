@@ -230,7 +230,7 @@
         request.EquipmentName ?? request.FacilityName ?? "Chưa gắn vị trí";
     private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", _ => "Tiêu chuẩn" };
     private static string PriorityClass(string? priority) => priority switch { "URGENT" => "priority-urgent", "HIGH" => "priority-high", _ => "priority-normal" };
-    private static string StatusLabel(string status) => status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", _ => status };
+    private static string StatusLabel(string status) => status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", "CANCELLED" => "Cư dân đã từ chối dịch vụ", _ => status };
     private static string StatusClass(string status) => status switch { "ASSIGNED" => "status-assigned", "RESOLVED" or "CLOSED" => "status-resolved", _ => "status-progress" };
 
     private sealed record StatusFilterOption(string Value, string Label, string DotClass);

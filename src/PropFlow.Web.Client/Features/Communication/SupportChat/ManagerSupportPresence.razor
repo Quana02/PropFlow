@@ -1,0 +1,69 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
+@using PropFlow.Modules.Communication.Contracts
+@implements IAsyncDisposable
+@inject SupportChatApi Api
+@inject ISupportChatConnection Connection
+
+<section class="support-presence" aria-label="Trạng thái nhận chat BQL">
+    <span class="presence-dot @(Connection.Connected && availability?.Available == true ? "online" : "")"></span>
+    <div><strong>Chat với cư dân</strong><small>@Label</small></div>
+    <button type="button" disabled="@(busy || !Connection.Connected)" @onclick="Toggle">@(availability?.Available == true ? "Tạm dừng nhận mới" : "Sẵn sàng nhận chat")</button>
+    <a href="@(availability?.ActiveConversationId is Guid active ? $"/manager/support-chat?conversation={active}" : "/manager/support-chat")">@(availability?.ActiveConversationId is not null ? "Mở cuộc đang hỗ trợ →" : "Mở hộp thư →")</a>
+    @if (error is not null) { <span class="presence-error" role="alert">@error</span> }
+</section>
+
+@code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
+    private readonly CancellationTokenSource lifetime = new();
+    private readonly SemaphoreSlim refreshGate = new(1, 1);
+    private SupportAvailabilityView? availability;
+    private string? error;
+    private bool busy, disposed, refreshRequested;
+    private Task? loop;
+    private string Label => !Connection.Connected ? "Đang kết nối lại…" : availability?.ActiveConversationId is not null
+        ? "Đang hỗ trợ một cư dân" : availability?.Available == true ? "Đang sẵn sàng tiếp nhận" : "Đang tạm dừng nhận mới";
+    protected override async Task OnInitializedAsync()
+    {
+        Connection.Changed += Changed; Connection.StateChanged += StateChanged;
+        await Connection.EnsureAsync(lifetime.Token); await Refresh(); loop = Poll();
+    }
+    private Task Changed(Guid id) => InvokeAsync(Refresh);
+    private void StateChanged() => _ = InvokeAsync(Refresh);
+    private async Task Refresh()
+    {
+        if (disposed) return;
+        if (!await refreshGate.WaitAsync(0)) { refreshRequested = true; return; }
+        try
+        {
+            do
+            {
+                refreshRequested = false;
+                var result = await Api.Availability(lifetime.Token);
+                if (result.IsSuccess) { availability = result.Data; error = null; } else error = result.Message;
+            } while (refreshRequested && !disposed);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { refreshGate.Release(); if (!disposed) StateHasChanged(); }
+    }
+    private async Task Toggle()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (busy) return; busy = true;
+        try { var result = await Api.SetAvailability(availability?.Available != true, lifetime.Token); if (disposed) return; if (result.IsSuccess) { availability = result.Data; error = null; } else if (result.ValidationErrors?.Count is not > 0 && result.StatusCode is null or 0 or >= 500) operationFeedback.Publish(() => Toasts.Error(result.Message)); else error = result.Message; }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { busy = false; }
+    }
+    private async Task Poll()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
+        try { while (await timer.WaitForNextTickAsync(lifetime.Token)) await InvokeAsync(Refresh); }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+    }
+    public async ValueTask DisposeAsync()
+    { toastLifetime.Dispose();
+        disposed = true; Connection.Changed -= Changed; Connection.StateChanged -= StateChanged; lifetime.Cancel();
+        if (loop is not null) await loop; lifetime.Dispose();
+    }
+}

@@ -1,0 +1,114 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
+@using PropFlow.Modules.AiChatbot.Contracts
+@using PropFlow.Web.Client.Features.AiChatbot.Services
+@implements IDisposable
+@inject ResidentChatApiClient Api
+
+<div class="rag-widget">
+    @if (open)
+    {
+        <section class="rag-window" aria-labelledby="rag-heading">
+            <header><div><span class="rag-eyebrow">PROPFLOW COPILOT</span><h2 id="rag-heading">Trợ lý tài liệu</h2><small>@(configured ? "Đã cấu hình AI · Có dẫn nguồn" : "Tra cứu tài liệu chung cư")</small></div>
+                <button type="button" @onclick="Close" aria-label="Thu nhỏ trợ lý">⌄</button></header>
+            <div class="rag-notice">Trả lời từ tài liệu được Ban quản lý xuất bản cho cư dân. Không nhập mật khẩu, số tài khoản hoặc thông tin cá nhân.</div>
+            @if (error is not null) { <div class="rag-error" role="alert">@error</div> }
+            @if (source is not null)
+            {
+                <section class="rag-source" aria-label="Nội dung tài liệu nguồn"><button type="button" @onclick="() => source = null">← Quay lại hội thoại</button>
+                    <h3>@source.Title</h3><small>Phiên bản @source.Revision · Đang xuất bản cho cư dân</small><pre>@source.Content</pre></section>
+            }
+            else
+            {
+                <div class="rag-thread" role="log" aria-live="polite" aria-relevant="additions text">
+                    @if (turns.Count == 0)
+                    {
+                        <div class="rag-welcome"><span aria-hidden="true">✦</span><h3>Bạn muốn tìm hiểu điều gì?</h3><p>Hỏi về nội quy, quy trình dịch vụ hoặc cách sử dụng PropFlow. Hãy nêu đầy đủ nội dung trong mỗi câu hỏi.</p></div>
+                        <div class="rag-suggestions">@foreach (var suggestion in Suggestions) { <button type="button" disabled="@busy" @onclick="() => Suggest(suggestion)">@suggestion</button> }</div>
+                    }
+                    @foreach (var turn in turns)
+                    {
+                        <article class="rag-question"><small>Bạn</small><p>@turn.Question</p></article>
+                        @if (turn.Reply is not null)
+                        {
+                            <article class="rag-answer"><small>@(turn.Reply.Mode == "AI" ? "AI có dẫn nguồn" : "Trợ lý tài liệu")</small><p>@turn.Reply.Answer</p>
+                                @foreach (var citation in turn.Reply.Sources)
+                                { <details class="rag-citation"><summary>[@citation.Number] @citation.Title · v@(citation.Revision)</summary><blockquote>@citation.Excerpt</blockquote><button type="button" disabled="@loadingSource" @onclick="() => ReadSource(citation)">Đọc tài liệu nguồn</button></details> }
+                            </article>
+                        }
+                    }
+                    @if (busy) { <p class="rag-thinking" role="status">Đang tra cứu tài liệu…</p> }
+                </div>
+                <form class="rag-input" @onsubmit="Send" @onsubmit:preventDefault>
+                    <label class="rag-sr" for="rag-question">Câu hỏi cho trợ lý tài liệu</label>
+                    <input id="rag-question" @bind="question" @bind:event="oninput" maxlength="1000" required minlength="2" placeholder="Nhập câu hỏi của bạn…" disabled="@(busy || blocked)" />
+                    <button type="submit" disabled="@(busy || blocked || question.Trim().Length < 2)">Gửi</button>
+                </form>
+                <nav class="rag-links" aria-label="Mở chức năng PropFlow"><a href="/resident/service-requests">Yêu cầu dịch vụ</a><a href="/resident/billing">Hóa đơn và thanh toán</a><a href="/resident/contact-management">Liên hệ BQL</a></nav>
+            }
+            <footer><span>AI có thể trả lời chưa chính xác. Hãy kiểm tra nguồn.</span><button type="button" disabled="@busy" @onclick="Clear">Xóa hội thoại</button></footer>
+        </section>
+    }
+    <button type="button" class="rag-launch" aria-expanded="@open" aria-label="@(open ? "Thu nhỏ trợ lý tài liệu" : "Mở trợ lý tài liệu")" @onclick="Toggle"><span aria-hidden="true">✦</span> Hỏi PropFlow</button>
+</div>
+
+@code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime chatFeedback = new();
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
+    private static readonly string[] Suggestions = ["Khi có chi phí sửa chữa phát sinh thì làm thế nào?", "Nội quy sử dụng khu vực chung là gì?", "Làm thế nào để gửi yêu cầu dịch vụ?"];
+    private readonly CancellationTokenSource lifetime = new();
+    private readonly List<Turn> turns = [];
+    private string question = "";
+    private string? error;
+    private bool open, busy, configured, blocked, loadingSource, checkedStatus;
+    private PublishedKnowledgeSource? source;
+    private sealed record Turn(string Question, ResidentChatReply? Reply);
+    private void Close() { chatFeedback.Invalidate(); open = false; }
+    private void Clear() { turns.Clear(); question = ""; error = null; source = null; }
+    private async Task Toggle()
+    {
+        open = !open; if (!open) chatFeedback.Invalidate();
+        if (!open || checkedStatus) return;
+        busy = true;
+        try
+        {
+            var status = await Api.StatusAsync(lifetime.Token);
+            if (status.IsSuccess) { configured = status.Data!.AiConfigured; checkedStatus = true; }
+            else { error = status.Message; blocked = status.StatusCode is 401 or 403; }
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { busy = false; }
+    }
+    private async Task Suggest(string text) { question = text; await Send(); }
+    private async Task Send()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, chatFeedback);
+
+        if (busy || blocked || question.Trim().Length < 2) return;
+        var text = question.Trim(); busy = true; error = null; question = "";
+        if (turns.Count == 20) turns.RemoveAt(0);
+        turns.Add(new(text, null));
+        try
+        {
+            var result = await Api.AskAsync(text, lifetime.Token);
+            if (lifetime.IsCancellationRequested) return;
+            if (result.IsSuccess && result.Data is not null) turns[^1] = new(text, result.Data);
+            else { if (result.StatusCode is 401 or 403 || result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); question = text; turns.RemoveAt(turns.Count - 1); }
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { busy = false; }
+    }
+    private async Task ReadSource(ChatCitation citation)
+    {
+        loadingSource = true; error = null;
+        try
+        {
+            var result = await Api.SourceAsync(citation.DocumentId, citation.Revision, lifetime.Token);
+            if (result.IsSuccess) source = result.Data;
+            else error = result.Message;
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { loadingSource = false; }
+    }
+    public void Dispose() { toastLifetime.Dispose();  lifetime.Cancel(); lifetime.Dispose(); }
+}

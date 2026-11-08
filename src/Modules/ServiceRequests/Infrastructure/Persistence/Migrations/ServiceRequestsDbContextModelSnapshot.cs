@@ -328,10 +328,34 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AdditionalCostConsentStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("NONE")
+                        .HasColumnName("additional_cost_consent_status");
+
                     b.Property<string>("AdditionalCostNote")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("additional_cost_note");
+
+                    b.Property<Guid?>("AdditionalCostProposalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("additional_cost_proposal_id");
+
+                    b.Property<DateTimeOffset?>("AdditionalCostProposedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("additional_cost_proposed_at");
+
+                    b.Property<DateTimeOffset?>("AdditionalCostRespondedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("additional_cost_responded_at");
+
+                    b.Property<Guid?>("AdditionalCostRespondedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("additional_cost_responded_by");
 
                     b.Property<Guid?>("ApartmentUnitId")
                         .HasColumnType("uuid")
@@ -479,7 +503,74 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "FinalPriorityCode");
 
-                    b.ToTable("service_requests", "service_requests");
+                    b.ToTable("service_requests", "service_requests", t =>
+                        {
+                            t.HasCheckConstraint("ck_service_request_cost_consent", "additional_cost_consent_status IN ('NONE','PENDING','ACCEPTED','REJECTED') AND (additional_cost_consent_status = 'NONE' OR (additional_cost_proposal_id IS NOT NULL AND proposed_additional_cost > 0 AND additional_cost_proposed_at IS NOT NULL)) AND (additional_cost_consent_status NOT IN ('ACCEPTED','REJECTED') OR (additional_cost_responded_at IS NOT NULL AND additional_cost_responded_by IS NOT NULL)) AND (additional_cost_consent_status <> 'REJECTED' OR status = 'CANCELLED')");
+                        });
+                });
+
+            modelBuilder.Entity("PropFlow.Shared.Messaging.OutboxEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered_at");
+
+                    b.Property<string>("LastErrorType")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("last_error_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("event_name");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("resident_notification_outbox", "service_requests");
                 });
 
             modelBuilder.Entity("PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities.ServiceRequestActivity", b =>

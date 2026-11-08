@@ -55,6 +55,8 @@ public sealed class AuthTestMail : IAuthEmail
         Codes[email] = code;
         return Task.CompletedTask;
     }
+    public Task SendEmailChangeCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct) =>
+        SendCodeAsync(email, code, false, expiryMinutes, ct);
 }
 public sealed class AuthTestClock : TimeProvider
 {
@@ -278,6 +280,26 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         if (csrf) { var token = await client.GetFromJsonAsync<CsrfResponse>("api/v1/auth/csrf"); request.Headers.Add("X-CSRF-TOKEN", token!.Token); }
         return await client.SendAsync(request);
     }
+
+    [Fact]
+    public async Task Query_access_token_authenticates_both_resident_hubs_but_not_rest_endpoints()
+    {
+        using var client = Client();
+        var email = $"hub-auth-{Guid.NewGuid():N}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var (_, session) = await RegisterActivateAndLoginAsync(client, email);
+        var accessToken = Uri.EscapeDataString(session.AccessToken);
+
+        foreach (var hub in new[] { "support-chat", "announcements" })
+        {
+            using var negotiation = await client.PostAsync($"/hubs/{hub}/negotiate?negotiateVersion=1&access_token={accessToken}", null);
+            Assert.Equal(HttpStatusCode.OK, negotiation.StatusCode);
+        }
+
+        using var profile = await client.GetAsync($"api/v1/auth/me?access_token={accessToken}");
+        Assert.Equal(HttpStatusCode.Unauthorized, profile.StatusCode);
+    }
+
     private async Task<RegisterRequest> RegistrationRequestAsync(string username, string displayName, string email, string password = Password)
     {
         using var scope = database.Factory.Services.CreateScope();

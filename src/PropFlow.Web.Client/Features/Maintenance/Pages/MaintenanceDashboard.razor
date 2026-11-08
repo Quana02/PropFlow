@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/maintenance"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER")]
@@ -57,14 +58,6 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(SuccessMessage))
-    {
-        <div class="fe07-alert fe07-alert-success" role="status">
-            <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
-            <span>@SuccessMessage</span>
-            <button type="button" @onclick="() => SuccessMessage = null" aria-label="Đóng thông báo">close</button>
-        </div>
-    }
     @if (!string.IsNullOrWhiteSpace(ErrorMessage))
     {
         <div class="fe07-alert fe07-alert-error" role="alert">
@@ -874,6 +867,8 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [SupplyParameterFromQuery(Name = "workspace")]
     public string? Workspace { get; set; }
     private readonly CancellationTokenSource cts = new();
@@ -895,7 +890,7 @@
     private bool IsExtendScheduleDialogOpen { get; set; }
     private bool IsExtendingSchedule { get; set; }
     private string? ErrorMessage { get; set; }
-    private string? SuccessMessage { get; set; }
+
     private ScheduleModel? EditingSchedule { get; set; }
     private CreateScheduleModel Editor { get; set; } = new();
     private CreateMaintenanceTaskModel TaskEditor { get; set; } = new();
@@ -1369,12 +1364,14 @@
     private void ClearTaskValidationErrors() { TaskFacilityError = null; TaskPlannedStartError = null; TaskDueError = null; }
     private async Task ConfirmSaveTask()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         IsTaskSaving = true;
         var result = await MaintenanceApi.CreateTaskAsync(TaskEditor, cts.Token);
         IsTaskSaving = false;
-        if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể tạo công việc bảo trì."; return; }
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể tạo công việc bảo trì."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể tạo công việc bảo trì.")); return; }
         var createdTask = result.Data!;
-        SuccessMessage = $"Đã tạo công việc {createdTask.TaskNumber} ở trạng thái {TaskStatusLabel(createdTask.Status)}.";
+        operationFeedback.Publish(() => Toasts.Success($"Đã tạo công việc {createdTask.TaskNumber} ở trạng thái {TaskStatusLabel(createdTask.Status)}."));
         IsTaskDialogOpen = false;
         TaskSourceSchedule = null;
         if (createdTask.FacilityId is null && createdTask.EquipmentId is null)
@@ -1441,18 +1438,20 @@
     }
     private async Task ConfirmLinkTaskServiceRequest(Guid taskId, Guid serviceRequestId)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         IsServiceRequestPickerLoading = true;
         var result = await MaintenanceApi.LinkTaskServiceRequestAsync(taskId, new() { ServiceRequestId = serviceRequestId }, cts.Token);
         IsServiceRequestPickerLoading = false;
         if (!result.IsSuccess || result.Data is null)
         {
-            ServiceRequestPickerError = result.Message ?? "Không thể liên kết yêu cầu dịch vụ.";
+            if (result.ValidationErrors?.Count > 0) ServiceRequestPickerError = result.Message ?? "Không thể liên kết yêu cầu dịch vụ."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể liên kết yêu cầu dịch vụ."));
             return;
         }
         TaskDetail = result.Data;
         IsServiceRequestPickerOpen = false;
         ServiceRequestPickerTaskId = null;
-        SuccessMessage = "Đã liên kết yêu cầu dịch vụ với công việc bảo trì.";
+        operationFeedback.Publish(() => Toasts.Success("Đã liên kết yêu cầu dịch vụ với công việc bảo trì."));
         if (!IsScheduleWorkspace && !IsHistoryWorkspace) await LoadTasks();
     }
     private void ClearCreateServiceRequest()
@@ -1509,16 +1508,18 @@
     }
     private async Task ConfirmSaveAssignment()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (TaskForAssignment is null) return;
         var task = TaskForAssignment;
         IsAssignmentSaving = true;
         var result = await MaintenanceApi.AssignTaskAsync(task.Id, AssignmentEditor, cts.Token);
         IsAssignmentSaving = false;
-        if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể phân công công việc."; return; }
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể phân công công việc."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể phân công công việc.")); return; }
         var assignedTask = result.Data!;
         IsAssignmentDialogOpen = false;
         TaskForAssignment = null;
-        SuccessMessage = $"Đã phân công công việc cho {AssigneeLabel(assignedTask)}.";
+        operationFeedback.Publish(() => Toasts.Success($"Đã phân công công việc cho {AssigneeLabel(assignedTask)}."));
         if (!IsScheduleWorkspace && !IsHistoryWorkspace) await LoadTasks();
         if (ReturnToTaskDetailAfterAssignment)
         {
@@ -1571,16 +1572,18 @@
     private void RequestRevision() => RequestConfirmation("Bạn có muốn yêu cầu nhân viên xử lý thêm không?", () => ReviewResult("request-revision"));
     private async Task ReviewResult(string decision)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (ProgressMonitor?.LatestResult is null) return;
         IsReviewSaving = true;
         ErrorMessage = null;
         var result = await MaintenanceApi.ReviewResultAsync(ProgressMonitor.Id, ProgressMonitor.LatestResult.Id,
             new ReviewMaintenanceResultModel { Decision = decision, ReviewNote = ReviewEditor.ReviewNote }, cts.Token);
         IsReviewSaving = false;
-        if (!result.IsSuccess || result.Data is null) { ErrorMessage = result.Message ?? "Không thể lưu kết quả review."; return; }
+        if (!result.IsSuccess || result.Data is null) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể lưu kết quả review."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể lưu kết quả review.")); return; }
         ProgressMonitor = result.Data;
         ReviewEditor = new();
-        SuccessMessage = decision == "approve" ? "Đã chấp nhận kết quả và đóng công việc." : "Đã yêu cầu tiếp tục xử lý công việc.";
+        operationFeedback.Publish(() => Toasts.Success(decision == "approve" ? "Đã chấp nhận kết quả và đóng công việc." : "Đã yêu cầu tiếp tục xử lý công việc."));
         if (!IsScheduleWorkspace && !IsHistoryWorkspace) await LoadTasks();
     }
     private async Task ReassignFromProgressMonitor()
@@ -1609,14 +1612,16 @@
     }
     private async Task ConfirmSaveAssetAssociation()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (TaskForAssetAssociation is null) return;
         var task = TaskForAssetAssociation;
         IsAssetAssociationSaving = true;
         var result = await MaintenanceApi.AssociateTaskAssetAsync(task.Id, AssetAssociationEditor, cts.Token);
         IsAssetAssociationSaving = false;
-        if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể gắn tài sản cho công việc bảo trì."; return; }
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể gắn tài sản cho công việc bảo trì."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể gắn tài sản cho công việc bảo trì.")); return; }
         TaskForAssetAssociation = result.Data!;
-        SuccessMessage = $"Đã gắn tài sản cho công việc {TaskForAssetAssociation.TaskNumber}.";
+        operationFeedback.Publish(() => Toasts.Success($"Đã gắn tài sản cho công việc {TaskForAssetAssociation.TaskNumber}."));
         IsAssetAssociationDialogOpen = false;
         TaskForAssetAssociation = null;
         if (!IsScheduleWorkspace && !IsHistoryWorkspace) await LoadTasks();
@@ -1647,6 +1652,8 @@
     }
     private async Task ConfirmSaveSchedule()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (!TryGetScheduleRange(out var start, out var end)) return;
         IsSaving = true;
         var result = EditingSchedule is null
@@ -1661,8 +1668,8 @@
                 Description = Editor.Description
             }, cts.Token);
         IsSaving = false;
-        if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể lưu lịch bảo trì."; return; }
-        SuccessMessage = EditingSchedule is null ? "Đã tạo lịch bảo trì." : "Đã cập nhật lịch bảo trì.";
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể lưu lịch bảo trì."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể lưu lịch bảo trì.")); return; }
+        operationFeedback.Publish(() => Toasts.Success(EditingSchedule is null ? "Đã tạo lịch bảo trì." : "Đã cập nhật lịch bảo trì."));
         IsDialogOpen = false;
         await LoadSchedules();
     }
@@ -1671,10 +1678,12 @@
         => RequestConfirmation(action == "complete" ? "Bạn có muốn hoàn tất lịch bảo trì này không?" : "Bạn có muốn hủy lịch bảo trì này không?", () => ConfirmChangeStatus(schedule, action));
     private async Task ConfirmChangeStatus(ScheduleModel schedule, string action)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         ErrorMessage = null;
         var result = await MaintenanceApi.SetScheduleStatusAsync(schedule.Id, action, cts.Token);
-        if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể cập nhật trạng thái lịch."; return; }
-        SuccessMessage = action == "complete" ? "Đã hoàn tất lịch bảo trì." : "Đã hủy lịch bảo trì.";
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể cập nhật trạng thái lịch."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể cập nhật trạng thái lịch.")); return; }
+        operationFeedback.Publish(() => Toasts.Success(action == "complete" ? "Đã hoàn tất lịch bảo trì." : "Đã hủy lịch bảo trì."));
         await LoadSchedules();
     }
 
@@ -1699,13 +1708,15 @@
         => RequestConfirmation("Bạn có muốn gia hạn lịch bảo trì này không?", ConfirmSaveScheduleExtension);
     private async Task ConfirmSaveScheduleExtension()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (ScheduleToExtend is null) return;
         IsExtendingSchedule = true;
         ErrorMessage = null;
         var result = await MaintenanceApi.ExtendScheduleAsync(ScheduleToExtend.Id, ExtendScheduleEditor, cts.Token);
         IsExtendingSchedule = false;
-        if (!result.IsSuccess) { ErrorMessage = result.Message ?? "Không thể gia hạn lịch bảo trì."; return; }
-        SuccessMessage = "Đã gia hạn lịch bảo trì.";
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message ?? "Không thể gia hạn lịch bảo trì."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể gia hạn lịch bảo trì.")); return; }
+        operationFeedback.Publish(() => Toasts.Success("Đã gia hạn lịch bảo trì."));
         CloseExtendSchedule();
         await LoadSchedules();
     }
@@ -1994,7 +2005,7 @@
         _ => string.Empty
     };
     public async ValueTask DisposeAsync()
-    {
+    { toastLifetime.Dispose();
         cts.Dispose();
         if (_hubConnection is not null)
         {

@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/otp"
 @layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
 @implements IDisposable
@@ -17,7 +18,7 @@ else
 {
     <p>@State.Challenge.Message</p>
     <div class="otp-heading"><label>MÃ XÁC THỰC (6 CHỮ SỐ)</label><span role="status">@(Remaining <= 0 ? "Mã đã hết hạn" : "Hết hạn sau: ")<strong>@(Remaining > 0 ? $"{Remaining / 60:00}:{Remaining % 60:00}" : "")</strong></span></div>
-    <ApiFeedback Result="result" />
+    <ApiFeedback Result="result" Operation="resultFeedback" />
     <EditForm Model="form" OnValidSubmit="Submit"><DataAnnotationsValidator /><ValidationSummary />
         <div class="otp-inputs" role="group" aria-label="Mã email gồm 6 chữ số">
             @for (var i = 0; i < 6; i++)
@@ -32,6 +33,9 @@ else
 }
 <nav class="auth-links"><a href="/login">Quay lại đăng nhập</a></nav>
 @code {
+    private PropFlow.Web.Client.Shared.Feedback.ToastOperation? resultFeedback;
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private readonly OtpForm form = new(); private readonly string[] digits = new string[6]; private ApiResult? result; private bool busy; private readonly CancellationTokenSource lifetime = new();
     private int Remaining => Math.Max(0, (int)((State.Challenge?.ExpiresAt ?? DateTimeOffset.UtcNow) - DateTimeOffset.UtcNow).TotalSeconds);
     private int ResendWait => Math.Max(0, (int)((State.Challenge?.ResendAfter ?? DateTimeOffset.UtcNow) - DateTimeOffset.UtcNow).TotalSeconds);
@@ -44,10 +48,13 @@ else
         form.Code = string.Concat(digits);
         if (digits[index].Length == 1 && index < 5) await JSRuntime.InvokeVoidAsync("focusOtpInput", index + 1);
     }
-    private async Task Submit() { if (busy || State.Challenge == null) return; busy = true; try {
+    private async Task Submit() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+        resultFeedback = operationFeedback;
+ if (busy || State.Challenge == null) return; busy = true; try {
         var request = new VerifyChallengeRequest(State.Challenge.ChallengeId, form.Code);
-        if (State.Recovery) { var response = await Auth.VerifyRecoveryAsync(request); result = response; if (response.IsSuccess) { State.ResetProof = response.Data; Navigation.NavigateTo("/reset-password"); } }
-        else { result = await Auth.ActivateAsync(request); if (result.IsSuccess) { State.Clear(); Navigation.NavigateTo("/account-activated"); } }
+        if (State.Recovery) { var response = await Auth.VerifyRecoveryAsync(request); if (!operationFeedback.IsCurrent) return; result = response; if (response.IsSuccess) { State.ResetProof = response.Data; Navigation.NavigateTo("/reset-password"); } }
+        else { result = await Auth.ActivateAsync(request); if (!operationFeedback.IsCurrent) { result = null; return; } if (result.IsSuccess) { State.Clear(); Navigation.NavigateTo("/account-activated"); } }
     } finally { form.Code = ""; Array.Fill(digits, ""); busy = false; } }
-    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose(); lifetime.Cancel(); lifetime.Dispose(); }
 }

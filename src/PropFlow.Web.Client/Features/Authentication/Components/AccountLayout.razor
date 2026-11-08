@@ -1,0 +1,11 @@
+@inherits LayoutComponentBase
+@inject AuthSession Session
+@inject NavigationManager Navigation
+
+<LayoutView Layout="@(Session.User?.Role == "ADMIN" ? typeof(PropFlow.Web.Client.Layout.AdminLayout) : typeof(AuthLayout))">
+    <div class="@(IsOverview ? "account-overview" : "account-content")">@Body</div>
+</LayoutView>
+
+@code {
+    private bool IsOverview => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/') == "account";
+}

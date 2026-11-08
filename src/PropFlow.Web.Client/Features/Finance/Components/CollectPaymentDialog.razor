@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Finance.Models
 @using PropFlow.Web.Client.Features.Finance.Services
 @using PropFlow.Web.Client.Shared.Feedback
@@ -26,6 +27,8 @@
     <PropFlowConfirmationDialog Title="Xác nhận thu tiền?" Message="@($"Bạn có muốn ghi nhận thu {amount.ToString("N0", Vi)} đ cho hóa đơn {Invoice.InvoiceNumber} không?")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="ConfirmSave" OnCancel="() => confirming = false" />
 }
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private ElementReference dialog;
     private ElementReference moneyInput;
     private IJSObjectReference? module;
@@ -36,7 +39,7 @@
         await module.InvokeVoidAsync("open", dialog);
     }
     public async ValueTask DisposeAsync()
-    {
+    { toastLifetime.Dispose();
         if (module is null) return;
         try { await module.InvokeVoidAsync("close", dialog); await module.DisposeAsync(); }
         catch (JSDisconnectedException) { }
@@ -78,6 +81,8 @@
         return Task.CompletedTask;
     }
     private async Task ConfirmSave() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy || !verified) return;
         if (amountError is not null) { confirming = false; return; }
         if (amount <= 0 || amount > Invoice.OutstandingAmount || amount != decimal.Round(amount, 0)) { error = "Số tiền phải là VND nguyên và không vượt dư nợ."; return; }
@@ -85,7 +90,7 @@
         var payload = System.Text.Json.JsonSerializer.Serialize(input);
         if (payload != lastPayload) { key = Guid.NewGuid().ToString(); lastPayload = payload; }
         busy = true; error = null;
-        try { var result = await Api.CollectAsync(input, key); if (result.IsSuccess) await Saved.InvokeAsync(); else error = result.Message; }
+        try { var result = await Api.CollectAsync(input, key); if (result.IsSuccess) { if (operationFeedback.IsCurrent) await Saved.InvokeAsync(); } else if (result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); }
         finally { busy = false; confirming = false; }
     }
 }

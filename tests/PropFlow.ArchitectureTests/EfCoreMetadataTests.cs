@@ -440,7 +440,11 @@ public class EfCoreMetadataTests
         var model = context.Model;
 
         Assert.Equal("service_requests", model.GetDefaultSchema());
-        Assert.Equal(6, model.GetEntityTypes().Count());
+        Assert.Equal(7, model.GetEntityTypes().Count());
+        var costOutbox = model.FindEntityType(typeof(PropFlow.Shared.Messaging.OutboxEvent));
+        Assert.NotNull(costOutbox);
+        Assert.Equal("resident_notification_outbox", costOutbox.GetTableName());
+        Assert.Equal("service_requests", costOutbox.GetSchema());
 
         var categoryEntity = model.FindEntityType(typeof(ServiceRequestCategory));
         Assert.NotNull(categoryEntity);
@@ -958,7 +962,7 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("communication", model.GetDefaultSchema());
-        Assert.Equal(5, model.GetEntityTypes().Count());
+        Assert.Equal(9, model.GetEntityTypes().Count());
         var emailEntity = model.FindEntityType(typeof(FinanceEmail));
         Assert.NotNull(emailEntity);
         Assert.Equal("finance_emails", emailEntity.GetTableName());

@@ -1,0 +1,166 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
+@using PropFlow.Web.Client.Features.Communication.Services
+@inject AnnouncementApiClient Api
+@inject AnnouncementRealtimeClient Realtime
+@implements IDisposable
+
+<section class="announcement-workspace @(Embedded ? "embedded" : "")">
+    @if (!Embedded)
+    {
+    <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">@(Manager ? "Vận hành" : "Trang chủ")</a><span>/</span><strong>Thông báo chung</strong></nav>
+    <header class="hero">
+        <div><span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">campaign</span>Thông tin từ Ban Quản lý</span><h1>Thông báo chung</h1><p>Cập nhật thông tin và hoạt động dành cho cư dân.</p></div>
+        @if (Manager)
+        {
+            <button class="primary" @onclick="OpenComposer" disabled="@busy"><span class="material-symbols-outlined" aria-hidden="true">add</span>Đăng thông báo</button>
+        }
+    </header>
+    }
+    @if (error is not null) { <div class="notice error" role="alert">@error <button @onclick="LoadAsync" disabled="@busy">Tải lại danh sách</button></div> }
+
+    @if (Manager && composing)
+    {
+        <section class="panel composer" aria-labelledby="compose-title">
+            <header class="panel-heading"><div><h2 id="compose-title">Soạn thông báo mới</h2><p>Thông báo sẽ được gửi đến tất cả cư dân được phép truy cập.</p></div><button disabled="@publishing" @onclick="CancelComposerFeedbackCloseComposer">Đóng soạn thảo</button></header>
+            <form @onsubmit="PublishAsync" @onsubmit:preventDefault>
+                <fieldset disabled="@publishing">
+                    @if (!preview)
+                    {
+                        <label for="announcement-title">Tiêu đề <span aria-hidden="true">*</span></label>
+                        <input id="announcement-title" @bind="title" @bind:event="oninput" required maxlength="200" placeholder="Ví dụ: Lịch bảo dưỡng thang máy tháng 11" />
+                        <small class="field-hint">Viết ngắn gọn để cư dân dễ nhận biết. @title.Length/200 ký tự</small>
+                        <label for="announcement-content">Nội dung <span aria-hidden="true">*</span></label>
+                        <textarea id="announcement-content" @bind="content" @bind:event="oninput" required rows="8" placeholder="Nêu rõ thời gian, khu vực ảnh hưởng và những điều cư dân cần lưu ý."></textarea>
+                    }
+                    else
+                    {
+                        <div class="preview"><span class="kicker">Bản xem trước · Chưa đăng</span><h2>@title</h2><p class="content">@content</p></div>
+                    }
+                    <div class="audience"><span class="material-symbols-outlined" aria-hidden="true">groups</span><div><strong>Tất cả cư dân</strong><small>Cư dân có quyền truy cập trong chung cư hiện hành.</small></div></div>
+                    <footer class="compose-actions"><span>Kiểm tra nội dung trước khi đăng.</span><div><button type="button" @onclick="TogglePreview" disabled="@(!CanPublish)">@(preview ? "Tiếp tục chỉnh sửa" : "Xem trước")</button><button type="submit" class="primary" disabled="@(!CanPublish)">@(publishing ? "Đang đăng…" : "Đăng thông báo")</button></div></footer>
+                </fieldset>
+            </form>
+        </section>
+    }
+    <section class="panel" aria-labelledby="announcements-title" aria-busy="@loading">
+        <header class="panel-heading"><div><h2 id="announcements-title">Danh sách thông báo <span class="count">@(data?.Total.ToString() ?? "—")</span></h2><p>Chọn thông báo để đọc đầy đủ nội dung.</p></div><button @onclick="LoadAsync" disabled="@busy"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Làm mới</button></header>
+        @if (loading)
+        {
+            <div class="empty-state" role="status"><span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><h3>Đang tải thông báo…</h3></div>
+        }
+        else if (data is not null && data.Items.Count > 0)
+        {
+            <div class="reading-layout @(mobileReading ? "is-reading" : "")">
+                <div class="announcement-list" aria-label="Chọn thông báo">
+                    @foreach (var item in data.Items)
+                    {
+                        <button @key="item.Id" class="announcement-item @(selected?.Id == item.Id ? "selected" : "")" aria-pressed="@(selected?.Id == item.Id)" @onclick="() => Select(item)">
+                            <span class="item-date"><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>@PublishedTime(item)</span><strong>@item.Title</strong><span class="excerpt">@item.Content</span><span class="read-link">Xem chi tiết <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></span>
+                        </button>
+                    }
+                </div>
+                @if (selected is not null)
+                {
+                    <article class="reader" aria-labelledby="announcement-detail-title" aria-live="polite">
+                        <button class="back-button" @onclick="() => mobileReading = false"><span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>Danh sách thông báo</button>
+                        <span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">campaign</span>Thông báo từ Ban Quản lý</span>
+                        <h2 id="announcement-detail-title">@selected.Title</h2>
+                        <div class="reader-meta"><span class="material-symbols-outlined" aria-hidden="true">schedule</span>Ngày đăng: @PublishedTime(selected)</div>
+                        <p class="content">@selected.Content</p>
+                    </article>
+                }
+            </div>
+            <footer class="panel-footer"><span>Trang @(page) / @TotalPages · @data.Total thông báo</span><nav aria-label="Phân trang thông báo"><button disabled="@(busy || page <= 1)" @onclick="PreviousAsync">Trước</button><button disabled="@(busy || page >= TotalPages)" @onclick="NextAsync">Sau</button></nav></footer>
+        }
+        else if (error is null)
+        {
+            <div class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">campaign</span><h3>Chưa có thông báo</h3><p>@(Manager ? "Đăng thông báo đầu tiên để chia sẻ thông tin đến cư dân." : "Thông tin mới từ Ban Quản lý sẽ xuất hiện tại đây.")</p></div>
+        }
+    </section>
+</section>
+
+@code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime composerFeedback = new();
+    private void CancelComposerFeedbackCloseComposer() { CloseComposer(); if (!composing) composerFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
+    [Parameter] public bool Manager { get; set; }
+    [Parameter] public bool Embedded { get; set; }
+    [SupplyParameterFromQuery(Name = "announcement")] public Guid? RequestedAnnouncement { get; set; }
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? refresh;
+    private bool disposed;
+    private Guid? appliedAnnouncement;
+    private readonly CancellationTokenSource cancellation = new();
+    private string title = "", content = "";
+    private string? error;
+    private AnnouncementPage? data;
+    private AnnouncementView? selected;
+    private int page = 1;
+    private bool loading, publishing, composing, preview, mobileReading;
+    private bool busy => loading || publishing;
+    private bool CanPublish => !string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(content);
+    private int TotalPages => data is null ? 1 : Math.Max(1, (int)Math.Ceiling((double)data.Total / data.PageSize));
+    protected override Task OnInitializedAsync()
+    {
+        refresh = new(() => InvokeAsync(LoadCoreAsync), afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += OnRealtimeAsync;
+        return LoadAsync();
+    }
+    protected override void OnParametersSet()
+    {
+        if (RequestedAnnouncement.HasValue && RequestedAnnouncement != appliedAnnouncement)
+        {
+            var requested = data?.Items.FirstOrDefault(x => x.Id == RequestedAnnouncement);
+            if (requested is not null) { selected = requested; mobileReading = true; appliedAnnouncement = RequestedAnnouncement; }
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { await Realtime.EnsureStartedAsync(cancellation.Token); await LoadAsync(); }
+    }
+    private Task OnRealtimeAsync(Guid _) => disposed ? Task.CompletedTask : refresh?.RequestAsync() ?? Task.CompletedTask;
+    private Task LoadAsync() => refresh?.RefreshNowAsync() ?? Task.CompletedTask;
+    private string PublishedTime(AnnouncementView item) => item.PublishedAt.HasValue && data is not null
+        ? TimeZoneInfo.ConvertTimeBySystemTimeZoneId(item.PublishedAt.Value, data.TimeZoneId).ToString("dd/MM/yyyy · HH:mm") : "Chưa có ngày đăng";
+    private void Select(AnnouncementView item) { selected = item; mobileReading = true; }
+    private void OpenComposer() { composing = true; preview = false;  }
+    private void CloseComposer() { composing = false; preview = false; }
+    private void TogglePreview() => preview = !preview;
+    private async Task LoadCoreAsync()
+    {
+        loading = true; error = null;
+        try
+        {
+            var result = await Api.ListAsync(page, cancellation.Token);
+            data = result.IsSuccess ? result.Data : null;
+            if (!result.IsSuccess) error = result.Message ?? "Không tải được thông báo.";
+            selected = data?.Items.FirstOrDefault(x => x.Id == (selected?.Id ?? RequestedAnnouncement)) ?? data?.Items.FirstOrDefault();
+            if (RequestedAnnouncement.HasValue && selected?.Id == RequestedAnnouncement) mobileReading = true;
+        }
+        finally { loading = false; }
+    }
+    private async Task PublishAsync()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, composerFeedback);
+
+        if (busy || !CanPublish) return;
+        publishing = true; error = null;
+        try
+        {
+            var result = await Api.PublishAsync(title, content, cancellation.Token);
+            if (result.IsSuccess)
+            {
+                title = ""; content = ""; page = 1; composing = false; preview = false; mobileReading = false;
+                selected = result.Data;
+                operationFeedback.Publish(() => Toasts.Success("Đã đăng thông báo cho cư dân."));
+                await LoadAsync();
+            }
+            else { { if (result.ValidationErrors?.Count > 0) error = string.Join(" ", result.ValidationErrors.Values.SelectMany(value => value)); else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không đăng được thông báo.")); } preview = false; }
+        }
+        finally { publishing = false; }
+    }
+    private Task PreviousAsync() { page--; mobileReading = false; return LoadAsync(); }
+    private Task NextAsync() { page++; mobileReading = false; return LoadAsync(); }
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= OnRealtimeAsync; refresh?.Dispose(); cancellation.Cancel(); cancellation.Dispose(); }
+}

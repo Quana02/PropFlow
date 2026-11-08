@@ -1,0 +1,10 @@
+@page "/manager/support-chat"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Policy = PropFlow.Modules.Communication.Contracts.SupportChatPolicies.Manager)]
+
+<PageTitle>Chat với cư dân - PropFlow</PageTitle>
+<SupportChatWorkspace ForManager="true" RequestedConversationId="ConversationId" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
+}

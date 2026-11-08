@@ -18,7 +18,7 @@ public sealed class FinanceNoticePublisher(CommunicationDbContext db, IFinanceNo
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({emailEvent.ToString() + n.Email.ToUpperInvariant()}, 2))", ct);
         Notification? notification = null;
         if (n.UserId is Guid userId && !existingNotification) {
-            notification = new Notification(userId, n.SourceType is "PRICING" or "ASSET_STATUS" ? NotificationType.ANNOUNCEMENT : n.SourceType == "MAINTENANCE" ? NotificationType.MAINTENANCE : n.SourceType == "PAYMENT" ? NotificationType.PAYMENT : NotificationType.INVOICE,
+            notification = new Notification(userId, n.SourceType == "SERVICE_REQUEST" ? NotificationType.SERVICE_REQUEST : n.SourceType is "PRICING" or "ASSET_STATUS" ? NotificationType.ANNOUNCEMENT : n.SourceType == "MAINTENANCE" ? NotificationType.MAINTENANCE : n.SourceType == "PAYMENT" ? NotificationType.PAYMENT : NotificationType.INVOICE,
                 n.Title, n.Message, DateTimeOffset.UtcNow, n.EventId, n.SourceType, n.SourceId, n.ActionPath);
             db.Notifications.Add(notification);
         }

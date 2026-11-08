@@ -1,0 +1,247 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
+@page "/knowledge/documents"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Policy = KnowledgePolicies.Read)]
+@using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Modules.AiChatbot.Contracts
+@using PropFlow.Web.Client.Features.AiChatbot.Services
+@using PropFlow.Web.Client.Shared.Feedback
+@implements IDisposable
+@inject KnowledgeApiClient Api
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Tài liệu chung cư - PropFlow</PageTitle>
+<div class="knowledge-workspace">
+    <header class="knowledge-hero">
+        <div><span class="eyebrow">KHO TÀI LIỆU</span><h1>Tài liệu chung cư</h1>
+            <p>Nội quy, hướng dẫn và quy trình vận hành tại một nơi.</p></div>
+        @if (canManage) { <button class="primary" disabled="@InteractionBlocked" @onclick="NewDocument">+ Thêm tài liệu</button> }
+    </header>
+    <p class="knowledge-notice">@(canManage ? "Lưu bản nháp để kiểm tra nội dung trước khi xuất bản. Chỉ bản đã xuất bản cho cư dân mới đủ điều kiện làm nguồn trả lời của chatbot." : "Bạn có thể xem các tài liệu đã được Ban quản lý xuất bản, bao gồm tài liệu nội bộ.")</p>
+    @if (error is not null) { <div class="error" role="alert">@error</div> }
+
+    <form class="knowledge-search" @onsubmit="Search" @onsubmit:preventDefault>
+        <label for="knowledge-search">Tìm theo tiêu đề</label>
+        <input id="knowledge-search" @bind="search" maxlength="200" placeholder="Nhập tên tài liệu…" disabled="@InteractionBlocked" />
+        <button disabled="@InteractionBlocked" type="submit">Tìm kiếm</button><button disabled="@InteractionBlocked" type="button" @onclick="Load">Tải lại</button>
+    </form>
+    @if (loading) { <p role="status">Đang tải tài liệu…</p> }
+    else if (pageData is not null)
+    {
+        @if (pageData.Total == 0) { <div class="empty">@(canManage ? "Chưa có tài liệu. Chọn “Thêm tài liệu” để tạo bản đầu tiên." : "Chưa có tài liệu được xuất bản.")</div> }
+        <div class="knowledge-grid">
+            @foreach (var item in pageData.Items)
+            {
+                <article class="knowledge-card">
+                    <span class="material-symbols-outlined book-icon" aria-hidden="true">description</span>
+                    <div class="badges"><span>@AudienceLabel(item.Audience)</span><span>@StatusLabel(item)</span></div>
+                    <h2>@item.Title</h2><p>Phiên bản @item.Revision</p>
+                    <button disabled="@InteractionBlocked" @onclick="() => Open(item.Id)">@(canManage ? "Xem và quản lý" : "Đọc tài liệu")</button>
+                </article>
+            }
+        </div>
+        <nav class="knowledge-pagination" aria-label="Phân trang tài liệu">
+            <span>@pageData.Total tài liệu · Trang @(page)</span>
+            <button disabled="@(InteractionBlocked || page <= 1)" @onclick="Previous">Trước</button>
+            <button disabled="@(InteractionBlocked || page * pageData.PageSize >= pageData.Total)" @onclick="Next">Sau</button>
+        </nav>
+    }
+    @if (editorOpen)
+    {
+        <section class="knowledge-editor" aria-labelledby="editor-heading">
+            <div class="editor-heading"><h2 id="editor-heading">@(detail is null ? "Thêm tài liệu" : detail.Revision.Title)</h2><button disabled="@InteractionBlocked" @onclick="Close">Đóng</button></div>
+            @if (canManage)
+            {
+                <form @onsubmit="Save" @onsubmit:preventDefault>
+                    <label for="doc-title">Tiêu đề</label><input id="doc-title" @bind="title" required maxlength="200" disabled="@InteractionBlocked" />
+                    <label for="doc-audience">Phạm vi của phiên bản này</label>
+                    <PropFlowSelect Id="doc-audience" @bind-Value="audience" Options="AudienceOptions" Disabled="@InteractionBlocked" AriaLabel="Phạm vi của phiên bản này" />
+                    <label for="doc-import">Nhập từ tệp văn bản (.txt, .md; UTF-8; tối đa 256 KB)</label>
+                    <InputFile id="doc-import" accept=".txt,.md,text/plain,text/markdown" OnChange="Import" disabled="@InteractionBlocked" />
+                    <label for="doc-content">Nội dung</label><textarea id="doc-content" rows="16" @bind="content" required maxlength="60000" disabled="@InteractionBlocked"></textarea>
+                    <small>Nội dung hiển thị dưới dạng văn bản. Không đưa thông tin cá nhân hoặc khóa bí mật vào tài liệu.</small>
+                    <div class="editor-actions"><button class="primary" type="submit" disabled="@InteractionBlocked">Lưu bản nháp</button></div>
+                </form>
+                @if (detail is not null)
+                {
+                    <p>Đang sửa phiên bản @detail.Document.Revision. @(detail.Document.PublishedRevision is int published ? $"Bản đang xuất bản: {published}." : "Chưa xuất bản.")</p>
+                    <p>Bản đã xuất bản giữ nguyên nội dung và phạm vi cho đến khi bạn xuất bản bản mới hoặc ngừng xuất bản.</p>
+                    <div class="editor-actions">
+                        <button disabled="@(InteractionBlocked || detail.Document.PublishedRevision == detail.Document.Revision)" @onclick="() => Publication(true)">Xuất bản bản đã lưu</button>
+                        <button class="danger" disabled="@(InteractionBlocked || detail.Document.PublishedRevision is null)" @onclick="() => Publication(false)">Ngừng xuất bản</button>
+                    </div>
+                    <div class="source-note"><strong>Nguồn chatbot cư dân</strong>
+                        @if (indexStatus is not null)
+                        { <p>@indexStatus.Chunks đoạn sẵn sàng tìm kiếm · @indexStatus.EmbeddedChunks đoạn đã xử lý ngữ nghĩa.</p><p>@(indexStatus.AiConfigured ? "Đã cấu hình Gemini. Các đoạn chờ được xử lý tự động." : "Chưa cấu hình Gemini. Cư dân vẫn có thể tìm và đọc trích đoạn tài liệu.")</p> }
+                        <p>Tài liệu nội bộ và bản nháp được loại khỏi nguồn chatbot. Chỉ xuất bản nội dung phù hợp để cung cấp cho cư dân.</p>
+                        <button type="button" disabled="@InteractionBlocked" @onclick="RefreshIndex">Kiểm tra trạng thái nguồn</button>
+                    </div>
+                    <details><summary>Lịch sử phiên bản gần đây</summary>
+                        @foreach (var revision in detail.History)
+                        { <details class="revision"><summary>Phiên bản @revision.Number · @revision.Title · @AudienceLabel(revision.Audience)</summary><pre>@revision.Content</pre></details> }
+                    </details>
+                    <details><summary>Nhật ký xuất bản và chỉnh sửa</summary><ul>@foreach (var activity in detail.Activity) { <li>@ActionLabel(activity.Action) · phiên bản @activity.Revision</li> }</ul></details>
+                }
+            }
+            else if (detail is not null)
+            { <p>@AudienceLabel(detail.Revision.Audience) · Phiên bản @detail.Revision.Number</p><pre class="document-content">@detail.Revision.Content</pre> }
+        </section>
+    }
+</div>
+
+@if (pendingPublication is { } publication)
+{
+    <PropFlowConfirmationDialog Title="@(publication.Publish ? "Xuất bản tài liệu?" : "Ngừng xuất bản tài liệu?")"
+        Message="@(publication.Publish ? $"Xuất bản bản đã lưu của “{publication.Title}” cho {AudienceLabel(publication.Audience).ToLowerInvariant()}?" : $"Ngừng xuất bản “{publication.Title}”? Nhân viên và chatbot sẽ không sử dụng tài liệu này nữa.")"
+        ConfirmText="@(publication.Publish ? "Xuất bản" : "Ngừng xuất bản")" CancelText="Hủy"
+        Destructive="@(!publication.Publish)" Busy="@busy" OnConfirm="ConfirmPublication" OnCancel="CancelConfirmation" />
+}
+else if (pendingImport is { } import)
+{
+    <PropFlowConfirmationDialog Title="Thay nội dung đang soạn?"
+        Message="@($"Thay nội dung hiện tại bằng nội dung tệp “{import.FileName}”? Nội dung đang soạn sẽ bị thay thế. Bạn vẫn cần lưu bản nháp sau đó.")"
+        ConfirmText="Thay nội dung" CancelText="Giữ nội dung hiện tại" Busy="@busy"
+        OnConfirm="ConfirmImport" OnCancel="CancelConfirmation" />
+}
+
+@code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
+    private readonly CancellationTokenSource lifetime = new();
+    private static readonly PropFlowSelectOption[] AudienceOptions = [new("RESIDENT", "Cư dân và nhân sự"), new("INTERNAL", "Nội bộ nhân sự")];
+    private KnowledgeDocumentPage? pageData;
+    private KnowledgeDocumentDetail? detail;
+    private KnowledgeIndexStatus? indexStatus;
+    private bool canManage, busy, loading, editorOpen;
+    private int page = 1;
+    private string search = "", title = "", content = "", audience = "RESIDENT";
+    private string? error;
+    private PublicationConfirmation? pendingPublication;
+    private ImportConfirmation? pendingImport;
+    private int editorVersion;
+    private bool InteractionBlocked => busy || pendingPublication is not null || pendingImport is not null;
+    private sealed record PublicationConfirmation(Guid DocumentId, Guid Token, bool Publish, string Title, string Content, string Audience);
+    private sealed record ImportConfirmation(Guid? DocumentId, int EditorVersion, string OriginalContent, string ImportedContent, string FileName);
+
+    protected override async Task OnInitializedAsync()
+    {
+        canManage = KnowledgePolicies.CanManage((await Authentication.GetAuthenticationStateAsync()).User);
+        await Load();
+    }
+    private async Task Load()
+    {
+        if (pendingPublication is not null || pendingImport is not null) return;
+        busy = loading = true; error = null;
+        try
+        {
+            var result = await Api.ListAsync(search, page, lifetime.Token);
+            if (result.IsSuccess) pageData = result.Data;
+            else { pageData = null; error = result.Message; }
+        }
+        finally { busy = loading = false; }
+    }
+    private async Task Search() { if (InteractionBlocked) return; page = 1; await Load(); }
+    private async Task Previous() { if (InteractionBlocked) return; page--; await Load(); }
+    private async Task Next() { if (InteractionBlocked) return; page++; await Load(); }
+    private void NewDocument() { if (InteractionBlocked) return; editorVersion++; detail = null; indexStatus = null; title = content = ""; audience = "RESIDENT"; editorOpen = true; error = null; }
+    private void Close() { if (InteractionBlocked) return; editorVersion++; editorOpen = false; detail = null; }
+    private async Task Open(Guid id)
+    {
+        if (pendingPublication is not null || pendingImport is not null) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await Api.GetAsync(id, lifetime.Token);
+            if (!result.IsSuccess || result.Data is null) { error = result.Message; return; }
+            editorVersion++; detail = result.Data; title = detail.Revision.Title; content = detail.Revision.Content; audience = detail.Revision.Audience; editorOpen = true;
+            if (canManage) await RefreshIndex();
+        }
+        finally { busy = false; }
+    }
+    private async Task Save()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (InteractionBlocked || !canManage) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await Api.SaveAsync(detail?.Document.Id, new(title, content, audience, detail?.Document.Token), lifetime.Token);
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); return; }
+            await Open(result.Data); await Load(); operationFeedback.Publish(() => Toasts.Success("Đã lưu bản nháp. Kiểm tra nội dung rồi xuất bản khi sẵn sàng."));
+        }
+        finally { busy = false; }
+    }
+    private async Task RefreshIndex()
+    {
+        if (detail is null) return;
+        var result = await Api.IndexAsync(detail.Document.Id, lifetime.Token);
+        indexStatus = result.IsSuccess ? result.Data : null;
+        if (!result.IsSuccess) error = result.Message;
+    }
+    private void Publication(bool publish)
+    {
+        if (InteractionBlocked || detail is null || !canManage) return;
+        if (title != detail.Revision.Title || content != detail.Revision.Content || audience != detail.Revision.Audience)
+        { error = "Vui lòng lưu thay đổi thành bản nháp trước khi thay đổi trạng thái xuất bản."; return; }
+        pendingPublication = new(detail.Document.Id, detail.Document.Token, publish, title, content, audience);
+    }
+    private async Task ConfirmPublication()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (busy || pendingPublication is not { } pending || !canManage) return;
+        if (!editorOpen || detail is null || detail.Document.Id != pending.DocumentId || detail.Document.Token != pending.Token
+            || title != pending.Title || content != pending.Content || audience != pending.Audience)
+        { pendingPublication = null; error = "Tài liệu đã thay đổi. Vui lòng kiểm tra lại trước khi xuất bản hoặc ngừng xuất bản."; return; }
+        busy = true; error = null;
+        try
+        {
+            var result = await Api.PublicationAsync(pending.DocumentId, pending.Token, pending.Publish, lifetime.Token);
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); return; }
+            pendingPublication = null;
+            await Open(pending.DocumentId); await Load(); operationFeedback.Publish(() => Toasts.Success(pending.Publish ? "Đã xuất bản tài liệu." : "Đã ngừng xuất bản tài liệu."));
+        }
+        finally { pendingPublication = null; busy = false; }
+    }
+    private async Task Import(InputFileChangeEventArgs args)
+    {
+        if (InteractionBlocked || !canManage) return;
+        var file = args.File;
+        if (file.Size > 262144 || !new[] { ".txt", ".md" }.Contains(System.IO.Path.GetExtension(file.Name).ToLowerInvariant()))
+        { error = "Chọn tệp .txt hoặc .md không quá 256 KB."; return; }
+        busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(262144, lifetime.Token);
+            using var reader = new System.IO.StreamReader(stream, new System.Text.UTF8Encoding(false, true), false);
+            var text = await reader.ReadToEndAsync(lifetime.Token);
+            if (text.Length > 60000 || text.Any(c => char.IsControl(c) && c is not '\r' and not '\n' and not '\t'))
+            { error = "Nội dung không hợp lệ hoặc vượt quá 60.000 ký tự."; return; }
+            var importedContent = text.TrimStart('\uFEFF'); error = null;
+            if (!string.IsNullOrWhiteSpace(content))
+                pendingImport = new(detail?.Document.Id, editorVersion, content, importedContent, file.Name);
+            else content = importedContent;
+        }
+        catch (System.Text.DecoderFallbackException) { error = "Vui lòng lưu tệp với bảng mã UTF-8 rồi thử lại."; }
+        catch (System.IO.IOException) { error = "Không đọc được tệp. Vui lòng chọn lại tệp."; }
+        finally { busy = false; }
+    }
+    private void ConfirmImport()
+    {
+        if (busy || pendingImport is not { } pending || !canManage) return;
+        pendingImport = null;
+        if (!editorOpen || editorVersion != pending.EditorVersion || detail?.Document.Id != pending.DocumentId || content != pending.OriginalContent)
+        { error = "Nội dung đang soạn đã thay đổi. Vui lòng chọn lại tệp để nhập."; return; }
+        content = pending.ImportedContent; error = null;
+    }
+    private void CancelConfirmation()
+    {
+        if (busy) return;
+        pendingPublication = null; pendingImport = null;
+    }
+    private static string AudienceLabel(string audience) => audience == "INTERNAL" ? "Nội bộ" : "Cư dân và nhân sự";
+    private static string StatusLabel(KnowledgeDocumentSummary d) => d.PublishedRevision is null ? "Bản nháp" : d.PublishedRevision == d.Revision ? "Đã xuất bản" : "Có bản nháp mới";
+    private static string ActionLabel(string action) => action switch { "CREATE" => "Tạo tài liệu", "EDIT" => "Lưu bản nháp", "PUBLISH" => "Xuất bản", "UNPUBLISH" => "Ngừng xuất bản", _ => "Cập nhật" };
+    public void Dispose() { toastLifetime.Dispose();  pendingPublication = null; pendingImport = null; lifetime.Cancel(); lifetime.Dispose(); }
+}

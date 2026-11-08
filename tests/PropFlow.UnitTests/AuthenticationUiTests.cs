@@ -15,8 +15,8 @@ public sealed class AuthenticationUiTests
             "Login.razor"));
 
         Assert.Contains("OnInvalidSubmit=\"HandleInvalidSubmit\"", source, StringComparison.Ordinal);
-        Assert.Contains("<PropFlowToast", source, StringComparison.Ordinal);
-        Assert.Contains("DurationMs=\"4000\"", source, StringComparison.Ordinal);
+        Assert.Contains("Toasts.Error(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<PropFlowToast", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<ValidationSummary", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<ApiFeedback", source, StringComparison.Ordinal);
     }

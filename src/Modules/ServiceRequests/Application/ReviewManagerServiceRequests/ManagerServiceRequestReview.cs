@@ -25,7 +25,7 @@ public sealed record ManagerServiceRequestCore(
     string? PreferredTimeCode, DateTimeOffset SubmittedAt, DateTimeOffset UpdatedAt,
     Guid? AssignedStaffUserId, Guid? SubmittedByUserId, decimal BaseServiceCost,
     decimal ProposedAdditionalCost, string? AdditionalCostNote,
-    decimal ApprovedAdditionalCost, Guid? ServiceInvoiceId);
+    decimal ApprovedAdditionalCost, Guid? ServiceInvoiceId, AdditionalCostConsentView? AdditionalCostConsent = null);
 
 public sealed record ManagerServiceRequestPage(
     IReadOnlyList<ManagerServiceRequestCore> Items, int TotalCount,
@@ -116,7 +116,7 @@ public sealed class ManagerServiceRequestReviewHandler(
             item.ServiceAreaCode, item.PreferredDate, item.PreferredTimeCode, item.SubmittedAt, item.UpdatedAt,
             item.AssignedStaffUserId, ToAsset(facility), ToAsset(equipment), insight, activities, evidence,
             item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote,
-            item.ApprovedAdditionalCost, item.ServiceInvoiceId));
+            item.ApprovedAdditionalCost, item.ServiceInvoiceId, item.AdditionalCostConsent));
     }
 
     public async Task<ManagerServiceRequestResult<StaffEvidenceDownload>> DownloadEvidenceAsync(

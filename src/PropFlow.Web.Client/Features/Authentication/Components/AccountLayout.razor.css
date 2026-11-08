@@ -1,0 +1,39 @@
+.account-overview {
+    width: 100%;
+    max-width: 1056px;
+    min-width: 0;
+    margin: 0 auto;
+}
+.account-content {
+    --account-accent: var(--app-accent, #0284c7);
+    --account-button-text: #fff;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: clamp(18px, 3vw, 32px);
+    border: 1px solid var(--app-border, #e0e5ef);
+    border-radius: 20px;
+    background: var(--app-surface, #fff);
+    color: var(--app-text, #24334b);
+}
+.account-content ::deep h2 { margin: 0 0 20px; font-size: 1.65rem; }
+.account-content ::deep p { line-height: 1.6; }
+.account-content ::deep dl { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 12px 20px; margin: 24px 0; }
+.account-content ::deep dt { font-weight: 600; }
+.account-content ::deep dd { margin: 0; overflow-wrap: anywhere; }
+.account-content ::deep label { display: block; margin: 18px 0 6px; font-weight: 600; }
+.account-content ::deep fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.account-content ::deep input { box-sizing: border-box; width: 100%; padding: 12px 14px; border: 1px solid #b8c3d5; border-radius: 10px; background: transparent; color: inherit; font: inherit; }
+.account-content ::deep button:not(.auth-toggle-pass) { margin-top: 20px; border: 0; border-radius: 10px; padding: 12px 18px; background: color-mix(in srgb, var(--account-accent) 80%, #075985); color: var(--account-button-text); font: inherit; cursor: pointer; }
+.account-content ::deep button:disabled { opacity: .55; cursor: wait; }
+.account-content ::deep .secondary { background: #edf0f7; color: #344158; }
+.account-content ::deep .auth-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 24px; }
+.account-content ::deep a { color: var(--account-accent); }
+.account-content ::deep .validation-message, .account-content ::deep .validation-errors { color: color-mix(in srgb, var(--app-text, #17243a) 25%, var(--feedback-error, #be4354)); }
+.account-content ::deep :focus-visible { outline: 3px solid var(--account-accent); outline-offset: 3px; }
+.app-shell-dark .account-content { --account-button-text: #082f49; }
+.account-content ::deep .auth-field-has-toggle { position: relative; }
+.account-content ::deep .auth-field-has-toggle input { padding-left: 42px; padding-right: 48px; }
+.account-content ::deep .auth-field-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--app-muted, #64748b); font-size: 20px; pointer-events: none; }
+.account-content ::deep .auth-toggle-pass { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 32px; height: 32px; margin: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--app-muted, #64748b); cursor: pointer; }
+.account-content ::deep .auth-toggle-pass .material-symbols-outlined { font-size: 20px; }
+@media (max-width: 480px) { .account-content ::deep dl { grid-template-columns: 1fr; gap: 6px; } .account-content ::deep dd { margin-bottom: 12px; } }

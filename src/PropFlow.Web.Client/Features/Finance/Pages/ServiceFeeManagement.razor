@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/operations/service-fee"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER")]
@@ -8,9 +10,8 @@
         <div class="page-title"><span class="material-symbols-outlined title-icon" aria-hidden="true">receipt_long</span><div><h1>Đơn giá và hóa đơn</h1><p>Thiết lập giá thuê, dịch vụ, nước và điện; theo dõi hóa đơn của từng căn hộ.</p></div></div>
         <div class="pricing-actions"><button class="primary-button" type="button" @onclick="OpenService" disabled="@(busy || loading)"><span class="material-symbols-outlined" aria-hidden="true">tune</span>Thiết lập giá dịch vụ + nước + điện</button><RentalPricingEditor /></div>
     </header>
-    @if (error is not null) { <p role="alert" class="feedback error">@error</p> }
-    @if (notice is not null) { <p role="status" class="feedback success">@notice</p> }
-    @if (invoices.Any(x => x.PaymentEnvironment == "SANDBOX")) { <p role="status" class="feedback">SANDBOX — Trạng thái và số dư đang hiển thị kết quả thử nghiệm. Đây không phải xác nhận thu tiền thật.</p> }
+    @if (error is not null && !serviceDialog) { <p role="alert" class="feedback error">@error</p> }
+
     <details class="billing-rules"><summary>Quy tắc tính phí</summary><p>Dịch vụ theo m² đã gồm giữ xe. Nước theo m³ và điện theo kWh đã sử dụng tháng trước, nhập tại danh sách căn hộ. Tiền thuê được lập hóa đơn riêng cho căn thuê chưa có chủ sở hữu.</p></details>
     @if (serviceDialog) {
     <FinancePricingDialog Title="Thiết lập giá dịch vụ + nước + điện" Busy="busy" OnClose="() => serviceDialog = false">
@@ -61,8 +62,10 @@
         </nav>
     </section>
 </section>
-<SandboxInvoiceRefresh Enabled="@invoices.Any(x => x.PaymentEnvironment == "SANDBOX")" Refresh="Load" />
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private ManagerInvoiceFilter filter = new();
     private int page = 1, pageSize = 10, ratePage = 1;
     private string Search { get => filter.Search; set { filter = filter with { Search = value }; page = 1; } }
@@ -85,11 +88,11 @@
     private static string Money(decimal value) => PropFlowMoneyText.Format(value) + " ₫";
     private static string OptionalMoney(decimal? value) => value.HasValue ? Money(value.Value) : "Chưa cấu hình";
     private static bool IsOverdue(HouseholdInvoice i) => i.Outstanding > 0 && i.DueDate is { } due && due < DateOnly.FromDateTime(DateTime.Today);
-    private static string StatusName(HouseholdInvoice i) => (i.Outstanding == 0 ? "Đã thanh toán" : IsOverdue(i) ? "Quá hạn" : i.Paid > 0 ? "Thanh toán một phần" : "Chưa thanh toán") + (i.PaymentEnvironment == "SANDBOX" ? " (Sandbox)" : "");
+    private static string StatusName(HouseholdInvoice i) => (i.Outstanding == 0 ? "Đã thanh toán" : IsOverdue(i) ? "Quá hạn" : i.Paid > 0 ? "Thanh toán một phần" : "Chưa thanh toán");
     private static string StatusClass(HouseholdInvoice i) => i.Outstanding == 0 ? "paid" : IsOverdue(i) ? "overdue" : i.Paid > 0 ? "partial" : "unpaid";
     private decimal? electricityRate = 3000, rate, waterRate; private string month = DateTime.Today.ToString("yyyy-MM");
     private ServiceRateRow[] rates = []; private HouseholdInvoice[] invoices = [];
-    private bool busy, serviceDialog, validate, loading; private string? error, notice, monthError;
+    private bool busy, serviceDialog, validate, loading; private string? error, monthError;
     private void ChangeMonth(ChangeEventArgs e) { month = e.Value?.ToString() ?? ""; monthError = null; error = null; }
     protected override Task OnInitializedAsync() => Load();
     private async Task Load() {
@@ -108,19 +111,21 @@
         } finally { loading = false; }
     }
     private async Task Save() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy) return;
-        validate = true; error = notice = monthError = null;
+        validate = true; error = monthError = null;
         if (!DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", out var start)) monthError = "Vui lòng chọn tháng bắt đầu hợp lệ.";
         else if (start < new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1)) monthError = "Không được đặt đơn giá cho tháng đã qua.";
         if (rate is null || waterRate is null || electricityRate is null || monthError is not null) { error = "Vui lòng kiểm tra các ô được báo lỗi."; return; }
-        busy = true; notice = null;
+        busy = true;
         try { var r = await Api.PostAsync<object>("api/v1/billing/cycle/rates", new ServiceRate(rate.Value, start, null, electricityRate, waterRate));
-            if (r.IsSuccess) { await Load(); serviceDialog = false; notice = "Đã lưu giá dịch vụ, nước và điện. Chứng từ đã phát hành được giữ nguyên; kỳ mới áp dụng sản lượng điện kWh và nước m³ tháng trước."; } else error = r.Message;
+            if (r.IsSuccess) { await Load(); serviceDialog = false; operationFeedback.Publish(() => Toasts.Success("Đã lưu giá dịch vụ, nước và điện. Chứng từ đã phát hành được giữ nguyên; kỳ mới áp dụng sản lượng điện kWh và nước m³ tháng trước.")); } else { if (r.ValidationErrors?.Count > 0) error = string.Join(" ", r.ValidationErrors.Values.SelectMany(value => value)); else operationFeedback.Publish(() => Toasts.Error(r.Message)); }
         } finally { busy = false; }
     }
     private void OpenService()
     {
-        error = notice = monthError = null; validate = false;
+        error = monthError = null; validate = false;
         var currentMonth = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1);
         var latest = rates.OrderByDescending(x => x.EffectiveFrom).FirstOrDefault();
         var nextMonth = latest is not null && latest.EffectiveFrom >= currentMonth ? latest.EffectiveFrom.AddMonths(1) : currentMonth;

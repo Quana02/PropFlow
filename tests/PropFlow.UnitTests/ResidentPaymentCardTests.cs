@@ -42,17 +42,6 @@ public sealed class ResidentPaymentCardTests
     }
 
     [Fact]
-    public async Task SandboxShowsSimulationAndSuppressesRealQrEvenIfAUrlIsPresent()
-    {
-        var html = await RenderAsync(View(false, 100000) with { PaymentEnvironment = "SANDBOX", SandboxSimulationAvailable = true });
-        Assert.Contains("Lấy nội dung thanh toán SePay", html);
-        Assert.Contains("KHÔNG CHUYỂN TIỀN THẬT", html);
-        Assert.DoesNotContain("payment-qr", html);
-        Assert.DoesNotContain("NGUYEN VAN A", html);
-        Assert.DoesNotContain("Báo chuyển khoản cho kế toán", html);
-    }
-
-    [Fact]
     public async Task LiveNeverDisplaysSimulationControls()
     {
         var html = await RenderAsync(View(true, 100000));
@@ -61,24 +50,13 @@ public sealed class ResidentPaymentCardTests
         Assert.Contains("payment-qr", html);
     }
 
-    [Fact]
-    public async Task SimulationSuccessIsDistinctFromConfirmedPaymentAndRating()
-    {
-        var html = await RenderAsync(View(false, 0) with { PaymentEnvironment = "SANDBOX", SimulatedTransferAmount = 100000 });
-        Assert.Contains("SePay đã xác nhận giao dịch thử", html);
-        Assert.Contains("Đã thanh toán trong Sandbox", html);
-        Assert.Contains("Đã thanh toán (Sandbox)", html);
-        Assert.DoesNotContain("Bạn có thể đánh giá dịch vụ", html);
-        Assert.DoesNotContain("Đã thanh toán đầy đủ", html);
-    }
-
     private static ResidentServiceRequestPaymentView View(bool automatic, decimal remaining) => new(Guid.NewGuid(), Guid.NewGuid(), "DV-TEST", 100000,
         100000 - remaining, remaining, remaining == 0 ? "PAID" : remaining < 100000 ? "PARTIAL" : "UNPAID", null, null, null, null,
         "Vietcombank", "VCB", "******6789", "NGUYEN VAN A", remaining == 0 ? null : "/qr", automatic, "PF1234567890123456789012");
 
     private static async Task<string> RenderAsync(ResidentServiceRequestPaymentView view)
     {
-        using var services = new ServiceCollection().AddLogging().AddSingleton<IResidentServiceRequestApiClient>(new Api(view)).BuildServiceProvider();
+        using var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IResidentServiceRequestApiClient>(new Api(view)).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         return await renderer.Dispatcher.InvokeAsync(async () =>
         {
@@ -89,7 +67,6 @@ public sealed class ResidentPaymentCardTests
     }
     private sealed class Api(ResidentServiceRequestPaymentView view) : IResidentServiceRequestApiClient
     {
-        public Task<ApiResult<ResidentServiceRequestPaymentView>> SimulateTransferAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ResidentServiceRequestPaymentView>(true, view with { SimulatedTransferAmount = view.OutstandingAmount }));
         public Task<ApiResult<ResidentServiceRequestPaymentView>> GetPaymentAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ResidentServiceRequestPaymentView>(true, view));
         public Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ApiFileContent>(true, new([137,80,78,71], "image/png")));
         public Task<ApiResult<IReadOnlyList<ResidentServiceRequestListItem>>> ListAsync(ResidentServiceRequestListQuery? query = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
