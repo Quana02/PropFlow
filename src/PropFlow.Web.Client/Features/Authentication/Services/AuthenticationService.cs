@@ -1,10 +1,11 @@
 using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Web.Client.Services.Api;
 using PropFlow.Web.Client.Services.Authentication;
+using PropFlow.Web.Client.Shared.Feedback;
 
 namespace PropFlow.Web.Client.Features.Authentication.Services;
 
-public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiClient privateApi, AuthSession session)
+public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiClient privateApi, AuthSession session, ToastService toasts)
 {
     public Task<ApiResult<ChallengeResponse>> RegisterAsync(RegisterRequest request) => publicApi.SendAsync<ChallengeResponse>(HttpMethod.Post, "api/v1/auth/register", request);
     public Task<ApiResult<ChallengeResponse>> ResumeAsync(ResumeRegistrationRequest request) => publicApi.SendAsync<ChallengeResponse>(HttpMethod.Post, "api/v1/auth/registration/resend", request);
@@ -27,7 +28,24 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
     public async Task<ApiResult<EmptyResponse>> ChangePasswordAsync(ChangePasswordRequest request)
     {
         var result = await privateApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/password/change", request, csrf: true);
-        if (result.IsSuccess) session.Clear("Mật khẩu đã được đổi. Vui lòng đăng nhập lại.");
+        if (result.IsSuccess)
+        {
+            toasts.SuccessAfterNavigation("Đổi mật khẩu thành công", "Vui lòng đăng nhập lại bằng mật khẩu mới.", "login");
+            session.Clear();
+        }
+        return result;
+    }
+    public Task<ApiResult<ChallengeResponse>> RequestEmailChangeAsync(ChangeEmailRequest request) =>
+        privateApi.SendAsync<ChallengeResponse>(HttpMethod.Post, "api/v1/auth/email/change", request, csrf: true);
+
+    public async Task<ApiResult<EmptyResponse>> VerifyEmailChangeAsync(VerifyEmailChangeRequest request)
+    {
+        var result = await privateApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/email/verify", request, csrf: true);
+        if (result.IsSuccess)
+        {
+            toasts.SuccessAfterNavigation("Đổi email thành công", "Vui lòng đăng nhập lại bằng tên đăng nhập hiện tại.", "login");
+            session.Clear();
+        }
         return result;
     }
 }

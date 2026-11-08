@@ -40,6 +40,7 @@ public sealed class WebShellRouteTests : IClassFixture<WebShellRouteTests.WebShe
     [InlineData("/otp")]
     [InlineData("/reset-password")]
     [InlineData("/account")]
+    [InlineData("/account/change-email")]
     [InlineData("/account/change-password")]
     [InlineData("/resident")]
     [InlineData("/forbidden")]
@@ -77,7 +78,11 @@ public sealed class WebShellRouteTests : IClassFixture<WebShellRouteTests.WebShe
             Assert.Single(pages.Where(page => page.GetCustomAttributes(typeof(RouteAttribute), false)
                 .Cast<RouteAttribute>().Any(attribute => attribute.Template == route)));
         Assert.All(pages, page =>
-            Assert.Equal(typeof(AuthLayout), page.GetCustomAttributes(typeof(LayoutAttribute), false)
-                .Cast<LayoutAttribute>().SingleOrDefault()?.LayoutType));
+        {
+            var isProfile = page.GetCustomAttributes(typeof(RouteAttribute), false).Cast<RouteAttribute>()
+                .Any(route => route.Template is "/account" or "/account/change-email" or "/account/change-password");
+            Assert.Equal(isProfile ? typeof(AccountLayout) : typeof(AuthLayout),
+                page.GetCustomAttributes(typeof(LayoutAttribute), false).Cast<LayoutAttribute>().SingleOrDefault()?.LayoutType);
+        });
     }
 }

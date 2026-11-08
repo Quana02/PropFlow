@@ -76,7 +76,7 @@
                 <div class="app-profile-options">
                     <strong>@(Session.User?.DisplayName ?? "Tài khoản")</strong>
                     <small>@Session.User?.Email</small>
-                    <a href="/account">Xem tài khoản</a>
+                    <a href="/account">Tài khoản của tôi</a>
                     <a href="/account/change-password">Đổi mật khẩu</a>
                     <button type="button" disabled="@busy" @onclick="Logout">Đăng xuất</button>
                 </div>

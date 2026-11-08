@@ -47,6 +47,7 @@ builder.Services.AddScoped(sp =>
     return new AuthenticatedApiClient(new HttpClient(handler) { BaseAddress = apiBase }, sp.GetRequiredService<ILogger<ApiClient>>());
 });
 builder.Services.AddScoped<AuthenticationService>();
+builder.Services.AddScoped<PropFlow.Web.Client.Shared.Feedback.ToastService>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Complaints.Services.ComplaintApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.Services.AnnouncementApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.Services.AnnouncementRealtimeClient>();
