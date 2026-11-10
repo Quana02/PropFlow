@@ -13,17 +13,27 @@ public sealed class AuthStore(AuthenticationDbContext db) : IAuthStore
 {
     public async Task<T> SerializedAsync<T>(string key, Func<Task<T>> action, CancellationToken ct)
     {
+        // The host already shares an explicit transaction for Administration writes and audit.
+        if (db.Database.CurrentTransaction is not null)
+            return await LockAndSaveAsync(key, action, ct);
+
         // All participating contexts use the same database and sequential operations.
         // Npgsql reuses the ambient enlisted connection between contexts.
         using var transaction = new TransactionScope(TransactionScopeOption.Required,
             new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted }, TransactionScopeAsyncFlowOption.Enabled);
+        var result = await LockAndSaveAsync(key, action, ct);
+        transaction.Complete();
+        return result;
+    }
+
+    private async Task<T> LockAndSaveAsync<T>(string key, Func<Task<T>> action, CancellationToken ct)
+    {
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
         db.ChangeTracker.Clear();
         try
         {
             var result = await action();
             await db.SaveChangesAsync(ct);
-            transaction.Complete();
             return result;
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgres)

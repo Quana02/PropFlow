@@ -12,17 +12,27 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
     public Task<ApiResult<EmptyResponse>> ActivateAsync(VerifyChallengeRequest request) => publicApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/registration/verify", request);
     public Task<ApiResult<ChallengeResponse>> ForgotAsync(ForgotPasswordRequest request) => publicApi.SendAsync<ChallengeResponse>(HttpMethod.Post, "api/v1/auth/password/forgot", request);
     public Task<ApiResult<ResetProofResponse>> VerifyRecoveryAsync(VerifyChallengeRequest request) => publicApi.SendAsync<ResetProofResponse>(HttpMethod.Post, "api/v1/auth/password/verify", request);
-    public async Task<ApiResult<EmptyResponse>> ResetAsync(ResetPasswordRequest request)
+    public async Task<ApiResult<EmptyResponse>> ResetAsync(ResetPasswordRequest request, ToastOperation? feedback = null)
     {
+        // Reset also clears the refresh cookie. Keep it available for the pending revocation.
+        if (session.Revocation != SessionRevocationState.None)
+            return new(false, Code: "revocation_pending", Message: "Vui lòng về trang đăng nhập và thử thu hồi phiên trước khi đặt lại mật khẩu.");
+        var operation = feedback ?? toasts.BeginOperation();
+        var version = session.Version;
         var result = await publicApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/password/reset", request, csrf: true);
-        if (result.IsSuccess) session.Clear("Mật khẩu đã được cập nhật. Vui lòng đăng nhập lại.");
+        if (result.IsSuccess && session.Version == version)
+        {
+            operation.Publish(() => toasts.SuccessAfterNavigation("Đã đặt lại mật khẩu", "Vui lòng đăng nhập bằng mật khẩu mới.", "login"));
+            session.Clear();
+        }
         return result;
     }
     public Task<ApiResult<AccountResponse>> MeAsync() => privateApi.SendAsync<AccountResponse>(HttpMethod.Get, "api/v1/auth/me");
     public async Task<ApiResult<AccountResponse>> UpdateAsync(UpdateProfileRequest request)
     {
+        var version = session.Version;
         var result = await privateApi.SendAsync<AccountResponse>(HttpMethod.Put, "api/v1/auth/me", request);
-        if (result.IsSuccess && result.Data is { } account) session.UpdateUser(account);
+        if (result.IsSuccess && session.Version == version && result.Data is { } account) session.UpdateUser(account);
         if (result.Code == "phone_conflict" && result.ValidationErrors is null)
             return result with
             {
@@ -36,9 +46,10 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
     public async Task<ApiResult<EmptyResponse>> ChangePasswordAsync(ChangePasswordRequest request, ToastOperation? feedback = null)
     {
         var operationFeedback = feedback ?? toasts.BeginOperation();
+        var version = session.Version;
 
         var result = await privateApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/password/change", request, csrf: true);
-        if (result.IsSuccess)
+        if (result.IsSuccess && session.Version == version)
         {
             operationFeedback.Publish(() => toasts.SuccessAfterNavigation("Đổi mật khẩu thành công", "Vui lòng đăng nhập lại bằng mật khẩu mới.", "login"));
             session.Clear();
@@ -59,9 +70,10 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
     public async Task<ApiResult<EmptyResponse>> VerifyEmailChangeAsync(VerifyEmailChangeRequest request, ToastOperation? feedback = null)
     {
         var operationFeedback = feedback ?? toasts.BeginOperation();
+        var version = session.Version;
 
         var result = await privateApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/email/verify", request, csrf: true);
-        if (result.IsSuccess)
+        if (result.IsSuccess && session.Version == version)
         {
             operationFeedback.Publish(() => toasts.SuccessAfterNavigation("Đổi email thành công", "Vui lòng đăng nhập lại bằng tên đăng nhập hiện tại.", "login"));
             session.Clear();
@@ -99,9 +111,9 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
 
     public async Task<ApiResult<EmptyResponse>> VerifyResidentEmailAsync(VerifyResidentEmailChange request, ToastOperation feedback)
     {
-        var userId = session.User?.Id;
+        var version = session.Version;
         var result = await privateApi.SendAsync<EmptyResponse>(HttpMethod.Post, "api/v1/auth/resident-email-change/verify", request, csrf: true);
-        if (result.IsSuccess && session.User?.Id == userId)
+        if (result.IsSuccess && session.Version == version)
         {
             feedback.Publish(() => toasts.SuccessAfterNavigation("Đổi email thành công", "Vui lòng đăng nhập lại.", "login"));
             session.Clear();

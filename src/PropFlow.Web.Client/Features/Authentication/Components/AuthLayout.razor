@@ -7,7 +7,7 @@
 else if (IsRegister) { <PageTitle>Đăng ký cư dân — PropFlow</PageTitle> }
 else if (IsForgot) { <PageTitle>Quên mật khẩu — PropFlow</PageTitle> }
 
-<div class="auth-shell @(IsRegister ? "register-mode" : IsForgot ? "forgot-mode" : "") @(IsLogin || IsRegister ? "switch-route" : "") @(IsAccount ? "account-route" : "") @_transition">
+<div class="auth-shell @(IsLogin ? "login-mode" : IsRegister ? "register-mode" : IsForgot ? "forgot-mode" : "") @(IsLogin || IsRegister ? "switch-route" : "") @(IsAccount ? "account-route" : "") @_transition">
     <div id="threejs-bg" class="auth-three" aria-hidden="true"></div>
     <PropFlow.Web.Client.Layout.Shared.PublicHeader />
     <main class="auth-main">

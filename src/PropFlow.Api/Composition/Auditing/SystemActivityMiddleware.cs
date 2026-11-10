@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Controllers;
+using PropFlow.Modules.Administration.Application.InternalAccounts;
 using PropFlow.Modules.Administration.Contracts;
 
 namespace PropFlow.Api.Composition.Auditing;
@@ -16,22 +17,26 @@ public sealed class SystemActivityMiddleware(RequestDelegate next, ILogger<Syste
         { await next(context); return; }
         var module = action.ControllerTypeInfo.Namespace?.Split('.').SkipWhile(x => x != "Modules").Skip(1).FirstOrDefault();
         if (module is null) { await next(context); return; }
+        // Exception handling can clear routing values before the response starts.
+        Guid? entityId = null;
+        foreach (var key in new[] { "id", "residentId", "apartmentId", "taskId", "requestId", "userId" })
+            if (Guid.TryParse(context.Request.RouteValues[key]?.ToString(), out var id)) { entityId = id; break; }
         var recorded = false;
         async Task RecordAsync(int status)
         {
             if (recorded) return;
             recorded = true;
             var success = status is >= 200 and < 300;
-            var explicitAccountAudit = module == "Administration" && action.ActionName is "Create" or "ChangeRole" or "ChangeStatus";
+            var internalProfileUpdate = module == "Administration" && action.ActionName == "UpdateProfile";
+            var explicitAccountAudit = internalProfileUpdate || module == "Administration" && action.ActionName is "Create" or "ChangeRole" or "ChangeStatus";
             // Data changes already have transactional audit; keep failures and security events separately.
             if (!success || module == "Authentication" || capture.RecordedChanges == 0 && !explicitAccountAudit)
             {
-                Guid? entityId = null;
-                foreach (var key in new[] { "id", "residentId", "apartmentId", "taskId", "requestId", "userId" })
-                    if (Guid.TryParse(context.Request.RouteValues[key]?.ToString(), out var id)) { entityId = id; break; }
                 var security = module == "Authentication";
-                var label = security ? SecurityLabel(action.ActionName) : OperationLabel(action.ActionName);
-                var entry = new SystemAuditEvent(module, security ? "security_event" : "operation", label, action.ControllerName,
+                var label = internalProfileUpdate ? ManageInternalAccountProfile.AuditLabel
+                    : security ? SecurityLabel(action.ActionName) : OperationLabel(action.ActionName);
+                var eventAction = internalProfileUpdate ? ManageInternalAccountProfile.AuditAction : security ? "security_event" : "operation";
+                var entry = new SystemAuditEvent(module, eventAction, label, internalProfileUpdate ? "InternalAccount" : action.ControllerName,
                     entityId, capture.Actor, success ? "SUCCESS" : status is 401 or 403 ? "DENIED" : "FAILED", clock.GetUtcNow(), context.TraceIdentifier, [], status);
                 try
                 {

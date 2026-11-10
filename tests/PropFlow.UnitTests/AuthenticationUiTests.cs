@@ -99,7 +99,7 @@ public sealed class AuthenticationUiTests
     }
 
     [Fact]
-    public void LoginValidation_UsesDismissibleToastInsteadOfInlineSummary()
+    public void Login_validation_is_attached_to_fields_and_operation_errors_use_shared_toast()
     {
         var source = File.ReadAllText(Path.Combine(
             FindSolutionDirectory(),
@@ -110,7 +110,10 @@ public sealed class AuthenticationUiTests
             "Pages",
             "Login.razor"));
 
-        Assert.Contains("OnInvalidSubmit=\"HandleInvalidSubmit\"", source, StringComparison.Ordinal);
+        Assert.Contains("<ValidationMessage For=\"() => form.Username\"", source, StringComparison.Ordinal);
+        Assert.Contains("<ValidationMessage For=\"() => form.Password\"", source, StringComparison.Ordinal);
+        Assert.Contains("aria-describedby=\"login-username-error\"", source, StringComparison.Ordinal);
+        Assert.Contains("aria-describedby=\"login-password-error\"", source, StringComparison.Ordinal);
         Assert.Contains("Toasts.Error(", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<PropFlowToast", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<ValidationSummary", source, StringComparison.Ordinal);

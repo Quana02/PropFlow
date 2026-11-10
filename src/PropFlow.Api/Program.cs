@@ -8,6 +8,7 @@ using PropFlow.Modules.Authentication.Infrastructure;
 using PropFlow.Modules.Authentication.Presentation;
 using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.Residents.Infrastructure;
+using PropFlow.Modules.Administration.Application.InternalAccounts;
 using PropFlow.Modules.Administration.Contracts;
 using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Administration.Domain.Roles;
@@ -365,6 +366,8 @@ builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentDuplic
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentProfileService>();
 builder.Services.AddScoped<IAccountAccess, AccountAccessService>();
 builder.Services.AddScoped<IAdministrationTransaction, AdministrationTransaction>();
+builder.Services.AddScoped<IInternalAccountProfileStore, InternalAccountProfileStore>();
+builder.Services.AddScoped<ManageInternalAccountProfile>();
 builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoordinator>();
 builder.Services.AddAuthorization(options =>
 {

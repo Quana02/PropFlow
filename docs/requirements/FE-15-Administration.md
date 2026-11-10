@@ -11,6 +11,21 @@ Quyền được seed theo migration Administration và gắn duy nhất với M
 
 Ngày 04/11/2026. Người dùng phê duyệt mở rộng màn hình nhật ký quản trị thành nhật ký các thao tác quan trọng trên website sau khi xem phạm vi chỉ gồm ba loại thay đổi tài khoản nội bộ. Quyết định này mở rộng phạm vi FE-15.9 trong đặc tả cũ; không cấp Admin quyền CRUD nghiệp vụ.
 
+## FE-15.1 — Xem và chỉnh sửa hồ sơ tài khoản Ban quản lý
+
+Trong **Tài khoản Ban quản lý**, ADMIN có quyền `MANAGE_INTERNAL_ACCOUNTS` mở **Xem chi tiết tài khoản** và chọn **Chỉnh sửa thông tin**. Quyền hiện có áp dụng cho tài khoản MANAGER, STAFF và ACCOUNTANT, kể cả khi tài khoản đích bị khóa hoặc vô hiệu hóa. ADMIN dùng **Tài khoản của tôi** của FE-01 để sửa hồ sơ của chính mình.
+
+| API | Yêu cầu | Kết quả |
+| --- | --- | --- |
+| `GET /api/v1/administration/internal-accounts/{userId}` | ID tài khoản nội bộ | Hồ sơ chỉ gồm `id`, `username`, `displayName`, `email`, `phoneNumber`, `role`, `status`, `emailVerified` |
+| `PUT /api/v1/administration/internal-accounts/{userId}/profile` | JSON có đủ `displayName` và `phoneNumber` | Hồ sơ sau khi lưu, cùng định dạng với GET |
+
+Tên hiển thị bắt buộc và tối đa 150 ký tự. Số điện thoại tối đa 20 ký tự, được trim theo FE-01 và phải duy nhất giữa các tài khoản. Gửi `null` hoặc chuỗi trắng để xóa số điện thoại. Trường ngoài hợp đồng, trường bắt buộc bị thiếu và dữ liệu sai trả 400. Số điện thoại trùng trả 409 với `phone_conflict`. API trả 401/403 theo quyền truy cập và 404 khi ID không thuộc phạm vi.
+
+Username, email đăng nhập, vai trò, trạng thái và xác minh email hiển thị ở chế độ chỉ đọc. Đổi email tiếp tục theo FE-01.6. Đổi vai trò và trạng thái tiếp tục qua thao tác FE-15 tương ứng. Form hồ sơ không hỗ trợ thay đổi mật khẩu, OTP hoặc thông tin phiên của tài khoản khác.
+
+Authentication sở hữu thao tác ghi hồ sơ. FE-01 và FE-15 dùng cùng khóa giao dịch theo tài khoản. Khi có hai yêu cầu cập nhật đồng thời, mỗi lần lưu áp dụng trọn cặp tên và điện thoại, với giá trị cuối theo lần lưu thành công sau cùng. Giao dịch FE-15 ghi audit `internal_account_profile_updated` cùng lần lưu, gồm actor, target, thời điểm, kết quả, correlation ID và tên trường thay đổi. Giá trị tên và số điện thoại được che trong audit. Phiên và quyền đang hiệu lực tiếp tục dùng được sau khi lưu hồ sơ.
+
 ## FE-15.8 — Phạm vi cấu hình còn cần chốt
 
 Đã có danh sách/tìm kiếm tài khoản nội bộ, provision Manager/Staff/Accountant, trạng thái truy cập, đổi role cố định, xem permission/effective access và activity. Các ca HTTP hiện có được chạy lại.

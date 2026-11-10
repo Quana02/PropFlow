@@ -1,0 +1,98 @@
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Features.Administration
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="role-table-wrap" @ref="root" role="region" aria-label="Danh sách tài khoản Ban quản lý" tabindex="0">
+    <table class="role-table">
+        <thead>
+            <tr><th scope="col">Tên</th><th scope="col">Tên đăng nhập</th><th scope="col">Email</th><th scope="col">Vai trò</th><th scope="col">Trạng thái</th><th scope="col">Thao tác</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var account in Accounts)
+            {
+                <tr @key="account.Id">
+                    <th scope="row">@account.DisplayName</th>
+                    <td>@account.Username</td>
+                    <td><span class="account-email" title="@account.Email">@(account.Email ?? "—")</span></td>
+                    <td>@account.Role</td>
+                    <td><span class="data-state @InternalAccountStatus.Tone(account.Status)">@InternalAccountStatus.Label(account.Status)</span></td>
+                    <td>
+                        <div class="account-actions">
+                            @foreach (var action in Actions)
+                            {
+                                <button class="row-action @action.Tone" type="button" data-action-tooltip="@action.Label"
+                                        aria-label="@($"{action.Label} của {account.Username}")" @onclick="() => RunAsync(action.Kind, account)">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"
+                                         stroke-linecap="round" stroke-linejoin="round"><path d="@action.Path" /></svg>
+                                </button>
+                            }
+                        </div>
+                        <details class="touch-actions">
+                            <summary aria-label="@($"Thao tác với {account.Username}")">Thao tác</summary>
+                            <div>
+                                @foreach (var action in Actions)
+                                {
+                                    <button type="button" @onclick="() => RunAsync(action.Kind, account)">@action.Label</button>
+                                }
+                            </div>
+                        </details>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <div class="action-tooltip" role="tooltip" popover="manual"></div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<InternalAccount> Accounts { get; set; } = [];
+    [Parameter] public EventCallback<InternalAccount> OnDetail { get; set; }
+    [Parameter] public EventCallback<InternalAccount> OnAccess { get; set; }
+    [Parameter] public EventCallback<InternalAccount> OnRole { get; set; }
+    [Parameter] public EventCallback<InternalAccount> OnStatus { get; set; }
+
+    private static readonly (ActionKind Kind, string Label, string Path, string? Tone)[] Actions =
+    [
+        (ActionKind.Detail, "Xem chi tiết tài khoản", "M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Zm10 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z", null),
+        (ActionKind.Access, "Xem quyền", "M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Zm-4 10 3 3 5-6", null),
+        (ActionKind.Role, "Đổi vai trò", "M14 19v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m10-12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 4 4 4-4 4m4-4h-7", null),
+        (ActionKind.Status, "Thay đổi trạng thái", "M7 6h10a6 6 0 0 1 0 12H7A6 6 0 0 1 7 6Zm10 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z", "status-action")
+    ];
+
+    private enum ActionKind { Detail, Access, Role, Status }
+
+    private ElementReference root;
+    private IJSObjectReference? binding;
+    private bool disposed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Features/Administration/Components/InternalAccountTable.razor.js");
+        if (disposed) return;
+        var attached = await module.InvokeAsync<IJSObjectReference>("bind", root);
+        if (disposed) await DisposeBindingAsync(attached);
+        else binding = attached;
+    }
+
+    private Task RunAsync(ActionKind kind, InternalAccount account) => (kind switch
+    {
+        ActionKind.Detail => OnDetail,
+        ActionKind.Access => OnAccess,
+        ActionKind.Role => OnRole,
+        _ => OnStatus
+    }).InvokeAsync(account);
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        if (binding is not null) await DisposeBindingAsync(binding);
+    }
+
+    private static async ValueTask DisposeBindingAsync(IJSObjectReference reference)
+    {
+        await reference.InvokeVoidAsync("dispose");
+        await reference.DisposeAsync();
+    }
+}

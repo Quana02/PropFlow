@@ -1,7 +1,10 @@
 @using PropFlow.Web.Client.Features.Administration.Models
 @using PropFlow.Web.Client.Services.Api
+@using PropFlow.Web.Client.Shared.Feedback
 @inject AuthenticatedApiClient Api
 @inject NavigationManager Navigation
+@inject ToastService Toasts
+@implements IDisposable
 
 <div class="oauth-connect">
     <div class="oauth-heading"><span class="material-symbols-outlined" aria-hidden="true">@(state?.Connected == true ? "verified_user" : "link")</span><div><h3>@(state?.Connected == true ? "Đã kết nối SePay của chung cư" : "Kết nối tài khoản SePay của bạn")</h3><p>@(state?.Message ?? "Đang tải trạng thái kết nối…")</p></div></div>
@@ -21,7 +24,7 @@
         <a class="secondary-action" href="https://my.sepay.vn" target="_blank" rel="noopener noreferrer">Mở SePay<span class="material-symbols-outlined" aria-hidden="true">open_in_new</span></a>
     </div>
     @if (state?.Connected == true && !state.WebhookConfigured) { <p class="connection-help">Sau khi chọn và lưu tài khoản nhận tiền, nhấn “Thiết lập nhận giao dịch”. Mỗi thay đổi đều cần OTP email.</p> }
-    @if (!string.IsNullOrWhiteSpace(message)) { <p class="@(failed ? "form-error" : "sync-time")" role="@(failed ? "alert" : "status")">@message</p> }
+    @if (challenge is null && !string.IsNullOrWhiteSpace(message)) { <p class="form-error" role="alert">@message</p> }
 </div>
 
 @if (challenge is not null)
@@ -34,33 +37,41 @@
     [Parameter] public EventCallback OnChanged { get; set; }
     private SePayOAuthState? state;
     private PrivilegedActionChallengeResult? challenge;
-    private bool busy, failed, loading = true;
+    private readonly ToastLifetime lifetime = new();
+    private bool busy, loading = true;
     private string action = "CONNECT";
     private string? message;
     protected override Task OnInitializedAsync() => LoadStateAsync();
     private async Task LoadStateAsync()
     {
-        loading = true; message = null; failed = false;
+        loading = true; message = null;
         try
         {
             var result = await Api.SendAsync<SePayOAuthState>(HttpMethod.Get, "api/v1/payment-settings/sepay/oauth/status");
-            if (result.IsSuccess) state = result.Data; else { message = result.Message ?? "Không tải được trạng thái SePay."; failed = true; }
+            if (result.IsSuccess) state = result.Data; else message = result.Message ?? "Không tải được trạng thái SePay.";
         }
         finally { loading = false; }
     }
     private async Task ChallengeAsync(string value)
     {
+        if (busy) return;
+        var feedback = Toasts.BeginOperation(lifetime);
         action = value; busy = true; message = null;
         try
         {
             var result = await Api.SendAsync<PrivilegedActionChallengeResult>(HttpMethod.Post, $"api/v1/payment-settings/sepay/oauth/challenge/{action}");
-            if (result.IsSuccess) challenge = result.Data; else { message = result.Message ?? "Không gửi được OTP email."; failed = true; }
+            if (!feedback.IsCurrent) return;
+            if (result.IsSuccess) challenge = result.Data;
+            else if (challenge is not null && result.StatusCode is >= 400 and < 500)
+                message = result.Message ?? "Không gửi được OTP email.";
+            else feedback.Publish(() => Toasts.Error(result.Message ?? "Không gửi được OTP email."));
         }
         finally { busy = false; }
     }
     private async Task ConfirmAsync(string code)
     {
-        if (challenge is null) return;
+        if (busy || challenge is null) return;
+        var feedback = Toasts.BeginOperation(lifetime);
         busy = true; message = null;
         try
         {
@@ -68,24 +79,38 @@
             if (action == "CONNECT")
             {
                 var result = await Api.SendAsync<SePayOAuthStart>(HttpMethod.Post, "api/v1/payment-settings/sepay/oauth/start", confirm);
+                if (!feedback.IsCurrent) return;
                 if (result.IsSuccess && result.Data is not null)
                 {
                     // Only navigate to the fixed provider, even if a malformed response reaches the UI.
                     if (Uri.TryCreate(result.Data.AuthorizationUrl, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "my.sepay.vn" && uri.AbsolutePath == "/oauth/authorize" && string.IsNullOrEmpty(uri.UserInfo))
                         Navigation.NavigateTo(uri.AbsoluteUri, forceLoad: true);
-                    else { message = "Địa chỉ kết nối SePay chưa hợp lệ."; failed = true; }
+                    else message = "Địa chỉ kết nối SePay chưa hợp lệ.";
                 }
-                else { message = result.Message ?? "Không thể bắt đầu kết nối SePay."; failed = true; }
+                else ShowConfirmationFailure(result, "Không thể bắt đầu kết nối SePay.", feedback);
             }
             else
             {
                 var result = await Api.SendAsync<SePayOAuthState>(HttpMethod.Post, "api/v1/payment-settings/sepay/oauth/webhook", confirm);
-                if (result.IsSuccess) { state = result.Data; challenge = null; message = "Đã thiết lập nhận giao dịch. Hãy kiểm tra gửi thông báo từ SePay trước khi thu tiền."; failed = false; await OnChanged.InvokeAsync(); }
-                else { message = result.Message ?? "Chưa thể thiết lập nhận giao dịch. Vui lòng yêu cầu OTP mới rồi thử lại."; failed = true; }
+                if (!feedback.IsCurrent) return;
+                if (result.IsSuccess)
+                {
+                    state = result.Data;
+                    challenge = null;
+                    feedback.Publish(() => Toasts.Success("Đã thiết lập nhận giao dịch SePay."));
+                    await OnChanged.InvokeAsync();
+                }
+                else ShowConfirmationFailure(result, "Chưa thể thiết lập nhận giao dịch. Vui lòng thử lại.", feedback);
             }
         }
         finally { busy = false; }
     }
+    private void ShowConfirmationFailure(ApiResult result, string fallback, ToastOperation feedback)
+    {
+        if (result.StatusCode is >= 400 and < 500) message = result.Message ?? fallback;
+        else feedback.Publish(() => Toasts.Error(result.Message ?? fallback));
+    }
     private Task ResendAsync() => ChallengeAsync(action);
     private void Close() { if (!busy) { challenge = null; message = null; } }
+    public void Dispose() => lifetime.Dispose();
 }
