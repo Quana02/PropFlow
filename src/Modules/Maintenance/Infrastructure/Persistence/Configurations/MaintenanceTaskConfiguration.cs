@@ -44,6 +44,7 @@ public class MaintenanceTaskConfiguration : IEntityTypeConfiguration<Maintenance
         builder.Property(task => task.FacilityId).HasColumnName("facility_id");
         builder.Property(task => task.EquipmentId).HasColumnName("equipment_id");
         builder.HasIndex(task => task.EquipmentId);
+        builder.Property(task => task.IsEmergency).HasColumnName("is_emergency").HasDefaultValue(false).IsRequired();
 
         builder.Property(task => task.Title)
             .HasColumnName("title")

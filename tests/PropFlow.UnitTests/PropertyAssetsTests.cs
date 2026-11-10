@@ -467,7 +467,7 @@ public class PropertyAssetsTests
     }
 
     [Fact]
-    public async Task EquipmentService_SetStatus_ChangesStatusAndUpdatesAuditFields()
+    public async Task EquipmentService_SetStatus_RejectsManualUnderMaintenanceTransition()
     {
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -483,13 +483,13 @@ public class PropertyAssetsTests
 
         var initialUpdatedAt = equipment.UpdatedAt;
 
-        // Change status to UNDER_MAINTENANCE
+        // UNDER_MAINTENANCE is reserved for the maintenance workflow.
         var statusCommand = new SetEquipmentStatusCommand(EquipmentStatus.UNDER_MAINTENANCE, Guid.NewGuid());
-        var updated = await service.SetEquipmentStatusAsync(equipment.Id, statusCommand);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SetEquipmentStatusAsync(equipment.Id, statusCommand));
 
-        Assert.Equal(EquipmentStatus.UNDER_MAINTENANCE, updated.Status);
-        Assert.Equal(statusCommand.UpdatedBy, updated.UpdatedBy);
-        Assert.True(updated.UpdatedAt > initialUpdatedAt);
+        Assert.Contains("quy trình bảo trì", exception.Message);
+        Assert.Equal(EquipmentStatus.ACTIVE, equipment.Status);
+        Assert.Equal(initialUpdatedAt, equipment.UpdatedAt);
     }
 
     [Fact]
@@ -883,7 +883,7 @@ public class PropertyAssetsTests
     }
 
     [Fact]
-    public async Task FacilityService_SetStatus_ChangesStatusAndUpdatesAuditFields()
+    public async Task FacilityService_SetStatus_RejectsManualUnderMaintenanceTransition()
     {
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -899,13 +899,13 @@ public class PropertyAssetsTests
 
         var initialUpdatedAt = facility.UpdatedAt;
 
-        // Change status to UNDER_MAINTENANCE
+        // UNDER_MAINTENANCE is reserved for the maintenance workflow.
         var statusCommand = new SetFacilityStatusCommand(MasterDataStatus.UNDER_MAINTENANCE, Guid.NewGuid());
-        var updated = await service.SetFacilityStatusAsync(facility.Id, statusCommand);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SetFacilityStatusAsync(facility.Id, statusCommand));
 
-        Assert.Equal(MasterDataStatus.UNDER_MAINTENANCE, updated.Status);
-        Assert.Equal(statusCommand.UpdatedBy, updated.UpdatedBy);
-        Assert.True(updated.UpdatedAt > initialUpdatedAt);
+        Assert.Contains("quy trình bảo trì", exception.Message);
+        Assert.Equal(MasterDataStatus.ACTIVE, facility.Status);
+        Assert.Equal(initialUpdatedAt, facility.UpdatedAt);
     }
 
     [Fact]

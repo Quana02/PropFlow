@@ -141,6 +141,56 @@ public sealed class MaintenanceAssetAssociationTests
     }
 
     [Fact]
+    public async Task CreateTaskAsync_EmergencyTaskRejectsAssetsAlreadyUnderMaintenanceWithoutCreatingTask()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY", status: "UNDER_MAINTENANCE");
+        var source = new AssetSource(facility);
+        var service = new MaintenanceService(db, source, new StaffDirectory(), notifier: new NoopNotifier(),
+            assetTransaction: new PassThroughAssetTransactionCoordinator());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateTaskAsync(
+            new(null, "Sửa chữa khẩn cấp", Description: "Xử lý sự cố", FacilityId: facility.Id,
+                IsEmergency: true), Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Empty(await db.MaintenanceTasks.ToListAsync());
+        Assert.Equal(0, source.MarkUnderMaintenanceCalls);
+    }
+
+    [Theory]
+    [InlineData("UNDER_MAINTENANCE", "ACTIVE")]
+    [InlineData("ACTIVE", "UNDER_MAINTENANCE")]
+    public async Task CreateScheduleAsync_RejectsFacilityOrEquipmentAlreadyUnderMaintenance(string facilityStatus, string equipmentStatus)
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY", status: facilityStatus);
+        var equipment = Asset("EQUIPMENT", facility.Id, equipmentStatus);
+        var service = new MaintenanceService(db, new AssetSource(facility, equipment), new StaffDirectory());
+        var command = new CreateScheduleCommand(null, "Lịch kiểm thử", DateTimeOffset.UtcNow.AddDays(1),
+            DateTimeOffset.UtcNow.AddDays(1).AddHours(1), facility.Id, equipment.Id, "Kiểm tra định kỳ");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateScheduleAsync(command, Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Empty(await db.MaintenanceSchedules.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateScheduleAsync_ForFutureDateDoesNotChangeAssetStatus()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY");
+        var source = new AssetSource(facility);
+        var service = new MaintenanceService(db, source, new StaffDirectory());
+        var start = DateTimeOffset.UtcNow.AddDays(1);
+
+        await service.CreateScheduleAsync(new(null, "Lịch kiểm thử", start, start.AddHours(1), facility.Id, null,
+            "Kiểm tra định kỳ"), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(0, source.MarkUnderMaintenanceCalls);
+        Assert.Equal("ACTIVE", facility.Status);
+    }
+
+    [Fact]
     public async Task CreateTaskAsync_ManualTaskStillRejectsMissingAssetsAndMismatchedFacilityEquipment()
     {
         await using var db = CreateDb();
@@ -278,6 +328,23 @@ public sealed class MaintenanceAssetAssociationTests
         Assert.Equal(1, source.MarkUnderMaintenanceCalls);
     }
 
+    [Fact]
+    public async Task SetScheduleStatusAsync_DoesNotRestoreAssetsWhenAnotherScheduleForTheSameFacilityIsActive()
+    {
+        await using var db = CreateDb();
+        var facility = Asset("FACILITY");
+        var first = AddSchedule(db, facility.Id, null, DateTimeOffset.UtcNow.AddMinutes(-2));
+        AddSchedule(db, facility.Id, null, DateTimeOffset.UtcNow.AddMinutes(-1));
+        var source = new AssetSource(facility);
+        var service = new MaintenanceService(db, source, new StaffDirectory());
+
+        await service.SetScheduleStatusAsync(first.Id, "complete", Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Equal(0, source.MarkActiveCalls);
+        Assert.Equal(MaintenanceScheduleStatus.COMPLETED,
+            (await db.MaintenanceSchedules.SingleAsync(schedule => schedule.Id == first.Id)).Status);
+    }
+
     private static MaintenanceDbContext CreateDb() => new(new DbContextOptionsBuilder<MaintenanceDbContext>()
         .UseInMemoryDatabase($"maintenance-association-{Guid.NewGuid()}")
         .Options);
@@ -305,6 +372,7 @@ public sealed class MaintenanceAssetAssociationTests
     private sealed class AssetSource(params MaintenanceAssetReference[] assets) : IMaintenanceAssetSource
     {
         public int MarkUnderMaintenanceCalls { get; private set; }
+        public int MarkActiveCalls { get; private set; }
         public Task<IReadOnlyList<MaintenanceAssetReference>> GetAvailableAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<MaintenanceAssetReference>>(assets);
         public Task<MaintenanceAssetReference?> GetFacilityAsync(Guid facilityId, CancellationToken ct) => Task.FromResult(assets.SingleOrDefault(x => x.AssetType == "FACILITY" && x.Id == facilityId));
         public Task<MaintenanceAssetReference?> GetEquipmentAsync(Guid equipmentId, CancellationToken ct) => Task.FromResult(assets.SingleOrDefault(x => x.AssetType == "EQUIPMENT" && x.Id == equipmentId));
@@ -312,6 +380,11 @@ public sealed class MaintenanceAssetAssociationTests
         public Task MarkUnderMaintenanceAsync(Guid facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
         {
             MarkUnderMaintenanceCalls++;
+            return Task.CompletedTask;
+        }
+        public Task MarkActiveAsync(Guid facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
+        {
+            MarkActiveCalls++;
             return Task.CompletedTask;
         }
     }
