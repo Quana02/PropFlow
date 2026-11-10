@@ -135,7 +135,7 @@
     private static string OutcomeLabel(string value) => value switch { "SUCCESS" => "Thành công", "DENIED" => "Bị từ chối", _ => "Thất bại" };
     private static string ActorLabel(AdministrationActivity item) => item.ActorDisplayName ?? item.ActorUsername ?? (item.ActorUserId.HasValue ? "Không có thông tin tài khoản" : "Chưa xác định");
     private static string Transition(string? before, string? after) => $"{before ?? "—"} → {after ?? "—"}";
-    private static string ActionLabel(AdministrationActivity item) => item.Label ?? item.Action switch { "internal_account_created" => "Tạo tài khoản", "internal_account_role_changed" => "Đổi vai trò", "internal_account_status_changed" => "Đổi trạng thái tài khoản", _ => "Thao tác hệ thống" };
+    private static string ActionLabel(AdministrationActivity item) => item.Label ?? item.Action switch { "internal_account_profile_updated" => "Cập nhật hồ sơ tài khoản nội bộ", "internal_account_created" => "Tạo tài khoản", "internal_account_role_changed" => "Đổi vai trò", "internal_account_status_changed" => "Đổi trạng thái tài khoản", _ => "Thao tác hệ thống" };
     private static string ModuleLabel(string value) => ModuleOptions.FirstOrDefault(x => x.Value == value)?.Label ?? "Hệ thống";
     private static string EntityLabel(string? value) => value switch {
         "Resident" or "Residents" => "Hồ sơ cư dân", "ResidentApartment" => "Quan hệ cư trú", "ResidentProfileAttachment" => "Tệp hồ sơ cư dân",
@@ -145,13 +145,13 @@
         "Complaint" or "Complaints" => "Khiếu nại", "MaintenanceTask" or "Maintenance" => "Công việc bảo trì", "MaintenanceSchedule" => "Lịch bảo trì",
         "Invoice" or "InvoiceItem" => "Hóa đơn", "Payment" => "Thanh toán", "FeeRateRule" => "Cấu hình phí", "Announcement" => "Thông báo", "SystemConfiguration" => "Cấu hình hệ thống", _ => "Dữ liệu phân hệ" };
     private static string FieldLabel(string value) => value switch {
-        "Status" => "Trạng thái", "FullName" => "Họ tên", "Name" => "Tên", "Email" => "Email", "PhoneNumber" => "Số điện thoại", "IdentityNumber" => "Số giấy tờ",
+        "Status" => "Trạng thái", "FullName" => "Họ tên", "DisplayName" => "Tên hiển thị", "Name" => "Tên", "Email" => "Email", "PhoneNumber" => "Số điện thoại", "IdentityNumber" => "Số giấy tờ",
         "HouseholdRole" => "Vai trò trong hộ", "ResidencyType" => "Hình thức cư trú", "RelationshipToHead" => "Quan hệ với chủ hộ", "StartDate" => "Ngày bắt đầu", "EndDate" => "Ngày kết thúc",
         "IsActive" => "Đang hoạt động", "Area" => "Diện tích", "Bedrooms" => "Số phòng ngủ", "Bathrooms" => "Số phòng tắm", "UnitNumber" => "Số căn hộ", "FloorNumber" => "Tầng",
         "ApartmentUnitId" => "Mã căn hộ", "ResidentId" => "Mã cư dân", "HouseholdHeadResidencyId" => "Mã quan hệ chủ hộ", "AssignedStaffId" => "Mã nhân viên được giao",
         "UsableAreaM2" => "Diện tích", "BedroomCount" => "Số phòng ngủ", "BathroomCount" => "Số phòng tắm",
         "DefaultArea" or "DefaultUsableAreaM2" => "Diện tích mặc định", "DefaultBedrooms" or "DefaultBedroomCount" => "Phòng ngủ mặc định", "DefaultBathrooms" or "DefaultBathroomCount" => "Phòng tắm mặc định", "Priority" => "Mức ưu tiên", "PaymentMethod" => "Hình thức thanh toán", _ => "Trường " + value };
     private static readonly PropFlowSelectOption[] ModuleOptions = [new("", "Tất cả phân hệ"),new("Authentication","Tài khoản & bảo mật"),new("Administration","Quản trị"),new("Residents","Cư dân"),new("Apartments","Căn hộ"),new("PropertyAssets","Tòa nhà & tài sản"),new("ServiceRequests","Yêu cầu dịch vụ"),new("Complaints","Khiếu nại"),new("Maintenance","Bảo trì"),new("Billing","Phí & hóa đơn"),new("Payments","Thanh toán"),new("Communication","Thông báo"),new("AiClassification","AI phân loại"),new("AiRecommendation","AI đề xuất")];
-    private static readonly PropFlowSelectOption[] ActionOptions = [new("","Tất cả hành động"),new("created","Tạo dữ liệu"),new("updated","Cập nhật dữ liệu"),new("deleted","Xóa dữ liệu"),new("operation","Thao tác nghiệp vụ"),new("security_event","Tài khoản & bảo mật"),new("internal_account_created","Tạo tài khoản nội bộ"),new("internal_account_role_changed","Đổi vai trò"),new("internal_account_status_changed","Đổi trạng thái tài khoản")];
+    private static readonly PropFlowSelectOption[] ActionOptions = [new("","Tất cả hành động"),new("created","Tạo dữ liệu"),new("updated","Cập nhật dữ liệu"),new("deleted","Xóa dữ liệu"),new("operation","Thao tác nghiệp vụ"),new("security_event","Tài khoản & bảo mật"),new("internal_account_created","Tạo tài khoản nội bộ"),new("internal_account_profile_updated","Cập nhật hồ sơ tài khoản nội bộ"),new("internal_account_role_changed","Đổi vai trò"),new("internal_account_status_changed","Đổi trạng thái tài khoản")];
     private static readonly PropFlowSelectOption[] OutcomeOptions = [new("","Tất cả kết quả"),new("SUCCESS","Thành công"),new("FAILED","Thất bại"),new("DENIED","Bị từ chối")];
 }

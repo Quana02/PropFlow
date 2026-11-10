@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.JSInterop;
 using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Modules.Authentication.Domain.Tokens;
 using PropFlow.Web.Client.Features.Authentication.Services;
@@ -27,8 +28,8 @@ public sealed class ClientAuthenticationTests
     private static HttpResponseMessage Json<T>(T body) => new(HttpStatusCode.OK) { Content = JsonContent.Create(body) };
     private static SessionResponse Session(string token) => new(token, DateTimeOffset.UtcNow.AddMinutes(15),
         new(Guid.NewGuid(), "resident", "Cư dân", "test@example.invalid", null, "ACTIVE", true, "RESIDENT", []));
-    private static AuthSession CreateSession(Func<HttpRequestMessage, Task<HttpResponseMessage>> send) =>
-        new(new ApiClient(new HttpClient(new Transport(send)) { BaseAddress = new("https://test.invalid/") }, NullLogger<ApiClient>.Instance));
+    private static AuthSession CreateSession(Func<HttpRequestMessage, Task<HttpResponseMessage>> send, IJSRuntime? js = null) =>
+        new(new ApiClient(new HttpClient(new Transport(send)) { BaseAddress = new("https://test.invalid/") }, NullLogger<ApiClient>.Instance), js);
 
     [Fact]
     public async Task Late_profile_response_cannot_restore_a_logged_out_account()
@@ -91,13 +92,14 @@ public sealed class ClientAuthenticationTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var refreshes = 0;
+        var original = Session("old");
         var session = CreateSession(async request =>
         {
             if (request.RequestUri!.AbsolutePath.EndsWith("csrf")) return Json(new CsrfResponse("csrf"));
             Interlocked.Increment(ref refreshes); started.TrySetResult(); await release.Task;
-            return Json(Session("new"));
+            return Json(original with { AccessToken = "new" });
         });
-        session.Accept(Session("old"));
+        session.Accept(original);
         var replays = 0; var originals = 0; var navigation = new Navigation();
         using var http = new HttpClient(new AuthHttpHandler(session, navigation) { InnerHandler = new Transport(request =>
         {
@@ -215,11 +217,151 @@ public sealed class ClientAuthenticationTests
         Assert.Null(session.User);
         if (serverFailure)
         {
-            Assert.Contains("chưa xác nhận", session.Notice);
+            Assert.Equal(SessionRevocationState.Unconfirmed, session.Revocation);
             Assert.True((await session.LogoutAsync()).IsSuccess);
             Assert.Equal(2, attempts);
         }
+        Assert.Equal(SessionRevocationState.None, session.Revocation);
         Assert.Null(session.Notice);
+    }
+
+    [Fact]
+    public async Task Failed_logout_cannot_restore_the_unconfirmed_cookie_through_refresh()
+    {
+        var refreshes = 0;
+        var session = CreateSession(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("csrf")) return Task.FromResult(Json(new CsrfResponse("csrf")));
+            if (path.EndsWith("logout")) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            refreshes++;
+            return Task.FromResult(Json(Session("old-cookie-restored")));
+        });
+        session.Accept(Session("old"));
+        Assert.False((await session.LogoutAsync()).IsSuccess);
+        Assert.False(await session.RefreshAsync(null));
+        Assert.Equal(0, refreshes);
+        Assert.Null(session.User);
+    }
+
+    [Fact]
+    public async Task Unconfirmed_logout_survives_tab_reload_and_blocks_login_until_retry_is_confirmed()
+    {
+        var browser = new RevocationStorage();
+        var original = CreateSession(_ => throw new HttpRequestException("API offline"), browser);
+        original.Accept(Session("old"));
+        Assert.Equal("network", (await original.LogoutAsync()).Code);
+        Assert.Equal("1", browser.Marker);
+
+        var requested = new List<string>();
+        var status = HttpStatusCode.BadGateway;
+        var reloaded = CreateSession(request =>
+        {
+            var path = request.RequestUri!.Segments.Last();
+            requested.Add(path);
+            return Task.FromResult(path switch
+            {
+                "csrf" => Json(new CsrfResponse("csrf")),
+                "logout" => new HttpResponseMessage(status),
+                "login" => Json(Session("new")),
+                _ => throw new InvalidOperationException("Unconfirmed cookie was used to refresh.")
+            });
+        }, browser);
+        await reloaded.InitializeAsync();
+        var loginRequest = new LoginRequest("resident", "password");
+        Assert.Equal("revocation_pending", (await reloaded.LoginAsync(loginRequest)).Code);
+        Assert.Empty(requested);
+        using var resetHttp = new HttpClient(new Transport(_ => throw new InvalidOperationException("Reset would clear the pending cookie.")));
+        var logger = NullLogger<ApiClient>.Instance;
+        var auth = new AuthenticationService(new(resetHttp, logger), new(resetHttp, logger), reloaded, new ToastService());
+        Assert.Equal("revocation_pending", (await auth.ResetAsync(new(Guid.NewGuid(), "proof", "New password! 123"))).Code);
+
+        var rejected = await reloaded.LogoutAsync();
+        Assert.Equal(502, rejected.StatusCode);
+        Assert.Equal(SessionRevocationState.Unconfirmed, reloaded.Revocation);
+        Assert.Equal("1", browser.Marker);
+        status = HttpStatusCode.NoContent;
+        Assert.True((await reloaded.LogoutAsync()).IsSuccess);
+        Assert.Null(browser.Marker);
+        Assert.True((await reloaded.LoginAsync(loginRequest)).IsSuccess);
+        Assert.Equal("new", reloaded.AccessToken);
+    }
+
+    [Fact]
+    public async Task Anonymous_logout_without_an_outstanding_session_is_silent()
+    {
+        var session = CreateSession(_ => throw new InvalidOperationException("Unexpected network request."));
+        Assert.True((await session.LogoutAsync()).IsSuccess);
+        Assert.Equal(SessionRevocationState.None, session.Revocation);
+    }
+
+    private sealed class RevocationStorage : IJSInProcessRuntime
+    {
+        public string? Marker { get; private set; }
+        public TValue Invoke<TValue>(string identifier, params object?[]? args)
+        {
+            Assert.Equal("propflow:logout-unconfirmed", args![0]);
+            switch (identifier)
+            {
+                case "sessionStorage.getItem": return (TValue)(object?)Marker!;
+                case "sessionStorage.setItem": Marker = Assert.IsType<string>(args[1]); break;
+                case "sessionStorage.removeItem": Marker = null; break;
+                default: throw new InvalidOperationException(identifier);
+            }
+            return default!;
+        }
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => new(Invoke<TValue>(identifier, args));
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
+            => new(Invoke<TValue>(identifier, args));
+    }
+
+    [Fact]
+    public async Task Late_unauthorized_response_is_not_replayed_under_a_new_login()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var session = CreateSession(_ => throw new InvalidOperationException("Unexpected refresh."));
+        session.Accept(Session("old"));
+        var navigation = new Navigation();
+        var calls = 0;
+        using var http = new HttpClient(new AuthHttpHandler(session, navigation) { InnerHandler = new Transport(async _ =>
+        {
+            if (++calls == 1)
+            {
+                started.SetResult();
+                await release.Task;
+            }
+            return new(HttpStatusCode.Unauthorized);
+        }) });
+        var pending = http.GetAsync("https://test.invalid/api/v1/resource");
+        await started.Task;
+        session.Accept(Session("new-login"));
+        release.SetResult();
+        using var response = await pending;
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(1, calls);
+        Assert.Equal("new-login", session.AccessToken);
+        Assert.Null(navigation.Destination);
+    }
+
+    [Fact]
+    public async Task Refresh_cookie_for_a_different_user_cannot_replay_the_previous_users_request()
+    {
+        var session = CreateSession(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("csrf")
+            ? Json(new CsrfResponse("csrf")) : Json(Session("different-account"))));
+        session.Accept(Session("old"));
+        var navigation = new Navigation();
+        var requests = 0;
+        using var http = new HttpClient(new AuthHttpHandler(session, navigation) { InnerHandler = new Transport(_ =>
+        {
+            requests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        }) });
+        using var response = await http.GetAsync("https://test.invalid/api/v1/resource");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(1, requests);
+        Assert.Null(session.User);
+        Assert.Equal("/login", navigation.Destination);
     }
 
     [Fact]

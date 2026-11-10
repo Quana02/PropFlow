@@ -40,6 +40,7 @@ public static class AuthRegistration
         services.AddScoped<IAuditActorLookup, InternalAccountDirectory>();
         services.AddScoped<IPrivilegedActionOtp, PrivilegedActionOtp>();
         services.AddScoped<AuthUseCases>();
+        services.AddScoped<IInternalAccountProfiles>(sp => sp.GetRequiredService<AuthUseCases>());
         services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly);
         services.Configure<ApiBehaviorOptions>(options => options.InvalidModelStateResponseFactory = context =>
         {

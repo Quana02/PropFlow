@@ -12,6 +12,7 @@ Tài liệu hợp nhất quyết định triển khai, API và vận hành FE-01
 - Mật khẩu 12–128 ký tự, không trim/normalize, hash bằng PasswordHasher. Mặc định khóa 15 phút sau 5 lần sai; rate limit login 10/phút, registration/recovery 5/15 phút.
 - Không có Remember Me. Token chỉ giữ trong bộ nhớ WASM; không lưu password/OTP/token vào browser storage. Route sau đăng nhập theo role và safe authorized return URL.
 - Hồ sơ tự sửa gồm tên hiển thị và điện thoại. Username, role, status và email chỉ đọc trong form cập nhật hồ sơ. ADMIN, MANAGER, STAFF và ACCOUNTANT tự đổi email qua luồng riêng. RESIDENT liên hệ Ban quản lý để khởi tạo yêu cầu, rồi tự xác minh trong Resident Portal. FE-01 giữ nguyên hồ sơ cư dân và quan hệ cư trú.
+- ADMIN quản lý tên hiển thị và số điện thoại của tài khoản Ban quản lý qua API và quyền FE-15.1. [Hợp đồng quản trị hồ sơ](FE-15-Administration.md#fe-151--xem-và-chỉnh-sửa-hồ-sơ-tài-khoản-ban-quản-lý)
 - Security event có baseline retention 30 ngày tại log sink; không lưu secret hoặc payload nhạy cảm. Quy tắc này độc lập với lịch sử nghiệp vụ của [FE-15](FE-15-Administration.md).
 - Giữ quan hệ DBML đã duyệt; corrective migration phải báo lỗi khi dữ liệu bất nhất, không tự xóa hoặc dựng dữ liệu để chạy qua.
 
@@ -58,7 +59,7 @@ The email OTP challenge is bound to the matched Resident fingerprint. Activation
 - Direct client routes are public Web-host shell endpoints with prerender disabled. Web routing removes copied server authorization metadata only for client components; their `[Authorize]` attributes remain on the component types for WASM AuthorizeRouteView. Protected API endpoints independently enforce Bearer authentication and account scope. Ten HTTP route tests cover direct navigation without rendering protected data.
 - Concurrent 401s within one WASM instance share a refresh and retry at most once. 403 never refreshes. Buffered JSON requests are replayable; large/streaming bodies are not automatically retried.
 - Tabs have independent memory/refresh locks. A stale refresh returns 401 without deleting a newer cookie issued concurrently in another tab. The losing tab may require login; cross-tab coordination is not implemented.
-- Logout clears local auth immediately and revokes the current rotation chain. Other device sessions remain. If server logout fails, the login page offers retry and says server revocation is unconfirmed.
+- Logout clears local auth immediately and requests revocation of the current rotation chain. Other device sessions remain. HTTP 204 confirms logout and the Login page stays silent. If the outcome is unconfirmed, Login offers retry below the form. The tab defers login, refresh and password reset completion until revocation is confirmed, because login replaces the refresh cookie and password reset clears it. The tab keeps a boolean pending marker in session storage so reloading it does not restore the old cookie. The marker contains no account identifier, access token, refresh cookie or credentials.
 - Password change/reset revokes all refresh tokens. Existing JWTs remain valid until normal expiry; this implementation does not claim immediate JWT revocation.
 - OTP: six digits, five minutes, five attempts; resend after 60 seconds, five/hour/account; old challenges are cancelled. Recovery proof is separately random, hashed, one-use, and expires after five minutes.
 

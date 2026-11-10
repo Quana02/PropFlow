@@ -3,6 +3,9 @@ namespace PropFlow.Web.Client.Features.Administration.Models;
 public sealed record InternalAccountSummary(int Total, int Active, int Disabled, int Locked, Dictionary<string, int> RoleCounts);
 public sealed record PagedInternalAccounts(int Total, int Page, int PageSize, InternalAccount[] Items);
 public sealed record InternalAccount(Guid Id, string Username, string DisplayName, string? Email, string Role, string Status);
+public sealed record InternalAccountProfile(Guid Id, string Username, string DisplayName, string? Email,
+    string? PhoneNumber, string Role, string Status, bool EmailVerified);
+public sealed record UpdateInternalAccountProfile(string DisplayName, string? PhoneNumber);
 public sealed record CreateInternalAccount(string Username, string DisplayName, string Email, string Password, string Role, string? PhoneNumber);
 public sealed record ChangeRole(string Role);
 public sealed record ChangeStatus(string Status);
