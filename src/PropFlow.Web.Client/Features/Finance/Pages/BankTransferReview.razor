@@ -20,7 +20,10 @@
         <tr><td><strong>SePay #@row.TransactionId</strong><small>@row.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small><small>@row.BankReference</small></td><td>@row.Gateway<small>@row.MaskedAccountNumber</small></td><td><strong>@Money(row.Amount)</strong>@if (row.AllocatedAmount > 0) { <small>Đã ghi nhận: @Money(row.AllocatedAmount)</small> }</td><td>@(row.InvoiceNumber ?? "Chưa khớp")<small>@row.TransferCode</small></td><td><span class="bank-badge">@Status(row.Status)</span><small>@Outcome(row.Outcome)</small></td><td><button type="button" @onclick="() => OpenAsync(row.Id)">Xem chi tiết</button></td></tr>
     } }
     </tbody></table></section>
-    <footer class="bank-pagination"><button type="button" disabled="@(page <= 1 || loading)" @onclick="PreviousAsync">Trước</button><span>Trang @(page) / @Pages</span><button type="button" disabled="@(page >= Pages || loading)" @onclick="NextAsync">Sau</button></footer>
+    <TablePagination Page="page" TotalPages="@((data?.Total ?? 0) > 0 ? Pages : 0)" Busy="loading" Label="Phân trang giao dịch"
+        Previous="PreviousAsync" Next="NextAsync">
+        <span>@(data?.Total ?? 0) giao dịch</span>
+    </TablePagination>
 </div>
 
 @if (selected is not null)
@@ -80,8 +83,19 @@
     }
     private Task ResetAsync() { page = 1; data = null; return ReloadAsync(); }
     private Task StatusChanged(string value) { status = value; return ResetAsync(); }
-    private Task PreviousAsync() { page--; return ReloadAsync(); }
-    private Task NextAsync() { page++; return ReloadAsync(); }
+    private Task PreviousAsync()
+    {
+        if (loading || page <= 1) return Task.CompletedTask;
+        page--;
+        return ReloadAsync();
+    }
+
+    private Task NextAsync()
+    {
+        if (loading || page >= Pages) return Task.CompletedTask;
+        page++;
+        return ReloadAsync();
+    }
     private async Task OpenAsync(Guid id)
     {
         var result = await Api.SendAsync<BankTransferRow>(HttpMethod.Get, $"api/v1/payments/bank-transfers/{id}", ct: cancellation.Token);

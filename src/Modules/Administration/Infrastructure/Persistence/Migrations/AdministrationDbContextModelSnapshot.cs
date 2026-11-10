@@ -229,6 +229,28 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                             Module = "Finance",
                             Name = "Quản lý tài khoản nhận tiền",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666669"),
+                            Code = "READ_RESIDENT_ACCOUNTS",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Xem tài khoản gắn với hồ sơ cư dân trong deployment.",
+                            IsActive = true,
+                            Module = "Authentication",
+                            Name = "Xem tài khoản cư dân",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666670"),
+                            Code = "REQUEST_RESIDENT_EMAIL_CHANGE",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Khởi tạo yêu cầu sau khi đối chiếu danh tính cư dân trực tiếp.",
+                            IsActive = true,
+                            Module = "Authentication",
+                            Name = "Yêu cầu đổi email tài khoản cư dân",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });
 
@@ -382,6 +404,18 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                         {
                             RoleId = new Guid("44444444-4444-4444-8444-444444444444"),
                             PermissionId = new Guid("66666666-6666-4666-8666-666666666664"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("44444444-4444-4444-8444-444444444444"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666669"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            RoleId = new Guid("44444444-4444-4444-8444-444444444444"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666670"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         },
                         new

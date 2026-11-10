@@ -52,6 +52,8 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
             Seed(staff, permissions[SystemPermissionCodes.PerformAssignedOperations]),
             Seed(accountant, permissions[SystemPermissionCodes.ManageFinance]),
             Seed(manager, permissions[SystemPermissionCodes.ManageOperations]),
+            Seed(manager, permissions[SystemPermissionCodes.ReadResidentAccounts]),
+            Seed(manager, permissions[SystemPermissionCodes.RequestResidentEmailChange]),
             Seed(admin, permissions[SystemPermissionCodes.ManageInternalAccounts]),
             Seed(admin, permissions[SystemPermissionCodes.ViewAdministrationActivity]),
             Seed(admin, permissions[SystemPermissionCodes.ViewSystemOverview]),

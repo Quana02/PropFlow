@@ -20,6 +20,10 @@ public sealed class PrivilegedActionChallengeConfiguration : IEntityTypeConfigur
         builder.Property(item => item.ExpiresAt).HasColumnName("expires_at").IsRequired();
         builder.Property(item => item.CreatedAt).HasColumnName("created_at").IsRequired();
         builder.Property(item => item.UsedAt).HasColumnName("used_at");
+        builder.Property(item => item.RequestedBy).HasColumnName("requested_by");
+        builder.Property(item => item.ResidentId).HasColumnName("resident_id");
+        builder.Property(item => item.Reason).HasColumnName("reason").HasMaxLength(40);
+        builder.Property(item => item.Outcome).HasColumnName("outcome").HasMaxLength(32);
         builder.HasOne<UserAccount>().WithMany().HasForeignKey(item => item.UserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(item => new { item.UserId, item.Purpose, item.CreatedAt });
         builder.HasIndex(item => item.ExpiresAt);

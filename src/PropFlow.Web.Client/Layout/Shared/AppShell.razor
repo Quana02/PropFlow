@@ -7,10 +7,10 @@
 @inject IJSRuntime JS
 
 <div class="app-shell @(dark ? "app-shell-dark" : "") @(ShowAmbientBackground ? "app-shell-ambient" : "")">
-    <div class="app-aurora app-aurora-one" aria-hidden="true"></div>
-    <div class="app-aurora app-aurora-two" aria-hidden="true"></div>
     @if (ShowAmbientBackground)
     {
+        <div class="app-aurora app-aurora-one" aria-hidden="true"></div>
+        <div class="app-aurora app-aurora-two" aria-hidden="true"></div>
         <canvas class="app-ambient-canvas" @ref="ambientCanvas" aria-hidden="true"></canvas>
     }
 
@@ -126,6 +126,8 @@
 
     private bool dark;
     private bool busy;
+    private bool disposed;
+    private Task? initialization;
     private ElementReference ambientCanvas;
     private ElementReference motionButton;
     private ElementReference weatherIcon;
@@ -139,17 +141,21 @@
     private IJSObjectReference? infoModule;
     private IJSObjectReference? infoHandle;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override Task OnAfterRenderAsync(bool firstRender) =>
+        firstRender ? initialization = InitializeAsync() : Task.CompletedTask;
+
+    private async Task InitializeAsync()
     {
-        if (!firstRender) return;
         if (ShowAmbientBackground)
         {
             ambientModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-ambient.js?v=20260929-2");
+            if (disposed) return;
             ambientHandle = await ambientModule.InvokeAsync<IJSObjectReference>("initialize", ambientCanvas, motionButton);
         }
-        if (ShowWeatherAndClock)
+        if (ShowWeatherAndClock && !disposed)
         {
             infoModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-info.js");
+            if (disposed) return;
             infoHandle = await infoModule.InvokeAsync<IJSObjectReference>("initialize",
                 weatherIcon, weatherTemperature, weatherDescription, dateLabel, clockLabel, periodLabel);
         }
@@ -157,20 +163,28 @@
 
     public async ValueTask DisposeAsync()
     {
+        disposed = true;
         try
         {
-            if (ambientHandle is not null)
+            try
             {
-                await ambientHandle.InvokeVoidAsync("dispose");
-                await ambientHandle.DisposeAsync();
+                if (initialization is not null) await initialization;
             }
-            if (ambientModule is not null) await ambientModule.DisposeAsync();
-            if (infoHandle is not null)
+            finally
             {
-                await infoHandle.InvokeVoidAsync("dispose");
-                await infoHandle.DisposeAsync();
+                if (ambientHandle is not null)
+                {
+                    await ambientHandle.InvokeVoidAsync("dispose");
+                    await ambientHandle.DisposeAsync();
+                }
+                if (ambientModule is not null) await ambientModule.DisposeAsync();
+                if (infoHandle is not null)
+                {
+                    await infoHandle.InvokeVoidAsync("dispose");
+                    await infoHandle.DisposeAsync();
+                }
+                if (infoModule is not null) await infoModule.DisposeAsync();
             }
-            if (infoModule is not null) await infoModule.DisposeAsync();
         }
         catch (JSDisconnectedException)
         {

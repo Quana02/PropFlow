@@ -163,16 +163,10 @@
                             </div>
                             @if (EquipmentPagedResult != null && EquipmentPagedResult.TotalPages > 1)
                             {
-                                <div class="px-4 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
-                                    <span class="text-xs text-slate-500">Trang @(EquipmentPagedResult?.PageIndex ?? 1) / @(EquipmentPagedResult?.TotalPages ?? 1)</span>
-                                    <div class="flex items-center gap-2">
-                                        @if (EquipmentPagedResult != null)
-                                        {
-                                            <button @onclick="() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex - 1)" disabled="!EquipmentPagedResult.HasPreviousPage" class="px-3 py-1 rounded-lg text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Trước</button>
-                                            <button @onclick="() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex + 1)" disabled="!EquipmentPagedResult.HasNextPage" class="px-3 py-1 rounded-lg text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Sau</button>
-                                        }
-                                    </div>
-                                </div>
+                                <TablePagination Page="EquipmentPagedResult.PageIndex" TotalPages="EquipmentPagedResult.TotalPages" Busy="IsLoadingEquipment" Label="Phân trang thiết bị liên quan"
+                                    Previous="@(() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex - 1))" Next="@(() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex + 1))">
+                                    <span>@EquipmentPagedResult.TotalCount thiết bị</span>
+                                </TablePagination>
                             }
                         </div>
                     }

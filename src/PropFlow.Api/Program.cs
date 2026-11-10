@@ -333,6 +333,7 @@ builder.Services.AddHostedService<BillingCycleWorker>();
 builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
+builder.Services.AddScoped<IResidentAccountScope, ResidentAccountScope>();
 builder.Services.AddScoped<IResidentResidenceSource, ResidentResidenceSource>();
 builder.Services.AddScoped<IServiceRequestSubmissionStore, ServiceRequestSubmissionStore>();
 builder.Services.AddScoped<SubmitServiceRequestHandler>();
@@ -366,6 +367,10 @@ builder.Services.AddScoped<IAdministrationTransaction, AdministrationTransaction
 builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoordinator>();
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy(PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.Read,
+        policy => policy.RequireRole("MANAGER").RequireClaim("permission", PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.Read));
+    options.AddPolicy(PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.RequestEmailChange,
+        policy => policy.RequireRole("MANAGER").RequireClaim("permission", PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.RequestEmailChange));
     options.AddPolicy(KnowledgePolicies.Read, policy => policy.RequireAssertion(context => KnowledgePolicies.CanRead(context.User)));
     options.AddPolicy(KnowledgePolicies.Manage, policy => policy.RequireAssertion(context => KnowledgePolicies.CanManage(context.User)));
     options.AddPolicy(ResidentChatPolicy.Use, policy => policy.RequireAssertion(context => ResidentChatPolicy.Allowed(context.User)));

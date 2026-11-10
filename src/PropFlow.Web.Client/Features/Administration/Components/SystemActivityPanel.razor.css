@@ -32,16 +32,6 @@ time { white-space:nowrap; } small { display:block; margin-top:.2rem; font-size:
 .detail-button .material-symbols-outlined { font-size:1.2rem; }
 footer { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; padding:1rem 1.2rem; color:var(--admin-muted,#64748b); font-size:.75rem; }
 nav { display:flex; gap:.5rem; }
-.table-footer { gap:1rem; padding:.65rem 1.2rem; border-top:1px solid var(--admin-line,#dce8f1); font-size:.65rem; }
-.table-pagination { align-items:center; gap:.35rem; }
-.table-pagination button,.page-number { display:grid; place-items:center; width:2rem; height:2rem; border-radius:.55rem; }
-.table-pagination button { min-height:0; padding:0; border:1px solid var(--admin-line,#dce8f1); background:var(--admin-surface,#fff); color:var(--admin-accent,#0284c7); cursor:pointer; transition:border-color .18s ease,background-color .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease; }
-.table-pagination button:hover:not(:disabled) { border-color:#7dd3fc; background:rgba(2,132,199,.09); box-shadow:0 .25rem .65rem rgba(2,132,199,.12); transform:translateY(-1px); }
-.table-pagination button:focus-visible { outline:2px solid #38bdf8; outline-offset:2px; }
-.table-pagination button:disabled { opacity:1; color:rgba(100,116,139,.4); background:rgba(148,163,184,.05); cursor:not-allowed; }
-.table-pagination .material-symbols-outlined { font-size:1.15rem; }
-.page-number { border:1px solid rgba(2,132,199,.2); background:rgba(2,132,199,.1); color:#0275b8; font-size:.7rem; font-weight:800; }
-@media(max-width:36rem) { .table-footer { align-items:stretch; flex-direction:column; } .table-pagination { align-self:flex-end; } }
 .audit-overlay { position:fixed; inset:0; z-index:1000; display:flex; justify-content:center; align-items:center; padding:1rem; background:rgba(15,23,42,.45); backdrop-filter:blur(4px); }
 .audit-dialog { width:min(52rem,100%); max-height:85dvh; overflow:auto; background:var(--admin-surface,#fff); color:var(--admin-text,#17243a); border:1px solid var(--admin-line,#dce8f1); border-radius:1rem; padding:1.2rem; box-shadow:0 1rem 4rem rgba(15,23,42,.2); }
 .audit-dialog>header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }

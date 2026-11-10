@@ -50,6 +50,8 @@ Resident Detail hiển thị current ownership `0..N`, ownership history, curren
 
 Self-registration phải khớp đúng cùng một Resident theo bốn giá trị normalized: email, phone, identity type và identity number. Resident phải `ACTIVE`, chưa liên kết tài khoản và có current ownership hoặc active residency với vai trò `HOUSEHOLD_HEAD` (quyết định người dùng ngày 03/11/2026). Chủ hộ không sở hữu chỉ được đăng ký khi có cư trú `TENANT` hiện hành tại căn hộ không có chủ sở hữu hiện hành, tức thuê căn hộ của đơn vị vận hành. Chủ hộ thuê căn có chủ sở hữu khác không đủ điều kiện. Thành viên hộ không có quyền sở hữu không được tự đăng ký; history đơn thuần không đủ. Quy tắc eligibility không tạo residency, không cấp quyền occupant/household và không thay thế authorization theo từng resource.
 
+Sau khi kích hoạt, `residents.residents.email` là email liên hệ do MANAGER quản lý theo FE-02.3. Cư dân xem hồ sơ của mình theo FE-02.7. Với yêu cầu đổi email tài khoản, MANAGER đối chiếu danh tính rồi khởi tạo quy trình FE-01.6. Cư dân tự xác minh mã tại email mới và nhập mật khẩu hiện tại. Quy trình chỉ cập nhật `auth.users.email`, giữ nguyên email liên hệ, liên kết Resident–UserAccount và dữ liệu căn hộ. [Hợp đồng FE-01](FE-01-API-and-Deployment.md#đổi-email-cư-dân-theo-yêu-cầu-ban-quản-lý)
+
 
 ## Quy tắc ngày hiệu lực và thao tác đồng thời
 

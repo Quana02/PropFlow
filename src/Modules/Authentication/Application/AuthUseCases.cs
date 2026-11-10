@@ -9,7 +9,7 @@ namespace PropFlow.Modules.Authentication.Application;
 
 // FE-01 shared orchestration dependencies; implementations are grouped by user goal.
 public sealed partial class AuthUseCases(IAuthStore store, IAuthSecrets secrets, IAuthEmail email,
-    IResidentOnboarding residents, IAccountAccess access, AuthPolicy policy, TimeProvider clock)
+    IResidentOnboarding residents, IResidentAccountScope residentAccounts, IAccountAccess access, AuthPolicy policy, TimeProvider clock)
 {
     private DateTimeOffset Now => clock.GetUtcNow();
     private DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(Now, TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh")).DateTime);

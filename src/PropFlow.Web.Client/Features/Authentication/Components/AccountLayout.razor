@@ -1,11 +1,24 @@
 @inherits LayoutComponentBase
+@using PropFlow.Web.Client.Layout.Shared
 @inject AuthSession Session
 @inject NavigationManager Navigation
 
-<LayoutView Layout="@(Session.User?.Role == "ADMIN" ? typeof(PropFlow.Web.Client.Layout.AdminLayout) : typeof(AuthLayout))">
-    <div class="@(IsOverview ? "account-overview" : "account-content")">@Body</div>
-</LayoutView>
+@{
+    RenderFragment content = @<div class="@ContentClass">@Body</div>;
+}
+@if (UseInternalShell)
+{
+    <AppShell ShowAmbientBackground="false" ShowWeatherAndClock="false">@content</AppShell>
+}
+else
+{
+    <LayoutView Layout="typeof(AuthLayout)">@content</LayoutView>
+}
 
 @code {
-    private bool IsOverview => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/') == "account";
+    private bool UseInternalShell => Session.User?.Role is "ADMIN" or "MANAGER" or "ACCOUNTANT" or "STAFF";
+    private string ContentClass => !IsOverview ? "account-content" :
+        UseInternalShell ? "account-overview" : "account-overview public-overview";
+    private bool IsOverview => string.Equals(AccountPath, "account", StringComparison.OrdinalIgnoreCase);
+    private string AccountPath => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
 }

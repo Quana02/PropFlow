@@ -1,0 +1,124 @@
+@page "/resident/account-email"
+@layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
+@attribute [Authorize(Roles = "RESIDENT")]
+@using System.ComponentModel.DataAnnotations
+@using PropFlow.Web.Client.Shared.Feedback
+@inject AuthenticationService Auth
+@inject NavigationManager Navigation
+@inject ToastService Toasts
+@implements IDisposable
+
+<PageTitle>Xác minh email tài khoản - PropFlow</PageTitle>
+<section class="email-verification" aria-labelledby="resident-email-title">
+    <a href="/resident">Về trang chủ cư dân</a>
+    <h1 id="resident-email-title">Xác minh email theo yêu cầu Ban quản lý</h1>
+    @if (loading)
+    {
+        <p role="status">Đang kiểm tra yêu cầu…</p>
+    }
+    else if (loadError is not null)
+    {
+        <p role="alert">@loadError</p>
+    }
+    else if (challenge?.ChallengeId is { } id)
+    {
+        <p>Nhập địa chỉ đã cung cấp cho Ban quản lý, mật khẩu hiện tại và mã nhận được tại email mới. Hãy tự nhập mã trên thiết bị của bạn.</p>
+        <EditForm EditContext="editContext" OnValidSubmit="() => VerifyAsync(id)">
+            <DataAnnotationsValidator />
+            <fieldset disabled="@saving">
+                <label for="resident-new-email">Email mới</label>
+                <InputText id="resident-new-email" type="email" @bind-Value="form.NewEmail" autocomplete="email" />
+                <ValidationMessage For="() => form.NewEmail" />
+                <label for="resident-email-password">Mật khẩu hiện tại</label>
+                <InputText id="resident-email-password" type="password" @bind-Value="form.CurrentPassword" autocomplete="current-password" />
+                <ValidationMessage For="() => form.CurrentPassword" />
+                <label for="resident-email-code">Mã xác minh</label>
+                <InputText id="resident-email-code" @bind-Value="form.Code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+                <ValidationMessage For="() => form.Code" />
+                <button type="submit" disabled="@saving">@(saving ? "Đang xác minh…" : "Xác minh và đổi email")</button>
+            </fieldset>
+        </EditForm>
+    }
+    else
+    {
+        <p>Bạn chưa có yêu cầu còn hiệu lực. Vui lòng liên hệ Ban quản lý chung cư.</p>
+    }
+    @if (!loading)
+    {
+        <button class="refresh" type="button" disabled="@saving" @onclick="LoadAsync">Kiểm tra lại yêu cầu</button>
+    }
+</section>
+
+@code {
+    private readonly ToastLifetime lifetime = new();
+    private readonly VerificationForm form = new();
+    private EditContext editContext = null!;
+    private ApiValidationMessages validation = null!;
+    private ResidentEmailChangePending? challenge;
+    private bool loading, saving, disposed;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync()
+    {
+        editContext = new(form);
+        validation = new(editContext, ("NewEmail", nameof(form.NewEmail)), ("CurrentPassword", nameof(form.CurrentPassword)),
+            ("Code", nameof(form.Code)));
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (loading || saving) return;
+        validation.Clear();
+        form.CurrentPassword = form.Code = "";
+        loading = true;
+        loadError = null;
+        var result = await Auth.PendingResidentEmailAsync();
+        if (disposed) return;
+        loading = false;
+        challenge = result.Data;
+        if (!result.IsSuccess) loadError = result.Message ?? "Không thể kiểm tra yêu cầu.";
+    }
+
+    private async Task VerifyAsync(Guid id)
+    {
+        if (saving) return;
+        var feedback = Toasts.BeginOperation(lifetime);
+        validation.Clear();
+        saving = true;
+        try
+        {
+            var result = await Auth.VerifyResidentEmailAsync(new(id, form.NewEmail, form.CurrentPassword, form.Code), feedback);
+            if (!feedback.IsCurrent) return;
+            if (result.IsSuccess) Navigation.NavigateTo("/login");
+            else
+            {
+                validation.Apply(result);
+                if (!editContext.GetValidationMessages().Any())
+                    feedback.Publish(() => Toasts.Error(result.Message ?? "Không thể xác minh yêu cầu."));
+            }
+        }
+        finally
+        {
+            form.CurrentPassword = form.Code = "";
+            if (!disposed) saving = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        lifetime.Dispose();
+        validation.Dispose();
+    }
+
+    private sealed class VerificationForm
+    {
+        [Required(ErrorMessage = "Nhập email mới."), EmailAddress(ErrorMessage = "Email không hợp lệ."), StringLength(255)]
+        public string NewEmail { get; set; } = "";
+        [Required(ErrorMessage = "Nhập mật khẩu hiện tại."), StringLength(128)]
+        public string CurrentPassword { get; set; } = "";
+        [Required(ErrorMessage = "Nhập mã xác minh."), RegularExpression(@"[0-9]{6}", ErrorMessage = "Mã xác minh gồm 6 chữ số.")]
+        public string Code { get; set; } = "";
+    }
+}

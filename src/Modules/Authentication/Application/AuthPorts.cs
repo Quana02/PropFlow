@@ -6,10 +6,15 @@ using PropFlow.Modules.Authentication.Domain.PrivilegedActions;
 
 namespace PropFlow.Modules.Authentication.Application;
 
+public sealed record ResidentAccountSummary(Guid Id, string Username, string? Email, AccountStatus Status,
+    bool EmailVerified, DateTimeOffset? LockoutUntil);
+
 public interface IAuthStore
 {
     Task<T> SerializedAsync<T>(string key, Func<Task<T>> action, CancellationToken ct);
     Task<UserAccount?> UserAsync(Guid id, CancellationToken ct);
+    Task<UserAccount?> UserForUpdateAsync(Guid id, CancellationToken ct);
+    Task<List<ResidentAccountSummary>> ReadResidentAccountSummariesAsync(Guid[] ids, CancellationToken ct);
     Task<UserAccount?> UsernameAsync(string username, CancellationToken ct);
     Task<UserAccount?> EmailAsync(string email, CancellationToken ct);
     Task<bool> PhoneInUseAsync(string phone, Guid? except, CancellationToken ct);

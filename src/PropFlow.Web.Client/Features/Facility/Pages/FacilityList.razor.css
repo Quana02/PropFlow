@@ -1,4 +1,4 @@
-.fe04-page { width: min(100%, 80rem); margin: 0 auto; display: flex; flex-direction: column; gap: .75rem; color: var(--admin-text, #17243a); }
+.fe04-page { display: flex; flex-direction: column; gap: .75rem; color: var(--admin-text, #17243a); }
 
 .fe04-header, .fe04-panel, .fe04-legend, .fe04-metric-card {
     margin: 0; border: 1px solid var(--admin-line, #dce8f1); border-radius: .9rem;
