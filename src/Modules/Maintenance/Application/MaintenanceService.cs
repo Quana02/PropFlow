@@ -74,9 +74,9 @@ public sealed class MaintenanceService(
         }
         var facilityId = schedule?.FacilityId ?? command.FacilityId;
         var equipmentId = schedule?.EquipmentId ?? command.EquipmentId;
-        if (schedule is null) await EnsureAssetsAsync(facilityId, equipmentId, ct, requireAnyAsset: false);
-        if (markAssetUnderMaintenance)
-            await EnsureEmergencyAssetsCanEnterMaintenanceAsync(facilityId, equipmentId, ct);
+        if (schedule is null)
+            await EnsureAssetsAsync(facilityId, equipmentId, ct, requireAnyAsset: false,
+                rejectUnderMaintenance: markAssetUnderMaintenance, requireActive: markAssetUnderMaintenance);
 
         var description = schedule?.Description ?? command.Description;
         if (string.IsNullOrWhiteSpace(description)) throw new ArgumentException("Mô tả là bắt buộc.");
@@ -99,7 +99,8 @@ public sealed class MaintenanceService(
                     var created = new MaintenanceTask(taskNumber, command.Title, actor, timeProvider.GetUtcNow(), command.ScheduleId,
                         sourceServiceRequestId: relatedRequest?.Id, facilityId: facilityId, equipmentId: equipmentId,
                         description: description, priorityCode: command.PriorityCode,
-                        plannedStartAt: schedule?.PlannedStartAt ?? Utc(command.PlannedStartAt), dueAt: schedule?.PlannedEndAt ?? Utc(command.DueAt));
+                        plannedStartAt: schedule?.PlannedStartAt ?? Utc(command.PlannedStartAt), dueAt: schedule?.PlannedEndAt ?? Utc(command.DueAt),
+                        isEmergency: markAssetUnderMaintenance);
                     candidate = created;
                     db.MaintenanceTasks.Add(created);
                     if (relatedRequest is not null)
@@ -187,12 +188,14 @@ public sealed class MaintenanceService(
         if (query.CompletedOnly)
         {
             source = source.Where(task => task.Assignments.Any(assignment => assignment.StaffUserId == staffUserId) &&
-                (task.Status == MaintenanceTaskStatus.COMPLETED || task.Status == MaintenanceTaskStatus.CLOSED));
+                task.Status == MaintenanceTaskStatus.CLOSED);
         }
         else
         {
             source = source.Where(task => task.Assignments.Any(assignment => assignment.StaffUserId == staffUserId &&
-                (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS)));
+                (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS ||
+                 (task.Status == MaintenanceTaskStatus.COMPLETED && assignment.Status == AssignmentStatus.COMPLETED))) &&
+                task.Status != MaintenanceTaskStatus.CLOSED && task.Status != MaintenanceTaskStatus.CANCELLED);
         }
         if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
         {
@@ -453,8 +456,10 @@ public sealed class MaintenanceService(
             if (task.Schedule is { Status: MaintenanceScheduleStatus.ACTIVE } schedule)
             {
                 schedule.Complete(actor, now);
-                await assets.MarkActiveAsync(schedule.FacilityId, schedule.EquipmentId, actor, ct);
+                await RestoreAssetsWhenNoOverlappingMaintenanceAsync(schedule.Id, null, schedule.FacilityId, schedule.EquipmentId, actor, ct);
             }
+            else if (task.IsEmergency)
+                await RestoreAssetsWhenNoOverlappingMaintenanceAsync(null, task.Id, task.FacilityId, task.EquipmentId, actor, ct);
             db.MaintenanceTaskActivities.Add(new MaintenanceTaskActivity(task.Id, MaintenanceActivityType.MANAGER_REVIEWED, now,
                 fromStatus: MaintenanceTaskStatus.COMPLETED, toStatus: MaintenanceTaskStatus.COMPLETED, detail: command.ReviewNote, performedBy: actor));
             db.MaintenanceTaskActivities.Add(new MaintenanceTaskActivity(task.Id, MaintenanceActivityType.CLOSED, now,
@@ -480,6 +485,22 @@ public sealed class MaintenanceService(
         await db.SaveChangesAsync(ct);
         await NotifyVisibleAssigneesAsync(task, ct);
         return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await ToDtoAsync(result, ct), ct);
+    }
+
+    public async Task<MaintenanceTaskDto> CancelTaskAsync(Guid taskId, Guid actor, CancellationToken ct)
+    {
+        var task = await db.MaintenanceTasks.Include(item => item.Assignments).Include(item => item.Schedule)
+            .SingleOrDefaultAsync(item => item.Id == taskId, ct) ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
+        var now = timeProvider.GetUtcNow();
+        var previousStatus = task.Status;
+        task.Cancel(now);
+        foreach (var assignment in task.Assignments.Where(assignment => assignment.IsActive)) assignment.Cancel(now);
+        db.MaintenanceTaskActivities.Add(new MaintenanceTaskActivity(task.Id, MaintenanceActivityType.STATUS_CHANGED, now, fromStatus: previousStatus, toStatus: MaintenanceTaskStatus.CANCELLED, detail: "Công việc đã được Manager hủy.", performedBy: actor));
+        if (task.IsEmergency && !await HasOverlappingActiveMaintenanceAsync(null, task.Id, task.FacilityId, task.EquipmentId, ct))
+            await assets.MarkUnavailableAsync(task.FacilityId, task.EquipmentId, actor, ct);
+        await db.SaveChangesAsync(ct);
+        await NotifyVisibleAssigneesAsync(task, ct);
+        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await LatestResultAsync(task.Id, ct), ct);
     }
 
     public async Task<MaintenanceTaskDto> AssignTaskAsync(Guid taskId, AssignMaintenanceTaskCommand command, Guid actor, CancellationToken ct)
@@ -625,7 +646,7 @@ public sealed class MaintenanceService(
     public async Task<ScheduleDto> CreateScheduleAsync(CreateScheduleCommand command, Guid actor, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(command.Description)) throw new ArgumentException("Mô tả là bắt buộc.");
-        await EnsureAssetsAsync(command.FacilityId, command.EquipmentId, ct, requireAnyAsset: true);
+        await EnsureAssetsAsync(command.FacilityId, command.EquipmentId, ct, requireAnyAsset: true, rejectUnderMaintenance: true);
         var codeObject = await AssetCodeObjectAsync(command.FacilityId, command.EquipmentId, allowCommon: false, ct);
         var startAt = Utc(command.PlannedStartAt);
         var codeDate = await BuildingDateAsync(startAt, ct);
@@ -661,8 +682,15 @@ public sealed class MaintenanceService(
     public async Task<ScheduleDto> UpdateScheduleAsync(Guid id, UpdateScheduleCommand command, Guid actor, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(command.Description)) throw new ArgumentException("Mô tả là bắt buộc.");
-        await EnsureAssetsAsync(command.FacilityId, command.EquipmentId, ct, requireAnyAsset: true);
         var item = await db.MaintenanceSchedules.FindAsync([id], ct) ?? throw new KeyNotFoundException("Không tìm thấy lịch bảo trì.");
+        var hasCreatedTask = await db.MaintenanceTasks.AsNoTracking().AnyAsync(task => task.ScheduleId == id, ct);
+        if (hasCreatedTask && (command.Title != item.Title
+            || command.Description != item.Description
+            || command.FacilityId != item.FacilityId
+            || command.EquipmentId != item.EquipmentId))
+            throw new InvalidOperationException("Lịch đã có công việc bảo trì; chỉ được cập nhật thời điểm bắt đầu và thời điểm kết thúc.");
+
+        await EnsureAssetsAsync(command.FacilityId, command.EquipmentId, ct, requireAnyAsset: true);
         item.UpdatePlan(command.Title, Utc(command.PlannedStartAt), actor, DateTimeOffset.UtcNow, command.FacilityId, command.EquipmentId, command.Description, Utc(command.PlannedEndAt));
         var eligible = await db.MaintenanceTasks.Where(task => task.ScheduleId == id && (task.Status == MaintenanceTaskStatus.OPEN || task.Status == MaintenanceTaskStatus.ASSIGNED)).ToListAsync(ct);
         foreach (var task in eligible) task.UpdateDetails(task.Title, DateTimeOffset.UtcNow, command.Description, task.PriorityCode, task.PlannedStartAt, task.DueAt);
@@ -674,7 +702,7 @@ public sealed class MaintenanceService(
         if (string.Equals(action, "complete", StringComparison.OrdinalIgnoreCase))
         {
             item.Complete(actor, DateTimeOffset.UtcNow);
-            await assets.MarkActiveAsync(item.FacilityId, item.EquipmentId, actor, ct);
+            await RestoreAssetsWhenNoOverlappingMaintenanceAsync(item.Id, null, item.FacilityId, item.EquipmentId, actor, ct);
         }
         else if (string.Equals(action, "cancel", StringComparison.OrdinalIgnoreCase))
         {
@@ -693,7 +721,7 @@ public sealed class MaintenanceService(
                     fromStatus: previousStatus, toStatus: MaintenanceTaskStatus.CANCELLED,
                     detail: "Công việc được hủy vì lịch bảo trì nguồn đã bị hủy.", performedBy: actor));
             }
-            await assets.MarkActiveAsync(item.FacilityId, item.EquipmentId, actor, ct);
+            await RestoreAssetsWhenNoOverlappingMaintenanceAsync(item.Id, null, item.FacilityId, item.EquipmentId, actor, ct);
         }
         else throw new ArgumentException("Thao tác lịch bảo trì không hợp lệ.");
         await db.SaveChangesAsync(ct); return ToDto(item);
@@ -758,7 +786,7 @@ public sealed class MaintenanceService(
             .Select(staff => new AssignableMaintenanceStaffDto(staff.UserId, staff.Username, staff.DisplayName))
             .ToArray();
     }
-    private async Task EnsureAssetsAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct, bool requireAnyAsset = false, bool requireUnderMaintenance = false, bool requireFacility = false)
+    private async Task EnsureAssetsAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct, bool requireAnyAsset = false, bool requireUnderMaintenance = false, bool requireFacility = false, bool rejectUnderMaintenance = false, bool requireActive = false)
     {
         if (facilityId is null && equipmentId is null)
         {
@@ -782,22 +810,60 @@ public sealed class MaintenanceService(
             throw new ArgumentException("Chỉ được chọn cơ sở vật chất đang bảo trì.");
         if (requireUnderMaintenance && equipment is not null && !string.Equals(equipment.Status, "UNDER_MAINTENANCE", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Chỉ được chọn thiết bị đang bảo trì.");
-    }
-
-    private async Task EnsureEmergencyAssetsCanEnterMaintenanceAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct)
-    {
-        var facility = facilityId is { } selectedFacilityId
-            ? await assets.GetFacilityAsync(selectedFacilityId, ct)
-            : null;
-        var equipment = equipmentId is { } selectedEquipmentId
-            ? await assets.GetEquipmentAsync(selectedEquipmentId, ct)
-            : null;
-
-        if (facility is not null && facility.Status is not ("ACTIVE" or "UNDER_MAINTENANCE"))
+        if (rejectUnderMaintenance && facility is not null && IsUnderMaintenance(facility))
+            throw new InvalidOperationException("Cơ sở vật chất đang bảo trì, không thể tạo mới lịch hoặc công việc bảo trì.");
+        if (rejectUnderMaintenance && equipment is not null && IsUnderMaintenance(equipment))
+            throw new InvalidOperationException("Thiết bị đang bảo trì, không thể tạo mới lịch hoặc công việc bảo trì.");
+        if (requireActive && facility is not null && !string.Equals(facility.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Cơ sở vật chất không ở trạng thái có thể chuyển sang đang bảo trì.");
-        if (equipment is not null && equipment.Status is not ("ACTIVE" or "UNDER_MAINTENANCE"))
+        if (requireActive && equipment is not null && !string.Equals(equipment.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Thiết bị không ở trạng thái có thể chuyển sang đang bảo trì.");
     }
+    private static bool IsUnderMaintenance(MaintenanceAssetReference asset) =>
+        string.Equals(asset.Status, "UNDER_MAINTENANCE", StringComparison.OrdinalIgnoreCase);
+
+    private async Task RestoreAssetsWhenNoOverlappingMaintenanceAsync(
+        Guid? completedScheduleId,
+        Guid? completedTaskId,
+        Guid? facilityId,
+        Guid? equipmentId,
+        Guid actor,
+        CancellationToken ct)
+    {
+        if (facilityId is null && equipmentId is null)
+            return;
+
+        var now = timeProvider.GetUtcNow();
+        if (!await HasOverlappingActiveMaintenanceAsync(completedScheduleId, completedTaskId, facilityId, equipmentId, ct))
+            await assets.MarkActiveAsync(facilityId, equipmentId, actor, ct);
+    }
+
+    private async Task<bool> HasOverlappingActiveMaintenanceAsync(Guid? completedScheduleId, Guid? completedTaskId, Guid? facilityId, Guid? equipmentId, CancellationToken ct)
+    {
+        var now = timeProvider.GetUtcNow();
+        var activeSchedules = db.MaintenanceSchedules.AsNoTracking()
+            .Where(schedule => (!completedScheduleId.HasValue || schedule.Id != completedScheduleId)
+                && schedule.Status == MaintenanceScheduleStatus.ACTIVE
+                && schedule.PlannedStartAt <= now);
+
+        var hasOverlappingActiveSchedule = equipmentId is { } selectedEquipmentId
+            ? await activeSchedules.AnyAsync(schedule =>
+                schedule.EquipmentId == selectedEquipmentId
+                || (facilityId.HasValue && schedule.EquipmentId == null && schedule.FacilityId == facilityId), ct)
+            : await activeSchedules.AnyAsync(schedule => schedule.FacilityId == facilityId, ct);
+
+        var activeEmergencyTasks = db.MaintenanceTasks.AsNoTracking()
+            .Where(task => (!completedTaskId.HasValue || task.Id != completedTaskId)
+                && task.IsEmergency
+                && task.Status != MaintenanceTaskStatus.CLOSED
+                && task.Status != MaintenanceTaskStatus.CANCELLED);
+        var hasOverlappingEmergencyTask = equipmentId is { } emergencyEquipmentId
+            ? await activeEmergencyTasks.AnyAsync(task => task.EquipmentId == emergencyEquipmentId || (facilityId.HasValue && task.EquipmentId == null && task.FacilityId == facilityId), ct)
+            : await activeEmergencyTasks.AnyAsync(task => task.FacilityId == facilityId, ct);
+
+        return hasOverlappingActiveSchedule || hasOverlappingEmergencyTask;
+    }
+
     private static DateTimeOffset Utc(DateTimeOffset value) => value.ToUniversalTime();
     private static DateTimeOffset? Utc(DateTimeOffset? value) => value?.ToUniversalTime();
 

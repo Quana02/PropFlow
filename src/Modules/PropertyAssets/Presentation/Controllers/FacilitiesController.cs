@@ -136,6 +136,10 @@ public class FacilitiesController : ControllerBase
         {
             return NotFound(Problem(StatusCodes.Status404NotFound, "facility_not_found", "Không tìm thấy dữ liệu", ex.Message));
         }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(Problem(StatusCodes.Status409Conflict, "invalid_facility_status_transition", "Không thể đổi trạng thái", ex.Message));
+        }
     }
 
     private Guid CurrentUserId() => Guid.Parse(User.FindFirst("sub")!.Value);

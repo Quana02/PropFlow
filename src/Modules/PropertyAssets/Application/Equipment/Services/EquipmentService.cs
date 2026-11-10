@@ -145,6 +145,8 @@ public class EquipmentService : IEquipmentService
     public async Task<EquipmentDto> SetEquipmentStatusAsync(Guid id, SetEquipmentStatusCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+        if (command.Status == EquipmentStatus.UNDER_MAINTENANCE)
+            throw new InvalidOperationException("Trạng thái đang bảo trì chỉ được cập nhật từ quy trình bảo trì.");
 
         var equipment = await _store.EquipmentAsync(id, true, cancellationToken);
 
@@ -160,9 +162,6 @@ public class EquipmentService : IEquipmentService
                 break;
             case EquipmentStatus.INACTIVE:
                 equipment.Deactivate(command.UpdatedBy, DateTimeOffset.UtcNow);
-                break;
-            case EquipmentStatus.UNDER_MAINTENANCE:
-                equipment.MarkUnderMaintenance(command.UpdatedBy, DateTimeOffset.UtcNow);
                 break;
             case EquipmentStatus.OUT_OF_SERVICE:
                 equipment.MarkOutOfService(command.UpdatedBy, DateTimeOffset.UtcNow);
