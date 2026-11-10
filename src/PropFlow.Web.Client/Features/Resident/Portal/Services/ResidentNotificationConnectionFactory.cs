@@ -4,7 +4,8 @@ using PropFlow.Web.Client.Services.Authentication;
 
 namespace PropFlow.Web.Client.Features.Resident.Portal.Services;
 
-public sealed class ResidentNotificationConnectionFactory(IConfiguration configuration, NavigationManager navigation, AuthSession session)
+public sealed class ResidentNotificationConnectionFactory(IConfiguration configuration, NavigationManager navigation, AuthSession session,
+    ILogger<ResidentNotificationConnectionFactory>? logger = null)
 {
     public HubConnection Create()
     {
@@ -17,9 +18,31 @@ public sealed class ResidentNotificationConnectionFactory(IConfiguration configu
             .Build();
     }
 
+    public async Task StartAsync(HubConnection connection, CancellationToken ct)
+    {
+        var attempt = 0;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                await connection.StartAsync(ct);
+                return;
+            }
+            catch (Exception exception) when (!ct.IsCancellationRequested)
+            {
+                if (attempt == 0)
+                    logger?.LogWarning("Notification realtime connection failed ({ErrorType}); retrying.", exception.GetType().Name);
+            }
+
+            await Task.Delay(RetryDelay(attempt++), ct);
+        }
+    }
+
+    private static TimeSpan RetryDelay(long attempt) => TimeSpan.FromSeconds(2 + Math.Min(14, attempt) * 2);
+
     private sealed class ReconnectPolicy : IRetryPolicy
     {
-        public TimeSpan? NextRetryDelay(RetryContext retryContext) =>
-            TimeSpan.FromSeconds(Math.Min(30, 2 + retryContext.PreviousRetryCount * 2));
+        public TimeSpan? NextRetryDelay(RetryContext retryContext) => RetryDelay(retryContext.PreviousRetryCount);
     }
 }

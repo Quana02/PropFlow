@@ -34,7 +34,7 @@ public sealed class FinanceNoticePublisher(CommunicationDbContext db, IFinanceNo
         if (notification is not null && realtime is not null)
         {
             try { await realtime.CreatedAsync(notification.RecipientUserId, new(notification.Id, notification.Title,
-                notification.Message, notification.ActionPath, notification.IsRead, notification.CreatedAt, notification.SourceType), ct); }
+                notification.Message, notification.ActionPath, notification.IsRead, notification.CreatedAt, notification.SourceType), CancellationToken.None); }
             catch (Exception ex) { logger?.LogWarning("Realtime notification deferred for {NoticeId} ({Type}).", notification.Id, ex.GetType().Name); }
         }
     }
