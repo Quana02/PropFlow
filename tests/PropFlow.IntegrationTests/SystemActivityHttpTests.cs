@@ -167,6 +167,34 @@ public sealed class SystemActivityHttpTests(AuthDatabaseFixture database) : ICla
         Assert.DoesNotContain(logs, x => x.Action == "created");
         Assert.Contains(logs, x => x.NewValues!.Contains("FAILED"));
     }
+
+    [Fact]
+    public async Task Internal_profile_update_rolls_back_when_its_audit_write_fails()
+    {
+        await using var factory = database.Factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.AddScoped<SystemAuditWriter>();
+            services.RemoveAll<ISystemAuditWriter>();
+            services.AddScoped<ISystemAuditWriter>(sp => new FailTransactionalAudit(sp.GetRequiredService<SystemAuditWriter>()));
+        }));
+        var admin = await Client("ADMIN", factory);
+        using var client = admin.Client;
+        var target = await Client("MANAGER", factory);
+        using var targetClient = target.Client;
+        var path = $"api/v1/administration/internal-accounts/{target.Id}";
+        var before = await client.GetFromJsonAsync<InternalAccountProfileResponse>(path);
+
+        using var failed = await client.PutAsJsonAsync(path + "/profile", new UpdateInternalAccountProfileRequest("Rollback name", "0901234580"));
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+        Assert.Equal(before, await client.GetFromJsonAsync<InternalAccountProfileResponse>(path));
+
+        var result = await client.GetFromJsonAsync<PagedAdministrationActivitiesResponse>(Endpoint + "?action=internal_account_profile_updated");
+        var audit = Assert.Single(result!.Items, x => x.TargetAccountId == target.Id);
+        Assert.Equal("FAILED", audit.Outcome);
+        Assert.Equal(admin.Id, audit.ActorUserId);
+        Assert.Equal(500, audit.HttpStatus);
+    }
+
     private sealed class FailTransactionalAudit(ISystemAuditWriter inner) : ISystemAuditWriter
     {
         public Task AppendAsync(SystemAuditEvent entry, CancellationToken ct) => inner.AppendAsync(entry, ct);

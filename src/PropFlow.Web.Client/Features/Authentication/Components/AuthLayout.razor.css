@@ -155,5 +155,13 @@ html.dark .auth-content ::deep .auth-register-grid .pf-select__trigger{backgroun
 html.dark .auth-content ::deep .auth-register-grid .pf-select__value.is-placeholder{color:#94a3b8}
 html.dark .auth-content ::deep .auth-register-grid .pf-select.modified.invalid .pf-select__trigger{background:#0f172acc!important;border-color:#ef4444!important;color:#fff!important;box-shadow:none!important}
 
-/* Security notices remain readable in dark mode; successful logout creates none. */
+/* On Login the visible form and welcome panel set the card's height. */
+.login-mode .auth-card{height:auto;overflow:visible}
+@media(min-width:701px){
+    .login-mode .auth-panel>.auth-login-welcome,.login-mode .auth-panel>.auth-login-form{position:relative;inset:auto;height:100%;box-sizing:border-box}
+    .login-mode .auth-panel>.auth-login-welcome{padding:clamp(1.5rem,4vw,3rem);justify-content:center}
+    .login-mode .auth-panel-right>.auth-login-form{padding:clamp(1.5rem,4vw,3rem)}
+    .login-mode .auth-panel>.auth-register-form,.login-mode .auth-panel>.auth-register-welcome,.login-mode .auth-panel>.auth-forgot-form{visibility:hidden}
+}
+
 html.dark .auth-content ::deep .feedback{background:#0c2638;border-color:#155e75;color:#e0f2fe}

@@ -46,7 +46,6 @@
             }
             <div class="connection-actions"><button type="button" class="secondary-action" disabled="@(busy || syncing || checking || connection?.ApiTokenConfigured != true)" @onclick="CheckConnectionAsync">@(checking ? "Đang kiểm tra…" : "Kiểm tra kết nối")</button><button type="button" class="primary-action" disabled="@(busy || syncing || checking || connection?.ApiTokenConfigured != true)" @onclick="SyncAccountsAsync"><span class="material-symbols-outlined">sync</span>@(syncing ? "Đang đồng bộ…" : "Đồng bộ tài khoản")</button></div>
             @if (lastSynced is { } time) { <p class="sync-time" role="status">Đồng bộ gần nhất: @time.ToLocalTime().ToString("HH:mm · dd/MM/yyyy") · @accounts.Length tài khoản</p> }
-            @if (!string.IsNullOrWhiteSpace(syncError)) { <p class="form-error" role="alert">@syncError</p> }
         </article>
         <div class="settings-grid">
             <article class="current-card">
@@ -150,7 +149,6 @@
     private int pendingVersion;
     private DateTimeOffset? lastSynced;
     private bool checking, syncing;
-    private string? syncError;
     private PaymentDestinationPreview? preview;
     private PrivilegedActionChallengeResult? challenge;
     private string pendingAction = "UPSERT";
@@ -191,8 +189,16 @@
 
     private async Task CheckConnectionAsync()
     {
-        checking = true; syncError = null;
-        try { var result = await Api.CheckSePayConnectionAsync(); if (result.IsSuccess) connection = result.Data; else syncError = Friendly(result, "Không thể kiểm tra kết nối."); }
+        if (checking || syncing) return;
+        var feedback = Toasts.BeginOperation(toastLifetime);
+        checking = true;
+        try
+        {
+            var result = await Api.CheckSePayConnectionAsync();
+            if (!feedback.IsCurrent) return;
+            if (result.IsSuccess) connection = result.Data;
+            else feedback.Publish(() => Toasts.Error(Friendly(result, "Không thể kiểm tra kết nối.")));
+        }
         finally { checking = false; }
     }
 
@@ -204,12 +210,20 @@
 
     private async Task SyncAccountsAsync()
     {
-        syncing = true; syncError = null; selectedId = null; preview = null; accounts = []; lastSynced = null;
+        if (checking || syncing) return;
+        var feedback = Toasts.BeginOperation(toastLifetime);
+        syncing = true; selectedId = null; preview = null; accounts = []; lastSynced = null;
         try
         {
             var result = await Api.GetSePayAccountsAsync();
-            if (result.IsSuccess) { accounts = result.Data ?? []; lastSynced = DateTimeOffset.Now; }
-            else syncError = Friendly(result, "Không thể đồng bộ tài khoản SePay.");
+            if (!feedback.IsCurrent) return;
+            if (result.IsSuccess)
+            {
+                accounts = result.Data ?? [];
+                lastSynced = DateTimeOffset.Now;
+                feedback.Publish(() => Toasts.Success("Đã đồng bộ tài khoản SePay."));
+            }
+            else feedback.Publish(() => Toasts.Error(Friendly(result, "Không thể đồng bộ tài khoản SePay.")));
         }
         finally { syncing = false; }
     }
