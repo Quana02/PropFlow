@@ -1,0 +1,7 @@
+<div class="finance-table-actions" role="group" aria-label="Thao tác" @onclick:stopPropagation="true">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/my-maintenance"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles="STAFF")]
@@ -181,7 +182,10 @@
             </table>
         </div>
         }
-        else { <div class="smt-table-wrap"><table class="smt-table"><thead><tr><th>CÔNG VIỆC</th><th>TÀI SẢN / VỊ TRÍ</th><th>NGUỒN</th><th>ƯU TIÊN</th><th>TRẠNG THÁI</th><th>THỜI GIAN THỰC HIỆN</th><th>KẾT QUẢ</th><th>THAO TÁC</th></tr></thead><tbody>@if (HistoryLoading) { <tr><td colspan="8" class="smt-empty-cell">Đang tải...</td></tr> } else if (!History.Page.Items.Any()) { <tr><td colspan="8" class="smt-empty-cell">Chưa có lịch sử bảo trì.</td></tr> } else { @foreach (var item in History.Page.Items) { <tr><td><div class="smt-task-code">@item.TaskNumber</div><div class="smt-task-title">@item.Title</div></td><td>@Asset(item.FacilityId, item.EquipmentId)</td><td>@(item.SourceScheduleCode is null ? "Tạo thủ công" : $"Theo lịch · {item.SourceScheduleCode}")</td><td>@PriorityLabel(item.PriorityCode)</td><td><span class="smt-badge @StatusClass(item.Status)">@Status(item.Status)</span></td><td>@HistoryDates(item)</td><td>@(item.ResultSummary ?? "—")</td><td><button class="smt-detail-btn" @onclick="() => OpenHistoryDetail(item.TaskId)">Xem chi tiết</button></td></tr> } }</tbody></table></div>@if (History.Page.TotalCount > History.Page.PageSize) { <div class="smt-history-pagination"><span>Hiển thị @HistoryStart–@HistoryEnd / @History.Page.TotalCount bản ghi · Trang @History.Page.PageIndex / @HistoryTotalPages</span><div><button disabled="@(History.Page.PageIndex <= 1)" @onclick="() => ChangeHistoryPage(History.Page.PageIndex - 1)">Trước</button><button disabled="@(History.Page.PageIndex >= HistoryTotalPages)" @onclick="() => ChangeHistoryPage(History.Page.PageIndex + 1)">Sau</button></div></div>} }
+        else { <div class="smt-table-wrap"><table class="smt-table"><thead><tr><th>CÔNG VIỆC</th><th>TÀI SẢN / VỊ TRÍ</th><th>NGUỒN</th><th>ƯU TIÊN</th><th>TRẠNG THÁI</th><th>THỜI GIAN THỰC HIỆN</th><th>KẾT QUẢ</th><th>THAO TÁC</th></tr></thead><tbody>@if (HistoryLoading) { <tr><td colspan="8" class="smt-empty-cell">Đang tải...</td></tr> } else if (!History.Page.Items.Any()) { <tr><td colspan="8" class="smt-empty-cell">Chưa có lịch sử bảo trì.</td></tr> } else { @foreach (var item in History.Page.Items) { <tr><td><div class="smt-task-code">@item.TaskNumber</div><div class="smt-task-title">@item.Title</div></td><td>@Asset(item.FacilityId, item.EquipmentId)</td><td>@(item.SourceScheduleCode is null ? "Tạo thủ công" : $"Theo lịch · {item.SourceScheduleCode}")</td><td>@PriorityLabel(item.PriorityCode)</td><td><span class="smt-badge @StatusClass(item.Status)">@Status(item.Status)</span></td><td>@HistoryDates(item)</td><td>@(item.ResultSummary ?? "—")</td><td><button class="smt-detail-btn" @onclick="() => OpenHistoryDetail(item.TaskId)">Xem chi tiết</button></td></tr> } }</tbody></table></div>@if (History.Page.TotalCount > History.Page.PageSize) { <TablePagination Page="History.Page.PageIndex" TotalPages="HistoryTotalPages" Busy="HistoryLoading" Label="Phân trang lịch sử bảo trì"
+            Previous="@(() => ChangeHistoryPage(History.Page.PageIndex - 1))" Next="@(() => ChangeHistoryPage(History.Page.PageIndex + 1))">
+            <span>Hiển thị @HistoryStart–@HistoryEnd / @History.Page.TotalCount bản ghi</span>
+        </TablePagination>} }
     </div>
 </main>
 
@@ -193,7 +197,7 @@
 @* ── DETAIL MODAL ── *@
 @if (Detail is not null)
 {
-    <div class="smt-backdrop" @onclick="CloseAsync" role="presentation">
+    <div class="smt-backdrop" @onclick="CancelDetailFeedbackCloseAsync" role="presentation">
         <div class="smt-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-label="Chi tiết công việc bảo trì">
 
             <div class="smt-modal-header">
@@ -204,7 +208,7 @@
                         <span class="smt-badge @StatusClass(Detail.Status)">@Status(Detail.Status)</span>
                     </div>
                 </div>
-                <button type="button" class="smt-close-btn" @onclick="CloseAsync" aria-label="Đóng">
+                <button type="button" class="smt-close-btn" @onclick="CancelDetailFeedbackCloseAsync" aria-label="Đóng">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -397,11 +401,11 @@
 @* ── PROGRESS MODAL ── *@
 @if (ProgressModal)
 {
-    <div class="smt-backdrop" @onclick="() => ProgressModal = false" role="presentation">
+    <div class="smt-backdrop" @onclick="() => { progressFeedback.Invalidate(); ProgressModal = false; }" role="presentation">
         <div class="smt-progress-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true">
             <div class="smt-progress-header">
                 <h2>Cập nhật tiến độ</h2>
-                <button type="button" class="smt-close-btn" @onclick="() => ProgressModal = false" aria-label="Đóng">
+                <button type="button" class="smt-close-btn" @onclick="() => { progressFeedback.Invalidate(); ProgressModal = false; }" aria-label="Đóng">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
@@ -409,7 +413,7 @@
             <textarea class="smt-progress-textarea" @bind="Content" placeholder="Mô tả công việc đã thực hiện hoặc tình trạng hiện tại..."></textarea>
             @if (Validation is not null) { <small class="smt-validation-msg">@Validation</small> }
             <div class="smt-progress-footer">
-                <button type="button" class="smt-action-btn smt-btn-ghost" @onclick="() => ProgressModal = false">Hủy</button>
+                <button type="button" class="smt-action-btn smt-btn-ghost" @onclick="() => { progressFeedback.Invalidate(); ProgressModal = false; }">Hủy</button>
                 <button type="button" class="smt-action-btn smt-btn-primary" disabled="@Submitting" @onclick="SaveProgress">
                     @(Submitting ? "Đang lưu..." : "Lưu cập nhật")
                 </button>
@@ -420,11 +424,11 @@
 
 @if (ResultModal)
 {
-    <div class="smt-backdrop" @onclick="CloseResultModal" role="presentation">
+    <div class="smt-backdrop" @onclick="CancelResultFeedbackCloseResultModal" role="presentation">
         <div class="smt-progress-modal smt-result-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-label="Kết quả thực hiện">
             <div class="smt-progress-header">
                 <div><h2>Hoàn thành công việc</h2><p>Hoàn thành công việc và gửi kết quả để Manager nghiệm thu.</p></div>
-                <button type="button" class="smt-close-btn" @onclick="CloseResultModal" aria-label="Đóng">×</button>
+                <button type="button" class="smt-close-btn" @onclick="CancelResultFeedbackCloseResultModal" aria-label="Đóng">×</button>
             </div>
             <label class="smt-progress-label">Kết quả thực hiện <b>*</b></label>
             <textarea class="smt-progress-textarea" @bind="ResultEditor.Summary" placeholder="Mô tả công việc đã thực hiện, kết quả đạt được và vấn đề phát sinh (nếu có)..."></textarea>
@@ -452,7 +456,7 @@
             </section>
             @if (ResultValidation is not null) { <small class="smt-validation-msg">@ResultValidation</small> }
             <div class="smt-progress-footer">
-                <button type="button" class="smt-action-btn smt-btn-ghost" disabled="@Submitting" @onclick="CloseResultModal">Hủy</button>
+                <button type="button" class="smt-action-btn smt-btn-ghost" disabled="@Submitting" @onclick="CancelResultFeedbackCloseResultModal">Hủy</button>
                 <button type="button" class="smt-action-btn smt-btn-primary" disabled="@Submitting" @onclick="SubmitResult">@(Submitting ? "Đang gửi..." : "Hoàn thành công việc")</button>
             </div>
         </div>
@@ -460,6 +464,16 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime progressFeedback = new();
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime resultFeedback = new();
+    private void CancelResultFeedbackCloseResultModal() { CloseResultModal(); if (!ResultModal) resultFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime detailFeedback = new();
+    private async Task CancelDetailFeedbackCloseAsync() { await CloseAsync(); if (Detail is null) detailFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     Page<MaintenanceTaskModel> Tasks = new([], 0, 1, 50);
     MyMaintenanceTaskFilterModel Filter = new() { PageSize = 50 };
     List<MaintenanceTaskActivityModel> Activities = [];
@@ -521,12 +535,26 @@
         [new(string.Empty, allLabel), .. Assets.Where(asset => asset.AssetType == assetType)
             .Select(asset => new PropFlowSelectOption(asset.Id.ToString(), $"{asset.Code} · {asset.Name}"))];
 
+    [SupplyParameterFromQuery(Name = "taskId")]
+    public Guid? NotificationTaskId { get; set; }
+    private Guid? openedNotificationTask;
+
     protected override async Task OnInitializedAsync()
     {
         var assets = await Api.AssetsAsync();
         Assets = assets.Data ?? [];
         await Refresh();
         _ = ConnectMaintenanceHubAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (NotificationTaskId is { } id && openedNotificationTask != id)
+        {
+            openedNotificationTask = id;
+            await Open(id);
+        }
+        else if (NotificationTaskId is null) openedNotificationTask = null;
     }
 
     private async Task ConnectMaintenanceHubAsync()
@@ -640,13 +668,15 @@
 
     async Task ConfirmStart()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, detailFeedback);
+
         if (Detail is null) return;
         Submitting = true;
         var r = await Api.StartMyTaskAsync(Detail.Id);
         Submitting = false;
-        if (r.Data is null) { Error = r.Message ?? "Không thể thực hiện thao tác ở trạng thái hiện tại."; await Refresh(); return; }
+        if (r.Data is null) { operationFeedback.Publish(() => Toasts.Error(r.Message ?? "Không thể thực hiện thao tác ở trạng thái hiện tại.")); await Refresh(); return; }
         Detail = r.Data;
-        Error = "Đã bắt đầu công việc.";
+        operationFeedback.Publish(() => Toasts.Success("Đã bắt đầu công việc."));
         await Refresh();
         await LoadActivities();
     }
@@ -659,15 +689,17 @@
 
     async Task ConfirmSaveProgress()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, detailFeedback, progressFeedback);
+
         Submitting = true;
         var r = await Api.UpdateMyTaskProgressAsync(Detail!.Id, new() { Content = Content.Trim() });
         Submitting = false;
-        if (r.Data is null) { Validation = r.Message ?? "Không thể cập nhật tiến độ công việc."; return; }
+        if (r.Data is null) { if (r.ValidationErrors?.Count > 0) Validation = r.Message ?? "Không thể cập nhật tiến độ công việc."; else operationFeedback.Publish(() => Toasts.Error(r.Message ?? "Không thể cập nhật tiến độ công việc.")); return; }
         Detail = r.Data;
         Content = "";
         Validation = null;
         ProgressModal = false;
-        Error = "Đã cập nhật tiến độ.";
+        operationFeedback.Publish(() => Toasts.Success("Đã cập nhật tiến độ."));
         await Refresh();
         await LoadActivities();
     }
@@ -705,19 +737,21 @@
 
     async Task ConfirmSubmitResult()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, detailFeedback, resultFeedback);
+
         if (Detail is null) return;
         Submitting = true;
         var result = await Api.SubmitMyTaskResultAsync(Detail.Id, ResultEditor, EvidenceImages.Select(item => item.File).ToArray());
         Submitting = false;
         if (result.Data is null)
         {
-            ResultValidation = result.Message ?? "Không thể hoàn thành công việc ở trạng thái hiện tại.";
+            if (result.ValidationErrors?.Count > 0) ResultValidation = result.Message ?? "Không thể hoàn thành công việc ở trạng thái hiện tại."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể hoàn thành công việc ở trạng thái hiện tại."));
             return;
         }
 
         Detail = result.Data;
         CloseResultModal();
-        Error = "Đã gửi kết quả để Manager nghiệm thu.";
+        operationFeedback.Publish(() => Toasts.Success("Đã gửi kết quả để Manager nghiệm thu."));
         await Refresh();
         await LoadActivities();
     }
@@ -858,7 +892,7 @@
     static string HistoryEvent(MaintenanceHistoryTimelineEventModel item) => item.ActivityType switch { MaintenanceActivityType.PROGRESS_UPDATED => "Cập nhật tiến độ", MaintenanceActivityType.RESULT_SUBMITTED => "Hoàn thành công việc", MaintenanceActivityType.MANAGER_REVIEWED => "Manager nghiệm thu", MaintenanceActivityType.CLOSED => "Đóng công việc", MaintenanceActivityType.ASSIGNED => "Đã phân công", _ => "Cập nhật công việc" };
 
     public async ValueTask DisposeAsync()
-    {
+    { toastLifetime.Dispose();
         _disposed = true;
         if (_hubConnection is not null)
         {

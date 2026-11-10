@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/equipment"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
@@ -25,7 +26,6 @@
     <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
 }
 
-
 <div class="fe04-page font-sans text-slate-800 antialiased">
 
     <!-- ===== PAGE HEADER ===== -->
@@ -37,7 +37,7 @@
             <div>
                 <div class="flex flex-wrap items-center gap-2.5">
                     <h1 class="text-2xl font-black text-slate-900 tracking-tight">Quản Lý Hồ Sơ và Trạng Thái Thiết Bị</h1>
-                    
+
                 </div>
                 <p class="text-xs text-slate-500 mt-1 max-w-2xl">
                     Theo dõi danh mục máy móc kỹ thuật, phân cấp vị trí theo Cơ sở vật chất cụ thể và cập nhật trạng thái vận hành tức thì.
@@ -84,9 +84,9 @@
                 <span class="text-3xl font-bold font-display text-emerald-600">
                     @(EquipmentSummary?.Active ?? 0)
                 </span>
-                
+
             </div>
-            
+
         </div>
 
         <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-sm transition-all group">
@@ -100,9 +100,9 @@
                 <span class="text-3xl font-bold font-display text-amber-600">
                     @(EquipmentSummary?.UnderMaintenance ?? 0)
                 </span>
-                
+
             </div>
-            
+
         </div>
 
         <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-sm transition-all group">
@@ -116,23 +116,14 @@
                 <span class="text-3xl font-bold font-display text-rose-600">
                     @((EquipmentSummary?.Inactive ?? 0) + (EquipmentSummary?.OutOfService ?? 0))
                 </span>
-               
+
             </div>
-            
+
         </div>
     </div>
 
     <!-- ===== ALERT NOTIFICATIONS ===== -->
-    @if (!string.IsNullOrEmpty(SuccessMessage))
-    {
-        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium shadow-sm">
-            <span class="material-symbols-outlined text-emerald-500 text-[20px]">check_circle</span>
-            <span>@SuccessMessage</span>
-            <button class="ml-auto text-emerald-500 hover:text-emerald-700 transition-stitch" @onclick="() => SuccessMessage = null">
-                <span class="material-symbols-outlined text-[18px]">close</span>
-            </button>
-        </div>
-    }
+
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
         <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium shadow-sm">
@@ -171,7 +162,6 @@
                 <PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="EquipmentTypeFilterString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" />
             </div>
 
-            
         </div>
 
         <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500">
@@ -343,7 +333,7 @@
                                                             <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                                                             <div class="text-left">
                                                                 <div class="font-bold">Đang bảo trì</div>
-                                                                
+
                                                             </div>
                                                         </button>
                                                         <button type="button"
@@ -377,46 +367,11 @@
                 </table>
             </div>
 
-            <!-- PAGINATION -->
-            <div class="p-4 sm:px-6 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-600">
-                <div>
-                    Bản ghi <strong class="text-slate-800">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> -
-                    <strong class="text-slate-800">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong>
-                    trong tổng số <strong class="text-slate-800">@PagedResult.TotalCount</strong>
-                </div>
-                <div class="flex items-center gap-1.5 self-center sm:self-auto">
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(1)">
-                        <span class="material-symbols-outlined text-[18px]">first_page</span>
-                    </button>
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
-                        <span class="material-symbols-outlined text-[18px]">chevron_left</span>
-                    </button>
-                    @for (int i = 1; i <= PagedResult.TotalPages; i++)
-                    {
-                        var pageNum = i;
-                        @if (pageNum == PagedResult.PageIndex)
-                        {
-                            <button class="w-8 h-8 rounded-lg bg-sky-600 text-white font-bold text-xs shadow-sm flex items-center justify-center">@pageNum</button>
-                        }
-                        else
-                        {
-                            <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-xs transition-stitch flex items-center justify-center"
-                                    @onclick="() => ChangePage(pageNum)">@pageNum</button>
-                        }
+            <TablePagination Page="PagedResult.PageIndex" TotalPages="PagedResult.TotalPages" Busy="IsLoading" Label="Phân trang thiết bị"
+                Previous="@(() => ChangePage(PagedResult.PageIndex - 1))" Next="@(() => ChangePage(PagedResult.PageIndex + 1))">
+                <span>Bản ghi @(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)–@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount)) / @PagedResult.TotalCount</span>
+            </TablePagination>
                     }
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
-                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
-                    </button>
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.TotalPages)">
-                        <span class="material-symbols-outlined text-[18px]">last_page</span>
-                    </button>
-                </div>
-            </div>
-        }
     </div>
 
     <!-- ===== STATUS GUIDELINES SECTION ===== -->
@@ -596,7 +551,7 @@
 
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                 <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
-                
+
             </div>
         </div>
     </div>
@@ -622,7 +577,7 @@
                         <p class="text-xs text-slate-500">Khai báo hồ sơ kỹ thuật, phân cấp nơi đặt và tình trạng thiết bị</p>
                     </div>
                 </div>
-                
+
             </div>
 
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
@@ -750,7 +705,7 @@
             </div>
 
             <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 p-6">
-                <button @onclick="CloseDialog"
+                <button @onclick="CancelEditFeedbackCloseDialog"
                         class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 text-xs sm:text-sm font-medium transition-all">
                     Hủy Bỏ
                 </button>
@@ -789,6 +744,11 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime editFeedback = new();
+    private void CancelEditFeedbackCloseDialog() { CloseDialog(); if (!IsFormOpen) editFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
         new("", "Tất cả trạng thái"),
         new("ACTIVE", "● Đang hoạt động"),
@@ -818,7 +778,7 @@
     private bool IsDetailOpen { get; set; }
     private bool IsSaving { get; set; }
     private bool IsSaveConfirmationOpen { get; set; }
-    private string? SuccessMessage { get; set; }
+
     private string? ErrorMessage { get; set; }
     private EquipmentModel? SelectedEquipmentToEdit { get; set; }
     private CreateEquipmentModel FormModel { get; set; } = new();
@@ -932,7 +892,7 @@
     });
 
     public async ValueTask DisposeAsync()
-    {
+    { toastLifetime.Dispose();
         StatusRefreshCancellation.Cancel();
         if (AssetStatusHub is not null) await AssetStatusHub.DisposeAsync();
         StatusRefreshCancellation.Dispose();
@@ -1022,7 +982,7 @@
     {
         if (!IsManager) return;
         ErrorMessage = null;
-        SuccessMessage = null;
+
         SelectedEquipmentToEdit = null;
         FormModel = new CreateEquipmentModel();
         IsFormOpen = true;
@@ -1046,7 +1006,7 @@
     {
         if (!IsManager) return;
         ErrorMessage = null;
-        SuccessMessage = null;
+
         SelectedEquipmentToEdit = item;
         FormModel = new CreateEquipmentModel
         {
@@ -1100,6 +1060,8 @@
 
     private async Task ConfirmSaveEquipment()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, editFeedback);
+
         if (!IsManager || !IsSaveConfirmationOpen) return;
         IsSaving = true;
         ErrorMessage = null;
@@ -1108,8 +1070,8 @@
             if (SelectedEquipmentToEdit == null)
             {
                 var createResult = await EquipmentApiClient.CreateEquipmentAsync(FormModel);
-                if (!createResult.IsSuccess) { ErrorMessage = createResult.Message; return; }
-                SuccessMessage = $"Đã thêm mới thiết bị '{FormModel.Name}' với mã {createResult.Data?.Code} thành công!";
+                if (!createResult.IsSuccess) { if (createResult.ValidationErrors?.Count > 0) ErrorMessage = createResult.Message; else operationFeedback.Publish(() => Toasts.Error(createResult.Message)); return; }
+                operationFeedback.Publish(() => Toasts.Success($"Đã thêm mới thiết bị '{FormModel.Name}' với mã {createResult.Data?.Code} thành công!"));
             }
             else
             {
@@ -1127,8 +1089,8 @@
                     Description = FormModel.Description
                 };
                 var updateResult = await EquipmentApiClient.UpdateEquipmentAsync(SelectedEquipmentToEdit.Id, updateModel);
-                if (!updateResult.IsSuccess) { ErrorMessage = updateResult.Message; return; }
-                SuccessMessage = $"Đã cập nhật '{FormModel.Name}' thành công!";
+                if (!updateResult.IsSuccess) { if (updateResult.ValidationErrors?.Count > 0) ErrorMessage = updateResult.Message; else operationFeedback.Publish(() => Toasts.Error(updateResult.Message)); return; }
+                operationFeedback.Publish(() => Toasts.Success($"Đã cập nhật '{FormModel.Name}' thành công!"));
             }
             IsSaveConfirmationOpen = false;
             CloseDialog();
@@ -1186,6 +1148,8 @@
 
     private async Task CreateEquipmentType()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (!IsManager) return;
         if (!TryValidate(NewEquipmentType, out var validationMessage))
         {
@@ -1200,7 +1164,7 @@
             var result = await EquipmentApiClient.CreateEquipmentTypeAsync(NewEquipmentType);
             if (!result.IsSuccess || result.Data is null)
             {
-                EquipmentTypeDialogError = result.Message ?? "Không thể tạo loại thiết bị.";
+                if (result.ValidationErrors?.Count > 0) EquipmentTypeDialogError = result.Message ?? "Không thể tạo loại thiết bị."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể tạo loại thiết bị."));
                 return;
             }
 
@@ -1208,6 +1172,7 @@
             FormModel.EquipmentTypeId = result.Data.Id;
             IsEquipmentTypeDialogOpen = false;
             RestoreEquipmentTypeTriggerFocus = true;
+            operationFeedback.Publish(() => Toasts.Success("Đã tạo loại thiết bị."));
         }
         finally { IsCreatingEquipmentType = false; }
     }
@@ -1227,12 +1192,14 @@
 
     private async Task ChangeStatus(EquipmentModel item, EquipmentStatus newStatus)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (!IsManager) return;
         OpenStatusDropdownId = null;
-        ErrorMessage = null; SuccessMessage = null;
+        ErrorMessage = null;
         var result = await EquipmentApiClient.SetEquipmentStatusAsync(item.Id, newStatus);
-        if (!result.IsSuccess) { ErrorMessage = result.Message; return; }
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); return; }
         await Task.WhenAll(LoadData(), LoadSummaryAsync());
-        if (ErrorMessage == null) SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
+        if (ErrorMessage == null) operationFeedback.Publish(() => Toasts.Success($"Đã đổi trạng thái thành công '{item.Name}'."));
     }
 }

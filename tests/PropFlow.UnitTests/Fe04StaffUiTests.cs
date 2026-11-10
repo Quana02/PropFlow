@@ -164,7 +164,7 @@ public sealed class Fe04StaffUiTests
 
     private static ServiceProvider Services(string role, string permission)
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>();
         services.AddLogging();
         services.AddAuthorizationCore(options => options.AddPolicy(AssetPermissions.ViewPolicy, policy => policy.RequireAssertion(c => AssetPermissions.CanView(c.User))));
         services.AddSingleton<NavigationManager, Navigation>();

@@ -23,7 +23,7 @@ public sealed class UiFixRenderTests
     [Fact]
     public async Task Resident_paging_and_calendar_render_with_accessible_controls()
     {
-        var services = new ServiceCollection().AddLogging();
+        var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging();
         var http = new HttpClient(new Transport()) { BaseAddress = new("https://test.invalid") };
         services.AddSingleton(new ApiClient(http, NullLogger<ApiClient>.Instance));
         services.AddSingleton(new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance));
@@ -36,8 +36,8 @@ public sealed class UiFixRenderTests
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var residents = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<ResidentManagement>());
         var residentHtml = await renderer.Dispatcher.InvokeAsync(residents.ToHtmlString);
-        Assert.Contains("resident-pagination", residentHtml);
-        Assert.Contains("Trang 1 / 3", residentHtml);
+        Assert.Contains("table-pagination", residentHtml);
+        Assert.Matches("aria-current=\"page\" aria-label=\"Trang 1 trên 3\"[^>]*>1 / 3</span>", WebUtility.HtmlDecode(residentHtml));
         var date = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<PropFlowDatePicker>(ParameterView.FromDictionary(
             new Dictionary<string, object?> { ["Value"] = new DateOnly(2026,10,16), ["AriaLabel"] = "Ngày bắt đầu bảo trì" })));
         var dateHtml = await renderer.Dispatcher.InvokeAsync(date.ToHtmlString);
@@ -49,7 +49,8 @@ public sealed class UiFixRenderTests
             var root = Path.GetFullPath(Path.Combine(output, "../.."));
             var css = await File.ReadAllTextAsync(Path.Combine(root,"src/PropFlow.Web.Client/Shared/Forms/PropFlowDatePicker.razor.css"));
             css += await File.ReadAllTextAsync(Path.Combine(root,"src/PropFlow.Web.Client/Features/Resident/Management/Pages/ResidentManagement.razor.css"));
-            var pager = Regex.Match(residentHtml,"<nav class=\"resident-pagination\"[\\s\\S]*?</nav>").Value;
+            css += await File.ReadAllTextAsync(Path.Combine(root,"src/PropFlow.Web.Client/Shared/Tables/TablePagination.razor.css"));
+            var pager = Regex.Match(residentHtml,"<footer class=\"table-footer\"[\\s\\S]*?</footer>").Value;
             await File.WriteAllTextAsync(Path.Combine(output,"ui-preview.html"),
                 "<!doctype html><html lang='vi'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
                 "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined'><style>" + css + "body{margin:0;padding:24px;font-family:Segoe UI,sans-serif;background:#f0f5fb}h1{font-size:20px}main{max-width:800px;margin:auto}.preview-card{padding:24px;background:white;border-radius:16px;margin:20px 0}.date-field{width:154px}.material-symbols-outlined{font-family:'Material Symbols Outlined';font-weight:normal;font-style:normal;line-height:1;letter-spacing:normal;text-transform:none;white-space:nowrap;word-wrap:normal;font-feature-settings:'liga'}.preview-card:first-of-type{min-height:520px}.pf-date__calendar button{font-family:inherit}</style>" +

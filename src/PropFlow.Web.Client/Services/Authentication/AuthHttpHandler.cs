@@ -11,6 +11,7 @@ public sealed class AuthHttpHandler(AuthSession session, NavigationManager navig
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
+        var version = session.Version;
         var token = session.AccessToken;
         request.Headers.Authorization = token == null ? null : new AuthenticationHeaderValue("Bearer", token);
         // Buffered JSON feature calls are replayable; large or streaming bodies are deliberately not replayed.
@@ -31,8 +32,10 @@ public sealed class AuthHttpHandler(AuthSession session, NavigationManager navig
         {
             var response = await base.SendAsync(request, ct);
             if (response.StatusCode != HttpStatusCode.Unauthorized) return response;
-            if (replay == null) return response;
-            if (await session.RefreshAsync(token))
+            if (replay == null || session.Version != version || session.Revocation != SessionRevocationState.None) return response;
+            var refreshed = await session.RefreshAsync(token);
+            if (session.Version != version) return response;
+            if (refreshed)
             {
                 replay.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
                 if (replay.Headers.Contains("X-CSRF-TOKEN"))
@@ -43,12 +46,13 @@ public sealed class AuthHttpHandler(AuthSession session, NavigationManager navig
                     using var csrfResponse = await base.SendAsync(csrfRequest, ct);
                     if (!csrfResponse.IsSuccessStatusCode) return response;
                     var protection = await csrfResponse.Content.ReadFromJsonAsync<CsrfResponse>(cancellationToken: ct);
+                    if (session.Version != version) return response;
                     replay.Headers.Remove("X-CSRF-TOKEN");
                     replay.Headers.Add("X-CSRF-TOKEN", protection!.Token);
                 }
                 response.Dispose();
                 response = await base.SendAsync(replay, ct);
-                if (response.StatusCode != HttpStatusCode.Unauthorized) return response;
+                if (response.StatusCode != HttpStatusCode.Unauthorized || session.Version != version) return response;
                 session.Clear("Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.");
             }
             navigation.NavigateTo("/login");

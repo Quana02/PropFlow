@@ -56,7 +56,7 @@ public sealed class ResidentPaymentCardTests
 
     private static async Task<string> RenderAsync(ResidentServiceRequestPaymentView view)
     {
-        using var services = new ServiceCollection().AddLogging().AddSingleton<IResidentServiceRequestApiClient>(new Api(view)).BuildServiceProvider();
+        using var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IResidentServiceRequestApiClient>(new Api(view)).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         return await renderer.Dispatcher.InvokeAsync(async () =>
         {
@@ -67,6 +67,7 @@ public sealed class ResidentPaymentCardTests
     }
     private sealed class Api(ResidentServiceRequestPaymentView view) : IResidentServiceRequestApiClient
     {
+        public Task<ApiResult<ResidentServiceRequestFacility[]>> GetFacilitiesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ApiResult<ResidentServiceRequestPaymentView>> GetPaymentAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ResidentServiceRequestPaymentView>(true, view));
         public Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ApiFileContent>(true, new([137,80,78,71], "image/png")));
         public Task<ApiResult<IReadOnlyList<ResidentServiceRequestListItem>>> ListAsync(ResidentServiceRequestListQuery? query = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();

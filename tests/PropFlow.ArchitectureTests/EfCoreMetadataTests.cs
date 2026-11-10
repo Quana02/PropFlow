@@ -361,10 +361,19 @@ public class EfCoreMetadataTests
         Assert.Contains(roleSeedData, row => string.Equals(row["Code"] as string, SystemRoleCodes.Admin, StringComparison.Ordinal));
         var designTimePermissionEntity = designTimeModel.FindEntityType(typeof(Permission));
         Assert.NotNull(designTimePermissionEntity);
-        Assert.Equal(8, designTimePermissionEntity.GetSeedData().Count());
+        var permissionSeedData = designTimePermissionEntity.GetSeedData();
+        Assert.Equal(10, permissionSeedData.Count());
         var designTimeRolePermissionEntity = designTimeModel.FindEntityType(typeof(RolePermission));
         Assert.NotNull(designTimeRolePermissionEntity);
-        Assert.Equal(8, designTimeRolePermissionEntity.GetSeedData().Count());
+        var rolePermissionSeedData = designTimeRolePermissionEntity.GetSeedData();
+        Assert.Equal(10, rolePermissionSeedData.Count());
+        var managerId = Assert.Single(roleSeedData, row => Equals(row["Code"], SystemRoleCodes.Manager))["Id"];
+        foreach (var code in new[] { SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange })
+        {
+            var permissionId = Assert.Single(permissionSeedData, row => Equals(row["Code"], code))["Id"];
+            var assignment = Assert.Single(rolePermissionSeedData, row => Equals(row["PermissionId"], permissionId));
+            Assert.Equal(managerId, assignment["RoleId"]);
+        }
 
         // No external entities
         Assert.Null(model.FindEntityType(typeof(UserAccount)));

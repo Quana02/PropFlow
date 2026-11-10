@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.Administration.Application.InternalAccounts;
 using PropFlow.Modules.Administration.Domain.AuditLogs;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Domain.UserAccessHistories;
@@ -20,6 +22,7 @@ namespace PropFlow.Modules.Administration.Presentation;
 public sealed class AdministrationController(
     AdministrationDbContext db,
     IInternalAccountDirectory accounts,
+    ManageInternalAccountProfile profiles,
     IAdministrationTransaction transaction) : ControllerBase
 {
     private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
@@ -32,6 +35,38 @@ public sealed class AdministrationController(
         Title = title,
         Extensions = { ["code"] = code }
     }) { StatusCode = status };
+
+    [HttpGet("internal-accounts/{userId:guid}")]
+    [Authorize(Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(404)]
+    public async Task<ActionResult<InternalAccountProfileResponse>> GetProfile(Guid userId, CancellationToken ct)
+    {
+        var result = await profiles.ReadAsync(userId, ct);
+        return result is null ? ProfileNotFound() : Ok(ProfileResponse(result));
+    }
+
+    [HttpPut("internal-accounts/{userId:guid}/profile")]
+    [Authorize(Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    public async Task<ActionResult<InternalAccountProfileResponse>> UpdateProfile(
+        Guid userId, UpdateInternalAccountProfileRequest request, CancellationToken ct)
+    {
+        var result = await profiles.UpdateAsync(userId, new(request.DisplayName, request.PhoneNumber), ActorId, HttpContext.TraceIdentifier, ct);
+        return result is null ? ProfileNotFound() : Ok(ProfileResponse(result));
+    }
+
+    private static ObjectResult ProfileNotFound() =>
+        Problem(404, "Không tìm thấy tài khoản Ban quản lý này.", "internal_account_not_found");
+
+    private static InternalAccountProfileResponse ProfileResponse(ManagedInternalAccountProfile profile)
+    {
+        var account = profile.Account;
+        return new(account.Id, account.Username, account.DisplayName, account.Email, account.PhoneNumber,
+            profile.Role, account.Status, account.EmailVerified);
+    }
 
     [HttpGet("internal-accounts/summary")]
     [Authorize(Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts)]
@@ -226,6 +261,15 @@ public sealed record ActivityMetadata(string? Username = null, string? Role = nu
 public sealed record InternalAccountSummaryResponse(int Total, int Active, int Disabled, int Locked, IReadOnlyDictionary<string, int> RoleCounts);
 public sealed record PagedInternalAccountsResponse(int Total, int Page, int PageSize, IReadOnlyList<InternalAccountResponse> Items);
 public sealed record InternalAccountResponse(Guid Id, string Username, string DisplayName, string? Email, string Role, string Status);
+public sealed record InternalAccountProfileResponse(Guid Id, string Username, string DisplayName, string? Email,
+    string? PhoneNumber, string Role, string Status, bool EmailVerified);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record UpdateInternalAccountProfileRequest(
+    [Required(ErrorMessage = "Tên hiển thị không được để trống."), StringLength(150, ErrorMessage = "Tên hiển thị tối đa 150 ký tự.")] string DisplayName,
+    [property: JsonRequired]
+    [StringLength(20, ErrorMessage = "Số điện thoại tối đa 20 ký tự.")] string? PhoneNumber);
+
 public sealed record CreateInternalAccountRequest(
     [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập."), StringLength(50, MinimumLength = 3, ErrorMessage = "Tên đăng nhập phải có từ 3 đến 50 ký tự."), RegularExpression(@"[a-zA-Z0-9_.-]+", ErrorMessage = "Tên đăng nhập chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.")] string Username,
     [Required(ErrorMessage = "Vui lòng nhập họ và tên."), StringLength(150, ErrorMessage = "Họ và tên không được vượt quá 150 ký tự.")] string DisplayName,

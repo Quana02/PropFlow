@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/knowledge/documents"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Policy = KnowledgePolicies.Read)]
@@ -18,7 +19,7 @@
     </header>
     <p class="knowledge-notice">@(canManage ? "Lưu bản nháp để kiểm tra nội dung trước khi xuất bản. Chỉ bản đã xuất bản cho cư dân mới đủ điều kiện làm nguồn trả lời của chatbot." : "Bạn có thể xem các tài liệu đã được Ban quản lý xuất bản, bao gồm tài liệu nội bộ.")</p>
     @if (error is not null) { <div class="error" role="alert">@error</div> }
-    @if (success is not null) { <div class="success" role="status">@success</div> }
+
     <form class="knowledge-search" @onsubmit="Search" @onsubmit:preventDefault>
         <label for="knowledge-search">Tìm theo tiêu đề</label>
         <input id="knowledge-search" @bind="search" maxlength="200" placeholder="Nhập tên tài liệu…" disabled="@InteractionBlocked" />
@@ -39,11 +40,10 @@
                 </article>
             }
         </div>
-        <nav class="knowledge-pagination" aria-label="Phân trang tài liệu">
-            <span>@pageData.Total tài liệu · Trang @(page)</span>
-            <button disabled="@(InteractionBlocked || page <= 1)" @onclick="Previous">Trước</button>
-            <button disabled="@(InteractionBlocked || page * pageData.PageSize >= pageData.Total)" @onclick="Next">Sau</button>
-        </nav>
+        <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(pageData.Total / (double)pageData.PageSize))" Busy="InteractionBlocked" Label="Phân trang tài liệu"
+            Previous="Previous" Next="Next">
+            <span>@pageData.Total tài liệu</span>
+        </TablePagination>
     }
     @if (editorOpen)
     {
@@ -104,6 +104,8 @@ else if (pendingImport is { } import)
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private readonly CancellationTokenSource lifetime = new();
     private static readonly PropFlowSelectOption[] AudienceOptions = [new("RESIDENT", "Cư dân và nhân sự"), new("INTERNAL", "Nội bộ nhân sự")];
     private KnowledgeDocumentPage? pageData;
@@ -112,7 +114,7 @@ else if (pendingImport is { } import)
     private bool canManage, busy, loading, editorOpen;
     private int page = 1;
     private string search = "", title = "", content = "", audience = "RESIDENT";
-    private string? error, success;
+    private string? error;
     private PublicationConfirmation? pendingPublication;
     private ImportConfirmation? pendingImport;
     private int editorVersion;
@@ -140,12 +142,12 @@ else if (pendingImport is { } import)
     private async Task Search() { if (InteractionBlocked) return; page = 1; await Load(); }
     private async Task Previous() { if (InteractionBlocked) return; page--; await Load(); }
     private async Task Next() { if (InteractionBlocked) return; page++; await Load(); }
-    private void NewDocument() { if (InteractionBlocked) return; editorVersion++; detail = null; indexStatus = null; title = content = ""; audience = "RESIDENT"; editorOpen = true; error = success = null; }
+    private void NewDocument() { if (InteractionBlocked) return; editorVersion++; detail = null; indexStatus = null; title = content = ""; audience = "RESIDENT"; editorOpen = true; error = null; }
     private void Close() { if (InteractionBlocked) return; editorVersion++; editorOpen = false; detail = null; }
     private async Task Open(Guid id)
     {
         if (pendingPublication is not null || pendingImport is not null) return;
-        busy = true; error = success = null;
+        busy = true; error = null;
         try
         {
             var result = await Api.GetAsync(id, lifetime.Token);
@@ -157,13 +159,15 @@ else if (pendingImport is { } import)
     }
     private async Task Save()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (InteractionBlocked || !canManage) return;
-        busy = true; error = success = null;
+        busy = true; error = null;
         try
         {
             var result = await Api.SaveAsync(detail?.Document.Id, new(title, content, audience, detail?.Document.Token), lifetime.Token);
-            if (!result.IsSuccess) { error = result.Message; return; }
-            await Open(result.Data); await Load(); success = "Đã lưu bản nháp. Kiểm tra nội dung rồi xuất bản khi sẵn sàng.";
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); return; }
+            await Open(result.Data); await Load(); operationFeedback.Publish(() => Toasts.Success("Đã lưu bản nháp. Kiểm tra nội dung rồi xuất bản khi sẵn sàng."));
         }
         finally { busy = false; }
     }
@@ -183,17 +187,19 @@ else if (pendingImport is { } import)
     }
     private async Task ConfirmPublication()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy || pendingPublication is not { } pending || !canManage) return;
         if (!editorOpen || detail is null || detail.Document.Id != pending.DocumentId || detail.Document.Token != pending.Token
             || title != pending.Title || content != pending.Content || audience != pending.Audience)
         { pendingPublication = null; error = "Tài liệu đã thay đổi. Vui lòng kiểm tra lại trước khi xuất bản hoặc ngừng xuất bản."; return; }
-        busy = true; error = success = null;
+        busy = true; error = null;
         try
         {
             var result = await Api.PublicationAsync(pending.DocumentId, pending.Token, pending.Publish, lifetime.Token);
-            if (!result.IsSuccess) { error = result.Message; return; }
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) error = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); return; }
             pendingPublication = null;
-            await Open(pending.DocumentId); await Load(); success = pending.Publish ? "Đã xuất bản tài liệu." : "Đã ngừng xuất bản tài liệu.";
+            await Open(pending.DocumentId); await Load(); operationFeedback.Publish(() => Toasts.Success(pending.Publish ? "Đã xuất bản tài liệu." : "Đã ngừng xuất bản tài liệu."));
         }
         finally { pendingPublication = null; busy = false; }
     }
@@ -226,7 +232,7 @@ else if (pendingImport is { } import)
         pendingImport = null;
         if (!editorOpen || editorVersion != pending.EditorVersion || detail?.Document.Id != pending.DocumentId || content != pending.OriginalContent)
         { error = "Nội dung đang soạn đã thay đổi. Vui lòng chọn lại tệp để nhập."; return; }
-        content = pending.ImportedContent; error = success = null;
+        content = pending.ImportedContent; error = null;
     }
     private void CancelConfirmation()
     {
@@ -236,5 +242,5 @@ else if (pendingImport is { } import)
     private static string AudienceLabel(string audience) => audience == "INTERNAL" ? "Nội bộ" : "Cư dân và nhân sự";
     private static string StatusLabel(KnowledgeDocumentSummary d) => d.PublishedRevision is null ? "Bản nháp" : d.PublishedRevision == d.Revision ? "Đã xuất bản" : "Có bản nháp mới";
     private static string ActionLabel(string action) => action switch { "CREATE" => "Tạo tài liệu", "EDIT" => "Lưu bản nháp", "PUBLISH" => "Xuất bản", "UNPUBLISH" => "Ngừng xuất bản", _ => "Cập nhật" };
-    public void Dispose() { pendingPublication = null; pendingImport = null; lifetime.Cancel(); lifetime.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  pendingPublication = null; pendingImport = null; lifetime.Cancel(); lifetime.Dispose(); }
 }

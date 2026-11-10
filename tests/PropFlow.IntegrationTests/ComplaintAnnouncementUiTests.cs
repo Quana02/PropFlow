@@ -38,7 +38,7 @@ public sealed class ComplaintAnnouncementUiTests
         => Services(new Transport(response));
     private static ServiceProvider Services(HttpMessageHandler transport)
     {
-        var services = new ServiceCollection();
+        var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>();
         services.AddLogging();
         services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         services.AddSingleton(new ApiClient(new HttpClient(transport) { BaseAddress = new Uri("https://example.invalid/") }, NullLogger<ApiClient>.Instance));
@@ -110,6 +110,8 @@ public sealed class ComplaintAnnouncementUiTests
         Assert.DoesNotContain("<form", html);
         Assert.Equal(manager, html.Contains(Text("Đăng thông báo")));
         Assert.Contains("id=\"announcement-detail-title\"", html);
+        Assert.Equal(manager, html.Contains("class=\"table-pagination\"", StringComparison.Ordinal));
+        Assert.Contains(manager ? "Trang 1 trên 1" : "Trang 1 / 1", WebUtility.HtmlDecode(html));
         Assert.Contains(Text("Xem chi tiết"), html);
         Assert.Contains("&lt;script&gt;", html);
         Assert.DoesNotContain("<script>", html);

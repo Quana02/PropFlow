@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Modules.Payments.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
@@ -40,7 +41,7 @@
                         <dl>
                             <div><dt>Trạng thái</dt><dd>@StatusLabel(_request.Status)</dd></div>
                             <div><dt>Loại dịch vụ</dt><dd>@(_request.CategoryName ?? _request.CategoryCode ?? "Chưa xác định")</dd></div>
-                            <div><dt>Khu vực</dt><dd>@AreaLabel(_request.ServiceAreaCode)</dd></div>
+                            <div><dt>Khu vực</dt><dd>@(_request.FacilityName ?? AreaLabel(_request.ServiceAreaCode))</dd></div>
                             <div><dt>Mức ưu tiên</dt><dd>@PriorityLabel(_request.PriorityCode)</dd></div>
                             <div><dt>Ngày gửi</dt><dd>@FormatDateTime(_request.SubmittedAt)</dd></div>
                             <div><dt>Lịch mong muốn</dt><dd>@PreferredSchedule(_request)</dd></div>
@@ -98,7 +99,6 @@
                             <label for="residentFeedbackComment">Nhận xét của bạn</label>
                             <textarea id="residentFeedbackComment" maxlength="1000" placeholder="Chia sẻ chất lượng phục vụ và kết quả xử lý..." disabled="@_saving" @bind="_comment"></textarea>
                             @if (!string.IsNullOrWhiteSpace(_feedbackError)) { <p class="request-feedback-error" role="alert">@_feedbackError</p> }
-                            @if (_saved) { <p class="request-feedback-success" role="status">Đã lưu đánh giá của bạn.</p> }
                             <button class="service-submit-button" type="button" disabled="@(_saving || _rating == 0 || string.IsNullOrWhiteSpace(_comment))" @onclick="SaveAsync">@(_saving ? "Đang lưu..." : _request.Rating.HasValue ? "Cập nhật đánh giá" : "Gửi đánh giá")</button>
                         </section>
                     }
@@ -113,6 +113,8 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public EventCallback FeedbackSaved { get; set; }
 
     private Guid _requestId;
@@ -124,7 +126,6 @@
     private string _comment = string.Empty;
     private string? _feedbackError;
     private bool _saving;
-    private bool _saved;
     private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _refreshQueue;
     private bool IsCompleted => _request?.Status is "RESOLVED" or "CLOSED";
     private bool HasCharge => (_request?.BaseServiceCost ?? 0) + (_request?.ApprovedAdditionalCost ?? 0) > 0;
@@ -168,7 +169,6 @@
             _rating = _request.Rating ?? 0;
             _comment = _request.FeedbackComment ?? string.Empty;
             _feedbackError = null;
-            _saved = false;
         }
         catch
         {
@@ -179,16 +179,17 @@
 
     private async Task SaveAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (_request is null) return;
         _saving = true;
-        _saved = false;
         _feedbackError = null;
         try
         {
             var result = await Api.RateAsync(_request.Id, new(_rating, _comment));
             if (!result.IsSuccess || result.Data is null)
             {
-                _feedbackError = result.Message ?? "Không thể lưu đánh giá.";
+                if (result.ValidationErrors?.Count > 0) _feedbackError = result.Message ?? "Không thể lưu đánh giá."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể lưu đánh giá."));
                 return;
             }
 
@@ -198,8 +199,8 @@
                 FeedbackComment = result.Data.Comment,
                 FeedbackSubmittedAt = result.Data.SubmittedAt
             };
-            _saved = true;
-            await FeedbackSaved.InvokeAsync();
+            operationFeedback.Publish(() => Toasts.Success("Đã lưu đánh giá của bạn."));
+            { if (operationFeedback.IsCurrent) await FeedbackSaved.InvokeAsync(); }
         }
         finally { _saving = false; }
     }
@@ -216,7 +217,7 @@
         if (!_saving) _open = false;
     }
 
-    public void Dispose() => _refreshQueue?.Dispose();
+    public void Dispose() { toastLifetime.Dispose(); _refreshQueue?.Dispose(); }
 
     private static string FormatDateTime(DateTimeOffset value) => value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     private static string PreferredSchedule(ResidentServiceRequestDetailResponse request) => request.PreferredDate is null
@@ -226,7 +227,7 @@
     {
         "MORNING" => "Buổi sáng", "AFTERNOON" => "Buổi chiều", "EVENING" => "Buổi tối", "ANYTIME" => "Cả ngày", _ => "Chưa chọn"
     };
-    private static string AreaLabel(string? code) => code?.Replace('_', ' ') ?? "Chưa xác định";
+    private static string AreaLabel(string? code) => PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.Label(code);
     private static string PriorityLabel(string? code) => code == "URGENT" ? "Khẩn cấp" : "Bình thường";
     private static string StatusTransition(string? from, string? to) => string.IsNullOrWhiteSpace(from)
         ? StatusLabel(to ?? string.Empty)
@@ -235,6 +236,6 @@
     {
         "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công",
         "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã hoàn tất",
-        "CANCELLED" => "Đã hủy", _ => status
+        "CANCELLED" => "Đã hủy", _ => "Chưa xác định"
     };
 }

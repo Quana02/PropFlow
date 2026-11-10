@@ -1,6 +1,6 @@
 @page "/finance/invoices/{InvoiceId:guid}"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
-@attribute [Authorize(Roles = "ACCOUNTANT")]
+@attribute [Authorize(Roles = "ACCOUNTANT", Policy = "finance.manage")]
 @inject BillingWorkspaceApi Workspace
 @inject FinanceCycleApi Cycle
 

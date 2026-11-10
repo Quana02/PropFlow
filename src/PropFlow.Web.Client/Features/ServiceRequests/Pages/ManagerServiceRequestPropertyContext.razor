@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/manager/service-requests/{Id:guid}/property-context"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER")]
@@ -105,19 +106,16 @@
         </div>
     }
 
-    @if (showToast)
-    {
-        <div class="context-toast" role="status"><span class="material-symbols-outlined">check_circle</span><div><strong>Đã xác nhận đơn dịch vụ</strong><p>Bối cảnh đã được lưu và yêu cầu chuyển sang trạng thái Đã tiếp nhận.</p></div><button type="button" @onclick="BackToDetail">Xem chi tiết</button></div>
-    }
 </div>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public Guid Id { get; set; }
 
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestDetailResponse? detail;
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerPropertyContextOptionsResponse? contextOptions;
     private bool loading;
-    private bool showToast;
     private bool saving;
     private string? errorMessage;
     private string? actionError;
@@ -150,7 +148,7 @@
 
     private async Task LoadCoreAsync()
     {
-        loading = true; errorMessage = null; showToast = false;
+        loading = true; errorMessage = null;
         var detailTask = Api.GetAsync(Id);
         var optionsTask = Api.PropertyContextOptionsAsync(Id);
         await Task.WhenAll(detailTask, optionsTask);
@@ -169,28 +167,31 @@
             ? Task.CompletedTask
             : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
 
-    public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private void ResetForm()
     {
         apartmentValue = detail?.ApartmentUnitId?.ToString() ?? string.Empty;
         facilityValue = detail?.Facility?.Id.ToString() ?? string.Empty;
         equipmentValue = detail?.Equipment?.Id.ToString() ?? string.Empty;
-        showToast = false;
+
         actionError = null;
     }
 
     private async Task ConfirmAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (!CanConfirm || saving) return;
-        saving = true; actionError = null; showToast = false;
+        saving = true; actionError = null;
         var request = new PropFlow.Modules.ServiceRequests.Contracts.ConfirmManagerServiceRequestPropertyContextRequest(
             ParseOptionalGuid(apartmentValue), ParseOptionalGuid(facilityValue), ParseOptionalGuid(equipmentValue));
         var result = await Api.ConfirmPropertyContextAsync(Id, request);
         saving = false;
-        if (!result.IsSuccess || result.Data is null) { actionError = result.Message ?? "Không thể xác nhận đơn dịch vụ."; return; }
+        if (disposed) return;
+        if (!result.IsSuccess || result.Data is null) { if (result.ValidationErrors?.Count > 0) actionError = result.Message ?? "Không thể xác nhận đơn dịch vụ."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể xác nhận đơn dịch vụ.")); return; }
         detail = result.Data;
-        showToast = true;
+        operationFeedback.Publish(() => Toasts.Success("Đã xác nhận đơn dịch vụ. Yêu cầu đã chuyển sang trạng thái Đã tiếp nhận."));
     }
     private void BackToDetail() => Navigation.NavigateTo($"/manager/service-requests/{Id}");
     private string OriginalApartmentLabel() => detail?.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{detail.ApartmentUnitNumber} (Tầng {detail.FloorNumber})";

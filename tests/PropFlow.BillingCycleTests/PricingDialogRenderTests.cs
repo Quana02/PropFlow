@@ -21,7 +21,7 @@ public sealed class PricingDialogRenderTests
     [InlineData(true)]
     public async Task Pricing_forms_render_grouped_money_and_explicit_submit_and_cancel(bool rental)
     {
-        var services = new ServiceCollection().AddLogging();
+        var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging();
         services.AddSingleton(new FinanceCycleApi(new AuthenticatedApiClient(
             new HttpClient(new PreviewTransport()) { BaseAddress = new("https://test.invalid") }, NullLogger<ApiClient>.Instance)));
         services.AddSingleton<IJSRuntime, NoJs>();

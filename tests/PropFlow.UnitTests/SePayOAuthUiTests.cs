@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using PropFlow.Web.Client.Features.Administration.Components;
 using PropFlow.Web.Client.Features.Administration.Models;
 using PropFlow.Web.Client.Services.Api;
+using PropFlow.Web.Client.Shared.Feedback;
 
 namespace PropFlow.UnitTests;
 
@@ -44,6 +45,7 @@ public sealed class SePayOAuthUiTests
     {
         using var http = new HttpClient(new Handler(state, status)) { BaseAddress = new("https://api.example.com/") };
         using var services = new ServiceCollection().AddLogging().AddSingleton<NavigationManager>(new Navigation())
+            .AddSingleton<ToastService>()
             .AddSingleton(new AuthenticatedApiClient(http, Microsoft.Extensions.Logging.Abstractions.NullLogger<ApiClient>.Instance)).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         return await renderer.Dispatcher.InvokeAsync(async () => WebUtility.HtmlDecode((await renderer.RenderComponentAsync<SePayOAuthConnect>(

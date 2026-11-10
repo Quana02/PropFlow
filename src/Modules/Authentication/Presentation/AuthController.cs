@@ -14,7 +14,7 @@ namespace PropFlow.Modules.Authentication.Presentation;
 [ProducesResponseType(typeof(ProblemDetails), 400), ProducesResponseType(typeof(ProblemDetails), 401)]
 [ProducesResponseType(typeof(ProblemDetails), 403), ProducesResponseType(typeof(ProblemDetails), 409)]
 [ProducesResponseType(typeof(ProblemDetails), 429), ProducesResponseType(typeof(ProblemDetails), 500)]
-public sealed class AuthController(AuthUseCases auth, IAntiforgery antiforgery, AuthPolicy policy) : ControllerBase
+public sealed partial class AuthController(AuthUseCases auth, IAntiforgery antiforgery, AuthPolicy policy) : ControllerBase
 {
     public const string RefreshCookie = "__Secure-PropFlow.Refresh";
     private Guid UserId => Guid.Parse(User.FindFirstValue("sub")!);
@@ -88,6 +88,16 @@ public sealed class AuthController(AuthUseCases auth, IAntiforgery antiforgery, 
 
     [HttpGet("me"), Authorize]
     public async Task<ActionResult<AccountResponse>> Me(CancellationToken ct) => Ok(await auth.GetAccountAsync(UserId, ct));
+
+    [HttpPost("email/change"), Authorize(Roles = ResidentAccountPolicies.OwnEmailRoles), EnableRateLimiting("auth-login"), ProducesResponseType(typeof(ChallengeResponse), 200)]
+    [ProducesResponseType(400), ProducesResponseType(401), ProducesResponseType(403), ProducesResponseType(409), ProducesResponseType(429)]
+    public async Task<ActionResult<ChallengeResponse>> RequestEmailChange(ChangeEmailRequest request, CancellationToken ct)
+    { await CheckCsrfAsync(); return Ok(await auth.RequestEmailChangeAsync(UserId, request, ct)); }
+
+    [HttpPost("email/verify"), Authorize(Roles = ResidentAccountPolicies.OwnEmailRoles), EnableRateLimiting("auth-login"), ProducesResponseType(204)]
+    [ProducesResponseType(400), ProducesResponseType(401), ProducesResponseType(403), ProducesResponseType(409), ProducesResponseType(429)]
+    public async Task<IActionResult> VerifyEmailChange(VerifyEmailChangeRequest request, CancellationToken ct)
+    { await CheckCsrfAsync(); await auth.VerifyEmailChangeAsync(UserId, request, ct); ClearCookie(); return NoContent(); }
 
     [HttpPut("me"), Authorize, EnableRateLimiting("auth-session")]
     public async Task<ActionResult<AccountResponse>> Update(UpdateProfileRequest request, CancellationToken ct)

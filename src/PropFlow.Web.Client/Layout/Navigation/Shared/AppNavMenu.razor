@@ -2,6 +2,8 @@
 @using PropFlow.Web.Client.Layout.Navigation.Admin
 @using PropFlow.Web.Client.Layout.Navigation.Accountant
 @using PropFlow.Web.Client.Layout.Navigation.Operations
+@using PropFlow.Web.Client.Layout.Navigation.Staff
+@using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject IJSRuntime JS
@@ -11,12 +13,16 @@
          title="Kéo để di chuyển menu" aria-label="Di chuyển menu bằng cách kéo hoặc phím mũi tên">
         <span aria-hidden="true">⋮⋮</span>
     </div>
-    <AuthorizeView Roles="ADMIN"><AdminNavMenu /></AuthorizeView>
-    <AuthorizeView Roles="ACCOUNTANT"><AccountantNavMenu /></AuthorizeView>
-    <AuthorizeView Policy="@PropFlow.Web.Client.Features.Facility.Services.AssetPermissions.ViewPolicy"><OperationsNavMenu /></AuthorizeView>
+    <div class="app-nav-scroll">
+        <AuthorizeView Roles="ADMIN"><AdminNavMenu /></AuthorizeView>
+        <AuthorizeView Roles="ACCOUNTANT"><AccountantNavMenu /></AuthorizeView>
+        <AuthorizeView Roles="MANAGER" Policy="@AssetPermissions.ViewPolicy"><OperationsNavMenu /></AuthorizeView>
+        <AuthorizeView Roles="STAFF" Policy="@AssetPermissions.ViewPolicy"><StaffNavMenu /></AuthorizeView>
+    </div>
 </div>
 
 @code {
+    private bool disposed;
     private ElementReference railRef;
     private IJSObjectReference? module;
     private IJSObjectReference? dragHandle;
@@ -24,12 +30,23 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-nav.js");
-        dragHandle = await module.InvokeAsync<IJSObjectReference>("initialize", railRef);
+        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-nav.js?v=20261109-2");
+        if (disposed) { await imported.DisposeAsync(); return; }
+        module = imported;
+        var initialized = await module.InvokeAsync<IJSObjectReference>("initialize", railRef);
+        if (disposed)
+        {
+            await initialized.InvokeVoidAsync("dispose");
+            await initialized.DisposeAsync();
+            return;
+        }
+        dragHandle = initialized;
     }
 
     public async ValueTask DisposeAsync()
     {
+        if (disposed) return;
+        disposed = true;
         try
         {
             if (dragHandle is not null)

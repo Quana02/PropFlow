@@ -125,8 +125,17 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
                 var service = invoice.Items.Where(x => x.FeeCodeSnapshot != RentalPricing.FeeCode).Sum(x => x.LineAmount);
                 var rentalDetails = recipient.Capacity == "RENTAL" && invoice.Items.Any(x => x.FeeCodeSnapshot == RentalPricing.FeeCode)
                     ? " Tiền thuê: " + FinanceDocuments.Money(rental) + ". " + string.Join("; ", invoice.Items.Where(x => x.FeeCodeSnapshot == RentalPricing.FeeCode).Select(x => x.Description)) : "";
-                await PublishAsync(invoice, recipient, $"invoice:{invoice.Id}", invoice.Type == InvoiceType.MONTHLY_RENTAL ? "Hóa đơn tiền thuê tháng mới" : "Hóa đơn phí dịch vụ mới",
-                    $"Căn hộ {recipient.UnitNumber}, hóa đơn {invoice.InvoiceNumber}, kỳ {invoice.BillingPeriodStart:MM/yyyy}. Phí dịch vụ: {FinanceDocuments.Money(service)}.{rentalDetails} Tổng: {FinanceDocuments.Money(service + rental)}. Hạn {invoice.DueDate:dd/MM/yyyy}.", FinanceDocuments.Invoice(invoice, recipient, amount), ct);
+                var (title, charges) = invoice.Type switch
+                {
+                    InvoiceType.MONTHLY_RENTAL => ("Hóa đơn tiền thuê tháng mới", $"Tiền thuê: {FinanceDocuments.Money(rental)}."),
+                    InvoiceType.SERVICE_REQUEST => ("Hóa đơn yêu cầu dịch vụ mới", $"Chi phí yêu cầu: {FinanceDocuments.Money(service)}."),
+                    _ when rentalDetails.Length > 0 => ("Hóa đơn phí dịch vụ mới",
+                        $"Phí dịch vụ: {FinanceDocuments.Money(service)}.{rentalDetails} Tổng cộng: {FinanceDocuments.Money(service + rental)}."),
+                    _ => ("Hóa đơn phí dịch vụ mới", $"Tổng phí dịch vụ: {FinanceDocuments.Money(service)}.")
+                };
+                await PublishAsync(invoice, recipient, $"invoice:{invoice.Id}", title,
+                    $"Hóa đơn {invoice.InvoiceNumber} · Căn hộ {recipient.UnitNumber} · Kỳ {invoice.BillingPeriodStart:MM/yyyy}. {charges} Hạn thanh toán: {invoice.DueDate:dd/MM/yyyy}.",
+                    FinanceDocuments.Invoice(invoice, recipient, amount), ct);
                 if (invoice.DueDate is { } due && today > due && amount < invoice.TotalAmount) {
                     await RemindOneAsync(invoice, recipient, amount, $"overdue:{invoice.Id}:day:{today:yyyyMMdd}", ct);
                 }
@@ -152,6 +161,7 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
         // Existing issued demo invoices also need documents. Resolve the household at issue date,
         // never guess a recipient from the apartment's current owner or all residents.
         var existing = await db.Invoices.AsNoTracking().Where(x => x.Status == InvoiceStatus.ISSUED
+            && x.Type != InvoiceType.SERVICE_REQUEST && x.SourceServiceRequestId == null
             && (onlyInvoiceId == null || x.Id == onlyInvoiceId) && !db.InvoiceRecipients.Any(r => r.InvoiceId == x.Id)).ToArrayAsync(ct);
         foreach (var group in existing.GroupBy(x => x.IssueDate ?? x.BillingPeriodStart)) {
             var heads = await directory.ListAsync(group.Key, ct);
@@ -220,11 +230,11 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
                 if (electricityRate is not null && electricityUsage is { Kwh: > 0 })
                     service.AddItem(electricityRate.FeeType!.Code, electricityRate.FeeType.Name, "KWH", electricityUsage.Kwh!.Value, electricityRate.UnitRate,
                         serviceRate.CreatedBy, DateTimeOffset.UtcNow, electricityRate.FeeTypeId, electricityRate.Id,
-                        description: $"Điện sử dụng tháng {usageMonth:MM/yyyy}; số kWh do manager nhập và chốt trước khi phát hành.", unitName: "kWh");
+                        description: $"Điện sử dụng tháng {usageMonth:MM/yyyy} theo sản lượng đã chốt.", unitName: "kWh");
                 if (waterVolumeRate is not null && electricityUsage?.WaterM3 is > 0 && electricityUsage.WaterM3 is { } waterQuantity)
                     service.AddItem(waterVolumeRate.FeeType!.Code, waterVolumeRate.FeeType.Name, "VOLUME", waterQuantity, waterVolumeRate.UnitRate,
                         serviceRate.CreatedBy, DateTimeOffset.UtcNow, waterVolumeRate.FeeTypeId, waterVolumeRate.Id,
-                        description: $"Nước sử dụng tháng {usageMonth:MM/yyyy}; sản lượng m³ do manager nhập và chốt trước khi phát hành.", unitName: "m³");
+                        description: $"Nước sử dụng tháng {usageMonth:MM/yyyy} theo sản lượng đã chốt.", unitName: "m³");
                 Add(service,serviceRate.CreatedBy,"Tự động phát hành phí dịch vụ tháng");
             }
             if(h.Capacity != "RENTAL" || h.RentalStart is not { } start || Exists(InvoiceType.MONTHLY_RENTAL)) continue;

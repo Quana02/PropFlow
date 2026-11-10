@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Apartment.Models
 @using PropFlow.Web.Client.Features.Apartment.Services
 @using PropFlow.Web.Client.Shared.Feedback
@@ -44,9 +46,11 @@
 {
     <PropFlowConfirmationDialog Title="Xóa loại căn hộ?" Message="@($"Bạn có chắc muốn xóa loại “{deleteTarget.Name}”? Loại đang được căn hộ sử dụng sẽ không thể xóa.")" Busy="@busy" ConfirmText="Xóa loại" OnConfirm="Delete" OnCancel="CancelDelete" />
 }
-@if (notice is not null) { <PropFlowToast @key="noticeVersion" Message="@notice" Severity="@noticeSeverity" OnDismiss="() => notice = null" /> }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     [Parameter] public IReadOnlyList<ApartmentUnitTypeResponse> Items { get; set; } = [];
     [Parameter] public bool Loading { get; set; }
     [Parameter] public string? Error { get; set; }
@@ -57,9 +61,8 @@
     private string name = "", areaText = "";
     private int? bedrooms, bathrooms;
     private bool showEditor, busy;
-    private string? saveError, notice;
-    private string noticeSeverity = "success";
-    private int noticeVersion;
+    private string? saveError;
+
     private ApartmentUnitTypeResponse? deleteTarget;
     private ElementReference nameInput;
     private bool focusEditor;
@@ -74,9 +77,11 @@
     private void CancelEdit() { if (!busy) showEditor = false; }
     private Task Close() => busy ? Task.CompletedTask : Closed.InvokeAsync();
     private void CancelDelete() { if (!busy) deleteTarget = null; }
-    private void Notify(string text, string severity = "success") { notice = text; noticeSeverity = severity; noticeVersion++; }
+    private void Notify(string text, string severity = "success") => Toasts.Notify(text, severity);
     private async Task Save()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy) return;
         saveError = null;
         var area = ApartmentAreaInput.Parse(areaText);
@@ -89,15 +94,17 @@
             var result = editingId.HasValue
                 ? await Apartments.UpdateUnitTypeAsync(editingId.Value, new() { Name = name.Trim(), DefaultUsableAreaM2 = area, DefaultBedroomCount = bedrooms, DefaultBathroomCount = bathrooms })
                 : await Apartments.CreateUnitTypeAsync(new() { Name = name.Trim(), DefaultUsableAreaM2 = area, DefaultBedroomCount = bedrooms, DefaultBathroomCount = bathrooms });
-            if (!result.IsSuccess) { saveError = result.Message ?? "Không thể lưu loại căn hộ."; return; }
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) saveError = result.Message ?? "Không thể lưu loại căn hộ."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể lưu loại căn hộ.")); return; }
             showEditor = false;
             await Changed.InvokeAsync();
-            Notify("Đã lưu loại căn hộ.");
+            operationFeedback.Publish(() => Notify("Đã lưu loại căn hộ."));
         }
         finally { busy = false; }
     }
     private async Task Delete()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy || deleteTarget is null) return;
         busy = true;
         try
@@ -105,10 +112,10 @@
             var id = deleteTarget.Id;
             var result = await Apartments.DeleteUnitTypeAsync(id);
             deleteTarget = null;
-            if (!result.IsSuccess) { Notify(result.Message ?? "Không thể xóa loại căn hộ.", "error"); return; }
+            if (!result.IsSuccess) { operationFeedback.Publish(() => Notify(result.Message ?? "Không thể xóa loại căn hộ.", "error")); return; }
             if (editingId == id) showEditor = false;
             await Changed.InvokeAsync();
-            Notify("Đã xóa loại căn hộ.");
+            operationFeedback.Publish(() => Notify("Đã xóa loại căn hộ."));
         }
         finally { busy = false; }
     }

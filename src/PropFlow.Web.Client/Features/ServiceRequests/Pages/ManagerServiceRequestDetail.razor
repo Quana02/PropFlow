@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/manager/service-requests/{Id:guid}"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER")]
@@ -164,11 +165,11 @@
 
 @if (selectedActivity is not null)
 {
-    <div class="dialog-backdrop" @onclick="CloseResultPanel">
+    <div class="dialog-backdrop" @onclick="CancelReviewFeedbackCloseResultPanel">
         <section class="manager-dialog result-review-dialog" role="dialog" aria-modal="true" aria-labelledby="result-review-title" @onclick:stopPropagation="true">
             <header>
                 <div><span class="dialog-icon result-icon"><span class="material-symbols-outlined">fact_check</span></span><div><h2 id="result-review-title">Kiểm tra kết quả xử lý</h2><p>@ActivityLabel(selectedActivity.ActivityType) · @selectedActivity.CreatedAt.ToLocalTime().ToString("HH:mm · dd/MM/yyyy")</p></div></div>
-                <button type="button" aria-label="Đóng" @onclick="CloseResultPanel"><span class="material-symbols-outlined">close</span></button>
+                <button type="button" aria-label="Đóng" @onclick="CancelReviewFeedbackCloseResultPanel"><span class="material-symbols-outlined">close</span></button>
             </header>
 
             <div class="result-review-body">
@@ -267,7 +268,8 @@
                     }
                 }
             </div>
-            <label class="note-field"><span>Chi phí dịch vụ dự kiến (VND, có thể bằng 0)</span><input type="number" min="0" step="1" @bind="baseServiceCost" /></label>
+            @if (CommonArea) { <p>Công việc tại khu vực chung của chung cư không thu phí cư dân.</p> }
+            else { <label class="note-field"><span>Chi phí dịch vụ dự kiến (VND, có thể bằng 0)</span><input type="number" min="0" step="1" @bind="baseServiceCost" /></label> }
             <label class="note-field"><span>Ghi chú phân công (không bắt buộc)</span><textarea rows="3" maxlength="2000" @bind="assignmentNote" placeholder="Thông tin cần lưu ý cho Staff…"></textarea></label>
             @if (!string.IsNullOrWhiteSpace(assignmentError)) { <p class="ui-notice" role="alert">@assignmentError</p> }
             <footer><button type="button" class="dialog-cancel" disabled="@savingAssignment" @onclick="CloseAssignPanel">Hủy</button><button type="button" class="dialog-confirm" disabled="@(savingAssignment || selectedStaffUserId is null)" @onclick="ConfirmAssignmentAsync">@(savingAssignment ? "Đang lưu…" : "Xác nhận phân công")</button></footer>
@@ -287,6 +289,11 @@
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime reviewFeedback = new();
+    private void CancelReviewFeedbackCloseResultPanel() { CloseResultPanel(); if (selectedActivity is null) reviewFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public Guid? Id { get; set; }
 
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestDetailResponse? detail;
@@ -303,6 +310,7 @@
     private string? staffSearch;
     private string? assignmentNote;
     private decimal baseServiceCost;
+    private bool CommonArea => PropFlow.Modules.ServiceRequests.Contracts.ServiceRequestAreaCodes.IsCommonArea(detail?.ServiceAreaCode);
     private decimal approvedAdditionalCost;
     private string? assignmentError;
     private string? reviewDecisionNote;
@@ -350,7 +358,7 @@
             ? Task.CompletedTask
             : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
 
-    public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private bool CanAssign => detail?.Status is "UNDER_REVIEW" or "ASSIGNED" or "IN_PROGRESS";
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestEvidenceItem> SelectedEvidence =>
@@ -416,38 +424,43 @@
 
     private async Task RequestReworkAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, reviewFeedback);
+
         if (Id is not { } id || !CanReviewStaffResult) return;
         savingResolution = true;
         resultActionNotice = null;
         var result = await Api.RequestReworkAsync(id, new(reviewDecisionNote));
         savingResolution = false;
+        if (disposed) return;
         if (!result.IsSuccess || result.Data is null)
         {
-            resultActionNotice = result.Message ?? "Không thể yêu cầu Staff xử lý lại.";
+            if (result.ValidationErrors?.Count > 0) resultActionNotice = result.Message ?? "Không thể yêu cầu Staff xử lý lại."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể yêu cầu Staff xử lý lại."));
             return;
         }
 
         detail = result.Data;
         selectedActivity = null;
-        noticeMessage = "Đã yêu cầu Staff xử lý lại. Yêu cầu vẫn ở trạng thái Đang tiến hành.";
-        showUiNotice = true;
+        operationFeedback.Publish(() => Toasts.Success("Đã yêu cầu Staff xử lý lại. Yêu cầu vẫn ở trạng thái Đang tiến hành."));
     }
 
     private async Task ApproveResultAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, reviewFeedback);
+
         if (Id is not { } id || !CanReviewStaffResult) return;
         savingResolution = true;
         resultActionNotice = null;
         var result = await Api.ApproveResolutionAsync(id, new(reviewDecisionNote, approvedAdditionalCost));
         savingResolution = false;
+        if (disposed) return;
         if (!result.IsSuccess || result.Data is null)
         {
-            resultActionNotice = result.Message ?? "Không thể xác nhận kết quả xử lý.";
+            if (result.ValidationErrors?.Count > 0) resultActionNotice = result.Message ?? "Không thể xác nhận kết quả xử lý."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể xác nhận kết quả xử lý."));
             return;
         }
 
         detail = result.Data;
-        resultActionNotice = "Đã nghiệm thu kết quả. Yêu cầu đã chuyển sang trạng thái Đã xử lý và có thể đóng.";
+        operationFeedback.Publish(() => Toasts.Success("Đã nghiệm thu kết quả. Yêu cầu đã chuyển sang trạng thái Đã xử lý và có thể đóng."));
     }
 
     private void OpenClosePanel()
@@ -467,44 +480,48 @@
 
     private async Task ConfirmCloseAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (Id is not { } id || detail?.Status != "RESOLVED") return;
         savingClose = true;
         closeActionNotice = null;
         var result = await Api.CloseAsync(id, new(closeRequestNote));
         savingClose = false;
+        if (disposed) return;
         if (!result.IsSuccess || result.Data is null)
         {
-            closeActionNotice = result.Message ?? "Không thể đóng yêu cầu.";
+            if (result.ValidationErrors?.Count > 0) closeActionNotice = result.Message ?? "Không thể đóng yêu cầu."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể đóng yêu cầu."));
             return;
         }
 
         detail = result.Data;
         showClosePanel = false;
-        noticeMessage = "Đã đóng yêu cầu dịch vụ.";
-        showUiNotice = true;
+        operationFeedback.Publish(() => Toasts.Success("Đã đóng yêu cầu dịch vụ."));
     }
 
     private async Task ConfirmAssignmentAsync()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (Id is not { } id || selectedStaffUserId is not { } staffUserId) return;
         savingAssignment = true;
         assignmentError = null;
-        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote, baseServiceCost));
+        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote, CommonArea ? 0 : baseServiceCost));
         savingAssignment = false;
+        if (disposed) return;
         if (!result.IsSuccess || result.Data is null)
         {
-            assignmentError = result.Message ?? "Không thể phân công nhân sự.";
+            if (result.ValidationErrors?.Count > 0) assignmentError = result.Message ?? "Không thể phân công nhân sự."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể phân công nhân sự."));
             return;
         }
 
         detail = result.Data;
         showAssignPanel = false;
-        noticeMessage = "Đã phân công nhân sự và cập nhật trạng thái yêu cầu thành Đã phân công.";
-        showUiNotice = true;
+        operationFeedback.Publish(() => Toasts.Success("Đã phân công nhân sự và cập nhật trạng thái yêu cầu thành Đã phân công."));
     }
     private void ToggleNotePanel() => showNotePanel = !showNotePanel;
-    private void ShowUiNotice() => showUiNotice = true;
-    private void ConfirmUiNote() { showNotePanel = false; showUiNotice = true; }
+    private void ShowUiNotice() => Toasts.Info(noticeMessage);
+    private void ConfirmUiNote() { showNotePanel = false; Toasts.Info(noticeMessage); }
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption? AssignedStaff() =>
         detail?.AssignedStaffUserId is { } id ? staffOptions.FirstOrDefault(x => x.UserId == id) : null;
     private string AssignedStaffName() => detail?.AssignedStaffUserId is null ? "Chưa phân công" : AssignedStaff()?.DisplayName ?? "Đã phân công nhân sự";

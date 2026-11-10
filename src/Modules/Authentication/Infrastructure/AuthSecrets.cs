@@ -93,6 +93,7 @@ public sealed class AuthSecrets : IAuthSecrets, IDisposable
             new("name", user.DisplayName), new("role", user.Role)
         };
         claims.AddRange(user.Permissions.Select(x => new Claim("permission", x)));
+        if (user.Email is { } accountEmail) claims.Add(new Claim("email", accountEmail));
         var jwt = new JwtSecurityToken(policy.Issuer, policy.Audience, claims, now.UtcDateTime, expires.UtcDateTime,
             new SigningCredentials(SigningKey, SecurityAlgorithms.RsaSha256));
         return new(new JwtSecurityTokenHandler().WriteToken(jwt), expires, user);

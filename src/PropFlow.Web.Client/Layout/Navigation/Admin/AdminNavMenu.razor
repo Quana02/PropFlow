@@ -2,10 +2,12 @@
 
 <AuthorizeView Roles="ADMIN">
     <nav class="admin-nav" aria-label="Điều hướng quản trị hệ thống">
-        <NavLink href="/knowledge/documents" class="admin-nav-link" ActiveClass="is-selected" aria-label="Tài liệu chung cư" title="Tài liệu chung cư"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span></NavLink>
         <AdminTabLink Tab="overview" href="/admin/dashboard?tab=overview" class="admin-nav-link" aria-label="Tổng quan" title="Tổng quan"><span class="material-symbols-outlined" aria-hidden="true">dashboard</span></AdminTabLink>
         <AdminTabLink Tab="accounts" href="/admin/dashboard?tab=accounts" class="admin-nav-link" aria-label="Tài khoản Ban quản lý" title="Tài khoản Ban quản lý"><span class="material-symbols-outlined" aria-hidden="true">group</span></AdminTabLink>
-        <AdminTabLink Tab="activity" href="/admin/dashboard?tab=activity" class="admin-nav-link" aria-label="Nhật ký hệ thống" title="Nhật ký hệ thống"><span class="material-symbols-outlined" aria-hidden="true">history</span></AdminTabLink>
         <AdminTabLink Tab="payment" href="/admin/dashboard?tab=payment" class="admin-nav-link" aria-label="Cấu hình thanh toán" title="Cấu hình thanh toán"><span class="material-symbols-outlined" aria-hidden="true">account_balance</span></AdminTabLink>
+        <AdminTabLink Tab="activity" href="/admin/dashboard?tab=activity" class="admin-nav-link" aria-label="Nhật ký hệ thống" title="Nhật ký hệ thống"><span class="material-symbols-outlined" aria-hidden="true">history</span></AdminTabLink>
+        <AuthorizeView Policy="@PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read" Context="knowledgeAuthorization">
+            <NavLink href="/knowledge/documents" class="admin-nav-link" ActiveClass="is-selected" aria-label="Tài liệu chung cư" title="Tài liệu chung cư"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span></NavLink>
+        </AuthorizeView>
     </nav>
 </AuthorizeView>

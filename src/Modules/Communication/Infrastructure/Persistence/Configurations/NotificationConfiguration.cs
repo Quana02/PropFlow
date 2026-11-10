@@ -23,6 +23,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.Property(notification => notification.RecipientUserId)
             .HasColumnName("recipient_user_id")
             .IsRequired();
+        builder.Property(notification => notification.SenderUserId).HasColumnName("sender_user_id");
 
         builder.Property(notification => notification.Type)
             .HasColumnName("type")
@@ -73,6 +74,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.HasIndex(notification => notification.RecipientUserId);
         builder.HasIndex(notification => new { notification.RecipientUserId, notification.IsRead });
         builder.HasIndex(notification => notification.CreatedAt);
+        builder.HasIndex(notification => new { notification.RecipientUserId, notification.CreatedAt, notification.Id });
         builder.HasIndex(notification => notification.Type);
         builder.HasIndex(notification => new { notification.SourceType, notification.SourceId });
         builder.HasIndex(notification => new { notification.RecipientUserId, notification.SourceEventId })

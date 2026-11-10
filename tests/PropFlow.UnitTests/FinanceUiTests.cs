@@ -21,7 +21,7 @@ public sealed class FinanceUiTests
     [InlineData(true, "OVERDUE", "Công nợ quá hạn")]
     public async Task Invoice_view_shows_source_lines_print_and_only_authorized_write_controls(bool canWrite, string? settlement, string title)
     {
-        var services=new ServiceCollection().AddLogging();
+        var services=new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging();
         services.AddSingleton<IJSRuntime,NoJs>();
         services.AddSingleton(new AuthenticatedApiClient(new HttpClient(new Transport()){BaseAddress=new Uri("https://test.invalid")},NullLogger<ApiClient>.Instance));
         services.AddSingleton<BillingWorkspaceApi>();services.AddSingleton<IFinanceApiClient,FinanceApiClient>();

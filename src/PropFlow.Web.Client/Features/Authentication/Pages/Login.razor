@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/login"
 @layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
 @inject AuthSession Session
@@ -6,53 +8,84 @@
 <span class="auth-form-eyebrow">CỔNG THÔNG TIN TÀI KHOẢN</span>
 <h2>Đăng Nhập Hệ Thống</h2>
 <p class="auth-form-description">Truy cập tài khoản PropFlow của bạn.</p>
-@if (Session.Notice != null) { <p class="feedback" role="status">@Session.Notice</p> }
-@if (!string.IsNullOrWhiteSpace(toastMessage))
-{
-    <PropFlowToast @key="toastVersion" Message="@toastMessage" Severity="error" DurationMs="4000" OnDismiss="DismissToast" />
-}
-<EditForm Model="form" OnValidSubmit="Submit" OnInvalidSubmit="HandleInvalidSubmit">
+<EditForm EditContext="editContext" OnValidSubmit="Submit">
     <DataAnnotationsValidator />
     <label for="username">Tên đăng nhập</label>
-    <div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">badge</span><InputText id="username" @bind-Value="form.Username" autocomplete="username" placeholder="Nhập tên đăng nhập" /></div>
+    <div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">badge</span><InputText id="username" @bind-Value="form.Username" autocomplete="username" aria-describedby="login-username-error" placeholder="Nhập tên đăng nhập" /></div>
+    <div id="login-username-error" class="login-field-error"><ValidationMessage For="() => form.Username" /></div>
     <div class="auth-password-heading"><label for="password">Mật khẩu truy cập</label><a href="/forgot-password">QUÊN MẬT KHẨU?</a></div>
     <div class="auth-field auth-field-has-toggle">
         <span class="material-symbols-outlined auth-field-icon" aria-hidden="true">lock</span>
-        <InputText id="password" type="@(showPassword ? "text" : "password")" @bind-Value="form.Password" autocomplete="current-password" placeholder="Nhập mật khẩu" />
+        <InputText id="password" type="@(showPassword ? "text" : "password")" @bind-Value="form.Password" autocomplete="current-password" aria-describedby="login-password-error" placeholder="Nhập mật khẩu" />
         <button type="button" class="auth-toggle-pass" aria-label="@(showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")" title="@(showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")" @onclick="() => showPassword = !showPassword">
             <span class="material-symbols-outlined" aria-hidden="true">@(showPassword ? "visibility_off" : "visibility")</span>
         </button>
     </div>
-    <button disabled="@busy" type="submit">@(busy ? "ĐANG ĐĂNG NHẬP…" : "XÁC THỰC & TRUY CẬP →")</button>
+    <div id="login-password-error" class="login-field-error"><ValidationMessage For="() => form.Password" /></div>
+    <button disabled="@(busy || Session.Revocation != SessionRevocationState.None)" type="submit">@(busy ? "ĐANG ĐĂNG NHẬP…" : "XÁC THỰC & TRUY CẬP →")</button>
 </EditForm>
 <nav class="auth-links auth-links-login"><span>Chưa có tài khoản?</span><a href="/register">Tạo tài khoản</a><a class="auth-resume" href="/registration/resume">Đã đăng ký? Tiếp tục xác minh</a></nav>
-@if (Session.Notice?.Contains("chưa xác nhận") == true) { <button class="secondary" disabled="@busy" @onclick="RetryLogout">Thử thu hồi phiên lại</button> }
+@if (Session.Revocation == SessionRevocationState.Unconfirmed || retrying)
+{
+    <section class="session-revocation" aria-labelledby="session-revocation-title" aria-busy="@retrying">
+        <div class="session-revocation-copy" role="status">
+            <span class="material-symbols-outlined" aria-hidden="true">shield</span>
+            <div>
+                <h3 id="session-revocation-title">Bảo mật phiên đăng nhập</h3>
+                <p>Phiên trên thiết bị đã được xóa, nhưng chưa thể xác nhận việc thu hồi phiên trên máy chủ.</p>
+                <p>Hãy thử thu hồi phiên trước khi đăng nhập lại.</p>
+            </div>
+        </div>
+        <button type="button" class="secondary" disabled="@retrying" @onclick="RetryLogout">@(retrying ? "Đang thu hồi phiên…" : "Thử thu hồi phiên")</button>
+    </section>
+}
+else if (Session.Notice is { } notice)
+{
+    <p class="feedback" role="status">@notice</p>
+}
 @code {
+    private readonly ToastLifetime toastLifetime = new();
     private readonly LoginForm form = new();
-    private bool busy;
-    private bool showPassword;
-    private string? toastMessage;
-    private int toastVersion;
+    private EditContext editContext = null!;
+    private ApiValidationMessages fieldErrors = null!;
+    private bool busy, retrying, showPassword;
 
-    private void HandleInvalidSubmit(EditContext _)
-        => ShowToast("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.");
+    protected override void OnInitialized()
+    {
+        editContext = new(form);
+        fieldErrors = new(editContext, (nameof(form.Username), nameof(form.Username)), (nameof(form.Password), nameof(form.Password)));
+        Session.AuthenticationStateChanged += OnAuthenticationStateChanged;
+    }
+
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> state) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Session.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+        fieldErrors.Dispose();
+        toastLifetime.Dispose();
+    }
 
     private async Task Submit()
     {
-        if (busy) return;
-
-        DismissToast();
+        if (busy || Session.Revocation != SessionRevocationState.None) return;
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+        fieldErrors.Clear();
         busy = true;
         try
         {
             var result = await Session.LoginAsync(new(form.Username, form.Password));
+            if (!operationFeedback.IsCurrent) return;
             if (result.IsSuccess)
             {
                 Navigation.NavigateTo(RoleHomeNavigation.Home(Session.User?.Role));
                 return;
             }
 
-            ShowToast(GetErrorMessage(result));
+            if (result.Code is "session_changed" or "revocation_pending") return;
+            fieldErrors.Apply(result);
+            if (!editContext.GetValidationMessages().Any())
+                operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể đăng nhập. Vui lòng thử lại."));
         }
         finally
         {
@@ -63,36 +96,23 @@
 
     private async Task RetryLogout()
     {
-        busy = true;
+        if (retrying || Session.Revocation != SessionRevocationState.Unconfirmed) return;
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+        retrying = true;
         try
         {
             var result = await Session.LogoutAsync();
-            if (!result.IsSuccess) ShowToast(GetErrorMessage(result));
+            if (!result.IsSuccess)
+                operationFeedback.Publish(() => Toasts.Error(result.Code switch
+                {
+                    "network" => "Không kết nối được máy chủ để thu hồi phiên. Hãy kiểm tra kết nối và thử lại.",
+                    "timeout" => "Yêu cầu thu hồi phiên đã hết thời gian chờ. Vui lòng thử lại.",
+                    _ => "Máy chủ chưa xác nhận việc thu hồi phiên. Vui lòng thử lại."
+                }));
         }
         finally
         {
-            busy = false;
+            retrying = false;
         }
-    }
-
-    private void ShowToast(string message)
-    {
-        toastMessage = message;
-        toastVersion++;
-    }
-
-    private void DismissToast() => toastMessage = null;
-
-    private static string GetErrorMessage(ApiResult result)
-    {
-        var validationMessages = result.ValidationErrors?.Values
-            .SelectMany(messages => messages)
-            .Where(message => !string.IsNullOrWhiteSpace(message))
-            .Distinct()
-            .ToArray();
-
-        return validationMessages is { Length: > 0 }
-            ? string.Join(" ", validationMessages)
-            : result.Message ?? "Không thể đăng nhập. Vui lòng thử lại.";
     }
 }

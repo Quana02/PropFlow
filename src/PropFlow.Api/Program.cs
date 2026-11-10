@@ -8,6 +8,7 @@ using PropFlow.Modules.Authentication.Infrastructure;
 using PropFlow.Modules.Authentication.Presentation;
 using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.Residents.Infrastructure;
+using PropFlow.Modules.Administration.Application.InternalAccounts;
 using PropFlow.Modules.Administration.Contracts;
 using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Administration.Domain.Roles;
@@ -333,6 +334,7 @@ builder.Services.AddHostedService<BillingCycleWorker>();
 builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
 builder.Services.AddScoped<IResidentOnboarding, ResidentOnboarding>();
+builder.Services.AddScoped<IResidentAccountScope, ResidentAccountScope>();
 builder.Services.AddScoped<IResidentResidenceSource, ResidentResidenceSource>();
 builder.Services.AddScoped<IServiceRequestSubmissionStore, ServiceRequestSubmissionStore>();
 builder.Services.AddScoped<SubmitServiceRequestHandler>();
@@ -349,6 +351,7 @@ builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRe
 builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
 builder.Services.AddScoped<AdditionalCostConsentService>();
 builder.Services.AddScoped<ServiceRequestCostNoticeDispatcher>();
+builder.Services.AddScoped<WorkflowNotificationDelivery>();
 builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
 builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
     client.Timeout = TimeSpan.FromSeconds(90));
@@ -363,9 +366,15 @@ builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentDuplic
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentProfileService>();
 builder.Services.AddScoped<IAccountAccess, AccountAccessService>();
 builder.Services.AddScoped<IAdministrationTransaction, AdministrationTransaction>();
+builder.Services.AddScoped<IInternalAccountProfileStore, InternalAccountProfileStore>();
+builder.Services.AddScoped<ManageInternalAccountProfile>();
 builder.Services.AddScoped<IAtomicTransactionCoordinator, AtomicTransactionCoordinator>();
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy(PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.Read,
+        policy => policy.RequireRole("MANAGER").RequireClaim("permission", PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.Read));
+    options.AddPolicy(PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.RequestEmailChange,
+        policy => policy.RequireRole("MANAGER").RequireClaim("permission", PropFlow.Modules.Authentication.Contracts.ResidentAccountPolicies.RequestEmailChange));
     options.AddPolicy(KnowledgePolicies.Read, policy => policy.RequireAssertion(context => KnowledgePolicies.CanRead(context.User)));
     options.AddPolicy(KnowledgePolicies.Manage, policy => policy.RequireAssertion(context => KnowledgePolicies.CanManage(context.User)));
     options.AddPolicy(ResidentChatPolicy.Use, policy => policy.RequireAssertion(context => ResidentChatPolicy.Allowed(context.User)));
@@ -450,6 +459,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(SupportChatPolicies.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
             PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy(SupportChatPolicies.ReceiptRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
+            PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy(ResidentChatPolicy.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
             PermitLimit = Math.Clamp(builder.Configuration.GetValue("AiChatbot:QuestionsPerMinute", 10), 1, 100),
@@ -539,7 +551,9 @@ app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.AnnouncementHub>("/hubs/announcements", options => options.CloseOnAuthenticationExpiration = true);
-app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true)
+    .RequireAuthorization(policy => policy.RequireRole(SystemRoleCodes.Resident));
+app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/notifications", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<SupportChatHub>("/hubs/support-chat", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();

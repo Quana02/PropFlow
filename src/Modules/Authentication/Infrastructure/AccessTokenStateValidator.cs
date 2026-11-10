@@ -14,6 +14,7 @@ public sealed class AccessTokenStateValidator(
 
         var account = (await accounts.GetAsync([userId], ct)).SingleOrDefault();
         if (account is null || account.Status != "ACTIVE") return false;
+        if (!string.Equals(account.Email, principal.FindFirst("email")?.Value, StringComparison.OrdinalIgnoreCase)) return false;
 
         var currentAccess = await access.GetAsync(userId, ct);
         var tokenRole = principal.FindFirst("role")?.Value;

@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.Communication.Contracts
 @implements IAsyncDisposable
 @inject SupportChatApi Api
@@ -12,6 +13,8 @@
 </section>
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private readonly CancellationTokenSource lifetime = new();
     private readonly SemaphoreSlim refreshGate = new(1, 1);
     private SupportAvailabilityView? availability;
@@ -45,8 +48,10 @@
     }
     private async Task Toggle()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy) return; busy = true;
-        try { var result = await Api.SetAvailability(availability?.Available != true, lifetime.Token); if (result.IsSuccess) { availability = result.Data; error = null; } else error = result.Message; }
+        try { var result = await Api.SetAvailability(availability?.Available != true, lifetime.Token); if (disposed) return; if (result.IsSuccess) { availability = result.Data; error = null; } else if (result.ValidationErrors?.Count is not > 0 && result.StatusCode is null or 0 or >= 500) operationFeedback.Publish(() => Toasts.Error(result.Message)); else error = result.Message; }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { busy = false; }
     }
@@ -57,7 +62,7 @@
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
     }
     public async ValueTask DisposeAsync()
-    {
+    { toastLifetime.Dispose();
         disposed = true; Connection.Changed -= Changed; Connection.StateChanged -= StateChanged; lifetime.Cancel();
         if (loop is not null) await loop; lifetime.Dispose();
     }

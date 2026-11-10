@@ -33,4 +33,8 @@ public sealed class AccountAccessService(AdministrationDbContext db) : IAccountA
             newRoleId: roleId, reason: "Resident eligibility verified during account activation."));
         await db.SaveChangesAsync(ct);
     }
+
+    public Task<Guid[]> GetResidentUserIdsAsync(Guid[] userIds, CancellationToken ct) =>
+        db.UserRoleAssignments.Where(x => userIds.Contains(x.UserId) && x.Role.IsActive && x.Role.Code == SystemRoleCodes.Resident)
+            .Select(x => x.UserId).ToArrayAsync(ct);
 }

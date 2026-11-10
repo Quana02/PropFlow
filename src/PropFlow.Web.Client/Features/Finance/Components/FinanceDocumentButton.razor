@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using Microsoft.JSInterop
 @using PropFlow.Web.Client.Features.Finance.Services
 @using PropFlow.Web.Client.Features.Finance.Models
@@ -5,19 +6,30 @@
 @inject IJSRuntime Js
 @implements IAsyncDisposable
 <button type="button" disabled="@busy" @onclick="Open">@Label</button>
-@if (error is not null) { <span role="alert">@error</span> }
+
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter, EditorRequired] public string Path { get; set; } = "";
     [Parameter] public string Label { get; set; } = "In phiếu";
     [Parameter] public bool Print { get; set; } = true;
-    private bool busy; private string? error; private IJSObjectReference? module;
+    private bool busy;  private IJSObjectReference? module;
     private async Task Open() {
-        busy = true; error = null;
-        try { var r = await Api.GetAsync<FileResponse>(Path); if (!r.IsSuccess || r.Data is null) { error = r.Message; return; }
-            module ??= await Js.InvokeAsync<IJSObjectReference>("import", "./js/finance-documents.js");
+        if (busy) return;
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        busy = true;
+        try { var r = await Api.GetAsync<FileResponse>(Path); if (!r.IsSuccess || r.Data is null) { operationFeedback.Publish(() => Toasts.Error(r.Message)); return; }
+            if (!operationFeedback.IsCurrent) return;
+            if (module is null)
+            {
+                var imported = await Js.InvokeAsync<IJSObjectReference>("import", "./js/finance-documents.js");
+                if (!operationFeedback.IsCurrent) { await imported.DisposeAsync(); return; }
+                module = imported;
+            }
             if (Print) await module.InvokeVoidAsync("print", r.Data.Content);
             else await module.InvokeVoidAsync("download", r.Data.Content, r.Data.ContentType, r.Data.FileName);
-        } catch (JSException) { error = "Chưa thể mở chứng từ. Vui lòng thử lại."; } finally { busy = false; }
+        } catch (JSException) { operationFeedback.Publish(() => Toasts.Error("Chưa thể mở chứng từ. Vui lòng thử lại.")); } finally { busy = false; }
     }
-    public async ValueTask DisposeAsync() { if (module is not null) await module.DisposeAsync(); }
+    public async ValueTask DisposeAsync() { toastLifetime.Dispose();  if (module is not null) await module.DisposeAsync(); }
 }

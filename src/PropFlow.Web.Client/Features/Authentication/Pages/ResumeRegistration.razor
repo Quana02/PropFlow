@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/registration/resume"
 @layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
 @inject AuthenticationService Auth
@@ -5,7 +7,7 @@
 @inject NavigationManager Navigation
 <PageTitle>Tiếp tục xác minh — PropFlow</PageTitle><h2>Tiếp tục xác minh cư dân</h2>
 <p>Nhập thông tin tài khoản đã đăng ký để yêu cầu mã mới. Mã cũ sẽ không còn hiệu lực.</p>
-<ApiFeedback Result="result" />
+<ApiFeedback Result="result" Operation="resultFeedback" />
 @if (message != null) { <p class="feedback" role="status">@message</p> }
 <EditForm Model="form" OnValidSubmit="Submit"><DataAnnotationsValidator /><ValidationSummary />
     <label for="resume-user">Tên đăng nhập</label>
@@ -24,9 +26,16 @@
     <button type="submit" disabled="@busy">@(busy ? "Đang xử lý…" : "Yêu cầu mã xác minh")</button>
 </EditForm><nav class="auth-links"><a href="/login">Quay lại đăng nhập</a></nav>
 @code {
+    private PropFlow.Web.Client.Shared.Feedback.ToastOperation? resultFeedback;
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private readonly LoginForm form = new(); private ApiResult? result; private bool busy; private bool showPassword; private string? message;
-    private async Task Submit() { if (busy) return; busy = true; try {
-        var response = await Auth.ResumeAsync(new(form.Username, form.Password)); result = response;
+    private async Task Submit() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+        resultFeedback = operationFeedback;
+ if (busy) return; busy = true; try {
+        var response = await Auth.ResumeAsync(new(form.Username, form.Password)); if (!operationFeedback.IsCurrent) return; result = response;
         if (response.IsSuccess) { State.Clear(); State.Challenge = response.Data; message = response.Data!.Message; if (response.Data.ChallengeId != Guid.Empty) Navigation.NavigateTo("/otp"); }
     } finally { form.Password = ""; busy = false; } }
 }

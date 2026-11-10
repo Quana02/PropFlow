@@ -2,8 +2,10 @@ const storageKey = "propflow-app-nav-position";
 const EDGE_PADDING = 24;
 
 export function initialize(element) {
+  const scrolling = initializeScrolling(element);
+  let transitionTimer;
   const handle = element.querySelector(".app-nav-drag");
-  if (!handle) return { dispose() { } };
+  if (!handle) return scrolling;
 
   const clamp = (value, low, high) => Math.max(low, Math.min(value, high));
 
@@ -23,8 +25,9 @@ export function initialize(element) {
   // nửa nào của màn hình. Dùng khi khôi phục vị trí đã lưu hoặc khi resize.
   const enforceEdgeSnap = (left, top) => {
     const centerX = left + element.offsetWidth / 2;
-    const snappedLeft = centerX < halfScreenX() ? leftEdgeLeft() : rightEdgeLeft();
-    place(snappedLeft, top);
+    const dockOnLeft = centerX < halfScreenX();
+    element.dataset.dockSide = dockOnLeft ? "left" : "right";
+    place(dockOnLeft ? leftEdgeLeft() : rightEdgeLeft(), top);
   };
 
   try {
@@ -73,21 +76,14 @@ export function initialize(element) {
     if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
 
     const bounds = element.getBoundingClientRect();
-    const centerX = bounds.left + element.offsetWidth / 2;
-
     element.style.transition =
       "left 0.28s cubic-bezier(0.16, 1, 0.3, 1), top 0.2s ease";
 
-    if (centerX < halfScreenX()) {
-      // Thả ở nửa TRÁI màn hình -> neo về sát mép trái.
-      place(leftEdgeLeft(), bounds.top);
-    } else {
-      // Thả ở nửa PHẢI màn hình -> neo về sát mép phải.
-      place(rightEdgeLeft(), bounds.top);
-    }
+    enforceEdgeSnap(bounds.left, bounds.top);
 
     // Xóa transition sau khi animation chạy xong để không ảnh hưởng lần kéo tiếp theo.
-    window.setTimeout(() => { element.style.transition = "none"; }, 300);
+    window.clearTimeout(transitionTimer);
+    transitionTimer = window.setTimeout(() => { element.style.transition = "none"; }, 300);
 
     persist();
   };
@@ -119,6 +115,8 @@ export function initialize(element) {
 
   return {
     dispose() {
+      scrolling.dispose();
+      window.clearTimeout(transitionTimer);
       handle.removeEventListener("pointerdown", pointerDown);
       handle.removeEventListener("pointermove", pointerMove);
       handle.removeEventListener("pointerup", pointerUp);
@@ -126,6 +124,52 @@ export function initialize(element) {
       handle.removeEventListener("keydown", keyDown);
       window.removeEventListener("resize", keepVisible);
       observer.disconnect();
+    }
+  };
+}
+
+// Only change this scroll viewport, never scrollIntoView (which can move the page).
+export function initializeScrolling(element) {
+  const viewport = element.querySelector(".app-nav-scroll");
+  if (!viewport) return { dispose() {} };
+  let disposed = false;
+  let queued = false;
+  let forceNext = false;
+  let lastActive = null;
+  const reveal = item => {
+    if (!item || viewport.clientHeight === 0) return;
+    const bounds = viewport.getBoundingClientRect();
+    const target = item.getBoundingClientRect();
+    if (target.top < bounds.top) viewport.scrollTop -= bounds.top - target.top;
+    else if (target.bottom > bounds.bottom) viewport.scrollTop += target.bottom - bounds.bottom;
+  };
+  const schedule = (force = false) => {
+    forceNext ||= force;
+    if (queued || disposed) return;
+    queued = true;
+    queueMicrotask(() => {
+      queued = false;
+      if (disposed) return;
+      const active = viewport.querySelector('a[aria-current="page"], a.active, a.is-selected');
+      if (forceNext || active !== lastActive) reveal(active);
+      forceNext = false;
+      lastActive = active;
+    });
+  };
+  const focused = event => reveal(event.target.closest("a"));
+  viewport.addEventListener("focusin", focused);
+  // Handles delayed authorization rendering, normal NavLink changes and admin query tabs.
+  const changes = new MutationObserver(() => schedule());
+  changes.observe(viewport, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "aria-current"] });
+  const size = new ResizeObserver(() => schedule(true));
+  size.observe(viewport);
+  schedule(true);
+  return {
+    dispose() {
+      disposed = true;
+      changes.disconnect();
+      size.disconnect();
+      viewport.removeEventListener("focusin", focused);
     }
   };
 }

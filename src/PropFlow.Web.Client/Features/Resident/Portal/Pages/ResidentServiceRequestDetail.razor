@@ -46,7 +46,7 @@ else if (_detail is not null)
             <p class="request-description">@_detail.Description</p>
             <dl class="request-facts">
                 <div><dt>Loại dịch vụ</dt><dd>@(_detail.CategoryName ?? _detail.CategoryCode ?? "Chưa xác định")</dd></div>
-                <div><dt>Khu vực</dt><dd>@AreaLabel(_detail.ServiceAreaCode)</dd></div>
+                <div><dt>Khu vực</dt><dd>@(_detail.FacilityName ?? AreaLabel(_detail.ServiceAreaCode))</dd></div>
                 <div><dt>Mức ưu tiên</dt><dd>@PriorityLabel(_detail.PriorityCode)</dd></div>
                 <div><dt>Ngày gửi</dt><dd>@FormatDateTime(_detail.SubmittedAt)</dd></div>
                 <div><dt>Lịch mong muốn</dt><dd>@PreferredSchedule(_detail)</dd></div>
@@ -185,7 +185,7 @@ else if (_detail is not null)
     {
         "MORNING" => "Buổi sáng", "AFTERNOON" => "Buổi chiều", "EVENING" => "Buổi tối", "ANYTIME" => "Cả ngày", _ => "Chưa chọn"
     };
-    private static string AreaLabel(string? code) => code?.Replace('_', ' ') ?? "Chưa xác định";
+    private static string AreaLabel(string? code) => PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.Label(code);
     private static string PriorityLabel(string? code) => code == "URGENT" ? "Khẩn cấp" : "Bình thường";
     private static string StatusTransition(string? from, string? to) => string.IsNullOrWhiteSpace(from)
         ? StatusLabel(to ?? string.Empty)
@@ -194,6 +194,6 @@ else if (_detail is not null)
     {
         "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công",
         "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã hoàn tất",
-        "CANCELLED" => "Đã hủy", _ => status
+        "CANCELLED" => "Đã hủy", _ => "Chưa xác định"
     };
 }

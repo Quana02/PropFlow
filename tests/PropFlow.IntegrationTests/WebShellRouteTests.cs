@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PropFlow.Web;
 using PropFlow.Web.Client.Features.Authentication.Components;
+using PropFlow.Web.Client.Features.Resident.Portal.Components;
 using PropFlow.Web.Client.Services.Authentication;
 
 namespace PropFlow.IntegrationTests;
@@ -40,8 +41,11 @@ public sealed class WebShellRouteTests : IClassFixture<WebShellRouteTests.WebShe
     [InlineData("/otp")]
     [InlineData("/reset-password")]
     [InlineData("/account")]
+    [InlineData("/account/change-email")]
     [InlineData("/account/change-password")]
     [InlineData("/resident")]
+    [InlineData("/resident/account-email")]
+    [InlineData("/residents/accounts")]
     [InlineData("/forbidden")]
     [InlineData("/finance/dashboard")]
     [InlineData("/finance/payments/pending")]
@@ -77,7 +81,16 @@ public sealed class WebShellRouteTests : IClassFixture<WebShellRouteTests.WebShe
             Assert.Single(pages.Where(page => page.GetCustomAttributes(typeof(RouteAttribute), false)
                 .Cast<RouteAttribute>().Any(attribute => attribute.Template == route)));
         Assert.All(pages, page =>
-            Assert.Equal(typeof(AuthLayout), page.GetCustomAttributes(typeof(LayoutAttribute), false)
-                .Cast<LayoutAttribute>().SingleOrDefault()?.LayoutType));
+        {
+            var route = Assert.Single(page.GetCustomAttributes(typeof(RouteAttribute), false).Cast<RouteAttribute>()).Template;
+            var layout = route switch
+            {
+                "/account" or "/account/change-email" or "/account/change-password" => typeof(AccountLayout),
+                "/resident/account-email" => typeof(ResidentPortalLayout),
+                _ => typeof(AuthLayout)
+            };
+            Assert.Equal(layout,
+                page.GetCustomAttributes(typeof(LayoutAttribute), false).Cast<LayoutAttribute>().SingleOrDefault()?.LayoutType);
+        });
     }
 }

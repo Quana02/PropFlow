@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.Communication.Contracts
 @using PropFlow.Web.Client.Shared.Feedback
 @implements IAsyncDisposable
@@ -7,27 +8,48 @@
 @inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
 @inject NavigationManager Navigation
 
-<div class="support-workspace">
+<div class="support-workspace @(ForManager ? "internal-workspace" : null)" @ref="workspace">
     @if (identityChanged)
     { <p class="support-error" role="alert">Phiên đăng nhập đã thay đổi. Vui lòng tải lại trang để mở đúng cuộc trò chuyện của tài khoản hiện tại.</p> }
     else
     {
-    <header class="support-heading"><div><span class="support-eyebrow">KẾT NỐI TRỰC TIẾP</span><h1>@(ForManager ? "Chat với cư dân" : "Liên hệ Ban quản lý")</h1><p>@(ForManager ? "Tiếp nhận và hỗ trợ những cuộc trò chuyện được phân cho bạn." : "Mô tả nhu cầu của bạn để được kết nối với Manager đang sẵn sàng.")</p></div>
-        <span class="support-connection @(Connection.Connected ? "online" : "")">@(Connection.Connected ? "Đã kết nối trực tuyến" : "Đang kết nối lại…")</span></header>
+    @if (ForManager)
+    {
+        <h1 class="support-sr">Chat với cư dân</h1>
+    }
+    else
+    {
+        <header class="support-heading">
+            <div>
+                <span class="support-eyebrow">KẾT NỐI TRỰC TIẾP</span>
+                <h1>Liên hệ Ban quản lý</h1>
+                <p>Mô tả nhu cầu của bạn để được kết nối với Manager đang sẵn sàng.</p>
+            </div>
+            <span class="support-connection @(Connection.Connected ? "online" : "")">@(Connection.Connected ? "Đã kết nối trực tuyến" : "Đang kết nối lại…")</span>
+        </header>
+    }
     @if (error is not null) { <div class="support-error" role="alert">@error <button type="button" disabled="@busy" @onclick="Reload">Tải lại</button></div> }
     <div class="support-columns">
-        <aside class="support-list" aria-label="Danh sách cuộc trò chuyện">
-            <div class="support-list-heading"><h2>@(ForManager ? "Hộp thư của bạn" : "Lịch sử liên hệ")</h2>
-                @if (!ForManager) { <button type="button" disabled="@(busy || activeId is not null)" @onclick="New">+ Phiên mới</button> }</div>
+        @if (ForManager)
+        {
+            <ManagerSupportConversationList Conversations="conversations" SelectedId="selected?.Id"
+                Page="page" Busy="busy" Loading="loading" OnSelect="Select" OnPrevious="Previous" OnNext="Next" />
+        }
+        else
+        {
+        <aside class="support-list" aria-label="Lịch sử liên hệ">
+            <div class="support-list-heading"><h2>Lịch sử liên hệ</h2>
+                <button type="button" disabled="@(busy || activeId is not null)" @onclick="New">+ Phiên mới</button></div>
             @if (loading) { <p class="support-empty" role="status">Đang tải…</p> }
-            else if (conversations is null || conversations.Items.Count == 0) { <p class="support-empty">@(ForManager ? "Chưa có cuộc trò chuyện được phân. Bật sẵn sàng nhận chat ở thanh phía trên." : "Bạn chưa có cuộc trò chuyện nào. Hãy gửi nội dung cần hỗ trợ ở khung bên cạnh.")</p> }
+            else if (conversations is null || conversations.Items.Count == 0) { <p class="support-empty">Bạn chưa có cuộc trò chuyện nào. Hãy gửi nội dung cần hỗ trợ ở khung bên cạnh.</p> }
             @if (conversations is not null)
             {
                 @foreach (var item in conversations.Items)
-                { <button type="button" class="conversation-link @(selected?.Id == item.Id ? "selected" : "")" disabled="@busy" @onclick="() => Select(item.Id)"><span><strong>@(ForManager ? item.ResidentName : item.ManagerName ?? "Ban quản lý")</strong><small>@Status(item.Status)</small></span><time>@Time(item.UpdatedAt)</time></button> }
+                { <button type="button" class="conversation-link @(selected?.Id == item.Id ? "selected" : "")" disabled="@busy" @onclick="() => Select(item.Id)"><span><strong>@(item.ManagerName ?? "Ban quản lý")</strong><small>@Status(item.Status)</small></span><time>@Time(item.UpdatedAt)</time></button> }
                 <nav class="support-pagination" aria-label="Phân trang hội thoại"><button disabled="@(busy || page <= 1)" @onclick="Previous">Trước</button><span>Trang @(page)</span><button disabled="@(busy || page * 12 >= conversations.Total)" @onclick="Next">Sau</button></nav>
             }
         </aside>
+        }
         <section class="support-chat" aria-label="Khung trò chuyện với Ban quản lý">
             <header class="support-chat-heading"><div><h2>@(selected is null ? ForManager ? "Chọn cuộc trò chuyện" : "Trợ lý tiếp nhận BQL" : ForManager ? selected.ResidentName : selected.ManagerName ?? "Đang tìm Manager")</h2><small>@ConversationStatus</small></div>
                 @if (selected is { Status: not "CLOSED" }) { <button class="support-close" disabled="@busy" @onclick="CloseConversation">Kết thúc phiên</button> }</header>
@@ -38,19 +60,149 @@
                 @if (selected is null && !ForManager)
                 { <article class="support-bubble system"><small>Trợ lý tiếp nhận</small><p>Xin chào! Bạn cần Ban quản lý hỗ trợ việc gì? Hãy mô tả để mình kết nối với Manager đang sẵn sàng.</p></article> }
                 @foreach (var message in messages)
-                { <article @key="message.Id" class="support-bubble @BubbleClass(message)"><div><strong>@message.SenderName</strong><time>@Time(message.CreatedAt)</time></div><p>@message.Text</p></article> }
+                {
+                    var side = BubbleClass(message);
+                    var menuId = $"support-message-menu-{message.Id:N}";
+                    var selectable = selecting && message.Kind != "SYSTEM";
+                    var picked = selectedMessages.Contains(message.Id);
+                    <div @key="message.Id" class="support-message-row @side">
+                        <article class="support-bubble @side @(selectable ? "selectable" : null)" data-message-id="@message.Id">
+                            <div>
+                                <strong>@message.SenderName</strong><time>@Time(message.CreatedAt)</time>
+                            </div>
+                            @if (message.Reply is { } quoted)
+                            {
+                                <blockquote class="support-message-quote">
+                                    @if (quoted.SenderName is { } sender) { <strong>@sender</strong> }
+                                    <span>@(quoted.Text ?? "Tin nhắn gốc không còn hiển thị")</span>
+                                </blockquote>
+                            }
+                            @if (message.Forwarded) { <small class="support-message-label">Đã chuyển tiếp</small> }
+                            <p class="@(message.RecalledAt is null ? null : "recalled")">@message.Text</p>
+                            @if (IsMine(message) && message.RecalledAt is null)
+                            { <small class="support-message-label support-receipt">@ReceiptLabel(message)</small> }
+                            @if (selectable)
+                            {
+                                <input class="support-message-picker" type="checkbox"
+                                       aria-label="@($"Chọn tin của {message.SenderName} lúc {Time(message.CreatedAt)}")"
+                                       checked="@picked" disabled="@(busy || (selectedMessages.Count >= 50 && !picked))"
+                                       @onchange="() => ToggleMessageSelection(message.Id)" />
+                            }
+                        </article>
+                        @if (!selecting && message.Kind != "SYSTEM")
+                        {
+                            <div class="support-message-tools" role="group" aria-label="@($"Thao tác với tin của {message.SenderName} lúc {Time(message.CreatedAt)}")">
+                                @if (message.RecalledAt is null)
+                                {
+                                    @if (selected is { Status: not "CLOSED" })
+                                    {
+                                        <button type="button" aria-label="Trả lời" title="Trả lời" disabled="@busy" @onclick="() => ReplyTo(message)">
+                                            <span class="material-symbols-outlined" aria-hidden="true">format_quote</span>
+                                        </button>
+                                    }
+                                    <button type="button" aria-label="Chuyển tiếp" title="Chuyển tiếp" disabled="@busy" @onclick="() => PrepareForward([message.Id])">
+                                        <span class="material-symbols-outlined" aria-hidden="true">forward</span>
+                                    </button>
+                                }
+                                <button type="button" class="support-message-more" aria-label="Tùy chọn" title="Tùy chọn"
+                                        popovertarget="@menuId" disabled="@busy">
+                                    <span class="material-symbols-outlined" aria-hidden="true">more_horiz</span>
+                                </button>
+                                <div id="@menuId" class="support-message-menu" popover="auto" role="group" aria-label="Tùy chọn tin nhắn">
+                                    @if (message.RecalledAt is null)
+                                    {
+                                        <button type="button" popovertarget="@menuId" popovertargetaction="hide" disabled="@busy" @onclick="() => CopyMessageText(message.Text)">
+                                            <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>Sao chép tin nhắn
+                                        </button>
+                                        <hr />
+                                    }
+                                    <button type="button" popovertarget="@menuId" popovertargetaction="hide" disabled="@busy" @onclick="() => BeginSelection(message.Id)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">checklist</span>Chọn nhiều tin nhắn
+                                    </button>
+                                    <button type="button" aria-haspopup="dialog" popovertarget="@menuId" popovertargetaction="hide" disabled="@busy" @onclick="() => OpenMessageDetails(message.Id)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">info</span>Xem chi tiết
+                                    </button>
+                                    <hr />
+                                    @if (message.RecalledAt is null && IsMine(message))
+                                    {
+                                        <button type="button" class="danger" popovertarget="@menuId" popovertargetaction="hide" disabled="@busy" @onclick="() => PrepareRecall([message.Id])">
+                                            <span class="material-symbols-outlined" aria-hidden="true">undo</span>Thu hồi
+                                        </button>
+                                    }
+                                    <button type="button" class="danger" popovertarget="@menuId" popovertargetaction="hide" disabled="@busy" @onclick="() => PrepareHide([message.Id])">
+                                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>Xóa ở phía tôi
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
                 @if (!ForManager && selected is not null && Connection.IsTyping(selected.Id)) { <p class="support-typing" role="status">Manager đang nhập câu trả lời…</p> }
             </div>
             @if (ForManager && selected is { Status: "ACTIVE" } && Connection.Connected && Connection.Draft(selected.Id) is { } draft)
             { <aside class="support-live-draft" aria-label="Bản nháp cư dân đang gõ"><strong>Cư dân đang soạn — chưa gửi</strong><p>@draft</p><small>Nội dung có thể thay đổi trước khi gửi và không được lưu.</small></aside> }
-            @if (selected?.Status == "CLOSED")
+            @if (selecting)
+            {
+                <div class="support-selection" role="group" aria-label="Thao tác với các tin đã chọn">
+                    <span class="support-selection-count" aria-live="polite" aria-atomic="true">
+                        <strong>@selectedMessages.Count</strong> Đã chọn
+                    </span>
+                    <button type="button" aria-label="Sao chép" title="Sao chép" disabled="@(busy || !HasSelectedContent)" @onclick="CopySelection">
+                        <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                    </button>
+                    <button type="button" aria-label="Chuyển tiếp" title="Chuyển tiếp" disabled="@(busy || !CanForwardSelection)" @onclick="ForwardSelection">
+                        <span class="material-symbols-outlined" aria-hidden="true">forward</span>
+                    </button>
+                    <button type="button" class="danger" aria-label="Thu hồi" title="Thu hồi" disabled="@(busy || !CanRecallSelection)" @onclick="RecallSelection">
+                        <span class="material-symbols-outlined" aria-hidden="true">undo</span>
+                    </button>
+                    <button type="button" class="danger" aria-label="Xóa ở phía tôi" title="Xóa ở phía tôi" disabled="@(busy || selectedMessages.Count == 0)" @onclick="HideSelection">
+                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                    </button>
+                    <button type="button" class="support-selection-cancel" disabled="@busy" @onclick="CancelSelection">Hủy</button>
+                </div>
+            }
+            else if (selected?.Status == "CLOSED")
             { <div class="support-ended">Phiên đã kết thúc. @if (!ForManager && activeId is null) { <button type="button" @onclick="New">Bắt đầu phiên mới</button> }</div> }
             else if (!ForManager || selected is not null)
             {
-                <form class="support-compose" @onsubmit="Send" @onsubmit:preventDefault>
+                <form class="support-compose" aria-label="Soạn tin nhắn" @onsubmit="Send" @onsubmit:preventDefault>
+                    @if (replyTo is { } reply)
+                    {
+                        <div class="support-reply-draft">
+                            <div><strong>Đang trả lời @reply.SenderName</strong><span>@reply.Text</span></div>
+                            <button type="button" aria-label="Hủy trả lời" disabled="@busy" @onclick="CancelReply">×</button>
+                        </div>
+                    }
                     <label class="support-sr" for="support-message">Nội dung tin nhắn</label>
-                    <textarea id="support-message" value="@text" @oninput="Input" rows="3" maxlength="4000" disabled="@busy" placeholder="@(ForManager ? "Nhập câu trả lời cho cư dân…" : "Bạn cần Ban quản lý hỗ trợ điều gì?")"></textarea>
-                    <div><small>@text.Length / 4.000 ký tự · @DraftStatus</small><button type="submit" disabled="@(busy || string.IsNullOrWhiteSpace(text))">@(busy ? "Đang gửi…" : "Gửi tin nhắn")</button></div>
+                    <div class="support-compose-row">
+                        <textarea id="support-message" value="@text" @oninput="Input" rows="1" maxlength="4000"
+                                  readonly="@busy" enterkeyhint="send" aria-describedby="support-compose-hint"
+                                  placeholder="@(ForManager ? "Nhập tin nhắn…" : "Bạn cần Ban quản lý hỗ trợ điều gì?")"></textarea>
+                        <button type="submit" class="support-send" aria-label="Gửi tin nhắn" title="Gửi tin nhắn"
+                                disabled="@(busy || string.IsNullOrWhiteSpace(text))">
+                            @if (sending)
+                            {
+                                <span class="support-send-progress" aria-hidden="true"></span>
+                            }
+                            else
+                            {
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M22 2 7 12l-5-2 20-8Zm0 0-8 20-2-5 10-15ZM7 12l5 5" />
+                                </svg>
+                            }
+                        </button>
+                    </div>
+                    <div class="support-compose-meta">
+                        <small id="support-compose-hint">
+                            <span class="support-compose-shortcuts">Enter để gửi · Shift+Enter để xuống dòng</span>
+                            @if (!ForManager) { <span>@DraftStatus</span> }
+                        </small>
+                        <small>@text.Length / 4.000 ký tự</small>
+                    </div>
+                    @if (sending) { <small class="support-send-status" role="status">Đang gửi…</small> }
+                    else if (sendFailed) { <small class="support-send-status failed" role="status">Chưa gửi được. Bạn có thể thử lại.</small> }
                 </form>
             }
         </section>
@@ -66,7 +218,64 @@
         Busy="@busy" OnConfirm="ConfirmAction" OnCancel="CancelConfirmation" />
 }
 
+@if (!identityChanged && messageAction is { } pending)
+{
+    <PropFlowConfirmationDialog Title="@pending.Title" Message="@pending.Message" ConfirmText="@pending.ConfirmText"
+        Destructive="@(pending.Kind != MessageActionKind.Forward)" Busy="@busy"
+        OnConfirm="ConfirmMessageAction" OnCancel="CancelMessageAction" />
+}
+@if (!identityChanged && messageDetails is { } details)
+{
+    var recipient = details.Kind == "MANAGER" ? selected?.ResidentName : selected?.ManagerName;
+    var received = details.DeliveredAt is not null || details.SeenAt is not null;
+    <dialog @ref="detailsDialog" class="support-details" aria-labelledby="support-details-title">
+        <header class="support-details-header">
+            <h2 id="support-details-title">Thông tin tin nhắn</h2>
+            <button type="button" autofocus aria-label="Đóng" title="Đóng" @onclick="CloseMessageDetails">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </header>
+        <div class="support-details-preview">
+            <article class="support-details-bubble @(IsMine(details) ? "mine" : null)">
+                <strong>@details.SenderName</strong>
+                <p>@details.Text</p>
+                <time datetime="@details.CreatedAt.ToString("O")">@DetailsTime(details.CreatedAt)</time>
+                @if (details.RecalledAt is { } recalled)
+                {
+                    <small>Đã thu hồi · @DetailsTime(recalled)</small>
+                }
+            </article>
+        </div>
+        <section class="support-details-receipt">
+            <h3>@(details.SeenAt is not null ? "Đã xem (1)" : received ? "Đã nhận (1)" : "Đã nhận (0)")</h3>
+            @if (received)
+            {
+                <div class="support-details-recipient">
+                    <span class="material-symbols-outlined support-details-avatar" aria-hidden="true">person</span>
+                    <div>
+                        <strong>@(recipient ?? "Người nhận")</strong>
+                        @if (details.DeliveredAt is { } deliveredAt)
+                        {
+                            <small>Đã nhận · @DetailsTime(deliveredAt)</small>
+                        }
+                        @if (details.SeenAt is { } seenAt)
+                        {
+                            <small>Đã xem · @DetailsTime(seenAt)</small>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p>Chưa có xác nhận đã nhận.</p>
+            }
+        </section>
+    </dialog>
+}
+
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter] public bool ForManager { get; set; }
     [Parameter] public Guid? RequestedConversationId { get; set; }
     private Guid? lastRequested;
@@ -89,14 +298,14 @@
     private Task? draftPump;
     private long draftRevision;
     private CancellationTokenSource? draftDebounce;
-    private IJSObjectReference? scrollModule;
-    private ElementReference thread;
+    private IJSObjectReference? workspaceModule;
+    private ElementReference workspace, thread, detailsDialog;
     private string ConversationStatus => selected?.Status switch {
         "WAITING" => "Yêu cầu đang chờ Manager sẵn sàng. Bạn vẫn có thể gửi thêm nội dung.",
         "ACTIVE" => selected.ManagerOnline ? "Đang trao đổi với Ban quản lý" : "Manager đang mất kết nối. Tin đã gửi vẫn được lưu; bạn có thể chờ hoặc kết thúc phiên.",
         "CLOSED" => "Cuộc trò chuyện đã kết thúc", _ => ForManager ? "Chọn một phiên được phân để trả lời" : "Trợ lý sẽ tìm Manager sau khi bạn gửi nhu cầu hỗ trợ"
     };
-    private string DraftStatus => ForManager ? "Tin nhắn gửi trực tiếp cho cư dân" : selected is { Status: "ACTIVE", ManagerOnline: true } && Connection.Connected
+    private string DraftStatus => selected is { Status: "ACTIVE", ManagerOnline: true } && Connection.Connected
         ? "Đang chia sẻ bản nháp với Manager" : "Bản nháp chưa được chia sẻ trực tiếp";
     protected override async Task OnInitializedAsync()
     {
@@ -107,7 +316,7 @@
     private void AuthenticationChanged(Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> state)
     {
         if (Session.User?.Id == ownerUserId) return;
-        identityChanged = true; confirmation = null; lifetime.Cancel(); draftDebounce?.Cancel(); text = ""; messages.Clear(); selected = null; conversations = null;
+        identityChanged = true; confirmation = null; ResetMessageTools(); lifetime.Cancel(); draftDebounce?.Cancel(); text = ""; messages.Clear(); selected = null; conversations = null;
         if (!disposed) _ = InvokeAsync(StateHasChanged);
     }
     protected override async Task OnParametersSetAsync()
@@ -119,11 +328,12 @@
     private Task Changed(Guid id) => InvokeAsync(Reload);
     private async Task Reload()
     {
-        if (disposed) return;
+        if (disposed || identityChanged) return;
         if (!await refreshGate.WaitAsync(0)) { reloadAgain = true; return; }
         try
         {
             var list = await Api.List(page, lifetime.Token);
+            if (disposed || identityChanged) return;
             if (!list.IsSuccess || list.Data is null) { error = list.Message; return; }
             error = null;
             conversations = list.Data; timeZoneId = list.Data.TimeZoneId;
@@ -144,14 +354,29 @@
         if (!detail.IsSuccess || detail.Data is null) { error = detail.Message; return; }
         var history = await Api.Messages(id, null, lifetime.Token);
         if (!history.IsSuccess || history.Data is null) { error = history.Message; return; }
-        var incoming = history.Data.Items;
+        var incoming = history.Data.Items.ToList();
         var previousLastResident = messages.Where(m => m.Kind == "RESIDENT").Select(m => m.Sequence).DefaultIfEmpty().Max();
         var changedSelection = selected?.Id != id;
-        var newTail = changedSelection || incoming.LastOrDefault()?.Sequence != messages.LastOrDefault()?.Sequence;
-        if (reset || changedSelection || (messages.Count > 0 && incoming.Count > 0 && incoming[0].Sequence > messages[^1].Sequence + 1)) messages.Clear();
+        var more = history.Data.HasMore;
+        if (!reset && !changedSelection && messages.Count > 0)
+        {
+            var oldest = messages[0].Sequence;
+            while (more && incoming.Count > 0 && incoming[0].Sequence > oldest)
+            {
+                var older = await Api.Messages(id, incoming[0].Sequence, lifetime.Token);
+                if (!older.IsSuccess || older.Data is null) { error = older.Message; return; }
+                more = older.Data.HasMore;
+                if (older.Data.Items.Count == 0) break;
+                incoming.InsertRange(0, older.Data.Items);
+            }
+        }
+        if (disposed || identityChanged) return;
+        var newTail = changedSelection || (incoming.LastOrDefault()?.Sequence ?? 0) > (messages.LastOrDefault()?.Sequence ?? 0);
+        if (changedSelection) ResetMessageTools();
         selected = detail.Data; timeZoneId = history.Data.TimeZoneId;
-        messages = messages.Concat(incoming).DistinctBy(m => m.Id).OrderBy(m => m.Sequence).ToList();
-        if (reset || changedSelection || messages.Count == incoming.Count) hasMore = history.Data.HasMore;
+        messages = incoming;
+        hasMore = more;
+        SyncMessageTools();
         if (messages.Where(m => m.Kind == "RESIDENT").Select(m => m.Sequence).DefaultIfEmpty().Max() > previousLastResident || selected.Status != "ACTIVE") Connection.ClearDraft(id);
         scrollToEnd |= newTail || reset || changedSelection;
     }
@@ -163,7 +388,7 @@
     }
     private async Task SelectConversation(Guid id)
     {
-        await ClearTransientForSelected(); text = ""; pendingKey = null; messages.Clear(); error = null;
+        await ClearTransientForSelected(); ResetMessageTools(); text = ""; pendingKey = null; messages.Clear(); error = null;
         if (ForManager && RequestedConversationId != id)
         { Navigation.NavigateTo($"/manager/support-chat?conversation={id}"); return; }
         await refreshGate.WaitAsync(lifetime.Token); try { await LoadConversation(id, true); } finally { refreshGate.Release(); }
@@ -171,31 +396,47 @@
     private async Task New()
     {
         if (busy || activeId is not null) return;
-        await ClearTransientForSelected(); selected = null; messages.Clear(); text = ""; hasMore = false; error = null; pendingKey = null;
+        await ClearTransientForSelected(); ResetMessageTools(); selected = null; messages.Clear(); text = ""; hasMore = false; error = null; pendingKey = null;
+    }
+    private void OperationError(PropFlow.Web.Client.Services.Api.ApiResult result)
+    {
+        if (lifetime.IsCancellationRequested) return;
+        if (result.StatusCode is 401 or 403 || result.ValidationErrors?.Count > 0) error = result.Message;
+        else Toasts.Error(result.Message);
     }
     private async Task Send()
     {
-        if (busy || string.IsNullOrWhiteSpace(text)) return;
-        busy = true; error = null; var value = text.Trim();
-        if (pendingKey is null || pendingText != value) { pendingKey = Guid.NewGuid(); pendingText = value; }
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (busy || disposed || identityChanged || selecting || confirmation is not null || messageAction is not null || string.IsNullOrWhiteSpace(text)
+            || selected?.Status == "CLOSED" || (ForManager && selected is null)) return;
+        busy = sending = true; sendFailed = false; error = null; var value = text.Trim();
+        var replyId = replyTo?.Id;
+        if (pendingKey is null || pendingText != value || pendingReplyId != replyId)
+        { pendingKey = Guid.NewGuid(); pendingText = value; pendingReplyId = replyId; }
         try
         {
             await ClearTransientForSelected();
+            if (disposed || identityChanged) return;
             if (selected is null)
             {
                 var result = await Api.Start(new(pendingKey.Value, value), lifetime.Token);
-                if (!result.IsSuccess || result.Data is null) { error = result.Message; return; }
+                if (disposed || identityChanged) return;
+                if (!result.IsSuccess || result.Data is null) { sendFailed = true; operationFeedback.Publish(() => OperationError(result)); return; }
                 selected = result.Data;
             }
             else
             {
-                var result = await Api.Send(selected.Id, new(pendingKey.Value, value), lifetime.Token);
-                if (!result.IsSuccess) { error = result.Message; return; }
+                var result = await Api.Send(selected.Id, new(pendingKey.Value, value, replyId), lifetime.Token);
+                if (disposed || identityChanged) return;
+                if (!result.IsSuccess || result.Data is null) { sendFailed = true; operationFeedback.Publish(() => OperationError(result)); return; }
+                if (messages.All(message => message.Id != result.Data.Id))
+                    messages = messages.Append(result.Data).OrderBy(message => message.Sequence).ToList();
             }
-            text = ""; pendingKey = null; await Reload(); scrollToEnd = true;
+            text = ""; pendingKey = null; replyTo = null; await Reload(); scrollToEnd = true;
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        finally { busy = false; }
+        finally { busy = sending = false; }
     }
     private void CloseConversation()
     {
@@ -215,12 +456,15 @@
     }
     private async Task EndConversation(Guid id)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         busy = true;
         try
         {
             await ClearTransientForSelected(); var result = await Api.Close(id, lifetime.Token);
-            if (!result.IsSuccess) { error = result.Message; return; }
-            selected = result.Data; text = ""; pendingKey = null; await Reload();
+            if (disposed || identityChanged) return;
+            if (!result.IsSuccess) { operationFeedback.Publish(() => OperationError(result)); return; }
+            selected = result.Data; text = ""; pendingKey = null; ResetMessageTools(); await Reload(); operationFeedback.Publish(() => Toasts.Success("Đã kết thúc cuộc trò chuyện."));
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { busy = false; confirmation = null; }
@@ -235,7 +479,7 @@
     }
     private void Input(ChangeEventArgs args)
     {
-        text = args.Value?.ToString() ?? ""; draftRevision++;
+        text = args.Value?.ToString() ?? ""; sendFailed = false; draftRevision++;
         if (draftPump is { IsCompleted: false }) return;
         draftDebounce?.Dispose(); draftDebounce = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         draftPump = SendDraftWhileTyping(draftDebounce.Token);
@@ -269,26 +513,57 @@
     private async Task Poll()
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1)); var tick = 0;
-        try { while (await timer.WaitForNextTickAsync(lifetime.Token)) await InvokeAsync(async () => { if (++tick % 10 == 0 && !busy) await Reload(); else StateHasChanged(); }); }
+        try
+        {
+            while (await timer.WaitForNextTickAsync(lifetime.Token))
+                await InvokeAsync(async () =>
+                {
+                    if (++tick % 10 == 0 && !busy) await Reload(); else StateHasChanged();
+                    await SendReceipts();
+                });
+        }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!scrollToEnd) return; scrollToEnd = false;
-        scrollModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Features/Communication/SupportChat/SupportChatWorkspace.razor.js");
-        await scrollModule.InvokeVoidAsync("bottom", thread);
+        if (firstRender)
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Features/Communication/SupportChat/SupportChatWorkspace.razor.js");
+            if (disposed) { await module.DisposeAsync(); return; }
+            workspaceModule = module;
+            await module.InvokeVoidAsync("bindComposer", workspace);
+        }
+        if (disposed || workspaceModule is null) return;
+        if (openDetails && messageDetails is not null)
+        {
+            openDetails = false;
+            await workspaceModule.InvokeVoidAsync("openMessageDetails", detailsDialog);
+        }
+        if (focusSelectionId is Guid messageId)
+        {
+            focusSelectionId = null;
+            await workspaceModule.InvokeVoidAsync("focusMessagePicker", thread, messageId);
+        }
+        if (focusReply)
+        {
+            focusReply = false;
+            await workspaceModule.InvokeVoidAsync("focusComposer", workspace);
+        }
+        if (!scrollToEnd) return;
+        scrollToEnd = false;
+        await workspaceModule.InvokeVoidAsync("bottom", thread);
     }
     private string Time(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(timeZoneId)).ToString("dd/MM HH:mm");
     private string BubbleClass(SupportMessageView message) => message.Kind == "SYSTEM" ? "system" : (message.Kind == "MANAGER") == ForManager ? "mine" : "theirs";
     private static string Status(string value) => value switch { "WAITING" => "Đang chờ Manager", "ACTIVE" => "Đang trao đổi", "CLOSED" => "Đã kết thúc", _ => value };
     public async ValueTask DisposeAsync()
-    {
+    { toastLifetime.Dispose();
         Session.AuthenticationStateChanged -= AuthenticationChanged;
         disposed = true; Connection.Changed -= Changed; Connection.TransientChanged -= Transient; Connection.StateChanged -= Transient;
         await ClearTransientForSelected(); lifetime.Cancel(); draftDebounce?.Cancel();
         if (poll is not null) await poll; if (draftPump is not null) await draftPump; draftDebounce?.Dispose();
         if (!ForManager) await Connection.ReleaseResidentAsync();
-        if (scrollModule is not null) try { await scrollModule.DisposeAsync(); } catch (JSDisconnectedException) { }
+        if (workspaceModule is not null) try { await workspaceModule.DisposeAsync(); } catch (JSDisconnectedException) { }
         lifetime.Dispose();
     }
 }

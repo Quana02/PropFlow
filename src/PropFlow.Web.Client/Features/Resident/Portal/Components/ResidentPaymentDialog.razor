@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Finance.Services
 @using PropFlow.Web.Client.Features.Finance.Models
 @using PropFlow.Web.Client.Shared.Feedback
@@ -21,6 +22,8 @@
 </div>
 @if (confirming) { <PropFlowConfirmationDialog Title="Gửi xác nhận thanh toán?" Message="@($"Gửi khoản {Money(amount)} đ của hóa đơn {Invoice.Number} cho kế toán kiểm tra?")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="busy" OnConfirm="Submit" OnCancel="() => confirming = false" /> }
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     [Parameter, EditorRequired] public HouseholdInvoice Invoice { get; set; } = default!;
     [Parameter] public EventCallback Saved { get; set; }
     [Parameter] public EventCallback Closed { get; set; }
@@ -41,6 +44,8 @@
     }
     private void Ask() { if (busy) return; AmountChanged(new ChangeEventArgs { Value = amountText }); if (error is not null) return; if (string.IsNullOrWhiteSpace(reference)) { error = "Vui lòng nhập mã giao dịch chuyển khoản."; return; } confirming = true; }
     private async Task Submit() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy) return; busy = true;
         try {
             var input = new CollectionInput(Invoice.Id, amount, "BANK_TRANSFER", reference.Trim(), note.Trim());
@@ -48,9 +53,9 @@
             if (previousPayload != payload) { key = Guid.NewGuid().ToString("N"); previousPayload = payload; }
             var result = await Api.SubmitPaymentAsync(input, key);
             confirming = false;
-            if (result.IsSuccess) await Saved.InvokeAsync(); else error = result.Message ?? "Không thể gửi xác nhận thanh toán.";
+            if (result.IsSuccess) { if (operationFeedback.IsCurrent) await Saved.InvokeAsync(); } else if (result.ValidationErrors?.Count > 0) error = result.Message ?? "Không thể gửi xác nhận thanh toán."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể gửi xác nhận thanh toán."));
         } finally { busy = false; }
     }
     protected override async Task OnAfterRenderAsync(bool firstRender) { if (!firstRender) return; module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2"); await module.InvokeVoidAsync("open", dialog); }
-    public async ValueTask DisposeAsync() { if (module is null) return; try { await module.InvokeVoidAsync("close", dialog); await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    public async ValueTask DisposeAsync() { toastLifetime.Dispose();  if (module is null) return; try { await module.InvokeVoidAsync("close", dialog); await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
 }

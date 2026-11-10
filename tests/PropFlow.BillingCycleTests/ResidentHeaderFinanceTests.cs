@@ -29,6 +29,9 @@ public sealed class ResidentHeaderFinanceTests
         services.AddSingleton(new FinanceCycleApi(api));
         services.AddSingleton(new AuthSession(api));
         services.AddSingleton<NavigationManager, Navigation>();
+        services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        services.AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState>();
+        services.AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentNotificationConnectionFactory>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var root = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<HeaderHarness>());
