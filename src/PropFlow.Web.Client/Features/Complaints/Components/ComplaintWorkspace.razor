@@ -1,9 +1,10 @@
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Complaints.Models
 @using PropFlow.Web.Client.Services.Api
+@using PropFlow.Web.Client.Features.ServiceRequests.Services
 @inject PropFlow.Web.Client.Features.Complaints.Services.ComplaintApiClient Api
 @inject NavigationManager Navigation
-@implements IDisposable
+@implements IAsyncDisposable
 
 <section class="complaint-workspace @(Role is "MANAGER" or "STAFF" ? "internal-workspace" : null)">
     <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">@(Role == "RESIDENT" ? "Trang chủ" : "Vận hành")</a><span>/</span><strong>Phản ánh</strong></nav>
@@ -12,7 +13,13 @@
     </header>
     @if (error is not null) { <div role="alert" class="feedback error">@error <button @onclick="LoadAsync" disabled="@busy">Tải lại</button></div> }
 
-    @if (busy) { <p role="status">Đang tải dữ liệu…</p> }
+    @if (busy && detail is null && Id.HasValue)
+    {
+        <section class="history-panel" role="status"><h3>Lịch sử xử lý</h3><p>Đang tải phản ánh và lịch sử…</p>
+            <div class="history-placeholder" aria-hidden="true"><span></span><span></span></div>
+        </section>
+    }
+    else if (busy) { <p role="status">Đang tải dữ liệu…</p> }
     <fieldset disabled="@busy">
     @if (detail is null)
     {
@@ -69,10 +76,10 @@
                 @if (options is not null)
                 {
                     <form @onsubmit="SaveContextAsync" @onsubmit:preventDefault>
-                        <label>Căn hộ<PropFlowSelect Value="IdValue(apartmentId)" ValueChanged="v => apartmentId = ParseId(v)" Options="ContextChoices(options.Apartments, apartmentId)" Disabled="busy" AriaLabel="Căn hộ" /></label>
-                        <label>Yêu cầu dịch vụ (tùy chọn)<PropFlowSelect Value="IdValue(requestId)" ValueChanged="v => requestId = ParseId(v)" Options="ContextChoices(options.ServiceRequests, requestId)" Disabled="busy" AriaLabel="Yêu cầu dịch vụ" /></label>
-                        <label>Cơ sở vật chất<PropFlowSelect Value="IdValue(facilityId)" ValueChanged="v => facilityId = ParseId(v)" Options="ContextChoices(options.Facilities, facilityId)" Disabled="busy" AriaLabel="Cơ sở vật chất" /></label>
-                        <label>Thiết bị<PropFlowSelect Value="IdValue(equipmentId)" ValueChanged="v => equipmentId = ParseId(v)" Options="ContextChoices(options.Equipment, equipmentId)" Disabled="busy" AriaLabel="Thiết bị" /></label>
+                        <label>Căn hộ<PropFlowSelect Value="@IdValue(apartmentId)" ValueChanged="v => apartmentId = ParseId(v)" Options="ContextChoices(options.Apartments, apartmentId)" Disabled="busy" AriaLabel="Căn hộ" /></label>
+                        <label>Yêu cầu dịch vụ (tùy chọn)<PropFlowSelect Value="@IdValue(requestId)" ValueChanged="v => requestId = ParseId(v)" Options="ContextChoices(options.ServiceRequests, requestId)" Disabled="busy" AriaLabel="Yêu cầu dịch vụ" /></label>
+                        <label>Cơ sở vật chất<PropFlowSelect Value="@IdValue(facilityId)" ValueChanged="v => facilityId = ParseId(v)" Options="ContextChoices(options.Facilities, facilityId)" Disabled="busy" AriaLabel="Cơ sở vật chất" /></label>
+                        <label>Thiết bị<PropFlowSelect Value="@IdValue(equipmentId)" ValueChanged="v => equipmentId = ParseId(v)" Options="ContextChoices(options.Equipment, equipmentId)" Disabled="busy" AriaLabel="Thiết bị" /></label>
                         <button type="submit">Lưu liên kết</button>
                     </form>
                 }
@@ -80,8 +87,10 @@
             @if (detail.Status is "UNDER_REVIEW" or "FOLLOW_UP")
             {
                 <form @onsubmit="AssignAsync" @onsubmit:preventDefault><h3>Giao công việc hỗ trợ</h3>
-                    <label>Nhân viên<PropFlowSelect Value="IdValue(staffId)" ValueChanged="v => staffId = ParseId(v)" Options="StaffChoices" Disabled="busy" AriaLabel="Nhân viên được giao" /></label>
-                    <label>Công việc<input @bind="workTitle" required maxlength="200" /></label><label>Hướng dẫn nội bộ<textarea @bind="instruction"></textarea></label><button type="submit">Giao công việc</button>
+                    <label>Nhân viên<PropFlowSelect Value="@IdValue(staffId)" ValueChanged="v => staffId = ParseId(v)" Options="StaffChoices" Disabled="@(busy || staff.Count == 0)" Searchable="true" AriaLabel="Nhân viên được giao" /></label>
+                    @if (staffError is not null) { <p role="alert">@staffError <button type="button" @onclick="LoadStaffAsync">Thử lại</button></p> }
+                    else if (!busy && staff.Count == 0) { <p>Chưa có nhân viên đang hoạt động phù hợp.</p> }
+                    <label>Công việc<input @bind="workTitle" required maxlength="200" /></label><label>Hướng dẫn nội bộ<textarea @bind="instruction"></textarea></label><button type="submit" disabled="@(staffId is null)">Giao công việc</button>
                 </form>
                 <form @onsubmit="ResolveAsync" @onsubmit:preventDefault><h3>Kết quả giải quyết</h3><label>Phản hồi chính thức cho cư dân<textarea @bind="response" required rows="5"></textarea></label><button type="submit" disabled="@detail.Followups.Any(f => f.Status is "ASSIGNED" or "IN_PROGRESS")">Giải quyết phản ánh</button></form>
             }
@@ -89,7 +98,10 @@
         }
         @foreach (var f in detail.Followups)
         {
-            <article><h3>@f.Title</h3><p>@ComplaintLabels.Status(f.Status)</p><p class="content">@f.Instruction</p><p class="content">@f.Result</p>
+            <article><h3>@f.Title</h3><p>@ComplaintLabels.Status(f.Status)</p>
+                @if (Role == "MANAGER") { <p>Nhân viên phụ trách: @(f.StaffDisplayName ?? staff.FirstOrDefault(person => person.UserId == f.StaffUserId)?.DisplayName ?? "Nhân viên từng được giao")</p> }
+                @if (!string.IsNullOrWhiteSpace(f.Instruction)) { <p class="content">@f.Instruction</p> }
+                @if (!string.IsNullOrWhiteSpace(f.Result)) { <p class="content">@f.Result</p> }
                 @if (Role == "STAFF" && detail.Status == "FOLLOW_UP" && f.Status is "ASSIGNED" or "IN_PROGRESS")
                 {
                     @if (f.Status == "ASSIGNED") { <button @onclick='() => ActAsync($"followups/{f.Id}", new { complete = false })'>Bắt đầu thực hiện</button> }
@@ -99,10 +111,27 @@
                 }
             </article>
         }
-        @if (detail.History.Count > 0)
-        {
-            <h3>Lịch sử xử lý</h3><ol>@foreach (var h in detail.History) { <li><time datetime="@h.CreatedAt.ToString("O")">@FormatTime(h.CreatedAt)</time> · @ComplaintLabels.Activity(h.Type) @if (h.ToStatus is not null) { <span> · @ComplaintLabels.Status(h.ToStatus)</span> }<p class="content">@h.Detail</p></li> }</ol>
-        }
+        <section class="history-panel" aria-labelledby="complaint-history">
+            <h3 id="complaint-history">Lịch sử xử lý</h3>
+            @if (detail.History.Count == 0) { <p>Chưa có lịch sử xử lý.</p> }
+            else
+            {
+                <ol>
+                    @foreach (var entry in detail.History)
+                    {
+                        <li>
+                            <strong>@ComplaintLabels.Activity(entry.Type)</strong>
+                            <small>@(entry.ActorLabel ?? "Chưa xác định") · <time datetime="@entry.CreatedAt.ToString("O")">@FormatTime(entry.CreatedAt)</time></small>
+                            @if (entry.ToStatus is { } next)
+                            {
+                                <span>@(entry.FromStatus is { } previous && previous != next ? $"{ComplaintLabels.Status(previous)} → " : "")@ComplaintLabels.Status(next)</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(entry.Detail)) { <p class="content">@entry.Detail</p> }
+                        </li>
+                    }
+                </ol>
+            }
+        </section>
     }
     </fieldset>
 </section>
@@ -118,8 +147,10 @@
     private ComplaintContextOptions? options;
     private IReadOnlyList<StaffOption> staff = [];
     private readonly Dictionary<Guid, string> results = [];
-    private string? error;
+    private string? error, staffError;
     private bool busy, composing;
+    private RealtimeReconciliationPulse? reconciliation;
+    private int mutationVersion;
     private int page = 1;
     private string search = "", status = "", subject = "", description = "", workTitle = "", instruction = "", response = "", contextSearch = "";
     private Guid? staffId, apartmentId, requestId, facilityId, equipmentId;
@@ -129,9 +160,29 @@
     private IReadOnlyList<PropFlowSelectOption> StaffChoices => [new("", "Chọn nhân viên"), .. staff.Select(s => new PropFlowSelectOption(s.UserId.ToString(), $"{s.DisplayName} ({s.Username})"))];
     private static IReadOnlyList<PropFlowSelectOption> ContextChoices(IReadOnlyList<ContextOption> source, Guid? id) => [new("", "Không liên kết"), .. WithCurrent(source, id).Select(o => new PropFlowSelectOption(o.Id.ToString(), o.Label))];
     private string Root => Role == "MANAGER" ? "/manager/complaints" : Role == "STAFF" ? "/staff/complaints" : "/resident/complaints";
+    protected override void OnInitialized()
+    {
+        if (Role != "MANAGER") return;
+        reconciliation = new(() => InvokeAsync(RefreshDetailAsync), TimeSpan.FromSeconds(15));
+        reconciliation.Start();
+    }
+
+    private async Task RefreshDetailAsync()
+    {
+        if (busy || detail is null || Id is not { } id) return;
+        var version = mutationVersion;
+        var result = await Api.GetAsync(id, cancellation.Token);
+        if (!busy && Id == id && version == mutationVersion && result.IsSuccess && result.Data is { } updated)
+        {
+            detail = updated;
+            StateHasChanged();
+        }
+    }
+
     protected override Task OnParametersSetAsync() => LoadAsync();
     private async Task LoadAsync()
     {
+        mutationVersion++;
         busy = true; error = null; detail = null;
         try
         {
@@ -142,8 +193,7 @@
                 else error = result.Message ?? "Không tải được phản ánh.";
                 if (Role == "MANAGER" && detail is not null)
                 {
-                    var people = await Api.StaffAsync(cancellation.Token);
-                    if (people.IsSuccess) staff = people.Data ?? []; else error = people.Message ?? "Không tải được danh sách nhân viên.";
+                    await LoadStaffAsync();
                     await LoadOptionsAsync();
                 }
             }
@@ -160,6 +210,7 @@
     private string FormatTime(DateTimeOffset value) => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(value, detail!.TimeZoneId).ToString("dd/MM/yyyy HH:mm");
     private async Task SubmitAsync()
     {
+        if (busy) return;
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
 
         busy = true; error = null;
@@ -168,13 +219,15 @@
     }
     private async Task ActAsync(string action, object? body = null)
     {
+        if (busy || detail is null) return;
+        mutationVersion++;
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
 
         busy = true; error = null;
         try
         {
             var result = await Api.ActionAsync(detail!.Id, action, body, cancellation.Token);
-            if (result.IsSuccess) { detail = result.Data; CopyContext(); operationFeedback.Publish(() => Toasts.Success("Đã lưu thay đổi.")); }
+            if (result.IsSuccess && result.Data is { } updated) { detail = updated; CopyContext(); operationFeedback.Publish(() => Toasts.Success("Đã lưu thay đổi.")); }
             else { if (result.ValidationErrors?.Count > 0) error = string.Join(" ", result.ValidationErrors.Values.SelectMany(value => value)); else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thực hiện được thao tác.")); }
         }
         finally { busy = false; }
@@ -182,6 +235,12 @@
     private Task AssignAsync() => ActAsync("followups", new { staffUserId = staffId, title = workTitle, instruction });
     private Task ResolveAsync() => ActAsync("resolve", new { response });
     private Task SaveContextAsync() => ActAsync("context", new ComplaintContext(apartmentId, requestId, facilityId, equipmentId));
+    private async Task LoadStaffAsync()
+    {
+        var people = await Api.StaffAsync(cancellation.Token);
+        staff = people.IsSuccess ? people.Data ?? [] : [];
+        staffError = people.IsSuccess ? null : people.Message ?? "Không tải được danh sách nhân viên.";
+    }
     private async Task LoadOptionsAsync() { var r = await Api.ContextAsync(contextSearch, cancellation.Token); if (r.IsSuccess) options = r.Data; else error = r.Message ?? "Không tải được ngữ cảnh liên kết."; }
     private static IEnumerable<ContextOption> WithCurrent(IReadOnlyList<ContextOption> source, Guid? id) => id.HasValue && !source.Any(x => x.Id == id) ? source.Append(new(id.Value, "Liên kết hiện tại")) : source;
     private void Open(Guid id) => Navigation.NavigateTo($"{Root}/{id}");
@@ -189,5 +248,11 @@
     private Task SearchAsync() { page = 1; return LoadAsync(); }
     private Task PreviousAsync() { page--; return LoadAsync(); }
     private Task NextAsync() { page++; return LoadAsync(); }
-    public void Dispose() { toastLifetime.Dispose();  cancellation.Cancel(); cancellation.Dispose(); }
+    public async ValueTask DisposeAsync()
+    {
+        toastLifetime.Dispose();
+        cancellation.Cancel();
+        if (reconciliation is not null) await reconciliation.DisposeAsync();
+        cancellation.Dispose();
+    }
 }

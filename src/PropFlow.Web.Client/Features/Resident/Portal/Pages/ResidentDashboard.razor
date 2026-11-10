@@ -430,7 +430,7 @@
     };
 
     private static string RequestContext(ResidentServiceRequestListItem request) =>
-        $"Khu vực: {request.ServiceAreaCode ?? "Chưa xác định"} • Mức ưu tiên: {(request.PriorityCode == "URGENT" ? "Khẩn cấp" : "Bình thường")}";
+        $"Khu vực: {PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.Label(request.ServiceAreaCode)} • Mức ưu tiên: {(request.PriorityCode == "URGENT" ? "Khẩn cấp" : "Bình thường")}";
 
     private static string PreferredSchedule(ResidentServiceRequestListItem request) => request.PreferredDate is { } date
         ? $" • Hẹn: {date:dd/MM/yyyy}{(string.IsNullOrWhiteSpace(request.PreferredTimeCode) ? string.Empty : $" ({request.PreferredTimeCode})")}" : string.Empty;

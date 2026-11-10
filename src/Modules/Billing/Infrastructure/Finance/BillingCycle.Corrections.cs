@@ -62,7 +62,9 @@ public sealed partial class BillingCycle
         db.InvoiceItems.AddRange(replacement);
         db.InvoiceItems.RemoveRange(oldItems);
         if (oldReading is null) db.ElectricityUsages.Add(new ElectricityUsage(invoice.ApartmentUnitId, usageMonth, input.Kwh, input.WaterM3, actor, now));
-        else oldReading.UpdateUtilities(input.Kwh, input.WaterM3, actor, now);
+        else if (oldReading.CurrentElectricityReading is null || oldReading.CurrentWaterReading is null)
+            oldReading.UpdateUtilities(oldReading.CurrentElectricityReading is null ? input.Kwh : oldReading.Kwh,
+                oldReading.CurrentWaterReading is null ? input.WaterM3 : oldReading.WaterM3, actor, now);
         db.InvoiceStatusHistory.Add(new InvoiceStatusHistory(id, InvoiceStatus.ISSUED, actor, now, InvoiceStatus.ISSUED,
             JsonSerializer.Serialize(new { AuditKind = "SERVICE_INVOICE_CORRECTION", CorrectionKey = input.Key, PayloadHash = hash, Summary = summary, Actor = actor, At = now,
                 Before = before, After = new { invoice.TotalAmount, UsageMonth = usageMonth, input, Items = replacement.Select(x => new { x.FeeCodeSnapshot, x.FeeNameSnapshot, x.Quantity, x.UnitName, x.UnitRate, x.LineAmount }).ToArray() } })));

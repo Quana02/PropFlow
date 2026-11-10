@@ -54,6 +54,10 @@ public sealed class AuthenticationUiTests
             .AddSingleton(publicApi)
             .AddSingleton(new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance))
             .AddSingleton<AuthenticationService>()
+            .AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())
+            .AddSingleton<PropFlow.Web.Client.Features.Finance.Services.FinanceCycleApi>()
+            .AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState>()
+            .AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentNotificationConnectionFactory>()
             .BuildServiceProvider();
 
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());

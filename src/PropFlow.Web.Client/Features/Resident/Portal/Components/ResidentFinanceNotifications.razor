@@ -12,7 +12,7 @@
     @if (error is not null) { <div role="alert"><p>@error</p><button class="pricing-read" type="button" @onclick="Load" disabled="@loading">Thử lại</button></div> }
     @foreach (var n in notices) {
         <article class="glass-inner announcement sky"><em>@(n.SourceType == "SERVICE_REQUEST" ? "Dịch vụ cư dân" : IsManagement(n) ? "Ban quản lý" : "Tài chính") • @(!n.IsRead ? "Mới" : "Đã đọc")</em><h3>@n.Title</h3><p>@n.Message</p>
-            @if (GetAction(n) is { } action) { <a href="@action.Path" @onclick="() => Read(n.Id)">@action.Label</a> }
+            @if (GetAction(n) is { } action) { <a href="@action.Path" @onclick:preventDefault @onclick="() => OpenNotice(n, action.Path)">@action.Label</a> }
             else if (!n.IsRead) { <button class="pricing-read" type="button" @onclick="() => Read(n.Id)">Đánh dấu đã đọc</button> }
             <footer><span>@(n.SourceType == "SERVICE_REQUEST" ? "Bộ phận xử lý yêu cầu" : IsManagement(n) ? "Ban Quản lý Tòa nhà" : "Ban Kế toán Tòa nhà")</span><span>@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span></footer>
         </article>
@@ -27,7 +27,7 @@
     @if (!loading && notices.Length == 0 && error is null) { <p>Chưa có thông báo.</p> }
     @foreach (var n in notices) { <article class="glass-inner">
         <h3>@n.Title @if (!n.IsRead) { <small>• Mới</small> }</h3><p>@n.Message</p><small>@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
-        @if (GetAction(n) is { } action) { <a href="@action.Path">@action.Label</a> }
+        @if (GetAction(n) is { } action) { <a href="@action.Path" @onclick:preventDefault @onclick="() => OpenNotice(n, action.Path)">@action.Label</a> }
         @if (!n.IsRead) { <button @onclick="() => Read(n.Id)">Đánh dấu đã đọc</button> }
     </article> }
 </section>
@@ -58,8 +58,13 @@
     private async Task OpenLatest()
     {
         var latest = notices.FirstOrDefault();
-        if (latest is not null) await Read(latest.Id);
-        Navigation.NavigateTo(GetAction(latest)?.Path ?? (IsManagement(latest) ? "/resident?tab=notifications" : "/resident/billing"));
+        var path = GetAction(latest)?.Path ?? (IsManagement(latest) ? "/resident?tab=notifications" : "/resident/billing");
+        if (latest is null) Navigation.NavigateTo(path);
+        else await OpenNotice(latest, path);
+    }
+    private async Task OpenNotice(ResidentNotice notice, string path)
+    {
+        if (notice.IsRead || await NoticeState.ReadAsync(notice.Id)) Navigation.NavigateTo(path);
     }
     public void Dispose() => NoticeState.Changed -= Refresh;
 }

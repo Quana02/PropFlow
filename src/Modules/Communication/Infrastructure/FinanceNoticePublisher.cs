@@ -19,7 +19,7 @@ public sealed class FinanceNoticePublisher(CommunicationDbContext db, IFinanceNo
         Notification? notification = null;
         if (n.UserId is Guid userId && !existingNotification) {
             notification = new Notification(userId, n.SourceType == "SERVICE_REQUEST" ? NotificationType.SERVICE_REQUEST : n.SourceType is "PRICING" or "ASSET_STATUS" ? NotificationType.ANNOUNCEMENT : n.SourceType == "MAINTENANCE" ? NotificationType.MAINTENANCE : n.SourceType == "PAYMENT" ? NotificationType.PAYMENT : NotificationType.INVOICE,
-                n.Title, n.Message, DateTimeOffset.UtcNow, n.EventId, n.SourceType, n.SourceId, n.ActionPath);
+                n.Title, n.Message, DateTimeOffset.UtcNow, n.EventId, n.SourceType, n.SourceId, n.ActionPath, n.SenderUserId);
             db.Notifications.Add(notification);
         }
         // A newly linked account needs the web notice, but reuse email already queued/sent to the addressed person.

@@ -43,12 +43,12 @@ public sealed class ServiceRequestBilling(
 
         invoice.Issue(command.ApprovedBy, date, command.ApprovedAt, date.AddDays(7));
         var candidates = await households.ListAsync(date, ct);
-        var household = candidates.FirstOrDefault(x => x.ApartmentId == command.ApartmentUnitId && x.ResidentId == command.ResidentId)
-            ?? candidates.FirstOrDefault(x => x.ApartmentId == command.ApartmentUnitId);
+        var requester = candidates.FirstOrDefault(x => x.ApartmentId == command.ApartmentUnitId && x.ResidentId == command.ResidentId);
+        var household = requester ?? candidates.FirstOrDefault(x => x.ApartmentId == command.ApartmentUnitId);
         db.Invoices.Add(invoice);
         db.InvoiceRecipients.Add(new InvoiceRecipient(invoice.Id, command.ResidentUserId,
-            string.IsNullOrWhiteSpace(command.ResidentName) ? household?.FullName ?? "Cư dân" : command.ResidentName,
-            household?.Email, household?.UnitNumber ?? "N/A", household?.AreaM2 ?? 0,
+            string.IsNullOrWhiteSpace(command.ResidentName) ? requester?.FullName ?? "Cư dân" : command.ResidentName,
+            requester?.Email, household?.UnitNumber ?? "N/A", household?.AreaM2 ?? 0,
             command.ResidentId, "SERVICE_REQUESTER"));
         db.InvoiceStatusHistory.Add(new InvoiceStatusHistory(invoice.Id, InvoiceStatus.ISSUED,
             command.ApprovedBy, command.ApprovedAt, InvoiceStatus.DRAFT, "Phát hành từ yêu cầu dịch vụ"));

@@ -350,6 +350,7 @@ builder.Services.AddScoped<IManagerServiceRequestInsightSource, ManagerServiceRe
 builder.Services.AddScoped<IStaffServiceRequestStore, StaffServiceRequestStore>();
 builder.Services.AddScoped<AdditionalCostConsentService>();
 builder.Services.AddScoped<ServiceRequestCostNoticeDispatcher>();
+builder.Services.AddScoped<WorkflowNotificationDelivery>();
 builder.Services.AddScoped<LocalServiceRequestEvidenceStorage>();
 builder.Services.AddHttpClient<CloudinaryServiceRequestEvidenceStorage>(client =>
     client.Timeout = TimeSpan.FromSeconds(90));
@@ -544,7 +545,9 @@ app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.AnnouncementHub>("/hubs/announcements", options => options.CloseOnAuthenticationExpiration = true);
-app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true)
+    .RequireAuthorization(policy => policy.RequireRole(SystemRoleCodes.Resident));
+app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/notifications", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<SupportChatHub>("/hubs/support-chat", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();

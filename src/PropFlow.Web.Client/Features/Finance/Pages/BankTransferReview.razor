@@ -1,7 +1,7 @@
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/finance/payments/bank-transfers"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
-@attribute [Authorize(Roles = "ACCOUNTANT")]
+@attribute [Authorize(Roles = "ACCOUNTANT", Policy = "finance.manage")]
 @using PropFlow.Modules.Payments.Contracts
 @using PropFlow.Web.Client.Services.Api
 @implements IDisposable
@@ -13,7 +13,7 @@
     <div class="bank-toolbar"><label>Hiển thị<PropFlowSelect Value="@status" ValueChanged="StatusChanged" Options="StatusOptions" Disabled="loading" AriaLabel="Lọc trạng thái giao dịch SePay" /></label><span>@(data?.Total ?? 0) giao dịch · tự cập nhật mỗi 10 giây</span><a href="/finance/payments/pending">Báo chuyển khoản của cư dân →</a></div>
 
     @if (!string.IsNullOrWhiteSpace(error)) { <p class="bank-error" role="alert">@error</p> }
-    <section class="bank-table"><table><thead><tr><th>Giao dịch</th><th>Tài khoản nhận</th><th>Số tiền</th><th>Hóa đơn</th><th>Đối soát</th><th></th></tr></thead><tbody>
+    <section class="bank-table"><table><thead><tr><th>Giao dịch</th><th>Tài khoản nhận</th><th>Số tiền</th><th>Hóa đơn</th><th>Đối soát</th><th scope="col">Thao tác</th></tr></thead><tbody>
     @if (loading && data is null) { <tr><td colspan="6">Đang tải giao dịch…</td></tr> }
     else if (data?.Items.Count is null or 0) { <tr><td colspan="6">Chưa có giao dịch trong nhóm này.</td></tr> }
     else { @foreach (var row in data.Items) {

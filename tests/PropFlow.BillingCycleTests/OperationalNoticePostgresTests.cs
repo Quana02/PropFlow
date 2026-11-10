@@ -40,17 +40,17 @@ public sealed partial class BillingCyclePostgresTests
         Assert.Contains("Tiện ích công cộng mới", System.Text.Json.JsonDocument.Parse((await assets.ResidentEvents.SingleAsync()).Payload).RootElement.GetProperty("Title").GetString());
         var source = new MaintenanceAssetSource(assets);
         await source.MarkUnderMaintenanceAsync((Guid?)facility.Id, equipment.Id, actor, default);
-        Assert.Equal(3, await assets.ResidentEvents.CountAsync());
+        Assert.Equal(2, await assets.ResidentEvents.CountAsync());
         await source.MarkUnderMaintenanceAsync((Guid?)facility.Id, equipment.Id, actor, default);
-        Assert.Equal(3, await assets.ResidentEvents.CountAsync());
+        Assert.Equal(2, await assets.ResidentEvents.CountAsync());
         await using (var rollback = await assets.Database.BeginTransactionAsync()) {
             equipment.MarkActive(actor, now.AddSeconds(1)); await assets.SaveChangesAsync();
-            Assert.Equal(4, await assets.ResidentEvents.CountAsync()); await rollback.RollbackAsync();
+            Assert.Equal(3, await assets.ResidentEvents.CountAsync()); await rollback.RollbackAsync();
         }
         assets.ChangeTracker.Clear();
-        Assert.Equal(3, await assets.ResidentEvents.CountAsync());
+        Assert.Equal(2, await assets.ResidentEvents.CountAsync());
         await source.MarkActiveAsync((Guid?)facility.Id, equipment.Id, actor, default);
-        Assert.Equal(5, await assets.ResidentEvents.CountAsync());
+        Assert.Equal(3, await assets.ResidentEvents.CountAsync());
         Assert.Contains(await assets.ResidentEvents.ToArrayAsync(), n => n.Payload.Contains("Thang") && n.Name == "AssetAvailabilityChanged");
 
         var work = new MaintenanceTask("WORK-NOTICE", "Private task description is not broadcast", actor, now, equipmentId: equipment.Id);
@@ -115,13 +115,14 @@ public sealed partial class BillingCyclePostgresTests
         var result = await manager.PatchAsync($"api/v1/equipments/{equipment.Id}/status", JsonContent.Create(new { status = "UNDER_MAINTENANCE" }));
         Assert.Equal(HttpStatusCode.OK, result.StatusCode);
         using var scope = factory.Services.CreateScope();
+        using var publication = factory.Services.CreateScope();
         var scopedAssets = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>();
         var deliveryClock = new Clock(DateTimeOffset.UtcNow);
         var dispatcher = new PropFlow.Api.Composition.OperationalNoticeDispatcher(scopedAssets,
             scope.ServiceProvider.GetRequiredService<MaintenanceDbContext>(),
             scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>(),
             scope.ServiceProvider.GetRequiredService<AdministrationDbContext>(),
-            new FailSecondOperationalDelivery(scope.ServiceProvider.GetRequiredService<IFinanceNotificationStore>()),
+            new FailSecondOperationalDelivery(publication.ServiceProvider.GetRequiredService<IFinanceNotificationStore>()),
             scope.ServiceProvider.GetRequiredService<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PropFlow.Api.Composition.OperationalNoticeDispatcher>.Instance, deliveryClock);
         await dispatcher.DispatchAssetsAsync(default);

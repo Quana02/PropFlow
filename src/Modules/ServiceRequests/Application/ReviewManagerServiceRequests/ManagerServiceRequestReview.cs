@@ -190,6 +190,8 @@ public sealed class ManagerServiceRequestReviewHandler(
 
         var outcome = await store.AssignAsync(
             id, managerUserId, staff.UserId, request.BaseServiceCost, request.Note?.Trim(), clock.GetUtcNow(), ct);
+        if (outcome == ManagerServiceRequestOutcome.InvalidInput)
+            return Invalid<ManagerServiceRequestDetailResponse>("common_area_not_chargeable", "Công việc tại khu vực chung của chung cư không thu phí cư dân.");
         if (outcome == ManagerServiceRequestOutcome.NotFound)
             return NotFound<ManagerServiceRequestDetailResponse>();
         if (outcome == ManagerServiceRequestOutcome.Conflict)

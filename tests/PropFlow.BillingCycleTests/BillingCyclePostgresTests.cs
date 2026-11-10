@@ -48,6 +48,10 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         await using var billing = Billing(); await billing.Database.MigrateAsync();
         await using var payment = Payments(); await payment.Database.MigrateAsync();
         await using var communication = Communication(); await communication.Database.MigrateAsync();
+        await using var administration = new PropFlow.Modules.Administration.Infrastructure.Persistence.AdministrationDbContext(
+            new DbContextOptionsBuilder<PropFlow.Modules.Administration.Infrastructure.Persistence.AdministrationDbContext>()
+                .UseNpgsql(connection, options => options.MigrationsHistoryTable("__EFMigrationsHistory", "administration")).Options);
+        await administration.Database.MigrateAsync();
     }
     public async Task DisposeAsync()
     {
@@ -82,6 +86,91 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
     private sealed class ExplicitZone(string zone) : PropFlow.Modules.PropertyAssets.Contracts.ICurrentBuildingTimeZone
     {
         public Task<string> GetAsync(CancellationToken ct) => Task.FromResult(zone);
+    }
+    [Fact]
+    public async Task Meter_readings_carry_across_months_and_years_and_reject_changes_that_break_later_usage()
+    {
+        await using var billing = Billing();
+        await using var payments = Payments();
+        await using var communication = Communication();
+        var november = new DateOnly(Month.Year - 1, 11, 1);
+        var december = november.AddMonths(1);
+        var january = december.AddMonths(1);
+        var cycle = Cycle(billing, payments, communication);
+
+        var first = await cycle.ElectricityAsync(apartment, november, default);
+        Assert.Equal(0, first.PreviousElectricityReading);
+        Assert.Equal(0, first.PreviousWaterReading);
+        await cycle.SaveUtilitiesAsync(apartment, new(november, 100, 20), actor, default);
+        await cycle.SaveElectricityAsync(apartment, new(december, 150), actor, default);
+        var next = await cycle.ElectricityAsync(apartment, december, default);
+        Assert.Equal(100, next.PreviousElectricityReading);
+        Assert.Equal(150, next.CurrentElectricityReading);
+        Assert.Equal(50, next.Kwh);
+        Assert.Null(next.WaterM3);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => cycle.SaveUtilitiesAsync(apartment, new(january, 149, 25), actor, default));
+        await using var secondBilling = Billing();
+        await using var secondPayments = Payments();
+        await using var secondCommunication = Communication();
+        var second = Cycle(secondBilling, secondPayments, secondCommunication);
+        await Task.WhenAll(cycle.SaveUtilitiesAsync(apartment, new(january, 150, 25), actor, default),
+            second.SaveUtilitiesAsync(apartment, new(january, 150, 25), actor, default));
+        var newYear = await cycle.ElectricityAsync(apartment, january, default);
+        Assert.Equal(150, newYear.PreviousElectricityReading);
+        Assert.Equal(20, newYear.PreviousWaterReading);
+        Assert.Equal(0, newYear.Kwh);
+        Assert.Equal(5, newYear.WaterM3);
+        Assert.Equal(0, (await cycle.ElectricityAsync(apartment, november.AddMonths(-1), default)).PreviousElectricityReading);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => cycle.SaveElectricityAsync(apartment, new(december, 140), actor, default));
+        Assert.Equal(50, (await cycle.ElectricityAsync(apartment, december, default)).Kwh);
+        await cycle.SaveUtilitiesAsync(apartment, new(january, 170, 27), actor, default);
+        Assert.Equal(20, (await cycle.ElectricityAsync(apartment, january, default)).Kwh);
+
+        Assert.Equal(3, await billing.ElectricityUsages.CountAsync());
+    }
+
+    [Fact]
+    public async Task Notification_api_paginates_newest_first_and_updates_only_the_current_user()
+    {
+        await using var communication = Communication();
+        var otherUser = Guid.NewGuid();
+        var time = DateTimeOffset.UtcNow.AddHours(-2);
+        var latest = Guid.NewGuid();
+        var action = $"/manager/service-requests/{latest}";
+        var notifications = Enumerable.Range(0, 101)
+            .Select(index => new PropFlow.Modules.Communication.Domain.Notifications.Notification(user,
+                PropFlow.Modules.Communication.Domain.Notifications.NotificationType.SERVICE_REQUEST,
+                $"Yêu cầu {index}", "Thông báo kiểm thử", time.AddMinutes(index), sourceType: "SERVICE_REQUEST", sourceId: latest, actionPath: action))
+            .ToArray();
+        var foreign = new PropFlow.Modules.Communication.Domain.Notifications.Notification(otherUser,
+            PropFlow.Modules.Communication.Domain.Notifications.NotificationType.SYSTEM, "Thông báo riêng", "Nội dung riêng", time);
+        communication.Notifications.AddRange(notifications);
+        communication.Notifications.Add(foreign);
+        await communication.SaveChangesAsync();
+
+        await using var factory = new Factory(connection, user, apartment);
+        using var manager = factory.Client("MANAGER", user, "MANAGE_OPERATIONS");
+        using var staff = factory.Client("STAFF", otherUser, "PERFORM_ASSIGNED_OPERATIONS");
+        using var anonymous = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        const string path = "api/v1/notifications";
+        async Task<int> Count(HttpClient client) =>
+            (await client.GetFromJsonAsync<System.Text.Json.JsonElement>($"{path}/unread-count")).GetProperty("count").GetInt32();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+        Assert.Equal(101, await Count(manager));
+        var first = (await manager.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"{path}?pageSize=1"))!;
+        Assert.Equal(notifications[^1].Id, Assert.Single(first).GetProperty("id").GetGuid());
+        Assert.Equal(action, first[0].GetProperty("actionPath").GetString());
+        Assert.False(first[0].GetProperty("isRead").GetBoolean());
+        var next = (await manager.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"{path}?page=2&pageSize=1"))!;
+        Assert.Equal(notifications[^2].Id, Assert.Single(next).GetProperty("id").GetGuid());
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.PostAsJsonAsync($"{path}/{foreign.Id}/read", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsJsonAsync($"{path}/{notifications[^1].Id}/read", new { })).StatusCode);
+        Assert.Equal(100, await Count(manager));
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsJsonAsync($"{path}/read-all", new { })).StatusCode);
+        Assert.Equal(0, await Count(manager));
+        Assert.Equal(1, await Count(staff));
     }
     [Fact]
     public async Task Monthly_generation_obeys_the_configured_building_timezone_at_month_boundary()
@@ -158,18 +247,56 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
 
         Assert.Equal(60000, Assert.Single(service.Items.Where(x => x.FeeCodeSnapshot == BillingCycle.WaterVolumeFeeCode)).LineAmount);
         Assert.Equal(100000, Assert.Single(service.Items.Where(x => x.FeeCodeSnapshot == BillingCycle.ElectricityFeeCode)).LineAmount);
-        Assert.Equal(3000000, (await b.Invoices.SingleAsync(x => x.Type == InvoiceType.MONTHLY_RENTAL)).TotalAmount);
+        var rental = await b.Invoices.SingleAsync(x => x.Type == InvoiceType.MONTHLY_RENTAL);
+        Assert.Equal(3000000, rental.TotalAmount);
+        var rentalNotice = await c.Notifications.SingleAsync(x => x.SourceId == rental.Id);
+        Assert.Equal(user, rentalNotice.RecipientUserId);
+        Assert.Equal($"/resident/billing?invoice={rental.Id}", rentalNotice.ActionPath);
+        Assert.Contains("Tiền thuê: 3.000.000 đ", rentalNotice.Message);
+        Assert.DoesNotContain("Phí dịch vụ:", rentalNotice.Message);
+        var rentalMail = await c.FinanceEmails.SingleAsync(x => x.Subject == "Hóa đơn tiền thuê tháng mới");
+        var rentalDocument = await cycle.InvoiceDocumentAsync(rental.Id, user, default);
+        Assert.Equal(Encoding.UTF8.GetString(rentalDocument!.Content), rentalMail.Html);
+        Assert.DoesNotContain("Phí dịch vụ: 0 đ", rentalMail.Html);
         Assert.Equal(3860000, await b.Invoices.SumAsync(x => x.TotalAmount));
         Assert.Equal(2, await b.Invoices.CountAsync()); Assert.Empty(await p.Payments.ToArrayAsync());
         Assert.Equal(2, await c.Notifications.CountAsync());
         await Assert.ThrowsAsync<InvalidOperationException>(() => cycle.SaveUtilitiesAsync(apartment, new(Month.AddMonths(-1), 1, 1), actor, default));
         await cycle.SaveRateAsync(new(10000, Month.AddMonths(1), ElectricityUnitRate: 3000, WaterM3UnitRate: 15000), actor, default);
-        await cycle.SaveUtilitiesAsync(apartment, new(Month, 0, 0), actor, default);
+        await cycle.SaveUtilitiesAsync(apartment, new(Month, 50, 5), actor, default);
         clock.Now = clock.Now.AddMonths(1); await cycle.RunAsync(default);
         Assert.Equal(700000, (await b.Invoices.SingleAsync(x => x.Type == InvoiceType.SERVICE_FEE && x.BillingPeriodStart == Month.AddMonths(1))).TotalAmount);
         Assert.Equal(860000, (await b.Invoices.SingleAsync(x => x.Id == service.Id)).TotalAmount);
         Assert.Equal(12000, (await cycle.RatesAsync(default)).Single(x => x.EffectiveFrom == Month).WaterM3UnitRate);
     }
+    [Fact]
+    public async Task Request_invoice_never_uses_another_household_members_email()
+    {
+        await using var billing = Billing();
+        await using var payments = Payments();
+        await using var communication = Communication();
+        var directory = new Directory(new(apartment, "A-101", 70, user, "Chủ hộ", "household@example.invalid", Guid.NewGuid()));
+        var totals = new ConfirmedPaymentSource(payments);
+        var requester = Guid.NewGuid();
+        var requesterAccount = Guid.NewGuid();
+        var invoice = await new ServiceRequestBilling(billing, directory, totals).IssueAsync(
+            new(Guid.NewGuid(), "YC-TEST", apartment, requester, null, "Người gửi yêu cầu", 100000, 0, null, actor, DateTimeOffset.UtcNow), default);
+        var cycle = new BillingCycle(billing, directory, totals, new PaymentNoticeSource(payments),
+            new PropFlow.Api.Composition.FinanceNoticePublisherBridge(new FinanceNoticePublisher(communication)));
+
+        await cycle.RunAsync(default);
+        Assert.Empty(await communication.FinanceEmails.ToArrayAsync());
+        Assert.Empty(await communication.Notifications.ToArrayAsync());
+        directory.LinkedAccounts.Add(requester, requesterAccount);
+        await cycle.RunAsync(default);
+
+        var notice = Assert.Single(await communication.Notifications.ToArrayAsync());
+        Assert.Equal(requesterAccount, notice.RecipientUserId);
+        Assert.Equal(invoice!.InvoiceId, notice.SourceId);
+        Assert.Equal("Hóa đơn yêu cầu dịch vụ mới", notice.Title);
+        Assert.Empty(await communication.FinanceEmails.ToArrayAsync());
+    }
+
     [Fact]
     public async Task Utility_validation_is_atomic_and_unknown_water_is_not_zero()
     {
@@ -197,12 +324,12 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         var key=Guid.NewGuid();
         Assert.Equal(1,await cycle.RemindAsync([invoice.Id],default,true,key));
         await cycle.RemindAsync([invoice.Id],default,true,key);
-        Assert.Single(await c.FinanceEmails.Where(x=>x.Subject=="Nhắc thanh toán phí dịch vụ").ToArrayAsync());
+        Assert.Single(await c.FinanceEmails.Where(x=>x.Subject=="Thông báo công nợ quá hạn").ToArrayAsync());
         Assert.Equal(1,await cycle.RemindAsync([invoice.Id],default,true,Guid.NewGuid()));
-        var reminderMails=await c.FinanceEmails.Where(x=>x.Subject=="Nhắc thanh toán phí dịch vụ").ToArrayAsync();
+        var reminderMails=await c.FinanceEmails.Where(x=>x.Subject=="Thông báo công nợ quá hạn").ToArrayAsync();
         Assert.Equal(2,reminderMails.Length);
         Assert.All(reminderMails,x=>{Assert.Contains(invoice.InvoiceNumber,x.Html);Assert.Contains("700.000",x.Html);Assert.Equal(user,x.UserId);});
-        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
         var store=new PropFlow.Api.Composition.PaymentFinanceNotifications(new PaymentFinanceStore(p,new InvoiceFinancialSource(b)),cycle,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PropFlow.Api.Composition.PaymentFinanceNotifications>.Instance);
         var request=new CollectPaymentRequest(invoice.Id,700000,"CASH",null,null);
@@ -217,7 +344,7 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.Equal(0,Assert.Single(await cycle.InvoicesAsync(user,default)).Outstanding);
         Assert.Equal(0,await cycle.RemindAsync([invoice.Id],default,true,Guid.NewGuid()));
         clock.Now=clock.Now.AddDays(1);await cycle.RunAsync(default);
-        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
     }
     [Fact]
     public async Task Realtime_finance_notification_is_committed_deduplicated_and_sent_only_to_recipient()
@@ -269,7 +396,7 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.Single(await c.FinanceEmails.Where(x=>x.Subject=="Hóa đơn đã phát hành").ToArrayAsync());
         Assert.Equal(0,await cycle.RemindAsync([id],default,true));
         clock.Now=clock.Now.AddDays(11);Assert.Equal(1,await cycle.RemindAsync([id],default,true));await cycle.RemindAsync([id],default,true);
-        Assert.Single(await c.Notifications.Where(x=>x.Title=="Nhắc thanh toán phí dịch vụ").ToArrayAsync());
+        Assert.Single(await c.Notifications.Where(x=>x.Title=="Thông báo công nợ quá hạn").ToArrayAsync());
         Assert.All(await c.Notifications.ToArrayAsync(),n=>Assert.Equal(user,n.RecipientUserId));
         Assert.Equal(balance,Assert.Single(await cycle.InvoicesAsync(user,default)));Assert.Empty(await p.Payments.ToArrayAsync());
         Assert.NotNull(await cycle.InvoiceDocumentAsync(id,user,default));Assert.Null(await cycle.InvoiceDocumentAsync(id,Guid.NewGuid(),default));
@@ -336,7 +463,7 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.True((await cycle.ElectricityAsync(apartment, Month.AddMonths(-1), default)).IsLocked);
         await Assert.ThrowsAsync<InvalidOperationException>(() => cycle.SaveElectricityAsync(apartment, new(Month.AddMonths(-1), 999), actor, default));
         await cycle.SaveRateAsync(new(10000, Month.AddMonths(1), 50000, 4000), actor, default);
-        await cycle.SaveElectricityAsync(apartment, new(Month, 50), actor, default);
+        await cycle.SaveElectricityAsync(apartment, new(Month, kwh + 50), actor, default);
         clock.Now = clock.Now.AddMonths(1);
         await cycle.RunAsync(default);
         Assert.Equal(1050000, (await b.Invoices.SingleAsync(x => x.BillingPeriodStart == Month.AddMonths(1))).TotalAmount);
@@ -529,9 +656,9 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         i.Issue(actor,oldMonth,DateTimeOffset.UtcNow,oldMonth.AddDays(9));
         b.Invoices.Add(i); b.InvoiceRecipients.Add(new(i.Id,user,"Chủ hộ","head@example.invalid","A-101",70)); await b.SaveChangesAsync();
         await cycle.RunAsync(default); await cycle.RunAsync(default);
-        Assert.Single(await c.Notifications.Where(x=>x.Title=="Nhắc thanh toán phí dịch vụ").ToArrayAsync());
+        Assert.Single(await c.Notifications.Where(x=>x.Title=="Thông báo công nợ quá hạn").ToArrayAsync());
         await cycle.RemindAsync([i.Id],default); await cycle.RemindAsync([i.Id],default);
-        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
         await new PaymentFinanceStore(p,new InvoiceFinancialSource(b)).CollectAsync(new(i.Id,700000,"CASH",null,null),"paid-old",actor,default);
         Assert.Equal(0,await cycle.RemindAsync([i.Id],default));
     }
@@ -552,21 +679,21 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         await cycle.RunAsync(default);
         Assert.Equal(700000,Assert.Single(await cycle.InvoicesAsync(user,default)).Total);
         clock.Now=clock.Now.AddDays(10); await cycle.RunAsync(default);
-        Assert.Equal(1,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(1,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
         await cycle.RunAsync(default);
-        Assert.Equal(1,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(1,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
         Assert.Equal(1,await c.Notifications.CountAsync(x=>x.Title=="Hóa đơn phí dịch vụ mới"));
         clock.Now=clock.Now.AddDays(1); await cycle.RunAsync(default);
-        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
         await cycle.RunAsync(default);
-        Assert.Equal(2,await c.FinanceEmails.CountAsync(x=>x.Subject=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(2,await c.FinanceEmails.CountAsync(x=>x.Subject=="Thông báo công nợ quá hạn"));
         clock.Now=clock.Now.AddDays(1); await cycle.RunAsync(default);
-        Assert.Equal(3,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(3,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
         var oldInvoice = await b.Invoices.SingleAsync();
         var payment = new Payment("DAILY-REMINDER-PAID",oldInvoice.Id,700000,"CASH",clock.Now,clock.Now);
         payment.Confirm(actor,700000,clock.Now);p.Payments.Add(payment);await p.SaveChangesAsync();
         clock.Now=clock.Now.AddDays(1); await cycle.RunAsync(default);
-        Assert.Equal(3,await c.Notifications.CountAsync(x=>x.Title=="Nhắc thanh toán phí dịch vụ"));
+        Assert.Equal(3,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
         clock.Now=new DateTimeOffset(Month.AddMonths(1).ToDateTime(TimeOnly.MinValue),TimeSpan.FromHours(7)).ToUniversalTime();
         await cycle.RunAsync(default);
         var invoices=await cycle.InvoicesAsync(user,default);
@@ -738,7 +865,13 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden,(await accountant.PutAsJsonAsync(utilitiesPath,utilitiesInput)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await resident.PutAsJsonAsync(utilitiesPath,utilitiesInput)).StatusCode);
         Assert.Equal(HttpStatusCode.OK,(await manager.PutAsJsonAsync(utilitiesPath,utilitiesInput)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await manager.PutAsJsonAsync(utilitiesPath,utilitiesInput with { WaterM3=-1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await manager.PutAsJsonAsync(utilitiesPath,utilitiesInput with { CurrentWaterReading=-1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.PutAsJsonAsync(utilitiesPath, new { usageMonth = Month, kwh = 999 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.PutAsJsonAsync(utilitiesPath, new { usageMonth = Month, currentElectricityReading = "không hợp lệ" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await manager.PutAsJsonAsync(utilitiesPath, new
+        {
+            usageMonth = Month, currentElectricityReading = 321, currentWaterReading = 5, kwh = 999, waterM3 = 999
+        })).StatusCode);
         var utilityReading=(await manager.GetFromJsonAsync<ElectricityUsageView>($"{electricPath}?usageMonth={Month:yyyy-MM-dd}"))!;
         Assert.Equal(321,utilityReading.Kwh);Assert.Equal(5,utilityReading.WaterM3);
         Assert.Equal(HttpStatusCode.Conflict,(await manager.PutAsJsonAsync(utilitiesPath,utilitiesInput with { UsageMonth=Month.AddMonths(-1) })).StatusCode);
@@ -965,7 +1098,7 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FinanceEmailWorker>.Instance);
             await worker.StartAsync(timeout.Token);
             var body = await received;
-            Assert.Contains("Receipt", body); Assert.Contains("PT-test.html", body); Assert.Contains("multipart/mixed", body);
+            Assert.Contains("Receipt", body); Assert.Contains("text/html", body); Assert.DoesNotContain("multipart/mixed", body);
             while (true) {
                 await using var check = Communication();
                 if (await check.FinanceEmails.AnyAsync(x => x.SentAt != null, timeout.Token)) break;

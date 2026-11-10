@@ -3,9 +3,10 @@ using PropFlow.Web.Client.Features.Finance.Models;
 namespace PropFlow.Web.Client.Features.Finance.Services;
 public sealed record ServiceRate(decimal UnitRate, DateOnly EffectiveFrom, decimal? WaterUnitRate = null, decimal? ElectricityUnitRate = null, decimal? WaterM3UnitRate = null);
 public sealed record ServiceRateRow(Guid Id, decimal UnitRate, DateOnly EffectiveFrom, Guid CreatedBy, decimal? WaterUnitRate = null, decimal? ElectricityUnitRate = null, decimal? WaterM3UnitRate = null);
-public sealed record ElectricityUsageInput(DateOnly UsageMonth, decimal Kwh);
-public sealed record UtilityUsageInput(DateOnly UsageMonth, decimal? Kwh, decimal? WaterM3);
-public sealed record ElectricityUsageView(Guid ApartmentId, DateOnly UsageMonth, decimal? Kwh, bool IsLocked, DateTimeOffset? UpdatedAt, decimal? WaterM3 = null);
+public sealed record UtilityUsageInput(DateOnly UsageMonth, decimal? CurrentElectricityReading, decimal? CurrentWaterReading);
+public sealed record ElectricityUsageView(Guid ApartmentId, DateOnly UsageMonth, decimal? Kwh, bool IsLocked,
+    DateTimeOffset? UpdatedAt, decimal? WaterM3 = null, decimal PreviousElectricityReading = 0,
+    decimal? CurrentElectricityReading = null, decimal PreviousWaterReading = 0, decimal? CurrentWaterReading = null);
 public sealed record HouseholdInvoice(Guid Id, string Number, string Apartment, string ResidentName,
     DateOnly Period, DateOnly? DueDate, decimal Total, decimal Paid, decimal Outstanding,
     decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null, string PaymentEnvironment = "LIVE");

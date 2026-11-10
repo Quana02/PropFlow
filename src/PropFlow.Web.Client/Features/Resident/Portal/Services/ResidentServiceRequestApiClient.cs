@@ -6,6 +6,7 @@ namespace PropFlow.Web.Client.Features.Resident.Portal.Services;
 
 public interface IResidentServiceRequestApiClient
 {
+    Task<ApiResult<ResidentServiceRequestFacility[]>> GetFacilitiesAsync(CancellationToken cancellationToken = default);
     Task<ApiResult<IReadOnlyList<ResidentServiceRequestListItem>>> ListAsync(
         ResidentServiceRequestListQuery? query = null,
         CancellationToken cancellationToken = default);
@@ -30,6 +31,9 @@ public interface IResidentServiceRequestApiClient
 public sealed class ResidentServiceRequestApiClient(AuthenticatedApiClient api)
     : IResidentServiceRequestApiClient
 {
+    public Task<ApiResult<ResidentServiceRequestFacility[]>> GetFacilitiesAsync(CancellationToken cancellationToken = default) =>
+        api.SendAsync<ResidentServiceRequestFacility[]>(HttpMethod.Get, "api/v1/resident/service-requests/facility-options", ct: cancellationToken);
+
     public Task<ApiResult<IReadOnlyList<ResidentServiceRequestListItem>>> ListAsync(
         ResidentServiceRequestListQuery? query = null,
         CancellationToken cancellationToken = default) =>

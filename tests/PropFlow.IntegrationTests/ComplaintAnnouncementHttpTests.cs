@@ -168,7 +168,16 @@ public sealed class ComplaintAnnouncementHttpTests
         Assert.Equal(HttpStatusCode.Conflict, (await manager.PostAsJsonAsync(root + "/resolve", new { response = "Chưa hoàn thành follow-up" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await staff.PutAsJsonAsync(root + $"/followups/{followup.Id}", new { complete = false })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await staff.PutAsJsonAsync(root + $"/followups/{followup.Id}", new { complete = true, result = " " })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await staff.PutAsJsonAsync(root + $"/followups/{followup.Id}", new { complete = true, result = "Kết quả nội bộ bí mật" })).StatusCode);
+        var completedResponse = await staff.PutAsJsonAsync(root + $"/followups/{followup.Id}", new { complete = true, result = "Kết quả nội bộ bí mật" });
+        Assert.Equal(HttpStatusCode.OK, completedResponse.StatusCode);
+        var completed = (await completedResponse.Content.ReadFromJsonAsync<ComplaintDetail>())!;
+        Assert.Equal("UNDER_REVIEW", completed.Status);
+        Assert.Equal("COMPLETED", Assert.Single(completed.Followups).Status);
+        Assert.Contains(completed.History, entry => entry.Detail == "Kết quả nội bộ bí mật" && entry.ActorLabel == "Bạn");
+        Assert.Equal(HttpStatusCode.Conflict, (await staff.PutAsJsonAsync(root + $"/followups/{followup.Id}", new { complete = true, result = "Trùng thao tác" })).StatusCode);
+        var managerView = (await manager.GetFromJsonAsync<ComplaintDetail>(root))!;
+        Assert.Equal("UNDER_REVIEW", managerView.Status);
+        Assert.Contains(managerView.History, entry => entry.FromStatus == "FOLLOW_UP" && entry.ToStatus == "UNDER_REVIEW");
         Assert.Equal(HttpStatusCode.OK, (await manager.PostAsJsonAsync(root + "/resolve", new { response = "Ban Quản lý đã xử lý." })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync(root + "/close", null)).StatusCode);
         var visible = (await resident.GetFromJsonAsync<ComplaintDetail>(root))!;
