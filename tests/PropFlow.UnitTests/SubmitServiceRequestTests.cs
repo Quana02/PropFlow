@@ -15,6 +15,34 @@ public sealed class SubmitServiceRequestTests
     private static readonly DateTimeOffset Now = new(2026, 10, 2, 3, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task Public_requests_use_the_active_facility_catalog_and_reject_an_inactive_facility()
+    {
+        var active = new MaintenanceAssetReference(Guid.NewGuid(), "F-1", "Tiện ích từ danh mục", "FACILITY", "ACTIVE", null);
+        var inactive = new MaintenanceAssetReference(Guid.NewGuid(), "F-2", "Tiện ích ngừng dùng", "FACILITY", "INACTIVE", null);
+        var equipment = new MaintenanceAssetReference(Guid.NewGuid(), "E-1", "Thiết bị", "EQUIPMENT", "ACTIVE", null);
+        var store = new FakeStore(Guid.NewGuid());
+        var residence = new ActiveResidentResidence(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var handler = Handler(store, residence, assets: new FacilityCatalog(active, inactive, equipment));
+        var option = Assert.Single(await handler.GetFacilitiesAsync(default));
+        Assert.Equal(new ResidentServiceRequestFacility(active.Id, active.Name), option);
+
+        var request = ValidRequest(null) with { ServiceAreaCode = ServiceRequestAreaCodes.CommonArea, FacilityId = inactive.Id };
+        Assert.Equal("invalid_facility", (await handler.HandleAsync(Guid.NewGuid(), request, default)).ErrorCode);
+        Assert.Null(store.Request);
+        Assert.Equal(SubmitServiceRequestOutcome.Created,
+            (await handler.HandleAsync(Guid.NewGuid(), request with { FacilityId = option.Id }, default)).Outcome);
+        Assert.Equal(active.Id, store.Request!.FacilityId);
+    }
+
+    private sealed class FacilityCatalog(params MaintenanceAssetReference[] rows) : IMaintenanceAssetSource
+    {
+        public Task<IReadOnlyList<MaintenanceAssetReference>> GetAvailableAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<MaintenanceAssetReference>>(rows);
+        public Task<MaintenanceAssetReference?> GetFacilityAsync(Guid id, CancellationToken ct) => Task.FromResult(rows.SingleOrDefault(item => item.Id == id && item.AssetType == "FACILITY"));
+        public Task<MaintenanceAssetReference?> GetEquipmentAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> ExistsAsync(Guid? facilityId, Guid? equipmentId, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    [Fact]
     public async Task HandleAsync_CreatesRequestForAuthenticatedResidentsActiveApartment()
     {
         var userId = Guid.NewGuid();
@@ -120,15 +148,17 @@ public sealed class SubmitServiceRequestTests
         FakeStore store,
         ActiveResidentResidence? residence,
         DateTimeOffset? now = null,
-        RecordingRealtimeNotifier? realtime = null) =>
+        RecordingRealtimeNotifier? realtime = null,
+        IMaintenanceAssetSource? assets = null) =>
         new(
             store,
             new FakeResidenceSource(residence),
             new FakeBuildingTimeZone(),
             new FixedTimeProvider(now ?? Now),
-            realtime?.Track(store));
+            realtime?.Track(store),
+            assets);
 
-    private static CreateResidentServiceRequestRequest ValidRequest(DateOnly preferredDate) =>
+    private static CreateResidentServiceRequestRequest ValidRequest(DateOnly? preferredDate) =>
         new(
             "REPAIR",
             "Kiểm tra đường ống nước",

@@ -17,7 +17,8 @@ public class Notification
         Guid? sourceEventId = null,
         string? sourceType = null,
         Guid? sourceId = null,
-        string? actionPath = null)
+        string? actionPath = null,
+        Guid? senderUserId = null)
     {
         if (recipientUserId == Guid.Empty)
         {
@@ -28,6 +29,7 @@ public class Notification
 
         Id = Guid.NewGuid();
         RecipientUserId = recipientUserId;
+        SenderUserId = senderUserId;
         Type = type;
         Title = NormalizeRequired(title, nameof(title));
         Message = NormalizeRequired(message, nameof(message));
@@ -41,6 +43,7 @@ public class Notification
 
     public Guid Id { get; private set; }
     public Guid RecipientUserId { get; private set; }
+    public Guid? SenderUserId { get; private set; }
     public NotificationType Type { get; private set; }
     public string Title { get; private set; }
     public string Message { get; private set; }

@@ -3,7 +3,7 @@
 @using PropFlow.Web.Client.Services.Authentication
 @using PropFlow.Web.Client.Features.Finance.Models
 @using PropFlow.Web.Client.Features.Finance.Services
-@attribute [Authorize(Roles = "ACCOUNTANT")]
+@attribute [Authorize(Roles = "ACCOUNTANT", Policy = "finance.manage")]
 @inject AuthSession Session
 @inject IFinanceApiClient Finance
 

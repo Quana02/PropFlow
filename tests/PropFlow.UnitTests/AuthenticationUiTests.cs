@@ -60,6 +60,9 @@ public sealed class AuthenticationUiTests
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .AddSingleton<ISupportChatConnection, SupportChatConnection>()
             .AddSingleton<SupportChatApi>()
+            .AddSingleton<PropFlow.Web.Client.Features.Finance.Services.FinanceCycleApi>()
+            .AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState>()
+            .AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentNotificationConnectionFactory>()
             .BuildServiceProvider();
 
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());

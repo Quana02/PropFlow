@@ -36,14 +36,14 @@ public sealed class SubmitServiceRequestHandler(
     IResidentResidenceSource residences,
     ICurrentBuildingTimeZone buildingTimeZone,
     TimeProvider clock,
-    IServiceRequestRealtimeNotifier? realtime = null)
+    IServiceRequestRealtimeNotifier? realtime = null,
+    IMaintenanceAssetSource? assets = null)
 {
     private static readonly IReadOnlySet<string> ServiceAreaCodes =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "MASTER_BATHROOM", "LIVING_ROOM", "MASTER_BEDROOM", "SECONDARY_BEDROOM",
-            "BEDROOM", "KITCHEN", "OTHER_PRIVATE", "COMMON_AREA", "POOL", "GYM",
-            "KIDS_ZONE", "ELEVATOR", "LOBBY", "PARKING", "BBQ", "SPORT"
+            "BEDROOM", "KITCHEN", "OTHER_PRIVATE"
         };
 
     private static readonly IReadOnlySet<string> PreferredTimeCodes =
@@ -51,6 +51,13 @@ public sealed class SubmitServiceRequestHandler(
         {
             "MORNING", "AFTERNOON", "EVENING", "ANYTIME"
         };
+
+    public async Task<IReadOnlyList<ResidentServiceRequestFacility>> GetFacilitiesAsync(CancellationToken ct)
+    {
+        if (assets is null) return [];
+        return (await assets.GetAvailableAsync(ct)).Where(x => x.AssetType == "FACILITY" && x.Status == "ACTIVE")
+            .OrderBy(x => x.Name).ThenBy(x => x.Id).Select(x => new ResidentServiceRequestFacility(x.Id, x.Name)).ToArray();
+    }
 
     public async Task<SubmitServiceRequestResult> HandleAsync(
         Guid userId,
@@ -69,8 +76,12 @@ public sealed class SubmitServiceRequestHandler(
 
         if (string.IsNullOrWhiteSpace(categoryCode))
             return Invalid("invalid_category", "Loại dịch vụ không hợp lệ.");
-        if (!ServiceAreaCodes.Contains(areaCode))
+        if (!ServiceAreaCodes.Contains(areaCode) && !ServiceRequestAreaCodes.IsCommonArea(areaCode))
             return Invalid("invalid_service_area", "Khu vực hỗ trợ không hợp lệ.");
+        if (command.FacilityId is { } facilityId &&
+            (areaCode != ServiceRequestAreaCodes.CommonArea || assets is null ||
+             await assets.GetFacilityAsync(facilityId, ct) is not { Status: "ACTIVE" }))
+            return Invalid("invalid_facility", "Tiện ích đã chọn không còn khả dụng. Vui lòng chọn lại.");
         if (priorityCode is not ("NORMAL" or "URGENT"))
             return Invalid("invalid_priority", "Mức độ ưu tiên không hợp lệ.");
         if (preferredTimeCode is not null && !PreferredTimeCodes.Contains(preferredTimeCode))
@@ -115,6 +126,7 @@ public sealed class SubmitServiceRequestHandler(
             description,
             now,
             apartmentUnitId: residence.ApartmentUnitId,
+            facilityId: command.FacilityId,
             categoryId: categoryId,
             finalPriorityCode: priorityCode,
             serviceAreaCode: areaCode,

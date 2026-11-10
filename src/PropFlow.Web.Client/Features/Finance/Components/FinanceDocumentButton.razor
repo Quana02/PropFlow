@@ -15,6 +15,7 @@
     [Parameter] public bool Print { get; set; } = true;
     private bool busy;  private IJSObjectReference? module;
     private async Task Open() {
+        if (busy) return;
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
 
         busy = true;

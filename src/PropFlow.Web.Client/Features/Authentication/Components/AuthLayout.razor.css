@@ -116,6 +116,14 @@ html.dark .auth-content ::deep .auth-links{border-color:#334155}
 .switch-to-register .auth-panel>*,.switch-to-login .auth-panel>*{animation:none}
 .auth-panel>.auth-view{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .8s cubic-bezier(.45,0,.2,1),transform .8s cubic-bezier(.45,0,.2,1)}
 .auth-panel>.auth-login-welcome,.switch-route .auth-panel>.auth-login-form,.auth-panel>.auth-other{opacity:1;pointer-events:auto;transform:translateX(0)}
+.account-route .auth-card { height: auto; }
+.account-route .auth-panel > .auth-login-welcome,
+.account-route .auth-panel > .auth-other { position: relative; inset: auto; height: auto; }
+.account-route .auth-panel > .auth-other { box-sizing: border-box; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+    .account-route .auth-main { padding: 24px 12px; }
+    .account-route .auth-panel > .auth-other { padding: 16px; }
+}
 .auth-register-form{transform:translateX(-32px)}
 .auth-register-welcome{transform:translateX(32px)}
 .register-mode .auth-panel>.auth-login-welcome{opacity:0;pointer-events:none;transform:translateX(-32px)}

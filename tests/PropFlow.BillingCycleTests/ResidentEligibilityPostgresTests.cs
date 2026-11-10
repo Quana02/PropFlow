@@ -50,7 +50,10 @@ public sealed class ResidentEligibilityPostgresTests : IAsyncLifetime
         r.Residents.AddRange(people);r.Residents.Add(new Resident("OTHER","Unrelated",now));await r.SaveChangesAsync();
         var headResidency=new ResidentApartment(head.Id,unit.Id,HouseholdRole.HOUSEHOLD_HEAD,ResidencyType.TENANT,date.AddDays(-1),now);r.ResidentApartments.Add(headResidency);await r.SaveChangesAsync();
         r.ResidentApartments.AddRange(people.Select(person=>new ResidentApartment(person.Id,unit.Id,HouseholdRole.HOUSEHOLD_MEMBER,ResidencyType.TENANT,date.AddDays(-1),now,headResidency.Id,HouseholdRelationship.OTHER_RELATIVE)));await r.SaveChangesAsync();
-        var controller=new PropFlow.Modules.Residents.Presentation.ResidentsController(r,null!,new ApartmentResidentRelationshipSource(a),null!,null!,null!,TimeProvider.System);
+        var relationships = new ApartmentResidentRelationshipSource(a);
+        var overview = new ApartmentOverviewSource(a);
+        var residency = new PropFlow.Modules.Residents.Application.ResidentResidencyService(r, overview, relationships, new BuildingZone(), TimeProvider.System);
+        var controller = new PropFlow.Modules.Residents.Presentation.ResidentsController(r, overview, relationships, residency, null!, null!, TimeProvider.System);
         controller.ControllerContext=new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext=new Microsoft.AspNetCore.Http.DefaultHttpContext { User=new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role,"MANAGER")],"test")) } };
         async Task<PropFlow.Modules.Residents.Presentation.PagedResidentsResponse> List(int page,string term="matching",HouseholdRole role=HouseholdRole.HOUSEHOLD_MEMBER) {
             var result=await controller.List(term,ResidentStatus.ACTIVE,unit.Id,PropFlow.Modules.Residents.Presentation.ResidentApartmentRelationshipKind.RESIDENT_ONLY,ResidencyType.TENANT,role,page,20,default);
@@ -185,7 +188,7 @@ public sealed class ResidentEligibilityPostgresTests : IAsyncLifetime
         var person = new Resident("R-1","Head",null,null,null,"CCCD","123456789012",null,null,now,phoneNumber:"0901234567",email:"head@example.invalid");
         var owner = new Resident("R-2","New owner",now); r.Residents.AddRange(person,owner); await r.SaveChangesAsync();
         var type = new ApartmentUnitType("Test",now); a.ApartmentUnitTypes.Add(type); var unit = new ApartmentUnit("A-1",1,now,type.Id,70); a.ApartmentUnits.Add(unit); await a.SaveChangesAsync();
-        r.ResidentApartments.Add(new(person.Id,unit.Id,HouseholdRole.HOUSEHOLD_HEAD,ResidencyType.AUTHORIZED_OCCUPANT,date.AddDays(-1),now)); await r.SaveChangesAsync();
+        r.ResidentApartments.Add(new(person.Id,unit.Id,HouseholdRole.HOUSEHOLD_HEAD,ResidencyType.TENANT,date.AddDays(-1),now)); await r.SaveChangesAsync();
         var onboarding = new ResidentOnboarding(r,new ApartmentResidentRelationshipSource(a)); Assert.NotNull(await onboarding.RevalidateRegistrationCandidateAsync(person.Id,date,default));
         a.ApartmentOwnerships.Add(new(unit.Id,owner.Id,date,now,null)); await a.SaveChangesAsync();
         Assert.Null(await onboarding.RevalidateRegistrationCandidateAsync(person.Id,date,default)); Assert.Equal(2,await r.Residents.CountAsync());
@@ -195,5 +198,10 @@ public sealed class ResidentEligibilityPostgresTests : IAsyncLifetime
         Assert.Null(await new ResidentAccountEligibility(r,new ApartmentResidentRelationshipSource(a)).EligibleApartmentAsync(person.Id,date,default));
         Assert.Equal(AccountStatus.ACTIVE,(await accounts.UserAccounts.SingleAsync()).Status);
         Assert.Equal(existing.Id,(await r.Residents.SingleAsync(x=>x.Id==person.Id)).UserId);
+    }
+
+    private sealed class BuildingZone : PropFlow.Modules.PropertyAssets.Contracts.ICurrentBuildingTimeZone
+    {
+        public Task<string> GetAsync(CancellationToken ct) => Task.FromResult("Asia/Ho_Chi_Minh");
     }
 }

@@ -7,7 +7,10 @@ public sealed record CreateResidentServiceRequestRequest(
     string ServiceAreaCode,
     string PriorityCode,
     DateOnly? PreferredDate,
-    string? PreferredTimeCode);
+    string? PreferredTimeCode,
+    Guid? FacilityId = null);
+
+public sealed record ResidentServiceRequestFacility(Guid Id, string Name);
 
 public sealed record ResidentServiceRequestCreatedResponse(
     Guid Id,
@@ -69,7 +72,8 @@ public sealed record ResidentServiceRequestDetailResponse(
     decimal BaseServiceCost = 0,
     decimal ApprovedAdditionalCost = 0,
     ResidentServiceRequestSettlement? Settlement = null,
-    AdditionalCostConsentView? AdditionalCostConsent = null);
+    AdditionalCostConsentView? AdditionalCostConsent = null,
+    string? FacilityName = null);
 
 public sealed record ResidentServiceRequestSettlement(
     Guid InvoiceId,

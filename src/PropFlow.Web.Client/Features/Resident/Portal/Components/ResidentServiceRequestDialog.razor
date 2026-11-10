@@ -4,6 +4,7 @@
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
+@using PropFlow.Web.Client.Features.ServiceRequests.Models
 @using PropFlow.Web.Client.Services.Api
 @inject IResidentServiceRequestApiClient Api
 
@@ -95,7 +96,14 @@
                     <div class="service-form-grid">
                         <div class="service-form-section">
                             <label class="service-field-label">@LocationLabel <b>*</b></label>
-                            <PropFlowSelect @bind-Value="_form.ServiceAreaCode" Options="CurrentAreaOptions" AriaLabel="@LocationLabel" Disabled="_submitting" />
+                            <PropFlowSelect @bind-Value="_form.ServiceAreaCode" Options="CurrentAreaOptions" AriaLabel="@LocationLabel"
+                                Disabled="@(_submitting || _form.ScopeCode == PublicScope && (_facilitiesLoading || _facilityOptions.Count == 0))" />
+                            @if (_form.ScopeCode == PublicScope)
+                            {
+                                @if (_facilitiesLoading) { <p role="status">Đang tải tiện ích…</p> }
+                                else if (_facilityError is not null) { <p role="alert">@_facilityError <button type="button" @onclick="LoadFacilitiesAsync">Thử lại</button></p> }
+                                else if (_facilityOptions.Count == 0) { <p>Chưa có tiện ích đang hoạt động.</p> }
+                            }
                             <ValidationMessage For="@(() => _form.ServiceAreaCode)" />
                         </div>
                         <div class="service-form-section">
@@ -192,7 +200,11 @@
     private bool _submitting;
     private string MinimumDate => DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
     private string LocationLabel => _form.ScopeCode == PrivateScope ? "Vị trí trong căn hộ" : "Khu vực chung / Tiện ích";
-    private IReadOnlyList<PropFlowSelectOption> CurrentAreaOptions => _form.ScopeCode == PrivateScope ? PrivateAreaOptions : PublicAreaOptions;
+    private IReadOnlyList<PropFlowSelectOption> CurrentAreaOptions => _form.ScopeCode == PrivateScope ? PrivateAreaOptions : _facilityOptions;
+    private IReadOnlyList<PropFlowSelectOption> _facilityOptions = [];
+    private bool _facilitiesLoading;
+    private string? _facilityError;
+    private int _facilityRequest;
 
     private sealed record RequestType(string Code, string Icon, string Label, string SuggestedTitle);
     private sealed record ServiceDefinition(string Code, string Icon, string Title, string TypeLabel, string DescriptionLabel, string DescriptionPlaceholder, string ResponseNote, string ResponseCommitment, IReadOnlyList<RequestType> RequestTypes);
@@ -218,16 +230,8 @@
     ];
 
     private static readonly IReadOnlyList<PropFlowSelectOption> PrivateAreaOptions =
-    [
-        new("MASTER_BATHROOM", "Phòng tắm Master"), new("LIVING_ROOM", "Phòng khách & Ban công"), new("MASTER_BEDROOM", "Phòng ngủ chính"),
-        new("SECONDARY_BEDROOM", "Phòng ngủ phụ"), new("KITCHEN", "Bếp & Logia giặt phơi"), new("OTHER_PRIVATE", "Khu vực khác trong căn hộ")
-    ];
-
-    private static readonly IReadOnlyList<PropFlowSelectOption> PublicAreaOptions =
-    [
-        new("POOL", "🏊 Hồ bơi vô cực"), new("GYM", "🏋️ Phòng Gym & Yoga"), new("KIDS_ZONE", "🛝 Khu vui chơi trẻ em"), new("ELEVATOR", "🛗 Thang máy cư dân"),
-        new("LOBBY", "🛋️ Sảnh đón tiếp & Lounge"), new("PARKING", "🚗 Hầm để xe B1 / B2"), new("BBQ", "🍖 Vườn nướng BBQ"), new("SPORT", "🎾 Sân thể thao ngoài trời")
-    ];
+        new[] { "MASTER_BATHROOM", "LIVING_ROOM", "MASTER_BEDROOM", "SECONDARY_BEDROOM", "KITCHEN", "OTHER_PRIVATE" }
+            .Select(code => new PropFlowSelectOption(code, ServiceRequestAreaText.Label(code))).ToArray();
 
     private static readonly IReadOnlyList<PropFlowSelectOption> ImpactOptions =
     [
@@ -268,11 +272,33 @@
 
     private string? ScopeButtonClass(string scope) => _form.ScopeCode == scope ? "active" : null;
 
-    private void SelectScope(string scope)
+    private async Task SelectScope(string scope)
     {
+        if (_submitting || _form.ScopeCode == scope) return;
         _form.ScopeCode = scope;
-        _form.ServiceAreaCode = (scope == PrivateScope ? PrivateAreaOptions : PublicAreaOptions)[0].Value;
-        if (scope == PrivateScope) _form.LocationDetail = null;
+        _form.ServiceAreaCode = scope == PrivateScope ? PrivateAreaOptions[0].Value : "";
+        if (scope == PrivateScope)
+        {
+            _facilityRequest++;
+            _facilitiesLoading = false;
+            _form.LocationDetail = null;
+        }
+        else await LoadFacilitiesAsync();
+    }
+
+    private async Task LoadFacilitiesAsync()
+    {
+        var request = ++_facilityRequest;
+        _facilitiesLoading = true;
+        _facilityError = null;
+        _facilityOptions = [];
+        var result = await Api.GetFacilitiesAsync();
+        if (request != _facilityRequest) return;
+        _facilitiesLoading = false;
+        if (result.IsSuccess)
+            _facilityOptions = (result.Data ?? []).Select(item => new PropFlowSelectOption(item.Id.ToString(), item.Name)).ToArray();
+        else
+            _facilityError = result.Message ?? "Không thể tải tiện ích.";
     }
 
     private void SelectRequestType(RequestType type)
@@ -314,7 +340,10 @@
         }
 
         var requestType = CurrentService.RequestTypes.First(option => option.Code == _form.RequestTypeCode);
-        var area = CurrentAreaOptions.First(option => option.Value == _form.ServiceAreaCode);
+        var area = CurrentAreaOptions.FirstOrDefault(option => option.Value == _form.ServiceAreaCode);
+        if (area is null) return;
+        var isPublic = _form.ScopeCode == PublicScope;
+        var facilityId = isPublic ? Guid.Parse(area.Value) : (Guid?)null;
         var context = new List<string>
         {
             $"Loại yêu cầu: {requestType.Label}",
@@ -331,7 +360,8 @@
         try
         {
             _result = await Api.CreateAsync(new CreateResidentServiceRequestRequest(
-                _form.CategoryCode, _form.Title, description, _form.ServiceAreaCode, _form.PriorityCode, _form.PreferredDate, _form.PreferredTimeCode));
+                _form.CategoryCode, _form.Title, description, isPublic ? ServiceRequestAreaCodes.CommonArea : area.Value,
+                _form.PriorityCode, _form.PreferredDate, _form.PreferredTimeCode, facilityId));
             if (_result.IsSuccess && _result.Data is not null)
             {
                 _created = _result.Data;
@@ -353,6 +383,8 @@
     {
         if (_submitting) return;
         _open = false;
+        _facilityRequest++;
+        _facilitiesLoading = false;
         _result = null;
         _created = null;
         _attachmentError = null;

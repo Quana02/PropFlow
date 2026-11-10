@@ -4,7 +4,7 @@ using PropFlow.Modules.Communication.Application;
 
 namespace PropFlow.Modules.Communication.Presentation;
 
-[Authorize(Roles = "RESIDENT")]
+[Authorize]
 public sealed class ResidentNotificationHub : Hub { }
 
 public sealed class FinanceNotificationRealtime(IHubContext<ResidentNotificationHub> hub) : IFinanceNotificationRealtime

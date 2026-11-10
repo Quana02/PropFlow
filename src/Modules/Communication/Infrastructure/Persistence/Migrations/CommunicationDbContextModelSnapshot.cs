@@ -343,6 +343,10 @@ namespace PropFlow.Modules.Communication.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("recipient_user_id");
 
+                    b.Property<Guid?>("SenderUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sender_user_id");
+
                     b.Property<Guid?>("SourceEventId")
                         .HasColumnType("uuid")
                         .HasColumnName("source_event_id");
@@ -385,6 +389,8 @@ namespace PropFlow.Modules.Communication.Infrastructure.Persistence.Migrations
                         .HasFilter("source_event_id IS NOT NULL");
 
                     b.HasIndex("SourceType", "SourceId");
+
+                    b.HasIndex("RecipientUserId", "CreatedAt", "Id");
 
                     b.ToTable("notifications", "communication", t =>
                         {

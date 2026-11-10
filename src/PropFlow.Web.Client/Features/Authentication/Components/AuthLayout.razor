@@ -7,13 +7,13 @@
 else if (IsRegister) { <PageTitle>Đăng ký cư dân — PropFlow</PageTitle> }
 else if (IsForgot) { <PageTitle>Quên mật khẩu — PropFlow</PageTitle> }
 
-<div class="auth-shell @(IsLogin ? "login-mode" : IsRegister ? "register-mode" : IsForgot ? "forgot-mode" : "") @(IsLogin || IsRegister ? "switch-route" : "") @_transition">
+<div class="auth-shell @(IsLogin ? "login-mode" : IsRegister ? "register-mode" : IsForgot ? "forgot-mode" : "") @(IsLogin || IsRegister ? "switch-route" : "") @(IsAccount ? "account-route" : "") @_transition">
     <div id="threejs-bg" class="auth-three" aria-hidden="true"></div>
     <PropFlow.Web.Client.Layout.Shared.PublicHeader />
     <main class="auth-main">
         @if (IsOtp) { <div class="auth-step">BƯỚC 2: XÁC THỰC BẢO MẬT OTP</div> }
         else if (IsReset) { <div class="auth-step">THIẾT LẬP BẢO MẬT / MẬT KHẨU MỚI</div> }
-        else if (!IsForgot)
+        else if (!IsForgot && !IsAccount)
         {
             <nav class="auth-switch" aria-label="Tài khoản">
                 <a class="@(IsRegister ? "" : "selected")" href="/login">ĐĂNG NHẬP</a>
@@ -67,6 +67,7 @@ else if (IsForgot) { <PageTitle>Quên mật khẩu — PropFlow</PageTitle> }
     private bool IsOtp => Route == "otp";
     private bool IsReset => Route == "reset-password";
     private bool IsForgot => Route == "forgot-password";
+    private bool IsAccount => Route == "account" || Route.StartsWith("account/", StringComparison.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {
