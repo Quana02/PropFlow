@@ -458,6 +458,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(SupportChatPolicies.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
             PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy(SupportChatPolicies.ReceiptRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
+            PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy(ResidentChatPolicy.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
             PermitLimit = Math.Clamp(builder.Configuration.GetValue("AiChatbot:QuestionsPerMinute", 10), 1, 100),

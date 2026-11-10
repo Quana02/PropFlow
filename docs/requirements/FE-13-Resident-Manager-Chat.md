@@ -24,6 +24,13 @@ Trạng thái hội thoại WAITING/ACTIVE/CLOSED. Kết thúc không xóa lịc
 
 Heartbeat mỗi 20 giây, lease 75 giây; dọn lease hết hạn và điều phối mỗi 5 giây. Nhiều tab Manager được tính chung một người; đóng một tab không làm mất kết nối các tab còn lại. Tắt sẵn sàng chặn nhận mới, không kết thúc cuộc đang hỗ trợ.
 
+## Thao tác trên tin nhắn
+
+- Manager và cư dân có thể trả lời tin trong cùng hội thoại, xem chi tiết và chọn nhiều tin để sao chép, chuyển tiếp, thu hồi hoặc xóa ở phía mình. Chỉ người gửi mới có thể thu hồi tin. Thu hồi ẩn nội dung và phần trích dẫn ở cả hai phía. Xóa ở phía mình chỉ ẩn tin trong lịch sử của người thực hiện.
+- Chuyển tiếp tối đa 20 tin mỗi lần, từ lịch sử được phép xem đến hội thoại hỗ trợ đang mở mà người gửi tham gia. Bản chuyển tiếp chỉ mang nội dung và nhãn chuyển tiếp. Bản đó có vòng đời riêng nếu tin gốc được thu hồi sau này.
+- **Đã gửi** khi API xác nhận lưu. **Đã nhận** khi ứng dụng bên kia tải được tin trong hội thoại. **Đã xem** khi tin hiện trong vùng đọc và tab hội thoại có tiêu điểm. Chi tiết tin hiển thị thời điểm các xác nhận đã có.
+- Dưới `conversations/{id}/messages`, `POST` chấp nhận `replyToId` tùy chọn. `GET {messageId}` đọc chi tiết, `PUT {messageId}/recall` thu hồi một tin. `PUT recall` thu hồi tối đa 50 tin trong một giao dịch sau khi xác minh quyền với toàn bộ danh sách. `POST hide` và `POST receipts` nhận tối đa 50 ID. `POST forward` nhận hội thoại đích và cặp ID tin gốc / mã gửi để chống tạo bản sao khi thử lại.
+
 ## Kiểm thử và bàn giao
 
 Unit: lifecycle, validation, quyền, idempotency, không lưu draft. PostgreSQL: hai cư dân tranh cùng Manager, hai Manager tranh cùng hàng chờ, chỉ mục unique, rollback, phân trang và quyền đoán ID. Hub: draft chỉ tới Manager được phân, đóng phiên/đổi quyền chặn truyền tiếp. UI: lời chào, thông báo bản nháp, gửi/nhận, hàng chờ, mất kết nối và kết thúc. Build API/Web, chạy migration có sao lưu; dừng mọi tiến trình thử do agent tạo.

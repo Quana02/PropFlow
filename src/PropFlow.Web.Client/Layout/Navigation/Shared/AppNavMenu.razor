@@ -2,6 +2,8 @@
 @using PropFlow.Web.Client.Layout.Navigation.Admin
 @using PropFlow.Web.Client.Layout.Navigation.Accountant
 @using PropFlow.Web.Client.Layout.Navigation.Operations
+@using PropFlow.Web.Client.Layout.Navigation.Staff
+@using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject IJSRuntime JS
@@ -14,7 +16,8 @@
     <div class="app-nav-scroll">
         <AuthorizeView Roles="ADMIN"><AdminNavMenu /></AuthorizeView>
         <AuthorizeView Roles="ACCOUNTANT"><AccountantNavMenu /></AuthorizeView>
-        <AuthorizeView Policy="@PropFlow.Web.Client.Features.Facility.Services.AssetPermissions.ViewPolicy"><OperationsNavMenu /></AuthorizeView>
+        <AuthorizeView Roles="MANAGER" Policy="@AssetPermissions.ViewPolicy"><OperationsNavMenu /></AuthorizeView>
+        <AuthorizeView Roles="STAFF" Policy="@AssetPermissions.ViewPolicy"><StaffNavMenu /></AuthorizeView>
     </div>
 </div>
 

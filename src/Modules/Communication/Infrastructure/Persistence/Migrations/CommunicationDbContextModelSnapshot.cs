@@ -510,10 +510,31 @@ namespace PropFlow.Modules.Communication.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ForwardedFromId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("HiddenForManager")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HiddenForResident")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("RecalledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReplyToId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("SeenAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("SenderName")
                         .IsRequired()
