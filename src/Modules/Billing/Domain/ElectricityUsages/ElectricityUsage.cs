@@ -11,10 +11,42 @@ public sealed class ElectricityUsage
         Update(kwh, actor, now);
     }
     public ElectricityUsage(Guid apartmentId, DateOnly usageMonth, decimal? kwh, decimal? waterM3, Guid actor, DateTimeOffset now)
+        : this(apartmentId, usageMonth, actor, now)
+    {
+        UpdateUtilities(kwh, waterM3, actor, now);
+    }
+
+    internal ElectricityUsage(Guid apartmentId, DateOnly usageMonth, Guid actor, DateTimeOffset now)
     {
         if (apartmentId == Guid.Empty || usageMonth.Day != 1) throw new ArgumentException("Căn hộ hoặc kỳ sử dụng không hợp lệ.");
+        if (actor == Guid.Empty) throw new ArgumentException("Người cập nhật không hợp lệ.");
         Id = Guid.NewGuid(); ApartmentId = apartmentId; UsageMonth = usageMonth; CreatedBy = actor; CreatedAt = now;
-        UpdateUtilities(kwh, waterM3, actor, now);
+    }
+
+    internal void RecordReadings(decimal previousElectricity, decimal? electricity, decimal previousWater, decimal? water,
+        Guid actor, DateTimeOffset now)
+    {
+        if (electricity is null && water is null) throw new ArgumentException("Nhập ít nhất một chỉ số công tơ điện hoặc nước.");
+        var kwh = Consumption(previousElectricity, electricity, "Chỉ số điện (kWh)");
+        var waterM3 = Consumption(previousWater, water, "Chỉ số nước (m³)");
+        UpdateUtilities(kwh ?? Kwh, waterM3 ?? WaterM3, actor, now);
+        if (electricity.HasValue)
+        {
+            PreviousElectricityReading = previousElectricity;
+            CurrentElectricityReading = electricity;
+        }
+        if (water.HasValue)
+        {
+            PreviousWaterReading = previousWater;
+            CurrentWaterReading = water;
+        }
+    }
+
+    private static decimal? Consumption(decimal previous, decimal? current, string label)
+    {
+        Validate(current, label);
+        if (current < previous) throw new ArgumentException($"{label} hiện tại không được nhỏ hơn chỉ số trước ({previous:0.###}).");
+        return current - previous;
     }
     public void UpdateUtilities(decimal? kwh, decimal? waterM3, Guid actor, DateTimeOffset now)
     {
@@ -33,6 +65,10 @@ public sealed class ElectricityUsage
     public DateOnly UsageMonth { get; private set; }
     public decimal? Kwh { get; private set; }
     public decimal? WaterM3 { get; private set; }
+    public decimal? PreviousElectricityReading { get; private set; }
+    public decimal? CurrentElectricityReading { get; private set; }
+    public decimal? PreviousWaterReading { get; private set; }
+    public decimal? CurrentWaterReading { get; private set; }
     public Guid CreatedBy { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public Guid UpdatedBy { get; private set; }

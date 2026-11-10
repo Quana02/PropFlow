@@ -23,6 +23,9 @@ public sealed class ServiceRequestSubmissionStore(ServiceRequestsDbContext db)
     {
         db.ServiceRequests.Add(request);
         db.ServiceRequestActivities.Add(initialActivity);
+        if (request.SubmittedByUserId is { } sender)
+            db.ResidentEvents.Add(new ServiceRequestWorkflowNotice(sender, null, request.RequestNumber)
+                .ToEvent(ServiceRequestWorkflowNotice.Submitted, request.Id, request.SubmittedAt));
         await db.SaveChangesAsync(ct);
     }
 }

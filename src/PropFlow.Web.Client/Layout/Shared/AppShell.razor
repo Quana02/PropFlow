@@ -81,6 +81,10 @@
                     <button type="button" disabled="@busy" @onclick="Logout">Đăng xuất</button>
                 </div>
             </details>
+            @if (Session.User is not null)
+            {
+                <PropFlow.Web.Client.Features.Communication.Components.NotificationBell />
+            }
         </div>
     </header>
 

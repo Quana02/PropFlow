@@ -535,12 +535,26 @@
         [new(string.Empty, allLabel), .. Assets.Where(asset => asset.AssetType == assetType)
             .Select(asset => new PropFlowSelectOption(asset.Id.ToString(), $"{asset.Code} · {asset.Name}"))];
 
+    [SupplyParameterFromQuery(Name = "taskId")]
+    public Guid? NotificationTaskId { get; set; }
+    private Guid? openedNotificationTask;
+
     protected override async Task OnInitializedAsync()
     {
         var assets = await Api.AssetsAsync();
         Assets = assets.Data ?? [];
         await Refresh();
         _ = ConnectMaintenanceHubAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (NotificationTaskId is { } id && openedNotificationTask != id)
+        {
+            openedNotificationTask = id;
+            await Open(id);
+        }
+        else if (NotificationTaskId is null) openedNotificationTask = null;
     }
 
     private async Task ConnectMaintenanceHubAsync()

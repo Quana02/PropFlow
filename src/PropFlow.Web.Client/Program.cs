@@ -28,6 +28,8 @@ builder.Services.AddAuthorizationCore(options => options.AddPolicy(AssetPermissi
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorizationCore(options =>
 {
+    options.AddPolicy("finance.manage",
+        policy => policy.RequireRole("ACCOUNTANT").RequireClaim("permission", "MANAGE_FINANCE"));
     options.AddPolicy(ResidentAccountPolicies.Read,
         policy => policy.RequireRole("MANAGER").RequireClaim("permission", ResidentAccountPolicies.Read));
     options.AddPolicy(ResidentAccountPolicies.RequestEmailChange,

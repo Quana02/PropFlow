@@ -122,6 +122,15 @@ public class Complaint
         UpdatedAt = now;
     }
 
+    public void FinishFollowUp(DateTimeOffset now)
+    {
+        if (Status != ComplaintStatus.FOLLOW_UP || Followups.Any(item => item.IsActive))
+            throw new InvalidOperationException("All assigned follow-up work must be finished.");
+
+        Status = ComplaintStatus.UNDER_REVIEW;
+        UpdatedAt = now;
+    }
+
     public void Resolve(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();

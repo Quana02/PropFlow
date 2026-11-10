@@ -8,7 +8,8 @@ using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 namespace PropFlow.Api.Composition;
 
 public sealed class ServiceRequestCostNoticeDispatcher(ServiceRequestsDbContext db, ResidentsDbContext residents,
-    IFinanceNotificationStore notifications, TimeProvider clock, ILogger<ServiceRequestCostNoticeDispatcher> logger)
+    IFinanceNotificationStore notifications, TimeProvider clock, ILogger<ServiceRequestCostNoticeDispatcher> logger,
+    WorkflowNotificationDelivery? workflow = null)
 {
     public async Task DispatchAsync(CancellationToken ct)
     {
@@ -21,7 +22,29 @@ public sealed class ServiceRequestCostNoticeDispatcher(ServiceRequestsDbContext 
         {
             try
             {
-                if (item.Name != "ServiceRequestAdditionalCostProposed" || item.Version != 1)
+                if (item.Version != 1)
+                    throw new InvalidOperationException("Unsupported service request cost notice.");
+                if (item.Name is ServiceRequestWorkflowNotice.Submitted or ServiceRequestWorkflowNotice.Assigned)
+                {
+                    var delivery = workflow ?? throw new InvalidOperationException("Workflow notification delivery is unavailable.");
+                    var change = JsonSerializer.Deserialize<ServiceRequestWorkflowNotice>(item.Payload)!;
+                    if (item.Name == ServiceRequestWorkflowNotice.Submitted)
+                    {
+                        var residentId = await db.ServiceRequests.AsNoTracking().Where(x => x.Id == item.SourceId)
+                            .Select(x => x.ResidentId).SingleAsync(ct);
+                        var name = await residents.Residents.AsNoTracking().Where(x => x.Id == residentId)
+                            .Select(x => x.FullName).SingleOrDefaultAsync(ct);
+                        await delivery.PublishSubmissionAsync(item, change.SenderUserId, name, ct);
+                    }
+                    else
+                    {
+                        await delivery.PublishAssignmentAsync(item, change.SenderUserId, change.RecipientUserId!.Value,
+                            "SERVICE_REQUEST", $"/staff/service-requests/{Uri.EscapeDataString(change.RequestNumber)}", ct);
+                    }
+                    item.Delivered(clock.GetUtcNow());
+                    continue;
+                }
+                if (item.Name != "ServiceRequestAdditionalCostProposed")
                     throw new InvalidOperationException("Unsupported service request cost notice.");
                 var notice = JsonSerializer.Deserialize<AdditionalCostNotice>(item.Payload)!;
                 var current = await db.ServiceRequests.AsNoTracking().Where(x => x.Id == item.SourceId)

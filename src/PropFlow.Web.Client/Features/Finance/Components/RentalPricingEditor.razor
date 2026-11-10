@@ -5,18 +5,29 @@
 <section class="rental-pricing">
     <button type="button" @onclick="() => open = true">Thiết lập giá thuê tháng</button>
     @if (open) {
-    <FinancePricingDialog Title="Thiết lập giá thuê theo tháng" Busy="busy" OnClose="() => open = false">
+    <FinancePricingDialog Title="Thiết lập giá thuê theo tháng" Busy="@(busy || loadingVersions)" OnClose="() => open = false">
     <p>Các căn cùng loại dùng chung giá thuê tháng. Chỉ chủ hộ thuê căn chưa có chủ sở hữu chịu tiền thuê. Tháng lẻ tính theo ngày cư trú thực tế, gồm cả ngày bắt đầu và kết thúc. Dịch vụ và nước nằm trên hóa đơn dịch vụ riêng.</p>
     <form @onsubmit="Save" @onsubmit:preventDefault novalidate>
-        <label>Loại căn hộ<PropFlowSelect @bind-Value="ApartmentIdValue" @bind-Value:after="LoadVersions" Options="ApartmentTypeOptions" Placeholder="Chọn loại căn hộ" AriaLabel="Loại căn hộ" Disabled="busy" />@if (validate && apartmentId == Guid.Empty) { <small role="alert">Vui lòng chọn loại căn hộ.</small> }</label>
-        <FinanceNumberField Label="Đơn giá VND/tháng" Placeholder="Nhập giá thuê mỗi tháng" @bind-Value="amount" Max="999999999999999999" ShowErrors="validate" Disabled="busy" />
-        <label>Ngày hiệu lực<PropFlowDatePicker @bind-Value="effectiveFrom" ValidityChanged="value => effectiveFromValid = value" Disabled="busy" AriaLabel="Ngày hiệu lực" />@if (validate && effectiveFrom is null) { <small role="alert">Vui lòng chọn ngày hiệu lực hợp lệ.</small> }</label>
-        <div class="pricing-form-actions"><button type="button" disabled="@busy" @onclick="() => open = false">Hủy bỏ</button><button type="submit" disabled="@busy">@(busy ? "Đang lưu…" : "Lưu đơn giá thuê")</button></div>
+        <label>Loại căn hộ<PropFlowSelect @bind-Value="ApartmentIdValue" @bind-Value:after="LoadVersions" Options="ApartmentTypeOptions" Placeholder="Chọn loại căn hộ" AriaLabel="Loại căn hộ" Disabled="@(busy || loadingVersions)" />@if (validate && apartmentId == Guid.Empty) { <small role="alert">Vui lòng chọn loại căn hộ.</small> }</label>
+        <FinanceNumberField Label="Đơn giá VND/tháng" Placeholder="Nhập giá thuê mỗi tháng" @bind-Value="amount" Max="999999999999999999" ShowErrors="validate" Disabled="@(busy || loadingVersions)" />
+        <label>Ngày hiệu lực<PropFlowDatePicker @bind-Value="effectiveFrom" ValidityChanged="value => effectiveFromValid = value" Disabled="@(busy || loadingVersions)" AriaLabel="Ngày hiệu lực" />@if (validate && effectiveFrom is null) { <small role="alert">Vui lòng chọn ngày hiệu lực hợp lệ.</small> }</label>
+        @if (selectedVersion is { } version)
+        {
+            <p class="selected-price-version" role="status">Đang xem phiên bản từ @version.EffectiveFrom.ToString("dd/MM/yyyy") · @PropFlowMoneyText.Format(version.UnitRate) đ/tháng</p>
+        }
+        <div class="pricing-form-actions"><button type="button" disabled="@(busy || loadingVersions)" @onclick="() => open = false">Hủy bỏ</button><button type="submit" disabled="@(busy || loadingVersions || versionsError is not null)">@(busy ? "Đang lưu…" : "Lưu đơn giá thuê")</button></div>
     </form>
     @if(message is not null) { <p role="status">@message</p> }
+    @if (loadingVersions) { <p role="status">Đang tải phiên bản giá…</p> }
+    else if (versionsError is not null) { <p role="alert">@versionsError <button type="button" @onclick="LoadVersions">Thử lại</button></p> }
+    else if (apartmentId != Guid.Empty && versions.Length == 0) { <p>Loại căn hộ này chưa có phiên bản giá thuê tháng.</p> }
     @if (versions.Length > 0) {
     <table><thead><tr><th>Cơ sở tính</th><th>Đơn giá</th><th>Từ ngày</th><th>Đến ngày</th><th></th></tr></thead><tbody>
-    @foreach(var v in versions.Where(x => x.Basis == "MONTHLY")) { <tr><td>Theo tháng</td><td>@PropFlowMoneyText.Format(v.UnitRate) đ</td><td>@v.EffectiveFrom.ToString("dd/MM/yyyy")</td><td>@v.EffectiveTo?.ToString("dd/MM/yyyy")</td><td><button type="button" disabled="@busy" @onclick="() => Edit(v)">Chọn phiên bản</button></td></tr> }
+    @foreach (var v in versions)
+    {
+        var selected = selectedVersion?.Id == v.Id;
+        <tr @key="v.Id" class="@(selected ? "selected-price-row" : null)"><td>Theo tháng</td><td>@PropFlowMoneyText.Format(v.UnitRate) đ</td><td>@v.EffectiveFrom.ToString("dd/MM/yyyy")</td><td>@(v.EffectiveTo?.ToString("dd/MM/yyyy") ?? "—")</td><td><button type="button" aria-pressed="@selected" disabled="@busy" @onclick="() => Edit(v)">@(selected ? "Đang chọn" : "Chọn phiên bản")</button></td></tr>
+    }
     </tbody></table>
     }
     </FinancePricingDialog>
@@ -27,6 +38,9 @@
     public void Dispose() => toastLifetime.Dispose();
 
     private ApartmentType[] apartmentTypes = []; private Version[] versions = [];
+    private Version? selectedVersion;
+    private bool loadingVersions;
+    private string? versionsError;
     private Guid apartmentId; private const string basis = "MONTHLY"; private decimal? amount;
     private DateOnly? effectiveFrom = DateOnly.FromDateTime(DateTime.Today); private bool effectiveFromValid = true; private bool busy, open, validate; private string? message;
     private IReadOnlyList<PropFlowSelectOption> ApartmentTypeOptions =>
@@ -38,18 +52,33 @@
     }
     protected override async Task OnInitializedAsync() { var r = await Api.GetAsync<ApartmentType[]>("api/v1/apartment-unit-types"); apartmentTypes = r.Data ?? []; if(!r.IsSuccess) message = r.Message; }
     private async Task LoadVersions() {
-        versions = []; amount = null; effectiveFrom = DateOnly.FromDateTime(DateTime.Today); effectiveFromValid = true; validate = false; message = null;
+        versions = []; selectedVersion = null; versionsError = null; amount = null; effectiveFrom = DateOnly.FromDateTime(DateTime.Today); effectiveFromValid = true; validate = false; message = null;
         if(apartmentId == Guid.Empty) return;
-        var r = await Api.GetAsync<Version[]>($"api/v1/billing/rental-pricing?apartmentTypeId={apartmentId}");
-        versions = r.Data ?? []; if(!r.IsSuccess) message = r.Message;
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var current = versions.FirstOrDefault(x => x.Basis == "MONTHLY" && x.EffectiveFrom <= today && (x.EffectiveTo == null || x.EffectiveTo >= today));
-        if(current is not null) Edit(current);
+        loadingVersions = true;
+        try
+        {
+            var result = await Api.GetAsync<Version[]>($"api/v1/billing/rental-pricing?apartmentTypeId={apartmentId}");
+            if (!result.IsSuccess) { versionsError = result.Message ?? "Không tải được phiên bản giá."; return; }
+            versions = (result.Data ?? []).Where(x => x.Basis == basis).ToArray();
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var current = versions.FirstOrDefault(x => x.EffectiveFrom <= today && (x.EffectiveTo is null || x.EffectiveTo >= today));
+            if (current is not null) Edit(current);
+        }
+        finally { loadingVersions = false; }
     }
-    private void Edit(Version v) { amount = v.UnitRate; effectiveFrom = v.EffectiveFrom; effectiveFromValid = true; }
+    private void Edit(Version version)
+    {
+        selectedVersion = version;
+        amount = version.UnitRate;
+        effectiveFrom = version.EffectiveFrom;
+        effectiveFromValid = true;
+        validate = false;
+        message = null;
+    }
     private async Task Save() {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
- if(busy) return; validate = true; message = null;
+        if (busy || loadingVersions || versionsError is not null) return;
+        validate = true; message = null;
         if (apartmentId == Guid.Empty || amount is null || effectiveFrom is null || !effectiveFromValid) { message = "Vui lòng kiểm tra các ô được báo lỗi."; return; }
         busy = true; try {
         var r = await Api.PostAsync<object>("api/v1/billing/rental-pricing", new { apartmentUnitId = Guid.Empty, apartmentTypeId = apartmentId, basis, unitRate = amount.Value, effectiveFrom = effectiveFrom.Value });

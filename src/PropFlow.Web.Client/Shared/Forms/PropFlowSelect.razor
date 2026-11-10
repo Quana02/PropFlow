@@ -25,7 +25,7 @@
             {
                 var option = VisibleOptions[index];
                 var selected = option.Value == Value;
-                <button id="@($"{listboxId}-{index}")" type="button" role="option" class="pf-select__option @(selected ? "is-selected" : null) @(index == activeIndex ? "is-active" : null)" aria-selected="@selected" disabled="@option.Disabled" @onclick="() => SelectAsync(option)">
+                <button @key="option.Value" id="@($"{listboxId}-{index}")" type="button" role="option" class="pf-select__option @(selected ? "is-selected" : null) @(index == activeIndex ? "is-active" : null)" aria-selected="@selected" disabled="@option.Disabled" @onclick="() => SelectAsync(option)">
                     <span>@option.Label</span>
                     @if (selected) { <span class="material-symbols-outlined" aria-hidden="true">check</span> }
                 </button>

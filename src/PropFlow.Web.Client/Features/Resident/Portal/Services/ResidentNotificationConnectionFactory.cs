@@ -11,12 +11,8 @@ public sealed class ResidentNotificationConnectionFactory(IConfiguration configu
         var apiBase = new Uri(new Uri(navigation.BaseUri), configuration["Api:BaseUrl"]
             ?? throw new InvalidOperationException("Thiếu cấu hình Api:BaseUrl."));
         return new HubConnectionBuilder()
-            .WithUrl(new Uri(apiBase, "hubs/resident-notifications"), options =>
-                options.AccessTokenProvider = async () => {
-                    await session.InitializeAsync();
-                    if (session.AccessToken is { } token) await session.RefreshAsync(token);
-                    return session.AccessToken;
-                })
+            .WithUrl(new Uri(apiBase, "hubs/notifications"), options =>
+                options.AccessTokenProvider = session.GetValidAccessTokenAsync)
             .WithAutomaticReconnect(new ReconnectPolicy())
             .Build();
     }

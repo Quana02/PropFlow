@@ -71,7 +71,9 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
         if (!await VisibleRequests(staffUserId).AnyAsync(x => x.Id == id, ct)) return [];
         return await db.ServiceRequestActivities.AsNoTracking().Where(x => x.ServiceRequestId == id)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
-            .Select(x => new StaffServiceRequestActivityItem(x.Id, x.ActivityType.ToString(), x.Title, x.Detail,
+            .Select(x => new StaffServiceRequestActivityItem(x.Id, x.ActivityType.ToString(), x.Title,
+                x.ActivityType == ServiceActivityType.PROPERTY_CONTEXT_ASSOCIATED && x.Detail != null && x.Detail.StartsWith("ApartmentUnitId=")
+                    ? "Đã cập nhật vị trí và tài sản liên quan." : x.Detail,
                 x.WorkResult, x.PerformedBy, x.CreatedAt)).ToArrayAsync(ct);
     }
 

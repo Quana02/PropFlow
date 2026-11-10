@@ -21,6 +21,10 @@ public sealed class ResidentServiceRequestsController(
     GetResidentServiceRequestHandler detailHandler,
     RateResidentServiceRequestHandler rateHandler) : ControllerBase
 {
+    [HttpGet("facility-options")]
+    public Task<IReadOnlyList<ResidentServiceRequestFacility>> FacilityOptions(CancellationToken ct) =>
+        submitHandler.GetFacilitiesAsync(ct);
+
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<ResidentServiceRequestListItem>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

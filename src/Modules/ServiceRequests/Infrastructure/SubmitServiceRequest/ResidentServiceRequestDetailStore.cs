@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
@@ -6,7 +7,7 @@ using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
 
-public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext db)
+public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext db, IMaintenanceAssetSource? assets = null)
     : IResidentServiceRequestDetailStore
 {
     public async Task<ResidentServiceRequestDetailResponse?> GetAsync(
@@ -28,6 +29,7 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 Status = item.Status.ToString(),
                 PriorityCode = item.FinalPriorityCode,
                 item.ServiceAreaCode,
+                item.FacilityId,
                 item.PreferredDate,
                 item.PreferredTimeCode,
                 item.SubmittedAt,
@@ -69,6 +71,9 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
             })
             .ToArrayAsync(ct);
 
+        var facility = request.FacilityId is { } facilityId && assets is not null
+            ? await assets.GetFacilityAsync(facilityId, ct) : null;
+
         return new ResidentServiceRequestDetailResponse(
             request.Id,
             request.RequestNumber,
@@ -95,7 +100,8 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 activity.ToStatus?.ToString(),
                 activity.CreatedAt)).ToArray(),
             request.BaseServiceCost,
-            request.ApprovedAdditionalCost, AdditionalCostConsent: request.AdditionalCostProposalId.HasValue ? new(request.AdditionalCostProposalId.Value, request.ProposedAdditionalCost, request.AdditionalCostNote, request.AdditionalCostConsentStatus, request.AdditionalCostProposedAt, request.AdditionalCostRespondedAt) : null);
+            request.ApprovedAdditionalCost, AdditionalCostConsent: request.AdditionalCostProposalId.HasValue ? new(request.AdditionalCostProposalId.Value, request.ProposedAdditionalCost, request.AdditionalCostNote, request.AdditionalCostConsentStatus, request.AdditionalCostProposedAt, request.AdditionalCostRespondedAt) : null,
+            FacilityName: ServiceRequestAreaCodes.IsCommonArea(request.ServiceAreaCode) ? facility?.Name : null);
     }
 
     private static ResidentServiceRequestActivityItem ToResidentActivity(

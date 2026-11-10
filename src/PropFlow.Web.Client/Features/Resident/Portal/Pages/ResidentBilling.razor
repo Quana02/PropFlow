@@ -16,8 +16,13 @@
     <button @onclick="Load" disabled="@loading">Tải lại</button>
     @if (error is not null) { <p role="alert">@error</p> }
     @if (!loading && invoices.Length == 0 && error is null) { <p>Chưa có hóa đơn được gửi cho bạn.</p> }
-    @foreach (var i in FilteredInvoices) { <article class="glass-inner" id="@($"invoice-{i.Id}")">
-        <h2>@i.Number · Căn hộ @i.Apartment · @(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</h2>
+    @if (!loading && error is null && RequestedInvoiceId is { } invoiceId && invoices.All(i => i.Id != invoiceId))
+    {
+        <p role="status">Hóa đơn được liên kết không có trong danh sách của bạn.</p>
+    }
+    @foreach (var i in FilteredInvoices.OrderByDescending(i => i.Id == RequestedInvoiceId)) { <article @key="i.Id" class="glass-inner @(i.Id == RequestedInvoiceId ? "linked-invoice" : null)" id="@($"invoice-{i.Id}")">
+        @if (i.Id == RequestedInvoiceId) { <p class="invoice-status">Hóa đơn từ thông báo</p> }
+        <h2>@i.Number · Căn hộ @i.Apartment · @InvoiceTypeLabel(i.InvoiceType)</h2>
         <p>Kỳ: @i.Period.ToString("MM/yyyy") · Hạn: @i.DueDate?.ToString("dd/MM/yyyy")</p>
         <p class="invoice-status">@(i.Outstanding == 0 ? "Đã thanh toán" : HasPending(i) ? "Chờ kế toán xác minh" : "Chưa thanh toán")</p>
         <p>Tổng: <strong>@PropFlowMoneyText.Format(i.Total) đ</strong> · Đã nhận: @PropFlowMoneyText.Format(i.Paid) đ · Còn nợ: <strong>@PropFlowMoneyText.Format(i.Outstanding) đ</strong></p>
@@ -38,18 +43,32 @@
     public void Dispose() => toastLifetime.Dispose();
 
     private HouseholdInvoice[] invoices = []; private ResidentPayment[] payments = [];
-    private bool loading; private string? error;
+    private bool loading, loaded; private string? error;
     private HouseholdInvoice? selected; private string filter = "ALL";
+    [SupplyParameterFromQuery(Name = "invoice")] public Guid? RequestedInvoiceId { get; set; }
+    private Guid? openedInvoiceId;
     private bool HasPending(HouseholdInvoice invoice) => payments.Any(x => x.InvoiceId == invoice.Id && x.Status == "PENDING");
     private IEnumerable<HouseholdInvoice> FilteredInvoices => invoices.Where(i => filter switch { "UNPAID" => i.Outstanding > 0, "PENDING" => HasPending(i), "PAID" => i.Outstanding == 0, _ => true });
     private async Task PaymentSubmitted() {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
  selected = null; filter = "PENDING"; await Load(); operationFeedback.Publish(() => Toasts.Success("Đã gửi xác nhận thanh toán. Vui lòng chờ kế toán kiểm tra.")); }
-    protected override Task OnInitializedAsync() => Load();
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded && openedInvoiceId == RequestedInvoiceId) return;
+        openedInvoiceId = RequestedInvoiceId;
+        if (openedInvoiceId.HasValue) filter = "ALL";
+        if (!loaded || openedInvoiceId is { } id && invoices.All(i => i.Id != id)) await Load();
+    }
     private async Task Load() { loading = true; try {
         var i = await Api.GetAsync<HouseholdInvoice[]>("api/v1/resident/billing/invoices");
         var p = await Api.GetAsync<ResidentPayment[]>("api/v1/resident/billing/payments");
         invoices = i.Data ?? []; payments = p.Data ?? []; error = i.IsSuccess && p.IsSuccess ? null : i.Message ?? p.Message;
-    } finally { loading = false; } }
+    } finally { loading = false; loaded = true; } }
     private static string Status(string value) => value switch { "CONFIRMED" => "Đã xác nhận", "PENDING" => "Chờ xác minh", "REJECTED" => "Bị từ chối", _ => value };
+    private static string InvoiceTypeLabel(string? value) => value switch
+    {
+        "MONTHLY_RENTAL" => "Tiền thuê tháng",
+        "SERVICE_REQUEST" => "Yêu cầu dịch vụ",
+        _ => "Phí dịch vụ"
+    };
 }

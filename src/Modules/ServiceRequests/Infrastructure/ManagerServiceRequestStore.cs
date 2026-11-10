@@ -94,7 +94,10 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
             .Select(x => new ManagerServiceRequestActivityItem(
                 x.Id, x.ActivityType.ToString(), x.FromStatus == null ? null : x.FromStatus.ToString(),
-                x.ToStatus == null ? null : x.ToStatus.ToString(), x.Title, x.Detail, x.WorkResult, x.PerformedBy, x.CreatedAt))
+                x.ToStatus == null ? null : x.ToStatus.ToString(), x.Title,
+                x.ActivityType == ServiceActivityType.PROPERTY_CONTEXT_ASSOCIATED && x.Detail != null && x.Detail.StartsWith("ApartmentUnitId=")
+                    ? "Đã cập nhật vị trí và tài sản liên quan." : x.Detail,
+                x.WorkResult, x.PerformedBy, x.CreatedAt))
             .ToArrayAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceRequestEvidenceMetadata>> GetEvidenceAsync(Guid id, CancellationToken ct) =>
@@ -153,11 +156,10 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             request.UpdateServiceArea(serviceAreaCode, now);
         request.MarkUnderReview(now);
 
-        var contextDetail = $"ApartmentUnitId={apartmentUnitId?.ToString() ?? "null"}; FacilityId={facilityId?.ToString() ?? "null"}; EquipmentId={equipmentId?.ToString() ?? "null"}; ServiceAreaCode={serviceAreaCode ?? "null"}.";
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(
             request.Id, ServiceActivityType.PROPERTY_CONTEXT_ASSOCIATED, now,
             title: "Đã gắn bối cảnh tài sản cho đơn dịch vụ",
-            detail: contextDetail,
+            detail: "Đã cập nhật vị trí và tài sản liên quan.",
             performedBy: managerUserId));
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(
             request.Id, ServiceActivityType.MANAGER_REVIEWED, now,
@@ -186,6 +188,8 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
         if (request is null) return ManagerServiceRequestOutcome.NotFound;
         if (request.Status is not (ServiceRequestStatus.UNDER_REVIEW or ServiceRequestStatus.ASSIGNED or ServiceRequestStatus.IN_PROGRESS))
             return ManagerServiceRequestOutcome.Conflict;
+        if (baseServiceCost > 0 && ServiceRequestAreaCodes.IsCommonArea(request.ServiceAreaCode))
+            return ManagerServiceRequestOutcome.InvalidInput;
 
         var activeAssignment = request.Assignments
             .Where(x => x.IsActive)
@@ -214,6 +218,8 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             title: isReassignment ? "Ban Quản lý đã đổi nhân sự phụ trách" : "Ban Quản lý đã phân công nhân sự",
             detail: note,
             performedBy: managerUserId));
+        db.ResidentEvents.Add(new ServiceRequestWorkflowNotice(managerUserId, staffUserId, request.RequestNumber)
+            .ToEvent(ServiceRequestWorkflowNotice.Assigned, id, now));
 
         try
         {
