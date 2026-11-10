@@ -4,7 +4,7 @@
 @inject AnnouncementRealtimeClient Realtime
 @implements IDisposable
 
-<section class="announcement-workspace @(Embedded ? "embedded" : "")">
+<section class="announcement-workspace @(Embedded ? "embedded" : "") @(Manager && !Embedded ? "internal-workspace" : null)">
     @if (!Embedded)
     {
     <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">@(Manager ? "Vận hành" : "Trang chủ")</a><span>/</span><strong>Thông báo chung</strong></nav>
@@ -70,7 +70,17 @@
                     </article>
                 }
             </div>
-            <footer class="panel-footer"><span>Trang @(page) / @TotalPages · @data.Total thông báo</span><nav aria-label="Phân trang thông báo"><button disabled="@(busy || page <= 1)" @onclick="PreviousAsync">Trước</button><button disabled="@(busy || page >= TotalPages)" @onclick="NextAsync">Sau</button></nav></footer>
+            @if (Manager)
+            {
+                <TablePagination Page="page" TotalPages="TotalPages" Busy="busy" Label="Phân trang thông báo"
+                Previous="PreviousAsync" Next="NextAsync">
+                <span>@data.Total thông báo</span>
+            </TablePagination>
+            }
+            else
+            {
+                <footer class="panel-footer"><span>Trang @(page) / @TotalPages · @data.Total thông báo</span><nav aria-label="Phân trang thông báo"><button disabled="@(busy || page <= 1)" @onclick="PreviousAsync">Trước</button><button disabled="@(busy || page >= TotalPages)" @onclick="NextAsync">Sau</button></nav></footer>
+            }
         }
         else if (error is null)
         {

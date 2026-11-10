@@ -118,18 +118,10 @@
                 </tbody>
             </table>
             </div>
-            <footer class="staff-pagination" aria-label="Phân trang danh sách yêu cầu">
-                <span>Trang <strong>@currentPage</strong> / @TotalPages</span>
-                <div>
-                    <button type="button" disabled="@(currentPage == 1)" aria-label="Trang trước" @onclick="PreviousPageAsync"><span class="material-symbols-outlined">chevron_left</span></button>
-                    @for (var pageNumber = 1; pageNumber <= TotalPages; pageNumber++)
-                    {
-                        var targetPage = pageNumber;
-                        <button type="button" class="@(currentPage == targetPage ? "is-active" : null)" aria-current="@(currentPage == targetPage ? "page" : null)" @onclick="() => GoToPageAsync(targetPage)">@targetPage</button>
-                    }
-                    <button type="button" disabled="@(currentPage == TotalPages)" aria-label="Trang sau" @onclick="NextPageAsync"><span class="material-symbols-outlined">chevron_right</span></button>
-                </div>
-            </footer>
+            <TablePagination Page="currentPage" TotalPages="TotalPages" Busy="loading" Label="Phân trang danh sách yêu cầu"
+                Previous="PreviousPageAsync" Next="NextPageAsync">
+                <span>@totalCount yêu cầu</span>
+            </TablePagination>
         }
         else
         {

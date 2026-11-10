@@ -42,6 +42,7 @@
   --app-muted: #a9bbcc;
   --app-line: rgba(180, 215, 245, 0.13);
   --app-accent: #38bdf8;
+  --app-on-accent: #082f49;
   background: #0b111b;
 }
 
@@ -445,9 +446,18 @@
     margin-top: 0.75rem;
 }
 .app-page-body {
+    --content-padding-inline: 1.25rem;
+    --navigation-rail-reserved-width: 4.75rem;
     flex: 1;
     min-width: 0;
-    padding: 1.25rem 6rem 1.25rem 1.25rem;
+    padding-block: 1.25rem;
+    padding-inline: var(--content-padding-inline)
+        calc(var(--content-padding-inline) + var(--navigation-rail-reserved-width));
+}
+
+.app-shell:has(.app-floating-nav[data-dock-side="left"]) .app-page-body {
+    padding-inline: calc(var(--content-padding-inline) + var(--navigation-rail-reserved-width))
+        var(--content-padding-inline);
 }
 
 .app-footer {
@@ -502,7 +512,8 @@
     }
 
     .app-page-body {
-        padding: 0.75rem 0.75rem 5.5rem;
+        --content-padding-inline: 0.75rem;
+        padding-block: 0.75rem 1.25rem;
     }
 }
 

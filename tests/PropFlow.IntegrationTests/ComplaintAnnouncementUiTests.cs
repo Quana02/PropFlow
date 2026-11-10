@@ -110,6 +110,8 @@ public sealed class ComplaintAnnouncementUiTests
         Assert.DoesNotContain("<form", html);
         Assert.Equal(manager, html.Contains(Text("Đăng thông báo")));
         Assert.Contains("id=\"announcement-detail-title\"", html);
+        Assert.Equal(manager, html.Contains("class=\"table-pagination\"", StringComparison.Ordinal));
+        Assert.Contains(manager ? "Trang 1 trên 1" : "Trang 1 / 1", WebUtility.HtmlDecode(html));
         Assert.Contains(Text("Xem chi tiết"), html);
         Assert.Contains("&lt;script&gt;", html);
         Assert.DoesNotContain("<script>", html);

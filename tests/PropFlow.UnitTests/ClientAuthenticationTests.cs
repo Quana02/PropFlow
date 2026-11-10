@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging.Abstractions;
 using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Modules.Authentication.Domain.Tokens;
+using PropFlow.Web.Client.Features.Authentication.Services;
 using PropFlow.Web.Client.Services.Api;
 using PropFlow.Web.Client.Services.Authentication;
+using PropFlow.Web.Client.Shared.Feedback;
 
 namespace PropFlow.UnitTests;
 
@@ -27,6 +29,37 @@ public sealed class ClientAuthenticationTests
         new(Guid.NewGuid(), "resident", "Cư dân", "test@example.invalid", null, "ACTIVE", true, "RESIDENT", []));
     private static AuthSession CreateSession(Func<HttpRequestMessage, Task<HttpResponseMessage>> send) =>
         new(new ApiClient(new HttpClient(new Transport(send)) { BaseAddress = new("https://test.invalid/") }, NullLogger<ApiClient>.Instance));
+
+    [Fact]
+    public async Task Late_profile_response_cannot_restore_a_logged_out_account()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var login = Session("manager-token");
+        var manager = login.User with { Role = "MANAGER" };
+        var session = CreateSession(request => Task.FromResult(request.RequestUri!.AbsolutePath.EndsWith("csrf")
+            ? Json(new CsrfResponse("csrf"))
+            : new HttpResponseMessage(HttpStatusCode.NoContent)));
+        session.Accept(login with { User = manager });
+        using var http = new HttpClient(new Transport(async _ =>
+        {
+            started.SetResult();
+            await release.Task;
+            return Json(manager with { DisplayName = "Tên mới" });
+        })) { BaseAddress = new("https://test.invalid/") };
+        var logger = NullLogger<ApiClient>.Instance;
+        var service = new AuthenticationService(new ApiClient(http, logger), new AuthenticatedApiClient(http, logger), session, new ToastService());
+
+        var save = service.UpdateAsync(new UpdateProfileRequest("Tên mới", null));
+        await started.Task;
+        Assert.True((await session.LogoutAsync()).IsSuccess);
+        release.SetResult();
+
+        Assert.True((await save).IsSuccess);
+        Assert.Null(session.AccessToken);
+        Assert.Null(session.User);
+        Assert.False((await session.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
+    }
 
     [Fact]
     public async Task Api_client_preserves_specific_problem_message_and_metadata()

@@ -1,5 +1,14 @@
 # FE-15 — Quản trị hệ thống và nhật ký
 
+Quyền cố định bổ sung cho quản lý email tài khoản cư dân trong FE-01.6:
+
+| Quyền | MANAGER | ADMIN / STAFF / ACCOUNTANT / RESIDENT |
+|---|---|---|
+| `READ_RESIDENT_ACCOUNTS` | Xem danh sách tài khoản gắn với hồ sơ FE-02 của deployment | — |
+| `REQUEST_RESIDENT_EMAIL_CHANGE` | Khởi tạo yêu cầu sau khi đối chiếu danh tính trực tiếp | — |
+
+Quyền được seed theo migration Administration và gắn duy nhất với MANAGER. Bước xác minh dành cho chính tài khoản RESIDENT có yêu cầu còn hiệu lực. [Hợp đồng FE-01](FE-01-API-and-Deployment.md#đổi-email-cư-dân-theo-yêu-cầu-ban-quản-lý)
+
 Ngày 04/11/2026. Người dùng phê duyệt mở rộng màn hình nhật ký quản trị thành nhật ký các thao tác quan trọng trên website sau khi xem phạm vi chỉ gồm ba loại thay đổi tài khoản nội bộ. Quyết định này mở rộng phạm vi FE-15.9 trong đặc tả cũ; không cấp Admin quyền CRUD nghiệp vụ.
 
 ## FE-15.8 — Phạm vi cấu hình còn cần chốt

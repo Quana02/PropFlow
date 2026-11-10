@@ -5,7 +5,7 @@
 @inject NavigationManager Navigation
 @implements IDisposable
 
-<section class="complaint-workspace">
+<section class="complaint-workspace @(Role is "MANAGER" or "STAFF" ? "internal-workspace" : null)">
     <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">@(Role == "RESIDENT" ? "Trang chủ" : "Vận hành")</a><span>/</span><strong>Phản ánh</strong></nav>
     <header class="hero"><div><span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">feedback</span>Kết nối với Ban Quản lý</span><h1>@(Role == "RESIDENT" ? "Phản ánh của tôi" : Role == "STAFF" ? "Công việc phản ánh được giao" : "Quản lý phản ánh")</h1><p>Gửi ý kiến, theo dõi tiến độ và nhận phản hồi chính thức.</p></div>
         @if (Role == "RESIDENT" && !Id.HasValue) { <button class="primary" disabled="@busy" @onclick="() => composing = !composing"><span class="material-symbols-outlined" aria-hidden="true">@(composing ? "close" : "add")</span>@(composing ? "Đóng soạn thảo" : "Gửi phản ánh mới")</button> }
@@ -39,7 +39,17 @@
                 <div class="table-scroll"><table><thead><tr><th>Mã phản ánh</th><th>Tiêu đề</th><th>Trạng thái</th><th></th></tr></thead><tbody>
                     @foreach (var item in items.Items) { <tr><td>@item.ComplaintNumber</td><td>@item.Subject</td><td><span class="status-chip status-@item.Status.ToLowerInvariant()">@ComplaintLabels.Status(item.Status)</span></td><td><button @onclick="() => Open(item.Id)">Xem chi tiết</button></td></tr> }
                 </tbody></table></div>
-                <nav aria-label="Phân trang"><button disabled="@(page <= 1)" @onclick="PreviousAsync">Trước</button><span>Trang @(page) · @items.Total phản ánh</span><button disabled="@(page * items.PageSize >= items.Total)" @onclick="NextAsync">Sau</button></nav>
+                @if (Role is "MANAGER" or "STAFF")
+                {
+                    <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(items.Total / (double)items.PageSize))" Busy="busy" Label="Phân trang phản ánh"
+                    Previous="PreviousAsync" Next="NextAsync">
+                    <span>@items.Total phản ánh</span>
+                </TablePagination>
+                }
+                else
+                {
+                    <nav aria-label="Phân trang"><button disabled="@(page <= 1)" @onclick="PreviousAsync">Trước</button><span>Trang @(page) · @items.Total phản ánh</span><button disabled="@(page * items.PageSize >= items.Total)" @onclick="NextAsync">Sau</button></nav>
+                }
             }
         }
         </section>

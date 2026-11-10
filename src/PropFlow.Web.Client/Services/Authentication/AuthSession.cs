@@ -35,7 +35,13 @@ public sealed class AuthSession(ApiClient api) : AuthenticationStateProvider
         Notice = null;
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
-    public void UpdateUser(AccountResponse user) { User = user; NotifyAuthenticationStateChanged(GetAuthenticationStateAsync()); }
+    public void UpdateUser(AccountResponse user)
+    {
+        // A profile response can arrive after logout or after another account signs in.
+        if (AccessToken is null || User?.Id != user.Id) return;
+        User = user;
+        NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    }
     public void Clear(string? notice = null)
     {
         epoch++;

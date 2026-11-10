@@ -28,7 +28,16 @@
 @if (Session.Notice?.Contains("chưa xác nhận") == true) { <button class="secondary" disabled="@busy" @onclick="RetryLogout">Thử thu hồi phiên lại</button> }
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
-    public void Dispose() => toastLifetime.Dispose();
+
+    protected override void OnInitialized() => Session.AuthenticationStateChanged += OnAuthenticationStateChanged;
+
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> state) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Session.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+        toastLifetime.Dispose();
+    }
 
     private readonly LoginForm form = new();
     private bool busy;

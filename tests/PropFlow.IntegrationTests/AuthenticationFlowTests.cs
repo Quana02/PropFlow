@@ -310,6 +310,27 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         return new(username, displayName, email, password, resident.PhoneNumber, resident.IdentityType, resident.IdentityNumber);
     }
 
+    [Fact, Trait("UseCase", "FE-01.6")]
+    public async Task Linked_resident_cannot_start_a_self_service_email_change()
+    {
+        using var client = Client();
+        var contactEmail = $"resident-contact-{Guid.NewGuid():N}@example.invalid";
+        var seed = await database.SeedRegistrationResidentAsync(contactEmail, currentOwnership: true);
+        var (_, session) = await RegisterActivateAndLoginAsync(client, contactEmail);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+        var accountEmail = $"resident-account-{Guid.NewGuid():N}@example.invalid";
+
+        using var request = await Post(client, "email/change", new ChangeEmailRequest(accountEmail, Password), true);
+        Assert.Equal(HttpStatusCode.Forbidden, request.StatusCode);
+        Assert.False(database.Factory.Mail.Codes.ContainsKey(accountEmail));
+
+        using var profile = await client.GetAsync("api/v1/residents/me");
+        Assert.Equal(HttpStatusCode.OK, profile.StatusCode);
+        using var resident = JsonDocument.Parse(await profile.Content.ReadAsStringAsync());
+        Assert.Equal(seed.ResidentId, resident.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal(contactEmail, resident.RootElement.GetProperty("email").GetString());
+    }
+
     [Fact, Trait("UseCase", "FE-01.1")]
     public async Task Registration_requires_all_four_fields_to_match_the_same_eligible_resident()
     {
@@ -549,7 +570,7 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             await administration.SaveChangesAsync();
         }
         var manager = new AccountResponse(user.Id, user.Username, user.DisplayName, user.Email, null, "ACTIVE", true,
-            "MANAGER", [SystemPermissionCodes.ManageOperations]);
+            "MANAGER", [SystemPermissionCodes.ManageOperations, SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange]);
         var token = database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(manager, DateTimeOffset.UtcNow).AccessToken;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -1027,6 +1048,86 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "login", new LoginRequest(account.Username, "incorrect password"), true)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "login", new LoginRequest(account.Username, Password), true)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { }, true)).StatusCode);
+    }
+
+    [Theory, Trait("UseCase", "FE-01.5/FE-01.6/FE-01.7")]
+    [InlineData("ADMIN")]
+    [InlineData("MANAGER")]
+    [InlineData("ACCOUNTANT")]
+    [InlineData("STAFF")]
+    public async Task Internal_account_can_update_own_profile_and_manage_password_and_session(string role)
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var now = database.Factory.Clock.GetUtcNow();
+        var user = new UserAccount($"profile_{suffix}", "pending", "Tên ban đầu", now,
+            $"{suffix}@example.invalid", status: AccountStatus.ACTIVE, emailVerified: true);
+        using (var scope = database.Factory.Services.CreateScope())
+        {
+            var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            var access = scope.ServiceProvider.GetRequiredService<AdministrationDbContext>();
+            var secrets = scope.ServiceProvider.GetRequiredService<IAuthSecrets>();
+            user.ChangePasswordHash(secrets.HashPassword(user, Password), null, now);
+            auth.UserAccounts.Add(user);
+            await auth.SaveChangesAsync();
+            var roleId = await access.Roles.Where(item => item.Code == role).Select(item => item.Id).SingleAsync();
+            access.UserRoleAssignments.Add(new PropFlow.Modules.Administration.Domain.UserRoleAssignments.UserRoleAssignment(user.Id, roleId, now));
+            await access.SaveChangesAsync();
+        }
+
+        using var client = Client();
+        using var login = await Post(client, "login", new LoginRequest(user.Username, Password), true);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var session = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+
+        const string accountPath = "api/v1/auth/me";
+        var before = (await client.GetFromJsonAsync<AccountResponse>(accountPath))!;
+        Assert.Equal(user.Id, before.Id);
+        Assert.Equal(user.Username, before.Username);
+        Assert.Equal(user.Email, before.Email);
+        Assert.Equal(role, before.Role);
+        Assert.Equal("ACTIVE", before.Status);
+        Assert.True(before.EmailVerified);
+
+        using var invalid = await client.PutAsJsonAsync(accountPath, new UpdateProfileRequest(" ", new string('1', 21)));
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        var phoneNumber = $"+84{Random.Shared.NextInt64(1_000_000_000, 10_000_000_000)}";
+        using var update = await client.PutAsJsonAsync(accountPath, new
+        {
+            displayName = "Tên đã cập nhật",
+            phoneNumber,
+            username = "other",
+            email = "other@example.invalid",
+            role = "RESIDENT",
+            status = "DISABLED"
+        });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var after = (await client.GetFromJsonAsync<AccountResponse>(accountPath))!;
+        Assert.Equal("Tên đã cập nhật", after.DisplayName);
+        Assert.Equal(phoneNumber, after.PhoneNumber);
+        Assert.Equal(before.Id, after.Id);
+        Assert.Equal(before.Username, after.Username);
+        Assert.Equal(before.Email, after.Email);
+        Assert.Equal(before.Role, after.Role);
+        Assert.Equal(before.Status, after.Status);
+        Assert.Equal(before.EmailVerified, after.EmailVerified);
+        Assert.Equal(before.Permissions.Order(), after.Permissions.Order());
+
+        const string newPassword = "A new passphrase for profile tests 42!";
+        using var wrongPassword = await Post(client, "password/change", new ChangePasswordRequest("incorrect password", newPassword), true);
+        Assert.Equal(HttpStatusCode.BadRequest, wrongPassword.StatusCode);
+        using var passwordChange = await Post(client, "password/change", new ChangePasswordRequest(Password, newPassword), true);
+        Assert.Equal(HttpStatusCode.NoContent, passwordChange.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = null;
+        using var revoked = await Post(client, "refresh", new { }, true);
+        Assert.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode);
+        using var relogin = await Post(client, "login", new LoginRequest(user.Username, newPassword), true);
+        Assert.Equal(HttpStatusCode.OK, relogin.StatusCode);
+        using var logout = await Post(client, "logout", new { }, true);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        using var afterLogout = await Post(client, "refresh", new { }, true);
+        Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
     }
 
     [Fact, Trait("UseCase", "FE-01.2/FE-01.6")]

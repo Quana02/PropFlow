@@ -1,17 +1,17 @@
 @page "/account/change-email"
 @layout PropFlow.Web.Client.Features.Authentication.Components.AccountLayout
-@attribute [Authorize(Roles = "ADMIN")]
+@attribute [Authorize(Roles = ResidentAccountPolicies.OwnEmailRoles)]
 @inject AuthenticationService Auth
 @inject AuthSession Session
 @inject NavigationManager Navigation
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @implements IDisposable
 
-<PageTitle>Đổi email — PropFlow</PageTitle>
-<h2>Đổi email</h2>
-@if (challenge is null)
+<PageTitle>Đổi địa chỉ email — PropFlow</PageTitle>
+<h2>Đổi địa chỉ email</h2>
+@if (challenge is null || editingEmail)
 {
-    <p>Email hiện tại: <strong>@Session.User?.Email</strong></p>
+    <p>Email tài khoản hiện tại: <strong class="email-change-address">@(Session.User?.Email ?? "Chưa cập nhật")</strong></p>
     <p>Nhập mật khẩu hiện tại để gửi mã xác minh đến email mới. Email chỉ thay đổi khi xác minh thành công.</p>
     <EditForm EditContext="formContext" OnValidSubmit="RequestCode">
         <DataAnnotationsValidator />
@@ -25,10 +25,15 @@
             <button type="submit">@(busy ? "Đang gửi mã…" : "Gửi mã xác minh")</button>
         </fieldset>
     </EditForm>
+    @if (challenge is not null)
+    {
+        <button type="button" class="secondary" disabled="@busy" @onclick="BackToCode">Quay lại nhập mã đã gửi</button>
+    }
 }
 else
 {
-    <p>Nhập mã xác minh cho <strong>@pendingEmail</strong>. Mã có hiệu lực trong 5 phút.</p>
+    <p>Nhập mã xác minh đã gửi đến <strong class="email-change-address">@pendingEmail</strong>.
+        Mã có hiệu lực đến @LocalTime(challenge.ExpiresAt).</p>
     <EditForm EditContext="otpContext" OnValidSubmit="Verify">
         <DataAnnotationsValidator />
         <fieldset disabled="@busy">
@@ -38,8 +43,8 @@ else
             <button type="submit">@(busy ? "Đang xác minh…" : "Xác nhận đổi email")</button>
         </fieldset>
     </EditForm>
-    <p>Bạn có thể yêu cầu mã mới sau 60 giây; mỗi mã chỉ được sử dụng một lần.</p>
-    <button type="button" class="secondary" disabled="@busy" @onclick="StartAgain">Nhập lại email hoặc yêu cầu mã mới</button>
+    <p>Có thể yêu cầu mã mới sớm nhất lúc @LocalTime(challenge.ResendAfter). Khi gửi lại mã, bạn cần nhập lại mật khẩu.</p>
+    <button type="button" class="secondary" disabled="@busy" @onclick="StartAgain">Nhập lại email hoặc gửi lại mã</button>
 }
 <nav class="auth-links"><a href="/account">Quay lại tài khoản</a></nav>
 
@@ -53,7 +58,7 @@ else
     private EditContext formContext = default!, otpContext = default!;
     private ApiValidationMessages formValidation = default!, otpValidation = default!;
     private string pendingEmail = "";
-    private bool busy, disposed;
+    private bool busy, disposed, editingEmail;
 
     protected override void OnInitialized()
     {
@@ -64,39 +69,49 @@ else
 
     private async Task RequestCode()
     {
-        var operationFeedback = Toasts.BeginOperation(toastLifetime, emailFeedback);
-
         if (busy) return;
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, emailFeedback);
         busy = true;
         formValidation.Clear();
         try
         {
             var response = await Auth.RequestEmailChangeAsync(new(form.NewEmail, form.CurrentPassword));
-            if (disposed) return;
-            if (response.IsSuccess)
+            if (!operationFeedback.IsCurrent) return;
+            if (response.IsSuccess && response.Data is { } nextChallenge)
             {
                 pendingEmail = form.NewEmail.Trim();
-                challenge = response.Data;
+                challenge = nextChallenge;
+                editingEmail = false;
                 otp.Code = "";
                 operationFeedback.Publish(() => Toasts.Show("Đã gửi mã xác minh", "Vui lòng kiểm tra hộp thư của email mới.", "info"));
             }
-            else { formValidation.Apply(response); operationFeedback.Publish(() => ShowError(response)); }
+            else
+            {
+                formValidation.Apply(response);
+                if (!formContext.GetValidationMessages().Any())
+                    operationFeedback.Publish(() => ShowError(response));
+            }
         }
         finally { form.CurrentPassword = ""; if (!disposed) busy = false; }
     }
 
     private async Task Verify()
     {
+        if (busy || editingEmail || challenge is null) return;
         var operationFeedback = Toasts.BeginOperation(toastLifetime, emailFeedback);
-
-        if (busy || challenge is null) return;
         busy = true;
         otpValidation.Clear();
         try
         {
             var response = await Auth.VerifyEmailChangeAsync(new(challenge.ChallengeId, pendingEmail, otp.Code), operationFeedback);
-            if (response.IsSuccess && operationFeedback.IsCurrent) Navigation.NavigateTo("/login");
-            else if (!disposed) { otpValidation.Apply(response); operationFeedback.Publish(() => ShowError(response)); }
+            if (!operationFeedback.IsCurrent) return;
+            if (response.IsSuccess) Navigation.NavigateTo("/login");
+            else
+            {
+                otpValidation.Apply(response);
+                if (!otpContext.GetValidationMessages().Any())
+                    operationFeedback.Publish(() => ShowError(response));
+            }
         }
         finally { otp.Code = ""; if (!disposed) busy = false; }
     }
@@ -104,10 +119,18 @@ else
     private void StartAgain()
     {
         emailFeedback.Invalidate();
-        challenge = null;
+        editingEmail = true;
         otp.Code = "";
         formValidation.Clear(); otpValidation.Clear();
     }
+    private void BackToCode()
+    {
+        emailFeedback.Invalidate();
+        form.CurrentPassword = "";
+        formValidation.Clear();
+        editingEmail = false;
+    }
+    private static string LocalTime(DateTimeOffset time) => time.ToLocalTime().ToString("HH:mm:ss");
     private void ShowError(ApiResult response) => Toasts.Show("Chưa đổi được email", response.Message ?? "Vui lòng thử lại sau.", response.StatusCode == 429 ? "warning" : "error");
     public void Dispose() { toastLifetime.Dispose();  disposed = true; formValidation.Dispose(); otpValidation.Dispose(); }
 }

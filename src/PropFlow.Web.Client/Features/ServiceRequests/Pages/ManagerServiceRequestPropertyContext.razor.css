@@ -1,4 +1,4 @@
-.context-page { color:#13213a; padding:1.1rem 1.25rem 5rem; min-height:100%; }
+.context-page { color:#13213a; padding-block:1.1rem 5rem; min-height:100%; }
 .context-breadcrumb { display:flex; align-items:center; gap:.55rem; font-size:.76rem; color:#7a8ba6; margin-bottom:1rem; }
 .context-breadcrumb a { color:#60728f; text-decoration:none; }
 .context-breadcrumb a:hover { color:#0284c7; }
@@ -86,7 +86,7 @@
 .form-error { display:flex; align-items:center; gap:.4rem; margin:.8rem 0 0; padding:.65rem .75rem; border:1px solid #fecdd3; border-radius:.75rem; background:#fff1f2; color:#be123c; font-size:.7rem; font-weight:700; }
 .form-error .material-symbols-outlined { font-size:1rem; }
 @media (max-width:1050px) { .context-grid { grid-template-columns:1fr; } }
-@media (max-width:720px) { .context-page { padding:.8rem .65rem 4rem; } .context-hero { align-items:flex-start; flex-direction:column; } .hero-tags { justify-content:flex-start; } .context-card { padding:1rem; border-radius:1.2rem; } .summary-grid { grid-template-columns:1fr; } .form-actions { align-items:flex-start; flex-direction:column; } .form-actions > div { width:100%; } .form-actions button { flex:1; justify-content:center; } .source-facts > div { grid-template-columns:1fr; gap:.25rem; } .source-facts dd { text-align:left; } .original-apartment dd { justify-content:flex-start; } .card-title-row { flex-wrap:wrap; } }
+@media (max-width:720px) { .context-page { padding-block:.8rem 4rem; } .context-hero { align-items:flex-start; flex-direction:column; } .hero-tags { justify-content:flex-start; } .context-card { padding:1rem; border-radius:1.2rem; } .summary-grid { grid-template-columns:1fr; } .form-actions { align-items:flex-start; flex-direction:column; } .form-actions > div { width:100%; } .form-actions button { flex:1; justify-content:center; } .source-facts > div { grid-template-columns:1fr; gap:.25rem; } .source-facts dd { text-align:left; } .original-apartment dd { justify-content:flex-start; } .card-title-row { flex-wrap:wrap; } }
 /* AppShell changes --app-* variables itself. Keeping this page on those variables
    makes every surface transition correctly in both light and dark mode. */
 .context-page { color:var(--app-text); }

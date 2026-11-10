@@ -8,7 +8,7 @@
 @inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
 @inject NavigationManager Navigation
 
-<div class="support-workspace">
+<div class="support-workspace @(ForManager ? "internal-workspace" : null)">
     @if (identityChanged)
     { <p class="support-error" role="alert">Phiên đăng nhập đã thay đổi. Vui lòng tải lại trang để mở đúng cuộc trò chuyện của tài khoản hiện tại.</p> }
     else
@@ -26,7 +26,17 @@
             {
                 @foreach (var item in conversations.Items)
                 { <button type="button" class="conversation-link @(selected?.Id == item.Id ? "selected" : "")" disabled="@busy" @onclick="() => Select(item.Id)"><span><strong>@(ForManager ? item.ResidentName : item.ManagerName ?? "Ban quản lý")</strong><small>@Status(item.Status)</small></span><time>@Time(item.UpdatedAt)</time></button> }
-                <nav class="support-pagination" aria-label="Phân trang hội thoại"><button disabled="@(busy || page <= 1)" @onclick="Previous">Trước</button><span>Trang @(page)</span><button disabled="@(busy || page * 12 >= conversations.Total)" @onclick="Next">Sau</button></nav>
+                @if (ForManager)
+                {
+                    <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(conversations.Total / 12d))" Busy="@(busy || loading)" Label="Phân trang hội thoại"
+                    Previous="Previous" Next="Next">
+                    <span>@conversations.Total hội thoại</span>
+                </TablePagination>
+                }
+                else
+                {
+                    <nav class="support-pagination" aria-label="Phân trang hội thoại"><button disabled="@(busy || page <= 1)" @onclick="Previous">Trước</button><span>Trang @(page)</span><button disabled="@(busy || page * 12 >= conversations.Total)" @onclick="Next">Sau</button></nav>
+                }
             }
         </aside>
         <section class="support-chat" aria-label="Khung trò chuyện với Ban quản lý">

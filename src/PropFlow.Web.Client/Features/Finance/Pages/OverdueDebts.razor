@@ -51,7 +51,10 @@
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có công nợ phù hợp" Message="Hãy thay đổi từ khóa hoặc khoảng ngày quá hạn." Icon="inbox" /></td></tr> }
             else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hồ sơ @item.InvoiceNumber" /></td><td><strong><a href="@($"/finance/invoices/{item.Id}")" aria-label="Chi tiết hóa đơn @item.InvoiceNumber">@item.InvoiceNumber</a></strong><small>Kỳ @Period(item)</small></td><td><strong>Căn hộ @(item.ApartmentNumber ?? ShortId(item.ApartmentUnitId))</strong><small>@(item.ResidentName ?? "Chưa có người nhận")</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>Hạn thanh toán: @Date(item.DueDate)</small></td><td class="debt-cell"><strong>@Money(item.OutstandingAmount)</strong><small>Dư nợ chưa xác nhận thanh toán</small></td><td><span class="days-pill @DaysClass(item.DaysOverdue)">@item.DaysOverdue ngày</span></td><td><span class="level-pill @LevelClass(item.DaysOverdue)">@LevelName(item.DaysOverdue)</span></td><td><div class="debt-actions"><button class="collect-debt-button" type="button" @onclick="() => collecting = item">Thu nợ</button><FinanceReminderButton @key="item.Id" InvoiceIds="@(new[] { item.Id })" Label="Nhắc nợ" OverdueOnly="true" /></div></td></tr> } }
         </tbody></table></div>
-        @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="overdue-pagination"><span>Hiển thị @FilteredItems.Count bản ghi phù hợp trên trang; tổng cộng @data.Total hồ sơ nợ quá hạn</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
+        @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <TablePagination Page="page" TotalPages="TotalPages" Label="Phân trang"
+            Previous="PreviousPage" Next="NextPage">
+            <span>Hiển thị @FilteredItems.Count / @data.Total hồ sơ nợ quá hạn</span>
+        </TablePagination> }
     </section>
 </div>
 

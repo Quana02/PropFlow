@@ -27,7 +27,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-nav.js?v=20261109-1");
+        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-nav.js?v=20261109-2");
         if (disposed) { await imported.DisposeAsync(); return; }
         module = imported;
         var initialized = await module.InvokeAsync<IJSObjectReference>("initialize", railRef);

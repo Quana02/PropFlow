@@ -114,10 +114,10 @@
             </div>
         }
 
-        <footer class="panel-footer">
-            <span>Hiển thị <strong>@items.Count</strong> trong <strong>@totalCount</strong> yêu cầu phù hợp</span>
-            <nav class="pagination" aria-label="Phân trang"><button type="button" disabled="@(page == 1)" @onclick="PreviousPage" aria-label="Trang trước"><span class="material-symbols-outlined">chevron_left</span></button><button type="button" class="current" aria-current="page">@(page)</button><button type="button" disabled="@(page * PageSize >= totalCount)" @onclick="NextPage" aria-label="Trang sau"><span class="material-symbols-outlined">chevron_right</span></button></nav>
-        </footer>
+        <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(totalCount / (double)PageSize))" Busy="loading" Label="Phân trang yêu cầu"
+            Previous="PreviousPage" Next="NextPage">
+            <span>Hiển thị @items.Count / @totalCount yêu cầu phù hợp</span>
+        </TablePagination>
     </section>
 </div>
 

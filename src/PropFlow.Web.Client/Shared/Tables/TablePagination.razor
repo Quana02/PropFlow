@@ -1,0 +1,41 @@
+<footer class="table-footer">
+    <div class="page-summary">@ChildContent</div>
+    <nav class="table-pagination" aria-label="@Label">
+        <button type="button" disabled="@(!CanGoPrevious)" title="Trang trước" aria-label="Trang trước" @onclick="() => MoveAsync(false)">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <span class="page-number" aria-current="@(TotalPages > 0 ? "page" : null)"
+              aria-label="@(TotalPages > 0 ? $"Trang {Page} trên {TotalPages}" : "Không có trang kết quả")">@(TotalPages > 0 ? Page : 0) / @TotalPages</span>
+        <button type="button" disabled="@(!CanGoNext)" title="Trang sau" aria-label="Trang sau" @onclick="() => MoveAsync(true)">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+    </nav>
+</footer>
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int TotalPages { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string Label { get; set; } = "Phân trang";
+    [Parameter] public EventCallback Previous { get; set; }
+    [Parameter] public EventCallback Next { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool moving;
+    private bool CanGoPrevious => !Busy && !moving && Page > 1 && Page <= TotalPages;
+    private bool CanGoNext => !Busy && !moving && Page >= 1 && Page < TotalPages;
+
+    private async Task MoveAsync(bool forward)
+    {
+        if (forward ? !CanGoNext : !CanGoPrevious) return;
+        moving = true;
+        try
+        {
+            await (forward ? Next : Previous).InvokeAsync();
+        }
+        finally
+        {
+            moving = false;
+        }
+    }
+}

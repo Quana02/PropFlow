@@ -29,14 +29,10 @@
             <td><button type="button" class="detail-button" aria-label="Xem chi tiết @ActionLabel(item) lúc @LocalTime(item.Timestamp).ToString("HH:mm:ss")" @onclick="() => selected = item"><span class="material-symbols-outlined">visibility</span></button></td></tr>
         }
         </tbody></table></div>
-        <footer class="table-footer">
+        <TablePagination Page="data.Page" TotalPages="@((int)Math.Ceiling(data.Total / (double)data.PageSize))" Busy="loading"
+            Label="Phân trang nhật ký hệ thống" Previous="PreviousAsync" Next="NextAsync">
             <span>@data.Total hoạt động</span>
-            <nav class="table-pagination" aria-label="Phân trang nhật ký hệ thống">
-                <button type="button" disabled="@(data.Page <= 1)" title="Trang trước" aria-label="Trang trước" @onclick="PreviousAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
-                <span class="page-number" aria-current="page">@data.Page</span>
-                <button type="button" disabled="@(data.Page * data.PageSize >= data.Total)" title="Trang sau" aria-label="Trang sau" @onclick="NextAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
-            </nav>
-        </footer>
+        </TablePagination>
     }
 </section>
 @if (showFilters)

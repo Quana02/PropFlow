@@ -71,8 +71,8 @@
                             @if (account.Role == "RESIDENT") { <p class="field-hint resident-note">Thông tin cư dân và quan hệ căn hộ do ban quản lý quản lý, không thay đổi tại đây.</p> }
                         </div>
                         <footer class="form-footer">
-                            <p>@(HasChanges ? "Bạn có thay đổi chưa lưu." : "Chưa có thay đổi cần lưu.")</p>
-                            <button type="submit" class="account-button primary-button" disabled="@(busy || !HasChanges)">
+                            <p>@(HasValidationErrors ? "Kiểm tra lại thông tin cần lưu." : HasChanges ? "Bạn có thay đổi chưa lưu." : "Chưa có thay đổi cần lưu.")</p>
+                            <button type="submit" class="account-button primary-button" disabled="@(!CanSave)">
                                 @if (busy) { <span class="account-spinner" aria-hidden="true"></span> }
                                 else { <span class="material-symbols-outlined" aria-hidden="true">save</span> }
                                 @(busy ? "Đang lưu…" : "Lưu thay đổi")
@@ -83,14 +83,18 @@
 
                 <section class="account-card security-card" aria-labelledby="security-title">
                     <header class="card-heading"><span class="section-icon material-symbols-outlined" aria-hidden="true">shield</span><div><h2 id="security-title">Bảo mật tài khoản</h2><p>Quản lý email và mật khẩu truy cập.</p></div></header>
-                    @if (account.Role == "ADMIN")
-                    {
-                        <div class="security-action">
-                            <span class="action-icon material-symbols-outlined" aria-hidden="true">alternate_email</span>
+                    <div class="security-action">
+                        <span class="action-icon material-symbols-outlined" aria-hidden="true">alternate_email</span>
+                        @if (account.Role == "RESIDENT")
+                        {
+                            <div class="security-copy"><h3>Email tài khoản</h3><p>Để thay đổi email đăng nhập, vui lòng liên hệ Ban quản lý chung cư.</p></div>
+                        }
+                        else
+                        {
                             <div class="security-copy"><h3>Đổi địa chỉ email</h3><p>Xác nhận mật khẩu hiện tại và xác minh email mới để hoàn tất.</p></div>
                             <a class="account-button outline-button" href="/account/change-email">Đổi email<span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a>
-                        </div>
-                    }
+                        }
+                    </div>
                     <div class="security-action">
                         <span class="action-icon material-symbols-outlined" aria-hidden="true">lock</span>
                         <div class="security-copy"><h3>Đổi mật khẩu</h3><p>Cập nhật mật khẩu để bảo vệ quyền truy cập tài khoản của bạn.</p></div>
@@ -112,10 +116,7 @@
 
     <footer class="account-session-footer">
         <div><span class="material-symbols-outlined" aria-hidden="true">devices</span><p>Đăng xuất khỏi phiên làm việc trên thiết bị này.</p></div>
-        <div class="session-actions">
-            @if (account?.Role == "MANAGER") { <a class="back-to-work" href="/buildings">Về quản lý tòa nhà</a> }
-            <button type="button" class="account-button logout-button" disabled="@busy" @onclick="Logout"><span class="material-symbols-outlined" aria-hidden="true">logout</span>Đăng xuất</button>
-        </div>
+        <button type="button" class="account-button logout-button" disabled="@busy" @onclick="Logout"><span class="material-symbols-outlined" aria-hidden="true">logout</span>Đăng xuất</button>
     </footer>
 </div>
 
@@ -129,6 +130,9 @@
     private bool busy, disposed, loading = true;
     private bool HasChanges => account is not null &&
         (form.DisplayName.Trim() != account.DisplayName.Trim() || (form.PhoneNumber?.Trim() ?? "") != (account.PhoneNumber?.Trim() ?? ""));
+    private bool HasValidationErrors => editContext.GetValidationMessages().Any();
+    private bool CanSave => !busy && HasChanges && !HasValidationErrors;
+
     protected override Task OnInitializedAsync()
     {
         editContext = new(form);
@@ -154,9 +158,9 @@
 
     private async Task Save()
     {
+        if (!CanSave) return;
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
 
-        if (busy || !HasChanges) return;
         busy = true;
         serverValidation.Clear();
         try
@@ -172,7 +176,8 @@
             else
             {
                 serverValidation.Apply(response);
-                operationFeedback.Publish(() => Toasts.Show("Chưa lưu được thông tin", response.Message ?? "Vui lòng thử lại sau.", response.StatusCode == 429 ? "warning" : "error"));
+                if (!HasValidationErrors)
+                    operationFeedback.Publish(() => Toasts.Show("Chưa lưu được thông tin", response.Message ?? "Vui lòng thử lại sau.", response.StatusCode == 429 ? "warning" : "error"));
             }
         }
         finally { if (!disposed) busy = false; }

@@ -15,7 +15,7 @@ Tài liệu này ánh xạ schema hiện hành trong `docs/database/PropFlow.dbm
 
 | Schema | Các bảng | Module sở hữu |
 |---|---|---|
-| `auth` | `users`, `refresh_tokens`, `password_reset_tokens`, `resident_verifications` | Authentication |
+| `auth` | `users`, `refresh_tokens`, `password_reset_tokens`, `resident_verifications`, `privileged_action_challenges` | Authentication |
 | `administration` | `roles`, `permissions`, `role_permissions`, `user_role_assignments`, `user_access_history`, `system_configurations`, `audit_logs` | Administration |
 | `residents` | `residents`, `resident_apartments` (residency type, household role, household-head residency và relationship-to-head) | Residents / FE-02 |
 | `property_assets` | `buildings`, `facility_types`, `facilities`, `equipment` | PropertyAssets |
@@ -30,7 +30,7 @@ Tài liệu này ánh xạ schema hiện hành trong `docs/database/PropFlow.dbm
 | `ai_recommendation` | `ai_request_recommendations`, `ai_recommendation_reviews` | AiRecommendation |
 | `communication` | `notifications`, `announcements`, `announcement_versions`, `announcement_audiences` | Communication |
 
-Tổng cộng: **47 bảng** trong **14 PostgreSQL schema**. Reporting và AiChatbot hiện không có source-of-truth table riêng trong DBML.
+Reporting và AiChatbot hiện không có source-of-truth table riêng trong DBML.
 
 ## 3. Cấu trúc building scope đã loại bỏ
 

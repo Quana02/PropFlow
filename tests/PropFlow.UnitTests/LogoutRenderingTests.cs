@@ -29,7 +29,11 @@ public sealed class LogoutRenderingTests
     public sealed class LoginProbe : Login
     {
         [Parameter] public Action<LoginProbe>? Capture { get; set; }
-        protected override void OnInitialized() => Capture!(this);
+        protected override void OnInitialized()
+        {
+            base.OnInitialized();
+            Capture!(this);
+        }
         public Task SubmitForm() => (Task)typeof(Login).GetMethod("Submit", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(this, null)!;
         public void InputAndRender(string username, string password)
         {
@@ -93,6 +97,8 @@ public sealed class LogoutRenderingTests
         Assert.DoesNotContain("role=\"status\"", await renderer.Dispatcher.InvokeAsync(view.ToHtmlString));
         release.TrySetResult();
         await logout;
+        var settledHtml = await renderer.Dispatcher.InvokeAsync(view.ToHtmlString);
+        Assert.Equal(serverFailure, settledHtml.Contains("role=\"status\"", StringComparison.Ordinal));
         // Real Login markup is rerendered with username first, password first, both
         // autofill values, and unchanged values (the state seen on blur/rerender).
         // Native browser autofill/blur event delivery still requires browser QA.

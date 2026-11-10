@@ -348,6 +348,27 @@ Table auth.password_reset_tokens {
   }
 }
 
+Table auth.privileged_action_challenges {
+  id uuid [pk]
+  user_id uuid [not null, ref: > auth.users.id]
+  purpose varchar(80) [not null]
+  payload_hash varchar(64) [not null]
+  code_hash varchar(200) [not null]
+  attempt_count int [not null, default: 0]
+  expires_at timestamptz [not null]
+  created_at timestamptz [not null]
+  used_at timestamptz
+  requested_by uuid [note: 'Logical initiating Manager account ID for managed resident email changes']
+  resident_id uuid [note: 'Logical FE-02 Resident ID revalidated through Residents.Contracts']
+  reason varchar(40)
+  outcome varchar(32)
+
+  indexes {
+    (user_id, purpose, created_at)
+    expires_at
+  }
+}
+
 Table auth.resident_verifications {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > auth.users.id]

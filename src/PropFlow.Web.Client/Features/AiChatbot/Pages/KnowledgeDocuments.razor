@@ -40,11 +40,10 @@
                 </article>
             }
         </div>
-        <nav class="knowledge-pagination" aria-label="Phân trang tài liệu">
-            <span>@pageData.Total tài liệu · Trang @(page)</span>
-            <button disabled="@(InteractionBlocked || page <= 1)" @onclick="Previous">Trước</button>
-            <button disabled="@(InteractionBlocked || page * pageData.PageSize >= pageData.Total)" @onclick="Next">Sau</button>
-        </nav>
+        <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(pageData.Total / (double)pageData.PageSize))" Busy="InteractionBlocked" Label="Phân trang tài liệu"
+            Previous="Previous" Next="Next">
+            <span>@pageData.Total tài liệu</span>
+        </TablePagination>
     }
     @if (editorOpen)
     {

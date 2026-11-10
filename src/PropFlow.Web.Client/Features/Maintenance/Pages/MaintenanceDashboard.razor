@@ -262,17 +262,10 @@
                 </div>
             }
 
-            <footer class="fe07-pagination">
-                <span>Trang @Schedules.PageIndex / @TotalPages</span>
-                <div>
-                    <button type="button" disabled="@(Schedules.PageIndex <= 1)" @onclick="() => ChangePage(Schedules.PageIndex - 1)">
-                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>Trước
-                    </button>
-                    <button type="button" disabled="@(Schedules.PageIndex >= TotalPages)" @onclick="() => ChangePage(Schedules.PageIndex + 1)">
-                        Sau<span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-                    </button>
-                </div>
-            </footer>
+            <TablePagination Page="Schedules.PageIndex" TotalPages="TotalPages" Busy="IsLoading" Label="Phân trang lịch bảo trì"
+                Previous="@(() => ChangePage(Schedules.PageIndex - 1))" Next="@(() => ChangePage(Schedules.PageIndex + 1))">
+                <span>@Schedules.TotalCount lịch bảo trì</span>
+            </TablePagination>
         }
     </section>
     }
@@ -339,7 +332,10 @@
                         </tbody>
                     </table>
                 </div>
-                <footer class="fe07-pagination"><span>Hiển thị @History.Page.Items.Count trong @History.Page.TotalCount bản ghi</span><div><button type="button" disabled="@(History.Page.PageIndex <= 1)" @onclick="() => ChangeHistoryPage(History.Page.PageIndex - 1)"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>Trước</button><button type="button" disabled="@(History.Page.PageIndex >= HistoryTotalPages)" @onclick="() => ChangeHistoryPage(History.Page.PageIndex + 1)">Sau<span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></footer>
+                <TablePagination Page="History.Page.PageIndex" TotalPages="HistoryTotalPages" Busy="IsHistoryLoading" Label="Phân trang lịch sử bảo trì"
+                    Previous="@(() => ChangeHistoryPage(History.Page.PageIndex - 1))" Next="@(() => ChangeHistoryPage(History.Page.PageIndex + 1))">
+                    <span>Hiển thị @History.Page.Items.Count / @History.Page.TotalCount bản ghi</span>
+                </TablePagination>
             }
         </section>
     }
@@ -402,7 +398,10 @@
                         </article>
                     }
                 </div>
-                <footer class="fe07-pagination"><span>Trang @Tasks.PageIndex / @TaskTotalPages</span><div><button type="button" disabled="@(Tasks.PageIndex <= 1)" @onclick="() => ChangeTaskPage(Tasks.PageIndex - 1)"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>Trước</button><button type="button" disabled="@(Tasks.PageIndex >= TaskTotalPages)" @onclick="() => ChangeTaskPage(Tasks.PageIndex + 1)">Sau<span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button></div></footer>
+                <TablePagination Page="Tasks.PageIndex" TotalPages="TaskTotalPages" Busy="IsTasksLoading" Label="Phân trang công việc bảo trì"
+                    Previous="@(() => ChangeTaskPage(Tasks.PageIndex - 1))" Next="@(() => ChangeTaskPage(Tasks.PageIndex + 1))">
+                    <span>@Tasks.TotalCount công việc</span>
+                </TablePagination>
             }
         </section>
     }

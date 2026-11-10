@@ -1,4 +1,4 @@
-.announcement-workspace{width:min(100%,96rem);margin:0 auto;color:var(--app-text);font-family:"Plus Jakarta Sans","Segoe UI",sans-serif}
+.announcement-workspace:not(.internal-workspace){width:min(100%,96rem);margin:0 auto}.announcement-workspace{color:var(--app-text);font-family:"Plus Jakarta Sans","Segoe UI",sans-serif}
 .breadcrumb{display:flex;gap:.5rem;align-items:center;margin-bottom:.8rem;font-size:.72rem;color:var(--app-muted)}
 .breadcrumb a{color:inherit;text-decoration:none}.breadcrumb strong{color:var(--app-text)}
 .hero,.panel{border:1px solid var(--app-line);border-radius:1.4rem;background:color-mix(in srgb,var(--app-surface) 90%,transparent);box-shadow:0 18px 45px -34px #0f4c81;backdrop-filter:blur(22px)}

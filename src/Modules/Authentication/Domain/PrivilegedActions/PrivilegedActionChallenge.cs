@@ -36,6 +36,18 @@ public sealed class PrivilegedActionChallenge
     public DateTimeOffset ExpiresAt { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? UsedAt { get; private set; }
+    public Guid? RequestedBy { get; private set; }
+    public Guid? ResidentId { get; private set; }
+    public string? Reason { get; private set; }
+    public string? Outcome { get; private set; }
+
+    public void RecordResidentRequest(Guid managerId, Guid residentId, string reason)
+    {
+        RequestedBy = managerId;
+        ResidentId = residentId;
+        Reason = reason;
+        Outcome = "PENDING";
+    }
 
     public bool IsActiveAt(DateTimeOffset now) => UsedAt is null && now < ExpiresAt;
 
@@ -43,14 +55,26 @@ public sealed class PrivilegedActionChallenge
     {
         if (!IsActiveAt(now)) throw new InvalidOperationException("Challenge is not active.");
         AttemptCount++;
-        if (AttemptCount >= maximumAttempts) UsedAt = now;
+        if (AttemptCount >= maximumAttempts)
+        {
+            UsedAt = now;
+            if (RequestedBy.HasValue) Outcome = "ATTEMPTS_EXHAUSTED";
+        }
     }
 
     public void Consume(DateTimeOffset now)
     {
         if (!IsActiveAt(now)) throw new InvalidOperationException("Challenge is not active.");
         UsedAt = now;
+        if (RequestedBy.HasValue) Outcome = "VERIFIED";
     }
 
     public void Cancel(DateTimeOffset now) => UsedAt ??= now;
+
+    public void CloseResidentRequest(DateTimeOffset now, string outcome)
+    {
+        if (UsedAt.HasValue) return;
+        UsedAt = now;
+        Outcome = outcome;
+    }
 }
