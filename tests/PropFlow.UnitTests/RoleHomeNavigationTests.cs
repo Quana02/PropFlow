@@ -8,7 +8,7 @@ public sealed class RoleHomeNavigationTests
     [InlineData("ACCOUNTANT", "/finance/dashboard")]
     [InlineData("RESIDENT", "/resident")]
     [InlineData("MANAGER", "/buildings")]
-    [InlineData("STAFF", "/buildings")]
+    [InlineData("STAFF", "/staff/service-requests")]
     [InlineData("ADMIN", "/admin/dashboard")]
     public void Restored_session_opens_role_home_only_from_entry_routes(string role, string home)
     {

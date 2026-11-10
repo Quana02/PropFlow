@@ -31,11 +31,11 @@ public sealed class CompactNavigationTests
     [Theory]
     [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/admin/dashboard?tab=activity", 5)]
     [InlineData("MANAGER", "MANAGE_OPERATIONS", "/manager/service-requests/123", 12)]
-    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/service-requests/123", 9)]
+    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/service-requests/123", 2)]
     [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/knowledge/documents", 5)]
     [InlineData("MANAGER", "MANAGE_OPERATIONS", "/knowledge/documents", 12)]
-    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/knowledge/documents", 9)]
-    [InlineData("ACCOUNTANT", "", "/finance/invoices", 8)]
+    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/my-maintenance", 2)]
+    [InlineData("ACCOUNTANT", "", "/finance/invoices", 7)]
     [InlineData("RESIDENT", "", "/resident", 0)]
     [InlineData("ADMIN", "", "/admin/dashboard", 4)]
     [InlineData("MANAGER", "", "/buildings", 0)]
@@ -57,6 +57,8 @@ public sealed class CompactNavigationTests
             RenderFragment menu = builder => { builder.OpenComponent<AppNavMenu>(0); builder.CloseComponent(); };
             var view = await renderer.RenderComponentAsync<CascadingAuthenticationState>(ParameterView.FromDictionary(new Dictionary<string, object?> { [nameof(CascadingAuthenticationState.ChildContent)] = menu }));
             var html = view.ToHtmlString();
+            Assert.Equal(role == "STAFF" && count > 0, html.Contains("class=\"staff-nav\"", StringComparison.Ordinal));
+            Assert.Equal(role == "MANAGER" && count > 0, html.Contains("class=\"operations-nav\"", StringComparison.Ordinal));
             var links = Regex.Matches(html, "<a\\b[^>]*>").Select(match => match.Value)
                 .Where(link => !link.Contains("operations-brand", StringComparison.Ordinal)).ToArray();
             Assert.Equal(count, links.Length);
@@ -64,12 +66,12 @@ public sealed class CompactNavigationTests
             var expected = role switch
             {
                 "ADMIN" => new[] { "/admin/dashboard?tab=overview", "/admin/dashboard?tab=accounts", "/admin/dashboard?tab=payment", "/admin/dashboard?tab=activity" },
-                "ACCOUNTANT" => new[] { "/finance/payments/bank-transfers", "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices", "/account" },
+                "ACCOUNTANT" => new[] { "/finance/payments/bank-transfers", "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices" },
                 "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee" },
-                "STAFF" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/staff/complaints", "/staff/service-requests", "/my-maintenance" },
+                "STAFF" when count > 0 => new[] { "/staff/service-requests", "/my-maintenance" },
                 _ => Array.Empty<string>()
             };
-            if (KnowledgePolicies.CanRead(user)) expected = [..expected, "/knowledge/documents"];
+            if (role != "STAFF" && KnowledgePolicies.CanRead(user)) expected = [..expected, "/knowledge/documents"];
             Assert.Equal(expected, routes);
             Assert.All(links, link => { Assert.Contains("title=", link); Assert.Contains("aria-label=", link); });
             if (count > 0) Assert.Single(links.Where(link => link.Contains("aria-current=\"page\"", StringComparison.Ordinal)));

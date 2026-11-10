@@ -6,15 +6,18 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.JSInterop;
 using PropFlow.Modules.AiChatbot.Contracts;
 using PropFlow.Modules.Authentication.Contracts;
+using PropFlow.Modules.Communication.Contracts;
 using PropFlow.Web.Client.Features.Authentication.Pages;
 using PropFlow.Web.Client.Features.Authentication.Services;
 using PropFlow.Web.Client.Features.Authentication.State;
+using PropFlow.Web.Client.Features.Communication.SupportChat;
 using PropFlow.Web.Client.Features.Facility.Services;
 using PropFlow.Web.Client.Services.Api;
 using PropFlow.Web.Client.Services.Authentication;
@@ -28,7 +31,7 @@ public sealed class AuthenticationUiTests
     [InlineData("ADMIN", "Quản trị viên", "", "/admin/dashboard?tab=overview")]
     [InlineData("MANAGER", "Quản lý", "MANAGE_OPERATIONS", "/buildings")]
     [InlineData("ACCOUNTANT", "Kế toán", "", "/finance/dashboard")]
-    [InlineData("STAFF", "Nhân viên", "PERFORM_ASSIGNED_OPERATIONS", "/buildings")]
+    [InlineData("STAFF", "Nhân viên", "PERFORM_ASSIGNED_OPERATIONS", "/staff/service-requests")]
     [InlineData("RESIDENT", "Cư dân", "", null)]
     public async Task Account_uses_the_role_shell_and_renders_authorized_security_actions(
         string role, string roleLabel, string permission, string? workspaceLink)
@@ -54,7 +57,9 @@ public sealed class AuthenticationUiTests
             .AddSingleton(publicApi)
             .AddSingleton(new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance))
             .AddSingleton<AuthenticationService>()
-            .AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())
+            .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+            .AddSingleton<ISupportChatConnection, SupportChatConnection>()
+            .AddSingleton<SupportChatApi>()
             .AddSingleton<PropFlow.Web.Client.Features.Finance.Services.FinanceCycleApi>()
             .AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState>()
             .AddSingleton<PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentNotificationConnectionFactory>()
@@ -84,6 +89,10 @@ public sealed class AuthenticationUiTests
         else
         {
             Assert.Contains("app-nav-scroll", html, StringComparison.Ordinal);
+            Assert.Contains("app-ambient-canvas", html, StringComparison.Ordinal);
+            Assert.Contains("app-weather", html, StringComparison.Ordinal);
+            Assert.Contains("app-local-time", html, StringComparison.Ordinal);
+            Assert.Equal(role == "MANAGER", html.Contains("class=\"support-presence\"", StringComparison.Ordinal));
             Assert.Contains($"href=\"{workspaceLink}\"", html, StringComparison.Ordinal);
             Assert.DoesNotContain("public-overview", html, StringComparison.Ordinal);
         }
@@ -132,6 +141,11 @@ public sealed class AuthenticationUiTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Assert.Equal(HttpMethod.Get, request.Method);
+            if (request.RequestUri?.AbsolutePath == "/api/v1/support-chat/availability")
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new SupportAvailabilityView(false, false, null))
+                });
             Assert.Equal("/api/v1/auth/me", request.RequestUri?.AbsolutePath);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(account) });
         }

@@ -42,6 +42,19 @@ public sealed class SupportChatUiTests
     }
 
     [Fact]
+    public async Task ManagerInboxShowsActiveConversationWithoutAResidentOnlineIndicator()
+    {
+        await using var fixture = new RenderFixture(true, true);
+        var html = await fixture.Render();
+        Assert.Contains("Hộp thư của bạn", html);
+        Assert.Contains("class=\"inbox-avatar\"", html);
+        Assert.Contains("aria-current=\"true\"", html);
+        Assert.Contains("Bạn: Tin gần nhất", html);
+        Assert.Matches("class=\"inbox-status\"[^>]*>Đang trao đổi", html);
+        Assert.DoesNotContain("Phân trang hội thoại", html);
+    }
+
+    [Fact]
     public async Task ContinuousTypingPublishesBeforeTheResidentStopsAndNeverPostsUnsentText()
     {
         await using var fixture = new RenderFixture(false, true);
@@ -162,7 +175,8 @@ public sealed class SupportChatUiTests
             if (FailDetail && !request.RequestUri!.AbsolutePath.EndsWith("/messages") && !request.RequestUri.AbsolutePath.EndsWith("/conversations"))
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = JsonContent.Create(new { title = "Không thể mở cuộc trò chuyện này" }) });
             var now = DateTimeOffset.UtcNow;
-            var chat = new SupportConversationView(id, "ACTIVE", "Cư dân", "Manager", true, now, now);
+            var chat = new SupportConversationView(id, "ACTIVE", "Cư dân", "Manager", true, now, now,
+                new("MANAGER", "Tin gần nhất", now));
             object data = request.RequestUri!.AbsolutePath.EndsWith("/messages")
                 ? new SupportMessagePage([new(Guid.NewGuid(), 1, "RESIDENT", "Cư dân", "TIN_DA_GUI", now)], false, "Asia/Ho_Chi_Minh")
                 : request.RequestUri.AbsolutePath.EndsWith("/conversations") ? new SupportConversationPage(existing ? [chat] : [], existing ? 1 : 0, 1, "Asia/Ho_Chi_Minh") : chat;

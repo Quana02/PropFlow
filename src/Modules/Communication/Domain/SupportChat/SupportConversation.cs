@@ -23,13 +23,14 @@ public sealed class SupportConversation
         if (Status != "WAITING") throw new InvalidOperationException("Cuộc trò chuyện không còn trong hàng chờ.");
         ManagerUserId = manager; ManagerName = name; Status = "ACTIVE"; UpdatedAt = now;
     }
-    public SupportMessage Message(Guid? sender, string name, string kind, Guid clientId, string text, DateTimeOffset now)
+    public SupportMessage Message(Guid? sender, string name, string kind, Guid clientId, string text, DateTimeOffset now,
+        Guid? replyToId = null, Guid? forwardedFromId = null)
     {
         if (Status == "CLOSED") throw new InvalidOperationException("Cuộc trò chuyện đã kết thúc.");
         if (kind == "MANAGER" && (Status != "ACTIVE" || sender != ManagerUserId)) throw new InvalidOperationException("Chưa được phân công hỗ trợ.");
         if (kind == "RESIDENT" && sender != ResidentUserId) throw new InvalidOperationException("Không phải người tham gia.");
         text = ValidateText(text); LastSequence++; UpdatedAt = now;
-        return new(Id, LastSequence, sender, name, kind, clientId, text, now);
+        return new(Id, LastSequence, sender, name, kind, clientId, text, now, replyToId, forwardedFromId);
     }
     public void Close(DateTimeOffset now) { Status = "CLOSED"; ClosedAt = now; UpdatedAt = now; }
     public static string ValidateText(string? text)
@@ -45,8 +46,12 @@ public sealed class SupportMessage
 {
     private SupportMessage() { }
     internal SupportMessage(Guid conversationId, long sequence, Guid? senderUserId, string senderName, string kind,
-        Guid clientMessageId, string text, DateTimeOffset now)
-    { Id = Guid.NewGuid(); ConversationId = conversationId; Sequence = sequence; SenderUserId = senderUserId; SenderName = senderName; Kind = kind; ClientMessageId = clientMessageId; Text = text; CreatedAt = now; }
+        Guid clientMessageId, string text, DateTimeOffset now, Guid? replyToId, Guid? forwardedFromId)
+    {
+        Id = Guid.NewGuid(); ConversationId = conversationId; Sequence = sequence; SenderUserId = senderUserId;
+        SenderName = senderName; Kind = kind; ClientMessageId = clientMessageId; Text = text; CreatedAt = now;
+        ReplyToId = replyToId; ForwardedFromId = forwardedFromId;
+    }
     public Guid Id { get; private set; }
     public Guid ConversationId { get; private set; }
     public long Sequence { get; private set; }
@@ -56,6 +61,27 @@ public sealed class SupportMessage
     public Guid ClientMessageId { get; private set; }
     public string Text { get; private set; } = "";
     public DateTimeOffset CreatedAt { get; private set; }
+    public Guid? ReplyToId { get; private set; }
+    public Guid? ForwardedFromId { get; private set; }
+    public DateTimeOffset? RecalledAt { get; private set; }
+    public DateTimeOffset? DeliveredAt { get; private set; }
+    public DateTimeOffset? SeenAt { get; private set; }
+    public bool HiddenForManager { get; private set; }
+    public bool HiddenForResident { get; private set; }
+
+    public void Recall(DateTimeOffset now) => RecalledAt ??= now;
+
+    public void HideFor(string role)
+    {
+        if (role == "MANAGER") HiddenForManager = true;
+        else HiddenForResident = true;
+    }
+
+    public void Acknowledge(bool seen, DateTimeOffset now)
+    {
+        DeliveredAt ??= now;
+        if (seen) SeenAt ??= now;
+    }
 }
 
 public sealed class SupportManagerPresence

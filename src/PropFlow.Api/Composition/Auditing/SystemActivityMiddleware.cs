@@ -13,7 +13,8 @@ public sealed class SystemActivityMiddleware(RequestDelegate next, ILogger<Syste
     {
         var action = context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>();
         var method = context.Request.Method;
-        if (action is null || method is not ("POST" or "PUT" or "PATCH" or "DELETE") || ReadOnlyActions.Contains(action.ActionName))
+        if (action is null || method is not ("POST" or "PUT" or "PATCH" or "DELETE") || ReadOnlyActions.Contains(action.ActionName) ||
+            (action.ControllerName == "SupportChat" && action.ActionName == "Acknowledge"))
         { await next(context); return; }
         var module = action.ControllerTypeInfo.Namespace?.Split('.').SkipWhile(x => x != "Modules").Skip(1).FirstOrDefault();
         if (module is null) { await next(context); return; }

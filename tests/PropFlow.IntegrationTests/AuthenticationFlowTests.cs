@@ -27,6 +27,10 @@ using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Apartments.Domain.ApartmentUnits;
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.Apartments.Infrastructure.Persistence;
+using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
+using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Infrastructure;
+using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 
 namespace PropFlow.IntegrationTests;
 
@@ -81,6 +85,8 @@ public sealed class AuthFlowFactory(string connection) : PropFlowApiFactory
         {
             services.RemoveAll<IAuthEmail>(); services.AddSingleton<IAuthEmail>(Mail);
             services.RemoveAll<TimeProvider>(); services.AddSingleton<TimeProvider>(Clock);
+            services.RemoveAll<IServiceRequestEvidenceStorage>();
+            services.AddScoped<IServiceRequestEvidenceStorage, LocalServiceRequestEvidenceStorage>();
         });
     }
 }
@@ -1072,6 +1078,8 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             var roleId = await access.Roles.Where(item => item.Code == role).Select(item => item.Id).SingleAsync();
             access.UserRoleAssignments.Add(new PropFlow.Modules.Administration.Domain.UserRoleAssignments.UserRoleAssignment(user.Id, roleId, now));
             await access.SaveChangesAsync();
+            if (role == "STAFF")
+                await scope.ServiceProvider.GetRequiredService<ServiceRequestsDbContext>().Database.MigrateAsync();
         }
 
         using var client = Client();
@@ -1088,6 +1096,14 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         Assert.Equal(role, before.Role);
         Assert.Equal("ACTIVE", before.Status);
         Assert.True(before.EmailVerified);
+
+        if (role == "STAFF")
+        {
+            var landing = await client.GetFromJsonAsync<StaffServiceRequestListResponse>(
+                "api/v1/staff/service-requests?page=1&pageSize=10");
+            Assert.NotNull(landing);
+            Assert.Empty(landing.Items);
+        }
 
         using var invalid = await client.PutAsJsonAsync(accountPath, new UpdateProfileRequest(" ", new string('1', 21)));
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);

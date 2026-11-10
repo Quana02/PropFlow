@@ -7,10 +7,11 @@ using PropFlow.Modules.Communication.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.Communication.Infrastructure;
 
-public sealed class SupportChatService(CommunicationDbContext db, ISupportChatActors actors, ISupportChatRealtime realtime,
+public sealed partial class SupportChatService(CommunicationDbContext db, ISupportChatActors actors, ISupportChatRealtime realtime,
     TimeProvider clock, ILogger<SupportChatService> logger) : ISupportChat
 {
     public const string Greeting = "Xin chào! Bạn cần Ban quản lý hỗ trợ việc gì? Hãy mô tả để mình kết nối với Manager đang sẵn sàng.";
+    private const int PreviewLength = 160;
     private DateTimeOffset Now => clock.GetUtcNow();
     private async Task<SupportActor> Actor(Guid id, string? role, CancellationToken ct)
     {
@@ -30,9 +31,25 @@ public sealed class SupportChatService(CommunicationDbContext db, ISupportChatAc
         var actor = await Actor(user, null, ct);
         if (page < 1 || page > 100000) throw Invalid("Trang danh sách không hợp lệ.");
         var query = Scoped(actor).AsNoTracking(); var total = await query.CountAsync(ct);
+        var includePreview = actor.Role == "MANAGER";
+        var visibleMessages = VisibleMessages(actor);
         var rows = await query.OrderBy(x => x.Status == "CLOSED").ThenByDescending(x => x.UpdatedAt).ThenBy(x => x.Id)
-            .Skip((page - 1) * 12).Take(12).ToArrayAsync(ct);
-        var result = new List<SupportConversationView>(); foreach (var row in rows) result.Add(await View(row, ct));
+            .Skip((page - 1) * 12).Take(12)
+            .Select(chat => new
+            {
+                Chat = chat,
+                LastMessage = visibleMessages
+                    .Where(message => includePreview && message.ConversationId == chat.Id && message.Kind != "SYSTEM")
+                    .OrderByDescending(message => message.Sequence)
+                    .Select(message => new SupportMessagePreview(message.Kind,
+                        message.RecalledAt != null ? RecalledText :
+                            message.Text.Length > PreviewLength ? message.Text.Substring(0, PreviewLength) + "…" : message.Text,
+                        message.CreatedAt))
+                    .FirstOrDefault()
+            }).ToArrayAsync(ct);
+        var result = new List<SupportConversationView>(rows.Length);
+        foreach (var row in rows)
+            result.Add((await View(row.Chat, ct)) with { LastMessage = row.LastMessage });
         return new(result, total, page, actor.TimeZoneId);
     }
     public async Task<SupportConversationView> GetAsync(Guid user, Guid id, CancellationToken ct) =>
@@ -41,13 +58,14 @@ public sealed class SupportChatService(CommunicationDbContext db, ISupportChatAc
     {
         var actor = await Actor(user, null, ct); await Conversation(actor, id, ct);
         if (before <= 0) throw Invalid("Mốc tin nhắn không hợp lệ.");
-        var rows = await db.SupportMessages.AsNoTracking().Where(x => x.ConversationId == id && (before == null || x.Sequence < before))
+        var rows = await VisibleMessages(actor).AsNoTracking().Where(x => x.ConversationId == id && (before == null || x.Sequence < before))
             .OrderByDescending(x => x.Sequence).Take(51).ToArrayAsync(ct);
-        return new(rows.Take(50).Reverse().Select(MessageView).ToArray(), rows.Length > 50, actor.TimeZoneId);
+        return new(await MessageViews(actor, id, rows.Take(50).Reverse().ToArray(), ct), rows.Length > 50, actor.TimeZoneId);
     }
     public async Task<SupportConversationView> StartAsync(Guid user, ChatSendRequest input, CancellationToken ct)
     {
         var actor = await Actor(user, "RESIDENT", ct); var text = Validate(input);
+        if (input.ReplyToId is not null) throw Invalid("Hãy mở hội thoại trước khi trả lời tin nhắn.");
         return await Mutate(async changed => {
             var replay = await Replay(actor, null, input.ClientMessageId, text, ct);
             if (replay is not null) return await View(await Conversation(actor, replay.ConversationId, ct), ct);
@@ -69,11 +87,22 @@ public sealed class SupportChatService(CommunicationDbContext db, ISupportChatAc
         var actor = await Actor(user, null, ct); var text = Validate(input);
         return await Mutate(async changed => {
             var chat = await Conversation(actor, id, ct, tracked: true);
-            var replay = await Replay(actor, id, input.ClientMessageId, text, ct);
-            if (replay is not null) return MessageView(replay);
+            var replay = await Replay(actor, id, input.ClientMessageId, text, ct, input.ReplyToId);
+            if (replay is not null)
+            {
+                if (!IsVisible(replay, actor)) throw Missing();
+                return (await MessageViews(actor, id, [replay], ct))[0];
+            }
             if (chat.Status == "CLOSED") throw Conflict("Cuộc trò chuyện đã kết thúc. Hãy bắt đầu phiên mới nếu cần hỗ trợ thêm.");
-            var message = chat.Message(user, actor.Name, actor.Role, input.ClientMessageId, text, Now);
-            db.SupportMessages.Add(message); changed.Add(chat); return MessageView(message);
+            if (input.ReplyToId is Guid replyId)
+            {
+                var reply = await VisibleMessages(actor).AsNoTracking().SingleOrDefaultAsync(x => x.Id == replyId && x.ConversationId == id, ct);
+                if (reply is null || reply.RecalledAt is not null || reply.Kind == "SYSTEM")
+                    throw Invalid("Tin nhắn cần trả lời không còn khả dụng.");
+            }
+            var message = chat.Message(user, actor.Name, actor.Role, input.ClientMessageId, text, Now, input.ReplyToId);
+            db.SupportMessages.Add(message); changed.Add(chat);
+            return (await MessageViews(actor, id, [message], ct))[0];
         }, ct);
     }
     public async Task<SupportConversationView> CloseAsync(Guid user, Guid id, CancellationToken ct)
@@ -183,11 +212,11 @@ public sealed class SupportChatService(CommunicationDbContext db, ISupportChatAc
         return new(chat.Id, chat.Status, chat.ResidentName, chat.ManagerName, online, chat.CreatedAt, chat.UpdatedAt);
     }
     private void System(SupportConversation chat, string text) => db.SupportMessages.Add(chat.Message(null, "Trợ lý tiếp nhận", "SYSTEM", Guid.NewGuid(), text, Now));
-    private static SupportMessageView MessageView(SupportMessage m) => new(m.Id, m.Sequence, m.Kind, m.SenderName, m.Text, m.CreatedAt);
-    private async Task<SupportMessage?> Replay(SupportActor actor, Guid? conversation, Guid key, string text, CancellationToken ct)
+    private async Task<SupportMessage?> Replay(SupportActor actor, Guid? conversation, Guid key, string text, CancellationToken ct, Guid? replyTo = null)
     {
         var message = await db.SupportMessages.AsNoTracking().SingleOrDefaultAsync(x => x.SenderUserId == actor.UserId && x.ClientMessageId == key, ct);
-        if (message is not null && (message.Text != text || (conversation is not null && message.ConversationId != conversation)))
+        if (message is not null && (message.Text != text || message.ReplyToId != replyTo || message.ForwardedFromId is not null ||
+            (conversation is not null && message.ConversationId != conversation)))
             throw Conflict("Mã gửi tin đã được dùng với nội dung khác. Vui lòng kiểm tra lại cuộc trò chuyện.");
         return message;
     }

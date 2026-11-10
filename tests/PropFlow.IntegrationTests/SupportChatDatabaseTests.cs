@@ -113,6 +113,131 @@ public sealed class SupportChatDatabaseTests(SupportChatDatabaseFixture database
     }
 
     [Fact]
+    public async Task ManagerInboxPreviewsOnlySavedMessagesFromAssignedConversations()
+    {
+        var manager = directory.Manager();
+        var otherManager = directory.Manager();
+        var resident = directory.Resident();
+        await Ready(manager, "inbox-preview");
+        var chat = await Start(resident, Guid.NewGuid());
+        await using var db = database.CreateDb();
+        var service = Service(db);
+
+        var initial = Assert.Single((await service.ListAsync(manager, 1, default)).Items);
+        Assert.Equal("RESIDENT", initial.LastMessage!.Kind);
+        Assert.Equal("Cần hỗ trợ từ Ban quản lý", initial.LastMessage.Text);
+
+        var message = await service.SendAsync(manager, chat.Id, new(Guid.NewGuid(), new string('a', 200)), default);
+        await service.CloseAsync(manager, chat.Id, default);
+
+        var closed = Assert.Single((await service.ListAsync(manager, 1, default)).Items);
+        Assert.Equal("CLOSED", closed.Status);
+        var preview = Assert.IsType<SupportMessagePreview>(closed.LastMessage);
+        Assert.Equal("MANAGER", preview.Kind);
+        Assert.Equal(new string('a', 160) + "…", preview.Text);
+        Assert.Equal(message.CreatedAt.ToUnixTimeMilliseconds(), preview.CreatedAt.ToUnixTimeMilliseconds());
+        Assert.Empty((await service.ListAsync(otherManager, 1, default)).Items);
+        Assert.Null(Assert.Single((await service.ListAsync(resident, 1, default)).Items).LastMessage);
+    }
+
+    [Fact]
+    public async Task ReplyReceiptsRecallAndHideHonorParticipantAndMessageScope()
+    {
+        var resident = directory.Resident();
+        var manager = directory.Manager();
+        var outsider = directory.Manager();
+        await Ready(manager, "message-actions");
+        var chat = await Start(resident, Guid.NewGuid());
+        var unrelated = await Start(directory.Resident(), Guid.NewGuid());
+        await using var db = database.CreateDb();
+        var service = Service(db);
+        var original = Assert.Single((await service.MessagesAsync(manager, chat.Id, null, default)).Items,
+            message => message.Kind == "RESIDENT");
+        var unrelatedMessage = Assert.Single(await db.SupportMessages.Where(message =>
+            message.ConversationId == unrelated.Id && message.Kind == "RESIDENT").Select(message => message.Id).ToArrayAsync());
+        Assert.Equal(400, (await Assert.ThrowsAsync<SupportChatFailure>(() =>
+            service.SendAsync(manager, chat.Id, new(Guid.NewGuid(), "Không hợp lệ", unrelatedMessage), default))).Status);
+
+        var request = new ChatSendRequest(Guid.NewGuid(), "Mình sẽ hỗ trợ", original.Id);
+        var reply = await service.SendAsync(manager, chat.Id, request, default);
+        Assert.Equal(reply.Id, (await service.SendAsync(manager, chat.Id, request, default)).Id);
+        Assert.Equal(original.Id, reply.Reply!.Id);
+        Assert.Equal(original.Text, reply.Reply.Text);
+        Assert.Null(reply.DeliveredAt);
+        Assert.Null(reply.SeenAt);
+
+        await service.AcknowledgeAsync(manager, chat.Id, new([reply.Id], Seen: true), default);
+        Assert.Null((await service.MessageAsync(manager, chat.Id, reply.Id, default)).DeliveredAt);
+        Assert.Equal(404, (await Assert.ThrowsAsync<SupportChatFailure>(() =>
+            service.AcknowledgeAsync(outsider, chat.Id, new([reply.Id], Seen: true), default))).Status);
+        await service.AcknowledgeAsync(resident, chat.Id, new([reply.Id], Seen: false), default);
+        var received = await service.MessageAsync(manager, chat.Id, reply.Id, default);
+        Assert.NotNull(received.DeliveredAt);
+        Assert.Null(received.SeenAt);
+        await service.AcknowledgeAsync(resident, chat.Id, new([reply.Id], Seen: true), default);
+        await service.AcknowledgeAsync(resident, chat.Id, new([reply.Id], Seen: false), default);
+        var viewed = await service.MessageAsync(manager, chat.Id, reply.Id, default);
+        Assert.Equal(received.DeliveredAt, viewed.DeliveredAt);
+        Assert.True(viewed.SeenAt >= viewed.DeliveredAt);
+
+        Assert.Equal(404, (await Assert.ThrowsAsync<SupportChatFailure>(() =>
+            service.RecallAsync(manager, chat.Id, original.Id, default))).Status);
+        await service.RecallAsync(resident, chat.Id, original.Id, default);
+        foreach (var participant in new[] { resident, manager })
+        {
+            var recalled = await service.MessageAsync(participant, chat.Id, original.Id, default);
+            Assert.NotNull(recalled.RecalledAt);
+            Assert.Equal("Tin nhắn đã được thu hồi", recalled.Text);
+            Assert.Null((await service.MessageAsync(participant, chat.Id, reply.Id, default)).Reply!.Text);
+        }
+
+        await service.HideAsync(manager, chat.Id, new([reply.Id, original.Id]), default);
+        Assert.DoesNotContain((await service.MessagesAsync(manager, chat.Id, null, default)).Items,
+            message => message.Id == reply.Id || message.Id == original.Id);
+        Assert.Null(Assert.Single((await service.ListAsync(manager, 1, default)).Items).LastMessage);
+        Assert.Equal(reply.Text, (await service.MessageAsync(resident, chat.Id, reply.Id, default)).Text);
+    }
+
+    [Fact]
+    public async Task ForwardCopiesInOriginalOrderAndRejectsOutOfScopeOrUnavailableMessages()
+    {
+        var manager = directory.Manager();
+        var firstResident = directory.Resident();
+        var secondResident = directory.Resident();
+        await Ready(manager, "forward-messages");
+        var source = await Start(firstResident, Guid.NewGuid());
+        await using var db = database.CreateDb();
+        var service = Service(db);
+        var first = await service.SendAsync(firstResident, source.Id, new(Guid.NewGuid(), "Nội dung thứ nhất"), default);
+        var second = await service.SendAsync(firstResident, source.Id, new(Guid.NewGuid(), "Nội dung thứ hai"), default);
+        await service.CloseAsync(manager, source.Id, default);
+        var destination = await Start(secondResident, Guid.NewGuid());
+        var items = new[] { new ChatForwardItem(second.Id, Guid.NewGuid()), new ChatForwardItem(first.Id, Guid.NewGuid()) };
+
+        Assert.Equal(404, (await Assert.ThrowsAsync<SupportChatFailure>(() =>
+            service.ForwardAsync(firstResident, source.Id, new(destination.Id, items), default))).Status);
+        Assert.Equal(409, (await Assert.ThrowsAsync<SupportChatFailure>(() =>
+            service.ForwardAsync(manager, source.Id, new(source.Id, items), default))).Status);
+        var request = new ChatForwardRequest(destination.Id, items);
+        Assert.Equal(2, await service.ForwardAsync(manager, source.Id, request, default));
+        Assert.Equal(2, await service.ForwardAsync(manager, source.Id, request, default));
+        Assert.Equal(404, (await Assert.ThrowsAsync<SupportChatFailure>(() =>
+            service.ForwardAsync(manager, destination.Id, request, default))).Status);
+
+        await service.RecallAsync(firstResident, source.Id, first.Id, default);
+        Assert.Equal(404, (await Assert.ThrowsAsync<SupportChatFailure>(() =>
+            service.ForwardAsync(manager, source.Id, new(destination.Id, [new(first.Id, Guid.NewGuid())]), default))).Status);
+        var copies = (await service.MessagesAsync(secondResident, destination.Id, null, default)).Items
+            .Where(message => message.Forwarded).ToArray();
+        Assert.Equal(new[] { first.Text, second.Text }, copies.Select(message => message.Text));
+        Assert.All(copies, message =>
+        {
+            Assert.Equal("MANAGER", message.Kind);
+            Assert.Null(message.Reply);
+        });
+    }
+
+    [Fact]
     public async Task DraftsStayOutOfSqlAndStopWhenRecipientLosesPermission()
     {
         var resident = directory.Resident(); var manager = directory.Manager(); await Ready(manager, Guid.NewGuid().ToString());

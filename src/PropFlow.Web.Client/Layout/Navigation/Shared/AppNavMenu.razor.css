@@ -41,7 +41,8 @@
 
 .app-floating-nav ::deep .app-rail,
 .app-floating-nav ::deep .admin-nav,
-.app-floating-nav ::deep .operations-nav {
+.app-floating-nav ::deep .operations-nav,
+.app-floating-nav ::deep .staff-nav {
     position: static;
     width: auto;
     min-height: 0;
@@ -197,6 +198,7 @@
 }
 .app-nav-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .app-nav-scroll ::deep .operations-nav,
+.app-nav-scroll ::deep .staff-nav,
 .app-nav-scroll ::deep .admin-nav,
 .app-nav-scroll ::deep .app-rail,
 .app-nav-scroll ::deep .rail-links,

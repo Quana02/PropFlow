@@ -39,6 +39,94 @@ public sealed class SupportChatRealtimeTests(SupportChatDatabaseFixture database
     }
 
     [Fact]
+    public async Task RecallManyRejectsMixedConversationAtomicallyAndCanBeRetried()
+    {
+        var directory = new SupportChatTestDirectory();
+        using var server = Server(directory);
+        using var residentApi = Client(server, "RESIDENT", directory.Resident());
+        using var otherApi = Client(server, "RESIDENT", directory.Resident());
+        using var start = await residentApi.PostAsJsonAsync("/api/v1/support-chat/conversations",
+            new ChatSendRequest(Guid.NewGuid(), "Tin thứ nhất"));
+        start.EnsureSuccessStatusCode();
+        var chat = (await start.Content.ReadFromJsonAsync<SupportConversationView>())!;
+        var path = $"/api/v1/support-chat/conversations/{chat.Id}/messages";
+        using var send = await residentApi.PostAsJsonAsync(path, new ChatSendRequest(Guid.NewGuid(), "Tin thứ hai"));
+        send.EnsureSuccessStatusCode();
+        using var otherStart = await otherApi.PostAsJsonAsync("/api/v1/support-chat/conversations",
+            new ChatSendRequest(Guid.NewGuid(), "Tin ở hội thoại khác"));
+        otherStart.EnsureSuccessStatusCode();
+        var other = (await otherStart.Content.ReadFromJsonAsync<SupportConversationView>())!;
+        var foreign = Assert.Single((await otherApi.GetFromJsonAsync<SupportMessagePage>(
+            $"/api/v1/support-chat/conversations/{other.Id}/messages"))!.Items, m => m.Kind == "RESIDENT");
+
+        var original = (await ReadHistory()).Where(m => m.Kind == "RESIDENT").ToArray();
+        Assert.Equal(2, original.Length);
+        using var rejected = await residentApi.PutAsJsonAsync(path + "/recall",
+            new ChatMessageSelection([original[0].Id, foreign.Id]));
+        Assert.Equal(HttpStatusCode.NotFound, rejected.StatusCode);
+        Assert.All((await ReadHistory()).Where(m => m.Kind == "RESIDENT"), m => Assert.Null(m.RecalledAt));
+
+        var selection = new ChatMessageSelection(original.Select(m => m.Id).ToArray());
+        using var success = await residentApi.PutAsJsonAsync(path + "/recall", selection);
+        success.EnsureSuccessStatusCode();
+        var recalled = (await ReadHistory()).Where(m => m.Kind == "RESIDENT").ToArray();
+        Assert.All(recalled, m =>
+        {
+            Assert.NotNull(m.RecalledAt);
+            Assert.Equal("Tin nhắn đã được thu hồi", m.Text);
+        });
+        using var retry = await residentApi.PutAsJsonAsync(path + "/recall", selection);
+        retry.EnsureSuccessStatusCode();
+        Assert.Equal(recalled, (await ReadHistory()).Where(m => m.Kind == "RESIDENT").ToArray());
+
+        async Task<IReadOnlyList<SupportMessageView>> ReadHistory() =>
+            (await residentApi.GetFromJsonAsync<SupportMessagePage>(path))!.Items;
+    }
+
+    [Fact]
+    public async Task RecipientReceiptEndpointUpdatesMessageDetailsAndNotifiesTheSender()
+    {
+        var directory = new SupportChatTestDirectory();
+        var manager = directory.Manager();
+        var resident = directory.Resident();
+        var stranger = directory.Resident();
+        using var server = Server(directory);
+        using var managerApi = Client(server, "MANAGER", manager);
+        using var residentApi = Client(server, "RESIDENT", resident);
+        using var strangerApi = Client(server, "RESIDENT", stranger);
+        await using var managerHub = Hub(server, "MANAGER", manager);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        var ct = timeout.Token;
+        await managerHub.StartAsync(ct);
+        while ((await managerApi.GetFromJsonAsync<SupportAvailabilityView>("/api/v1/support-chat/availability", ct))?.Connected != true)
+            await Task.Delay(50, ct);
+        using var ready = await managerApi.PutAsJsonAsync("/api/v1/support-chat/availability", new ChatAvailabilityRequest(true), ct);
+        ready.EnsureSuccessStatusCode();
+        using var started = await residentApi.PostAsJsonAsync("/api/v1/support-chat/conversations",
+            new ChatSendRequest(Guid.NewGuid(), "Cần hỗ trợ"), ct);
+        started.EnsureSuccessStatusCode();
+        var chat = (await started.Content.ReadFromJsonAsync<SupportConversationView>(ct))!;
+        Assert.Equal("ACTIVE", chat.Status);
+        var messagesPath = $"/api/v1/support-chat/conversations/{chat.Id}/messages";
+        using var posted = await managerApi.PostAsJsonAsync(messagesPath, new ChatSendRequest(Guid.NewGuid(), "Mình sẽ hỗ trợ"), ct);
+        posted.EnsureSuccessStatusCode();
+        var sent = (await posted.Content.ReadFromJsonAsync<SupportMessageView>(ct))!;
+        Assert.Null(sent.DeliveredAt);
+
+        var update = new TaskCompletionSource<Guid>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var watch = managerHub.On<Guid>("SupportChatChanged", id => update.TrySetResult(id));
+        var receipt = new ChatMessageReceipt([sent.Id], Seen: true);
+        using var forbidden = await strangerApi.PostAsJsonAsync(messagesPath + "/receipts", receipt, ct);
+        Assert.Equal(HttpStatusCode.NotFound, forbidden.StatusCode);
+        using var acknowledged = await residentApi.PostAsJsonAsync(messagesPath + "/receipts", receipt, ct);
+        acknowledged.EnsureSuccessStatusCode();
+        Assert.Equal(chat.Id, await update.Task.WaitAsync(ct));
+        var detail = (await managerApi.GetFromJsonAsync<SupportMessageView>(messagesPath + $"/{sent.Id}", ct))!;
+        Assert.NotNull(detail.DeliveredAt);
+        Assert.Equal(detail.DeliveredAt, detail.SeenAt);
+    }
+
+    [Fact]
     public async Task RealSignalRDeliversUnsentDraftOnlyToAssignedManagerAndStopsAfterClosing()
     {
         var directory = new SupportChatTestDirectory();
@@ -82,7 +170,11 @@ public sealed class SupportChatRealtimeTests(SupportChatDatabaseFixture database
             options.AddPolicy(SupportChatPolicies.Manager, p => p.RequireAssertion(c => SupportChatPolicies.IsManager(c.User)));
             options.AddPolicy(SupportChatPolicies.Resident, p => p.RequireAssertion(c => SupportChatPolicies.IsResident(c.User)));
         });
-        services.AddRateLimiter(options => options.AddFixedWindowLimiter(SupportChatPolicies.RateLimit, l => { l.PermitLimit = 100; l.Window = TimeSpan.FromMinutes(1); }));
+        services.AddRateLimiter(options =>
+        {
+            options.AddFixedWindowLimiter(SupportChatPolicies.RateLimit, l => { l.PermitLimit = 100; l.Window = TimeSpan.FromMinutes(1); });
+            options.AddFixedWindowLimiter(SupportChatPolicies.ReceiptRateLimit, l => { l.PermitLimit = 120; l.Window = TimeSpan.FromMinutes(1); });
+        });
         services.AddSignalR(); services.AddSingleton<IUserIdProvider, TestUserId>(); services.AddSingleton<SupportChatFrameGate>();
         services.AddControllers().ConfigureApplicationPartManager(m => m.ApplicationParts.Clear()).AddApplicationPart(typeof(SupportChatController).Assembly);
         services.AddScoped(_ => database.CreateDb()); services.AddSingleton<ISupportChatActors>(directory);
