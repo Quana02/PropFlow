@@ -42,10 +42,30 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<decimal?>("CurrentElectricityReading")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("current_electricity_reading");
+
+                    b.Property<decimal?>("CurrentWaterReading")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("current_water_reading");
+
                     b.Property<decimal?>("Kwh")
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)")
                         .HasColumnName("kwh");
+
+                    b.Property<decimal?>("PreviousElectricityReading")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("previous_electricity_reading");
+
+                    b.Property<decimal?>("PreviousWaterReading")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("previous_water_reading");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -73,7 +93,11 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_electricity_usage_kwh", "kwh >= 0 AND kwh <= 1000000");
 
+                            t.HasCheckConstraint("ck_utility_electricity_readings", "(previous_electricity_reading IS NULL AND current_electricity_reading IS NULL) OR (previous_electricity_reading IS NOT NULL AND current_electricity_reading IS NOT NULL AND kwh IS NOT NULL AND previous_electricity_reading >= 0 AND current_electricity_reading <= 1000000 AND kwh = current_electricity_reading - previous_electricity_reading)");
+
                             t.HasCheckConstraint("ck_utility_usage_water", "water_m3 >= 0 AND water_m3 <= 1000000");
+
+                            t.HasCheckConstraint("ck_utility_water_readings", "(previous_water_reading IS NULL AND current_water_reading IS NULL) OR (previous_water_reading IS NOT NULL AND current_water_reading IS NOT NULL AND water_m3 IS NOT NULL AND previous_water_reading >= 0 AND current_water_reading <= 1000000 AND water_m3 = current_water_reading - previous_water_reading)");
                         });
                 });
 

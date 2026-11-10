@@ -49,6 +49,7 @@ public sealed class FinanceAccessTests
                 .Cast<AuthorizeAttribute>().SingleOrDefault();
             Assert.NotNull(authorization);
             Assert.Equal("ACCOUNTANT", authorization.Roles);
+            Assert.Equal("finance.manage", authorization.Policy);
         });
     }
 

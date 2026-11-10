@@ -326,48 +326,11 @@
                 </table>
             </div>
 
-            <!-- Pagination Footer -->
-            <div class="fe04-pagination p-4 sm:p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#64748b]">
-                <!-- Page size info -->
-                <div class="flex items-center gap-2">
-                    <span>Bản ghi <strong class="text-[#0f172a]">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> - <strong class="text-[#0f172a]">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong> trong tổng số <strong class="text-[#0f172a]">@PagedResult.TotalCount</strong> CSVT</span>
-                </div>
-
-                <!-- Pagination Controls -->
-                <div class="flex items-center gap-1">
-                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
-                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(1)">
-                        <span class="material-symbols-outlined text-base">first_page</span>
-                    </button>
-                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
-                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
-                        <span class="material-symbols-outlined text-base">chevron_left</span>
-                    </button>
-
-                    @for (int i = 1; i <= PagedResult.TotalPages; i++)
-                    {
-                        var pageNum = i;
-                        @if (pageNum == PagedResult.PageIndex)
-                        {
-                            <button class="w-8 h-8 rounded-lg bg-[#0284c7] text-white font-semibold text-xs shadow-xs">@pageNum</button>
-                        }
-                        else
-                        {
-                            <button class="w-8 h-8 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium text-xs transition-colors" @onclick="() => ChangePage(pageNum)">@pageNum</button>
-                        }
+            <TablePagination Page="PagedResult.PageIndex" TotalPages="PagedResult.TotalPages" Busy="IsLoading" Label="Phân trang cơ sở vật chất"
+                Previous="@(() => ChangePage(PagedResult.PageIndex - 1))" Next="@(() => ChangePage(PagedResult.PageIndex + 1))">
+                <span>Bản ghi @(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)–@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount)) / @PagedResult.TotalCount</span>
+            </TablePagination>
                     }
-
-                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-[#0284c7] hover:bg-slate-50 transition-colors disabled:opacity-40"
-                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
-                        <span class="material-symbols-outlined text-base">chevron_right</span>
-                    </button>
-                    <button class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-[#0284c7] hover:bg-slate-50 transition-colors disabled:opacity-40"
-                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.TotalPages)">
-                        <span class="material-symbols-outlined text-base">last_page</span>
-                    </button>
-                </div>
-            </div>
-        }
     </div>
 
     <!-- Quick Legend for Status Colors -->

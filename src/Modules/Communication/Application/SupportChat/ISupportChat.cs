@@ -17,6 +17,12 @@ public interface ISupportChat
     Task<SupportMessagePage> MessagesAsync(Guid actor, Guid id, long? before, CancellationToken ct);
     Task<SupportConversationView> StartAsync(Guid actor, ChatSendRequest request, CancellationToken ct);
     Task<SupportMessageView> SendAsync(Guid actor, Guid id, ChatSendRequest request, CancellationToken ct);
+    Task<SupportMessageView> MessageAsync(Guid actor, Guid id, Guid messageId, CancellationToken ct);
+    Task<bool> RecallAsync(Guid actor, Guid id, Guid messageId, CancellationToken ct);
+    Task<bool> RecallManyAsync(Guid actor, Guid id, ChatMessageSelection request, CancellationToken ct);
+    Task<bool> HideAsync(Guid actor, Guid id, ChatMessageSelection request, CancellationToken ct);
+    Task<bool> AcknowledgeAsync(Guid actor, Guid id, ChatMessageReceipt request, CancellationToken ct);
+    Task<int> ForwardAsync(Guid actor, Guid id, ChatForwardRequest request, CancellationToken ct);
     Task<SupportConversationView> CloseAsync(Guid actor, Guid id, CancellationToken ct);
     Task<SupportAvailabilityView> AvailabilityAsync(Guid actor, CancellationToken ct);
     Task<SupportAvailabilityView> SetAvailabilityAsync(Guid actor, bool available, CancellationToken ct);

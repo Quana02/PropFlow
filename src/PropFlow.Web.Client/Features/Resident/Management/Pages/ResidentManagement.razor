@@ -4,8 +4,10 @@
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles="MANAGER,STAFF,ACCOUNTANT")]
 @implements IAsyncDisposable
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
+@using PropFlow.Modules.Authentication.Contracts
 @using PropFlow.Web.Client.Features.Resident.Management.Models
 @using PropFlow.Web.Client.Features.Resident.Shared.Models
 @using PropFlow.Web.Client.Features.Resident.Shared.Services
@@ -18,14 +20,37 @@
 
 <PageTitle>Quản lý cư dân - PropFlow</PageTitle>
 <div class="resident-page">
- <section class="resident-header"><div><h1>Quản lý cư dân</h1><p>Tra cứu hồ sơ và các quan hệ căn hộ hiện hành.</p></div>@if(CanManage){<button class="resident-primary" @onclick="Open">＋ Thêm cư dân</button>}</section>
+ <section class="resident-header">
+     <div><h1>Quản lý cư dân</h1><p>Tra cứu hồ sơ và các quan hệ căn hộ hiện hành.</p></div>
+     @if (CanManage)
+     {
+         <div class="resident-header-actions">
+             <AuthorizeView Policy="@ResidentAccountPolicies.Read">
+                 <a class="resident-secondary" href="/residents/accounts">
+                     <svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4"/><circle cx="17" cy="16" r="3"/><path d="M17 12v1m0 6v1m-4-4h1m6 0h1"/></svg>
+                     Tài khoản cư dân
+                 </a>
+             </AuthorizeView>
+             <button type="button" class="resident-primary" @onclick="Open">
+                 <svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                 Thêm cư dân
+             </button>
+         </div>
+     }
+ </section>
  @if(!string.IsNullOrWhiteSpace(loadError)){<p class="resident-notice error" role="alert">@loadError <button class="resident-link" @onclick="() => LoadAsync()">Thử lại</button></p>}
  <section class="resident-panel">
   <div class="resident-toolbar"><div class="resident-search"><span class="material-symbols-outlined">search</span><input aria-label="Tìm kiếm cư dân" placeholder="Tìm theo mã, họ tên, số điện thoại hoặc email..." @bind="search" @bind:event="oninput" @bind:after="SearchChanged" />@if(!string.IsNullOrWhiteSpace(search)){<button type="button" class="clear-search" aria-label="Xóa tìm kiếm" @onclick="ClearSearch"><span class="material-symbols-outlined">close</span></button>}</div><button type="button" class="filter-toggle @(showFilters||ActiveFilterCount>0?"active":null)" aria-expanded="@showFilters" aria-haspopup="dialog" @onclick="ToggleFilters"><span class="material-symbols-outlined">filter_alt</span><span>Bộ lọc</span>@if(ActiveFilterCount>0){<strong>@ActiveFilterCount</strong>}</button><span class="result-count"><i></i>Hiển thị @data.Items.Count / @data.TotalCount cư dân</span></div>
   <div class="resident-results @(loading?"is-loading":null)" aria-busy="@loading">
    @if(loading&&data.Items.Count>0){<div class="list-loading-overlay" role="status"><span class="loading-spinner"></span>Đang cập nhật…</div>}
    @if(loading&&data.Items.Count==0){<p class="resident-state">Đang tải danh sách cư dân…</p>}else if(data.Items.Count==0){<p class="resident-state">Không tìm thấy cư dân phù hợp.</p>}else{<div class="resident-table-wrap"><table><thead><tr><th>MÃ CƯ DÂN</th><th>CƯ DÂN</th><th>LIÊN HỆ</th><th>QUAN HỆ CĂN HỘ</th><th>TRẠNG THÁI</th><th>HÀNH ĐỘNG</th></tr></thead><tbody>@foreach(var x in data.Items){<tr><td><strong>@x.ResidentCode</strong><small>@(x.HasAccount?"Đã có tài khoản":"Chưa có tài khoản")</small></td><td><strong>@x.FullName</strong></td><td>@(x.PhoneNumber??"Chưa cập nhật")<small>@(x.Email??"Chưa cập nhật email")</small></td><td>@if(x.ApartmentRelationships.Count==0){<span class="resident-muted">Chưa có quan hệ hiện hành</span>}else{@foreach(var relation in x.ApartmentRelationships){<div class="resident-apartment"><strong>@relation.UnitNumber</strong><small>Tầng @relation.FloorNumber · @RelationLabel(relation)</small></div>}}</td><td><span class="resident-status @x.Status.ToLowerInvariant()">@StatusLabel(x.Status)</span></td><td><button type="button" class="resident-row-action" title="Xem chi tiết" aria-label="Xem chi tiết cư dân @x.FullName" @onclick="()=>Detail(x.Id)"><span class="material-symbols-outlined" aria-hidden="true">visibility</span></button></td></tr>}</tbody></table></div>}
-   @if(initialized&&TotalPages>1){<nav class="resident-pagination" aria-label="Phân trang cư dân"><span>Trang @data.PageIndex / @TotalPages</span><button type="button" disabled="@(loading||data.PageIndex<=1)" @onclick="()=>GoPage(data.PageIndex-1)">Trước</button>@foreach(var p in Enumerable.Range(1,TotalPages)){<button type="button" disabled="@loading" class="@(p==data.PageIndex?"current":null)" aria-current="@(p==data.PageIndex?"page":null)" aria-label="Trang @p" @onclick="()=>GoPage(p)">@p</button>}<button type="button" disabled="@(loading||data.PageIndex>=TotalPages)" @onclick="()=>GoPage(data.PageIndex+1)">Sau</button></nav>}
+   @if (initialized && data.TotalCount > 0)
+   {
+       <TablePagination Page="data.PageIndex" TotalPages="TotalPages" Busy="loading" Label="Phân trang cư dân"
+           Previous="@(() => GoPage(data.PageIndex - 1))" Next="@(() => GoPage(data.PageIndex + 1))">
+           <span>@data.TotalCount cư dân</span>
+       </TablePagination>
+   }
   </div>
  </section>
 </div>

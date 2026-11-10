@@ -19,12 +19,19 @@ public sealed partial class AuthUseCases
         store.SerializedAsync("user:" + id, async () =>
         {
             var user = await ActiveUserAsync(id, ct);
-            if (string.IsNullOrWhiteSpace(request.DisplayName)) throw new AuthFailure(400, "invalid_profile", "Tên hiển thị không được để trống.");
-            if (Phone(request.PhoneNumber) is { } phone && await store.PhoneInUseAsync(phone, id, ct))
-                throw new AuthFailure(409, "phone_conflict", "Không thể sử dụng số điện thoại này.");
-            user.UpdateProfile(request.DisplayName, Phone(request.PhoneNumber), id, Now);
+            await ApplyProfileAsync(user, request, id, ct);
             return await AccountAsync(user, ct);
         }, ct);
+
+    private async Task ApplyProfileAsync(UserAccount user, UpdateProfileRequest request, Guid actorId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.DisplayName))
+            throw new AuthFailure(400, "invalid_profile", "Tên hiển thị không được để trống.");
+        var phone = Phone(request.PhoneNumber);
+        if (phone is not null && await store.PhoneInUseAsync(phone, user.Id, ct))
+            throw new AuthFailure(409, "phone_conflict", "Không thể sử dụng số điện thoại này.");
+        user.UpdateProfile(request.DisplayName, phone, actorId, Now);
+    }
 
     // FE-01.5
     public async Task ChangePasswordAsync(Guid id, ChangePasswordRequest request, CancellationToken ct)

@@ -67,7 +67,7 @@
             <article class="metric-card equipment"><span class="metric-icon material-symbols-outlined" aria-hidden="true">settings</span><div><span>Thiết bị</span><small>@Building.Equipment.Active đang hoạt động</small></div><strong>@Building.Equipment.Total</strong></article>
         </section>
 
-        <div class="details-grid">
+        <div class="details-grid @(CanEdit ? "with-maintenance" : null)">
             <section class="detail-panel" aria-labelledby="basic-heading">
                 <header class="section-header">
                     <span class="section-icon" aria-hidden="true">⌂</span>

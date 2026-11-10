@@ -73,5 +73,6 @@ public sealed class AccessTokenStateValidatorTests
     {
         public Task<AccountAccess?> GetAsync(Guid userId, CancellationToken ct) => Task.FromResult<AccountAccess?>(access);
         public Task GrantResidentAsync(Guid userId, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Guid[]> GetResidentUserIdsAsync(Guid[] userIds, CancellationToken ct) => throw new NotSupportedException();
     }
 }

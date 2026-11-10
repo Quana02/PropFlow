@@ -98,7 +98,11 @@
         {
             await JSRuntime.InvokeVoidAsync("propFlowResident.init");
             _noticeConnection = NotificationConnections.Create();
-            _noticeConnection.On<ResidentNotice>("FinanceNotificationCreated", notice => InvokeAsync(() => FinanceNotices.Receive(notice)));
+            _noticeConnection.On<ResidentNotice>("FinanceNotificationCreated", notice => InvokeAsync(async () =>
+            {
+                FinanceNotices.Receive(notice);
+                await FinanceNotices.ReloadAsync();
+            }));
             _noticeConnection.Reconnected += _ => InvokeAsync(FinanceNotices.ReloadAsync);
             _noticeRefresh = RefreshNoticesAsync(_noticeCancellation.Token);
         }

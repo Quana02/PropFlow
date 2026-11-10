@@ -11,8 +11,10 @@ public sealed record FollowupUpdate(bool Complete, string? Result);
 public sealed record OfficialComplaintResponse(string Response);
 public sealed record ComplaintItem(Guid Id, string ComplaintNumber, string Subject, string Status, DateTimeOffset SubmittedAt);
 public sealed record ComplaintPage(IReadOnlyList<ComplaintItem> Items, int Total, int Page, int PageSize);
-public sealed record ComplaintHistory(string Type, string? FromStatus, string? ToStatus, string? Detail, DateTimeOffset CreatedAt);
-public sealed record FollowupView(Guid Id, Guid StaffUserId, string Title, string? Instruction, string Status, string? Result);
+public sealed record ComplaintHistory(string Type, string? FromStatus, string? ToStatus, string? Detail,
+    DateTimeOffset CreatedAt, string? ActorLabel = null);
+public sealed record FollowupView(Guid Id, Guid StaffUserId, string Title, string? Instruction, string Status,
+    string? Result, string? StaffDisplayName = null);
 public sealed record ComplaintDetail(Guid Id, string ComplaintNumber, string Subject, string Description, string Status,
     string? OfficialResponse, DateTimeOffset SubmittedAt, ComplaintContext Context,
     IReadOnlyList<ComplaintHistory> History, IReadOnlyList<FollowupView> Followups, string TimeZoneId);
@@ -41,4 +43,6 @@ public interface IComplaintContextSource
 {
     Task<bool> IsValidAsync(ComplaintContext context, CancellationToken ct);
     Task<ComplaintContextOptions> OptionsAsync(string? search, CancellationToken ct);
+    Task<IReadOnlyDictionary<Guid, string>> DisplayNamesAsync(Guid[] userIds, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
 }

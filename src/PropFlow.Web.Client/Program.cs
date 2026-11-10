@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
+using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Web.Client.Services.Api;
 using PropFlow.Web.Client.Services.Authentication;
 using PropFlow.Web.Client.Features.Authentication.Services;
@@ -27,6 +28,12 @@ builder.Services.AddAuthorizationCore(options => options.AddPolicy(AssetPermissi
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorizationCore(options =>
 {
+    options.AddPolicy("finance.manage",
+        policy => policy.RequireRole("ACCOUNTANT").RequireClaim("permission", "MANAGE_FINANCE"));
+    options.AddPolicy(ResidentAccountPolicies.Read,
+        policy => policy.RequireRole("MANAGER").RequireClaim("permission", ResidentAccountPolicies.Read));
+    options.AddPolicy(ResidentAccountPolicies.RequestEmailChange,
+        policy => policy.RequireRole("MANAGER").RequireClaim("permission", ResidentAccountPolicies.RequestEmailChange));
     options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read,
         policy => policy.RequireAssertion(context => PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.CanRead(context.User)));
     options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Manage,

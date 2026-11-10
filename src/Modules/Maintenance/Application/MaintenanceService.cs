@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using PropFlow.Modules.Administration.Contracts;
@@ -10,6 +11,7 @@ using PropFlow.Modules.Maintenance.Infrastructure.Persistence;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Shared;
+using PropFlow.Shared.Messaging;
 
 namespace PropFlow.Modules.Maintenance.Application;
 
@@ -514,6 +516,12 @@ public sealed class MaintenanceService(
             .Select(staffUserId => new MaintenanceAssignment(task.Id, staffUserId, actor, now))
             .ToArray();
         db.MaintenanceAssignments.AddRange(newAssignments);
+        foreach (var staffUserId in staffIdsToAdd)
+        {
+            var notice = new MaintenanceAssignmentNotice(actor, staffUserId);
+            db.ResidentEvents.Add(new OutboxEvent(MaintenanceAssignmentNotice.EventName, task.Id,
+                JsonSerializer.Serialize(notice), now));
+        }
 
         var previousStatus = task.Status;
         if (task.Status == MaintenanceTaskStatus.OPEN)

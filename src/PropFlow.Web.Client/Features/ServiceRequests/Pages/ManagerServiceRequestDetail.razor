@@ -268,7 +268,8 @@
                     }
                 }
             </div>
-            <label class="note-field"><span>Chi phí dịch vụ dự kiến (VND, có thể bằng 0)</span><input type="number" min="0" step="1" @bind="baseServiceCost" /></label>
+            @if (CommonArea) { <p>Công việc tại khu vực chung của chung cư không thu phí cư dân.</p> }
+            else { <label class="note-field"><span>Chi phí dịch vụ dự kiến (VND, có thể bằng 0)</span><input type="number" min="0" step="1" @bind="baseServiceCost" /></label> }
             <label class="note-field"><span>Ghi chú phân công (không bắt buộc)</span><textarea rows="3" maxlength="2000" @bind="assignmentNote" placeholder="Thông tin cần lưu ý cho Staff…"></textarea></label>
             @if (!string.IsNullOrWhiteSpace(assignmentError)) { <p class="ui-notice" role="alert">@assignmentError</p> }
             <footer><button type="button" class="dialog-cancel" disabled="@savingAssignment" @onclick="CloseAssignPanel">Hủy</button><button type="button" class="dialog-confirm" disabled="@(savingAssignment || selectedStaffUserId is null)" @onclick="ConfirmAssignmentAsync">@(savingAssignment ? "Đang lưu…" : "Xác nhận phân công")</button></footer>
@@ -309,6 +310,7 @@
     private string? staffSearch;
     private string? assignmentNote;
     private decimal baseServiceCost;
+    private bool CommonArea => PropFlow.Modules.ServiceRequests.Contracts.ServiceRequestAreaCodes.IsCommonArea(detail?.ServiceAreaCode);
     private decimal approvedAdditionalCost;
     private string? assignmentError;
     private string? reviewDecisionNote;
@@ -504,7 +506,7 @@
         if (Id is not { } id || selectedStaffUserId is not { } staffUserId) return;
         savingAssignment = true;
         assignmentError = null;
-        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote, baseServiceCost));
+        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote, CommonArea ? 0 : baseServiceCost));
         savingAssignment = false;
         if (disposed) return;
         if (!result.IsSuccess || result.Data is null)

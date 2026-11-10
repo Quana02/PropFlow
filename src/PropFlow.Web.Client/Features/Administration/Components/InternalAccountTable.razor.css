@@ -1,0 +1,65 @@
+.role-table-wrap { min-width: 0; overflow-x: auto; }
+.role-table { width: 100%; min-width: 44rem; border-collapse: collapse; }
+.role-table thead th { padding: .65rem .85rem; color: var(--app-muted); background: rgba(148,163,184,.05); font-size: .68rem; text-align: left; white-space: nowrap; }
+.role-table tbody :is(th,td) { padding: .65rem .85rem; border-top: 1px solid var(--app-line); font-size: .8rem; vertical-align: middle; text-align: left; overflow-wrap: anywhere; }
+.role-table tbody th { font-weight: 650; }
+.role-table tbody tr:hover { background: rgba(2,132,199,.04); }
+.role-table :is(th,td):last-child { width: 1%; }
+.account-email { display: block; max-width: clamp(10rem, 20vw, 21rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-state { display: inline-block; padding: .28rem .52rem; border-radius: 999px; white-space: nowrap; font-size: .68rem; font-weight: 700; background: rgba(100,116,139,.15); }
+.data-state.connected { background: rgba(16,185,129,.17); }
+.data-state.locked { background: rgba(244,63,94,.15); }
+.account-actions { display: flex; gap: .32rem; }
+.row-action {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    border: 1px solid var(--app-line);
+    border-radius: .55rem;
+    background: var(--app-surface);
+    color: var(--app-accent);
+    cursor: pointer;
+}
+.row-action svg { width: 1.12rem; height: 1.12rem; }
+.row-action.status-action { color: color-mix(in srgb, #b45309 65%, var(--app-text)); }
+.row-action:hover:not(:disabled), .touch-actions button:hover { background: color-mix(in srgb, var(--app-accent) 11%, var(--app-surface)); border-color: var(--app-accent); }
+.row-action:disabled { opacity: .5; cursor: not-allowed; }
+.role-table-wrap:focus-visible, :is(.row-action,.touch-actions summary,.touch-actions button):focus-visible {
+    outline: 2px solid var(--app-accent);
+    outline-offset: -2px;
+}
+.action-tooltip {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: .4rem .6rem;
+    border: 0;
+    border-radius: .45rem;
+    background: #17243a;
+    color: #fff;
+    font-size: .76rem;
+    font-weight: 650;
+    white-space: nowrap;
+    pointer-events: none;
+}
+.touch-actions { display: none; min-width: 8.8rem; }
+.touch-actions summary, .touch-actions button {
+    min-height: 2.25rem;
+    padding: .36rem .55rem;
+    border: 1px solid var(--app-line);
+    border-radius: .55rem;
+    background: var(--app-surface);
+    color: var(--app-text);
+    font: inherit;
+    cursor: pointer;
+}
+.touch-actions > div { display: grid; gap: .25rem; margin-top: .25rem; }
+.touch-actions button { text-align: start; }
+
+@media (max-width: 42rem), (hover: none) {
+    .account-actions { display: none; }
+    .touch-actions { display: block; }
+}

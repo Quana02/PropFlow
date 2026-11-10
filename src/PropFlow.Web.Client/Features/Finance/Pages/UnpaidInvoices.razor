@@ -2,7 +2,7 @@
 @implements IDisposable
 @page "/finance/invoices/unpaid"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
-@attribute [Authorize(Roles = "ACCOUNTANT")]
+@attribute [Authorize(Roles = "ACCOUNTANT", Policy = "finance.manage")]
 @using PropFlow.Web.Client.Features.Finance.Models
 @using PropFlow.Web.Client.Features.Finance.Services
 @inject IFinanceApiClient Finance
@@ -50,9 +50,12 @@
             @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có hóa đơn phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc trạng thái." Icon="inbox" /></td></tr> }
-            else { @foreach (var item in FilteredItems) { <tr><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong><a href="@($"/finance/invoices/{item.Id}")" aria-label="Chi tiết hóa đơn @item.InvoiceNumber">@item.InvoiceNumber</a></strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @(item.ApartmentNumber ?? ShortId(item.ApartmentUnitId))</strong><small>@(item.ResidentName ?? "Chưa có người nhận")</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><div class="invoice-row-actions"><button class="collect-button" type="button" @onclick="() => collecting = item"><span aria-hidden="true">＋</span> Thu tiền</button><FinanceSendInvoiceButton @key="item.Id" InvoiceId="item.Id" /></div></td></tr> } }
+            else { @foreach (var item in FilteredItems) { <tr @key="item.Id"><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong><a href="@($"/finance/invoices/{item.Id}")" aria-label="Chi tiết hóa đơn @item.InvoiceNumber">@item.InvoiceNumber</a></strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @(item.ApartmentNumber ?? ShortId(item.ApartmentUnitId))</strong><small>@(item.ResidentName ?? "Chưa có người nhận")</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><FinanceTableActions><button class="collect-button" type="button" @onclick="() => collecting = item"><span aria-hidden="true">＋</span> Thu tiền</button><FinanceSendInvoiceButton @key="item.Id" InvoiceId="item.Id" /></FinanceTableActions></td></tr> } }
         </tbody></table></div>
-        @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <div class="unpaid-pagination"><span>Hiển thị @FilteredItems.Count bản ghi phù hợp trên trang; tổng cộng @data.Total hóa đơn chưa thanh toán</span><div><button disabled="@(page <= 1)" @onclick="PreviousPage">‹</button><strong>@(page)</strong><span>/ @TotalPages</span><button disabled="@(page >= TotalPages)" @onclick="NextPage">›</button></div></div> }
+        @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <TablePagination Page="page" TotalPages="TotalPages" Label="Phân trang"
+            Previous="PreviousPage" Next="NextPage">
+            <span>Hiển thị @FilteredItems.Count / @data.Total hóa đơn chưa thanh toán</span>
+        </TablePagination> }
     </section>
 </div>
 

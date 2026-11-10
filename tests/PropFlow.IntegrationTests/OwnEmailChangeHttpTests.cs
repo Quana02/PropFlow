@@ -14,7 +14,7 @@ using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 namespace PropFlow.IntegrationTests;
 
 [Trait("Feature", "FE-01"), Trait("UseCase", "FE-01.6")]
-public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IClassFixture<AuthDatabaseFixture>
+public sealed partial class OwnEmailChangeHttpTests(AuthDatabaseFixture database) : IClassFixture<AuthDatabaseFixture>
 {
     private const string Password = "A secure passphrase 123!";
     private HttpClient Client() => database.Factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -25,7 +25,7 @@ public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IC
         using var scope = database.Factory.Services.CreateScope();
         var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
         var access = scope.ServiceProvider.GetRequiredService<AdministrationDbContext>();
-        var user = new UserAccount("email-" + Guid.NewGuid().ToString("N"), "pending", "Quản trị viên",
+        var user = new UserAccount("email-" + Guid.NewGuid().ToString("N"), "pending", "Tài khoản kiểm thử",
             database.Factory.Clock.GetUtcNow(), $"old-{Guid.NewGuid():N}@example.invalid", status: AccountStatus.ACTIVE, emailVerified: true);
         user.ChangePasswordHash(scope.ServiceProvider.GetRequiredService<IAuthSecrets>().HashPassword(user, Password), null,
             database.Factory.Clock.GetUtcNow());
@@ -61,12 +61,19 @@ public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IC
         return (await response.Content.ReadFromJsonAsync<ChallengeResponse>())!;
     }
 
-    [Fact]
-    public async Task Admin_changes_only_after_new_mailbox_verification_and_old_sessions_are_rejected()
+    [Theory]
+    [InlineData("ADMIN")]
+    [InlineData("MANAGER")]
+    [InlineData("STAFF")]
+    [InlineData("ACCOUNTANT")]
+    public async Task Own_email_changes_only_after_new_mailbox_verification_and_old_sessions_are_rejected(string role)
     {
-        var (client, account) = await Login();
+        var (client, account) = await Login(role);
         using (client)
         {
+            using var otherSession = Client();
+            using var secondLogin = await Post(otherSession, "login", new LoginRequest(account.Username, Password));
+            Assert.Equal(HttpStatusCode.OK, secondLogin.StatusCode);
             var target = Target();
             var recovery = await Post(client, "password/forgot", new ForgotPasswordRequest(account.Email!));
             var reset = (await recovery.Content.ReadFromJsonAsync<ChallengeResponse>())!;
@@ -81,30 +88,53 @@ public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IC
             Assert.Equal(HttpStatusCode.NoContent, verify.StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("api/v1/auth/me")).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { })).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await Post(otherSession, "refresh", new { })).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "password/verify", new VerifyChallengeRequest(reset.ChallengeId, oldCode))).StatusCode);
 
             var login = await Post(client, "login", new LoginRequest(account.Username, Password));
             var session = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
             Assert.Equal(target.ToUpperInvariant(), session.User.Email);
             Assert.True(session.User.EmailVerified);
+            Assert.Equal(account.Id, session.User.Id);
+            Assert.Equal(account.Username, session.User.Username);
+            Assert.Equal(role, session.User.Role);
+            Assert.Equal(account.Permissions.Order(), session.User.Permissions.Order());
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "email/verify", new VerifyEmailChangeRequest(
                 challenge.ChallengeId, target, database.Factory.Mail.Codes[target]))).StatusCode);
         }
     }
 
-    [Theory]
-    [InlineData("STAFF")]
-    [InlineData("MANAGER")]
-    [InlineData("ACCOUNTANT")]
-    [InlineData("RESIDENT")]
-    public async Task Other_roles_cannot_request_or_verify_email_changes(string role)
+    [Fact]
+    public async Task Anonymous_requests_are_rejected_by_both_endpoints()
     {
-        var (client, _) = await Login(role);
-        using (client)
+        using var client = Client();
+        using var request = await Post(client, "email/change", new ChangeEmailRequest(Target(), Password));
+        using var verify = await Post(client, "email/verify", new VerifyEmailChangeRequest(Guid.NewGuid(), Target(), "123456"));
+        Assert.Equal(HttpStatusCode.Unauthorized, request.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, verify.StatusCode);
+    }
+
+    [Fact]
+    public async Task Supplied_account_and_resident_ids_do_not_select_a_different_account()
+    {
+        var (requester, own) = await Login("STAFF");
+        var (otherClient, other) = await Login("RESIDENT");
+        using (requester)
+        using (otherClient)
         {
-            Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "email/change", new ChangeEmailRequest(Target(), Password))).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await Post(client, "email/verify", new VerifyEmailChangeRequest(Guid.NewGuid(), Target(), "123456"))).StatusCode);
+            var target = Target();
+            using var request = await Post(requester, "email/change",
+                new { newEmail = target, currentPassword = Password, userId = other.Id, residentId = Guid.NewGuid() });
+            Assert.Equal(HttpStatusCode.OK, request.StatusCode);
+            var challenge = (await request.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+            using var verify = await Post(requester, "email/verify",
+                new { challenge.ChallengeId, newEmail = target, code = database.Factory.Mail.Codes[target], userId = other.Id, residentId = Guid.NewGuid() });
+            Assert.Equal(HttpStatusCode.NoContent, verify.StatusCode);
+            using var scope = database.Factory.Services.CreateScope();
+            var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            Assert.Equal(target.ToUpperInvariant(), (await auth.UserAccounts.SingleAsync(user => user.Id == own.Id)).Email);
+            Assert.Equal(other.Email, (await otherClient.GetFromJsonAsync<AccountResponse>("api/v1/auth/me"))!.Email);
         }
     }
 
@@ -117,6 +147,7 @@ public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IC
             var target = Target();
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "email/change", new ChangeEmailRequest(target, Password), false)).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "email/change", new ChangeEmailRequest(target, "wrong"))).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "email/change", new ChangeEmailRequest("invalid-email", Password))).StatusCode);
             Assert.False(database.Factory.Mail.Codes.ContainsKey(target));
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "email/change", new ChangeEmailRequest(account.Email!, Password))).StatusCode);
             var (otherClient, other) = await Login();
@@ -128,14 +159,15 @@ public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IC
     [Fact]
     public async Task Codes_are_bound_to_requester_and_target_and_stop_after_five_failures()
     {
-        var (client, account) = await Login();
-        var (other, _) = await Login();
+        var (client, account) = await Login("MANAGER");
+        var (other, _) = await Login("ACCOUNTANT");
         using (client)
         using (other)
         {
             var target = Target();
             var challenge = await Request(client, target);
             var code = database.Factory.Mail.Codes[target];
+            Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "email/verify", new VerifyEmailChangeRequest(challenge.ChallengeId, target, code), false)).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(other, "email/verify", new VerifyEmailChangeRequest(challenge.ChallengeId, target, code))).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "email/verify", new VerifyEmailChangeRequest(challenge.ChallengeId, Target(), code))).StatusCode);
             var wrong = code == "000000" ? "111111" : "000000";
@@ -169,10 +201,10 @@ public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IC
     }
 
     [Fact]
-    public async Task Two_admins_cannot_claim_the_same_email_after_verification()
+    public async Task Concurrent_accounts_cannot_claim_the_same_canonical_email()
     {
-        var (first, firstAccount) = await Login();
-        var (second, secondAccount) = await Login();
+        var (first, firstAccount) = await Login("MANAGER");
+        var (second, secondAccount) = await Login("ACCOUNTANT");
         using (first)
         using (second)
         {
@@ -183,12 +215,135 @@ public sealed class AdminEmailChangeHttpTests(AuthDatabaseFixture database) : IC
             var secondCode = database.Factory.Mail.Codes[target];
             var results = await Task.WhenAll(
                 Post(first, "email/verify", new VerifyEmailChangeRequest(firstChallenge.ChallengeId, target, firstCode)),
-                Post(second, "email/verify", new VerifyEmailChangeRequest(secondChallenge.ChallengeId, target, secondCode)));
+                Post(second, "email/verify", new VerifyEmailChangeRequest(secondChallenge.ChallengeId, target.ToUpperInvariant(), secondCode)));
             Assert.Single(results.Where(item => item.StatusCode == HttpStatusCode.NoContent));
             Assert.Single(results.Where(item => item.StatusCode == HttpStatusCode.Conflict));
             var loser = results[0].StatusCode == HttpStatusCode.Conflict ? first : second;
             var originalEmail = results[0].StatusCode == HttpStatusCode.Conflict ? firstAccount.Email : secondAccount.Email;
             Assert.Equal(originalEmail, (await loser.GetFromJsonAsync<AccountResponse>("api/v1/auth/me"))!.Email);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Lockout_or_locked_account_cannot_finish_or_request_email_change(bool lockedStatus)
+    {
+        var (client, account) = await Login("STAFF");
+        using (client)
+        {
+            var target = Target();
+            var challenge = await Request(client, target);
+            using var scope = database.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            var user = await db.UserAccounts.SingleAsync(item => item.Id == account.Id);
+            var now = database.Factory.Clock.GetUtcNow();
+            if (lockedStatus) user.Lock(null, now);
+            else user.RecordLoginFailure(1, TimeSpan.FromMinutes(15), now);
+            await db.SaveChangesAsync();
+
+            var expected = lockedStatus ? HttpStatusCode.Unauthorized : HttpStatusCode.BadRequest;
+            using var verify = await Post(client, "email/verify",
+                new VerifyEmailChangeRequest(challenge.ChallengeId, target, database.Factory.Mail.Codes[target]));
+            using var request = await Post(client, "email/change", new ChangeEmailRequest(Target(), Password));
+            Assert.Equal(expected, verify.StatusCode);
+            Assert.Equal(expected, request.StatusCode);
+            await db.Entry(user).ReloadAsync();
+            Assert.Equal(account.Email, user.Email);
+        }
+    }
+
+    [Fact]
+    public async Task Verification_waits_for_a_concurrent_account_lock_and_rechecks_status()
+    {
+        var (client, account) = await Login("MANAGER");
+        using (client)
+        {
+            var target = Target();
+            var challenge = await Request(client, target);
+            using var scope = database.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            await using var statusWrite = await db.Database.BeginTransactionAsync();
+            var user = await db.UserAccounts.SingleAsync(item => item.Id == account.Id);
+            user.Lock(null, database.Factory.Clock.GetUtcNow());
+            await db.SaveChangesAsync();
+
+            var verification = Post(client, "email/verify",
+                new VerifyEmailChangeRequest(challenge.ChallengeId, target, database.Factory.Mail.Codes[target]));
+            using var observerScope = database.Factory.Services.CreateScope();
+            var observer = observerScope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            var waitingForStatusWrite = false;
+            while (!waitingForStatusWrite && !verification.IsCompleted && DateTime.UtcNow < deadline)
+            {
+                waitingForStatusWrite = await observer.Database.SqlQueryRaw<bool>("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_stat_activity
+                        WHERE datname = current_database()
+                            AND wait_event_type = 'Lock'
+                            AND query LIKE '%FROM auth.users WHERE id = %FOR UPDATE%'
+                    ) AS "Value"
+                    """).SingleAsync();
+                if (!waitingForStatusWrite) await Task.Delay(25);
+            }
+
+            await statusWrite.CommitAsync();
+            using var response = await verification.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(waitingForStatusWrite);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            await db.Entry(user).ReloadAsync();
+            Assert.Equal(account.Email, user.Email);
+        }
+    }
+
+    [Fact]
+    public async Task Changing_the_current_email_invalidates_a_pending_code_even_with_a_fresh_session()
+    {
+        var (client, account) = await Login("ACCOUNTANT");
+        using (client)
+        {
+            var target = Target();
+            var challenge = await Request(client, target);
+            var replacement = Target();
+            using var scope = database.Factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            var user = await db.UserAccounts.SingleAsync(item => item.Id == account.Id);
+            user.ChangeEmail(replacement, account.Id, database.Factory.Clock.GetUtcNow());
+            await db.SaveChangesAsync();
+
+            client.DefaultRequestHeaders.Authorization = null;
+            using var login = await Post(client, "login", new LoginRequest(account.Username, Password));
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            var session = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
+            client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+            using var verify = await Post(client, "email/verify",
+                new VerifyEmailChangeRequest(challenge.ChallengeId, target, database.Factory.Mail.Codes[target]));
+            Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);
+            Assert.Equal(replacement.ToUpperInvariant(), (await client.GetFromJsonAsync<AccountResponse>("api/v1/auth/me"))!.Email);
+        }
+    }
+
+    [Fact]
+    public async Task Hourly_resend_limit_applies_across_target_addresses()
+    {
+        var (client, _) = await Login("ACCOUNTANT");
+        using (client)
+        {
+            var originalOffset = database.Factory.Clock.Offset;
+            try
+            {
+                for (var i = 0; i < 5; i++)
+                {
+                    database.Factory.Clock.Offset = originalOffset.Add(TimeSpan.FromSeconds(61 * i));
+                    await Request(client, Target());
+                }
+                database.Factory.Clock.Offset = originalOffset.Add(TimeSpan.FromSeconds(305));
+                var target = Target();
+                using var limited = await Post(client, "email/change", new ChangeEmailRequest(target, Password));
+                Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+                Assert.False(database.Factory.Mail.Codes.ContainsKey(target));
+            }
+            finally { database.Factory.Clock.Offset = originalOffset; }
         }
     }
 

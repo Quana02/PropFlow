@@ -25,8 +25,9 @@ export function initialize(element) {
   // nửa nào của màn hình. Dùng khi khôi phục vị trí đã lưu hoặc khi resize.
   const enforceEdgeSnap = (left, top) => {
     const centerX = left + element.offsetWidth / 2;
-    const snappedLeft = centerX < halfScreenX() ? leftEdgeLeft() : rightEdgeLeft();
-    place(snappedLeft, top);
+    const dockOnLeft = centerX < halfScreenX();
+    element.dataset.dockSide = dockOnLeft ? "left" : "right";
+    place(dockOnLeft ? leftEdgeLeft() : rightEdgeLeft(), top);
   };
 
   try {
@@ -75,18 +76,10 @@ export function initialize(element) {
     if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
 
     const bounds = element.getBoundingClientRect();
-    const centerX = bounds.left + element.offsetWidth / 2;
-
     element.style.transition =
       "left 0.28s cubic-bezier(0.16, 1, 0.3, 1), top 0.2s ease";
 
-    if (centerX < halfScreenX()) {
-      // Thả ở nửa TRÁI màn hình -> neo về sát mép trái.
-      place(leftEdgeLeft(), bounds.top);
-    } else {
-      // Thả ở nửa PHẢI màn hình -> neo về sát mép phải.
-      place(rightEdgeLeft(), bounds.top);
-    }
+    enforceEdgeSnap(bounds.left, bounds.top);
 
     // Xóa transition sau khi animation chạy xong để không ảnh hưởng lần kéo tiếp theo.
     window.clearTimeout(transitionTimer);

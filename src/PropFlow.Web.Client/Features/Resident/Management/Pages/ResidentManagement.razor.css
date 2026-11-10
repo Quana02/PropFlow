@@ -64,3 +64,45 @@
 .resident-pagination button:focus-visible{outline:2px solid #0284c7;outline-offset:2px}
 .resident-pagination button:disabled{opacity:.45;cursor:default}
 @media(max-width:480px){.resident-pagination{justify-content:center;padding:.8rem}.resident-pagination>span{flex-basis:100%;margin:0;text-align:center}}
+
+.resident-header > .resident-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+}
+
+.resident-header-actions > :is(.resident-primary, .resident-secondary) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+    min-height: 2.75rem;
+    padding: .65rem .95rem;
+    border: 1px solid transparent;
+    border-radius: .7rem;
+    font: inherit;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+}
+
+.resident-header-actions .resident-secondary {
+    border-color: var(--app-line);
+    background: var(--app-surface);
+    color: var(--app-accent);
+    text-decoration: none;
+}
+
+.resident-header-actions .resident-secondary:hover {
+    border-color: var(--app-accent);
+    background: color-mix(in srgb, var(--app-accent) 9%, var(--app-surface));
+}
+
+.resident-header-actions .resident-primary:hover { background: #0369a1; }
+.resident-header-actions > :active { box-shadow: none; }
+.resident-header-actions > :focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+.resident-header-actions .header-icon { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; }
+
+@media (max-width: 480px) {
+    .resident-header-actions > * { flex: 1 1 100%; }
+}

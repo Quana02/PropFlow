@@ -36,7 +36,13 @@
    else{<table><thead><tr><th>CĂN HỘ</th><th>LOẠI & DIỆN TÍCH</th><th>CHỦ SỞ HỮU / CƯ TRÚ</th><th>TRẠNG THÁI</th><th>HÀNH ĐỘNG</th></tr></thead><tbody>
     @foreach(var x in data.Items){<tr><td><button class="link" @onclick="()=>Detail(x.Id)">@x.UnitNumber</button><small>Tầng @x.FloorNumber</small></td><td><strong>@x.UsableAreaM2.ToString("0.##") m²</strong> · @x.UnitType</td><td>@OwnerSummary(x.Owners)<small>@(x.IsOccupied?"Có cư dân đang cư trú":"Căn hộ trống")</small></td><td><span class="status-chip @(x.Status=="ACTIVE"?"active":"inactive")">@(x.Status=="ACTIVE"?"Đang quản lý":"Ngừng quản lý")</span></td><td class="row-actions"><button title="Xem chi tiết" @onclick="()=>Detail(x.Id)"><span class="material-symbols-outlined">visibility</span></button>@if(CanManage){<button type="button" title="Nhập điện và nước đã dùng" aria-label="Nhập điện và nước căn hộ @x.UnitNumber" @onclick="()=>electricityApartment=x"><span class="material-symbols-outlined">electric_meter</span></button><button title="Chỉnh sửa" @onclick="()=>OpenEdit(x.Id)"><span class="material-symbols-outlined">edit</span></button><button title="@StatusActionTitle(x)" @onclick="()=>RequestStatusChange(x)"><span class="material-symbols-outlined">@(x.Status=="ACTIVE"?"pause_circle":"play_circle")</span></button>}</td></tr>}
    </tbody></table>}
-   @if(initialized&&TotalPages>1){<nav class="pagination"><span>Trang @data.PageIndex / @TotalPages</span><button disabled="@(loading||data.PageIndex<=1)" @onclick="()=>GoToPage(data.PageIndex-1)">Trước</button>@foreach(var p in Enumerable.Range(1,TotalPages)){<button disabled="@loading" class="@(p==data.PageIndex?"current":null)" @onclick="()=>GoToPage(p)">@p</button>}<button disabled="@(loading||data.PageIndex>=TotalPages)" @onclick="()=>GoToPage(data.PageIndex+1)">Sau</button></nav>}
+   @if (initialized && data.TotalCount > 0)
+   {
+       <TablePagination Page="data.PageIndex" TotalPages="TotalPages" Busy="loading" Label="Phân trang căn hộ"
+           Previous="@(() => GoToPage(data.PageIndex - 1))" Next="@(() => GoToPage(data.PageIndex + 1))">
+           <span>@data.TotalCount căn hộ</span>
+       </TablePagination>
+   }
   </div>
  </section>
 </div>

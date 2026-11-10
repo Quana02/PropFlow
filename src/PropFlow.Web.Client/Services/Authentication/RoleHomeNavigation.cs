@@ -5,7 +5,8 @@ public static class RoleHomeNavigation
     public static string Home(string? role) => role switch
     {
         "ADMIN" => "/admin/dashboard",
-        "MANAGER" or "STAFF" => "/buildings",
+        "MANAGER" => "/buildings",
+        "STAFF" => "/staff/service-requests",
         "ACCOUNTANT" => "/finance/dashboard",
         "RESIDENT" => "/resident",
         _ => "/account"

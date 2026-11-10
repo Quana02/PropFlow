@@ -33,6 +33,20 @@ public class BillingTests
     }
 
     [Fact]
+    public void Invoice_print_preserves_fractional_meter_quantity_in_vietnamese_format()
+    {
+        var invoice = NewInvoice();
+        var actor = Guid.NewGuid();
+        invoice.AddItem("ELECTRICITY", "Tiền điện", "KWH", 12.345m, 3000m, actor, _now, unitName: "kWh");
+        var recipient = new InvoiceRecipient(invoice.Id, actor, "Cư dân", null, "A-101", 50);
+
+        var html = FinanceDocuments.Invoice(invoice, recipient, 0);
+
+        Assert.Contains("12,345 kWh", html);
+        Assert.Contains("37.035 đ", html);
+    }
+
+    [Fact]
     public void FeeType_Constructor_CreatesActiveFeeTypeAndNormalizesCodes()
     {
         var feeType = NewFeeType();

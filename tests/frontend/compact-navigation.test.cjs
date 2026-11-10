@@ -89,3 +89,45 @@ test('scroll constraints are local, hide both scrollbar implementations, and cap
     assert.match(css, /\.app-nav-scroll::\-webkit-scrollbar \{ display: none/);
     assert.doesNotMatch(source, /addEventListener\(["']wheel/);
 });
+
+test('a restored dock reports its edge so the shell can reserve space on the same side', async () => {
+    const { initialize } = await modulePromise;
+    const listeners = new Map();
+    const previous = Object.fromEntries(['window', 'innerWidth', 'innerHeight', 'sessionStorage', 'ResizeObserver']
+        .map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+    try {
+        globalThis.innerWidth = 1366;
+        globalThis.innerHeight = 768;
+        globalThis.window = {
+            innerWidth,
+            addEventListener: (type, callback) => listeners.set(type, callback),
+            removeEventListener: type => listeners.delete(type),
+            clearTimeout,
+        };
+        globalThis.sessionStorage = { getItem: () => JSON.stringify({ left: 24, top: 200 }) };
+        globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+        const dragHandle = { addEventListener() {}, removeEventListener() {} };
+        const rail = {
+            querySelector: selector => selector === '.app-nav-drag' ? dragHandle : null,
+            offsetWidth: 64,
+            offsetHeight: 350,
+            style: {},
+            dataset: {},
+        };
+
+        const handle = initialize(rail);
+        assert.equal(rail.dataset.dockSide, 'left');
+        assert.equal(rail.style.left, '24px');
+        rail.style.left = '1280px';
+        listeners.get('resize')();
+        assert.equal(rail.dataset.dockSide, 'right');
+        assert.equal(rail.style.left, '1278px');
+        handle.dispose();
+        assert.equal(listeners.size, 0);
+    } finally {
+        for (const [key, descriptor] of Object.entries(previous)) {
+            if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+            else delete globalThis[key];
+        }
+    }
+});

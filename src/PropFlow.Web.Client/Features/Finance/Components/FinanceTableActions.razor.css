@@ -1,0 +1,18 @@
+.finance-table-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    min-inline-size: 9rem;
+}
+.finance-table-actions ::deep button {
+    min-block-size: 32px;
+    padding: 5px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+.finance-table-actions ::deep button:focus-visible {
+    outline: 2px solid var(--app-accent, #0284c7);
+    outline-offset: 2px;
+}

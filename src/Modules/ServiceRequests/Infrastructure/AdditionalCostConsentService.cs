@@ -33,6 +33,8 @@ public sealed class AdditionalCostConsentService(ServiceRequestsDbContext db, IR
         var request = await db.ServiceRequests.Include(x => x.Assignments).Include(x => x.Activities)
             .SingleOrDefaultAsync(x => x.Id == id && x.Assignments.Any(a => a.StaffUserId == staffId && (a.Status == PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments.AssignmentStatus.ASSIGNED || a.Status == PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments.AssignmentStatus.IN_PROGRESS)), ct);
         if (request is null) throw Missing();
+        if (ServiceRequestAreaCodes.IsCommonArea(request.ServiceAreaCode))
+            throw new ServiceRequestCostFailure(400, "common_area_not_chargeable", "Công việc tại khu vực chung của chung cư không thu phí cư dân.");
         var assignment = request.Assignments.SingleOrDefault(a => a.StaffUserId == staffId && a.IsActive);
         if (assignment is null) throw Missing();
         var result = request.Activities.Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED).MaxBy(x => x.CreatedAt);

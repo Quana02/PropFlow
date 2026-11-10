@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.Apartments.Infrastructure.Persistence;
+using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 using PropFlow.Modules.Complaints.Application;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -8,8 +9,12 @@ namespace PropFlow.Api.Composition;
 
 // Read-only adapter over master records. Complaint persists scalar references only.
 public sealed class ComplaintContextSource(ApartmentsDbContext apartments, ServiceRequestsDbContext requests,
-    PropertyAssetsDbContext assets) : IComplaintContextSource
+    PropertyAssetsDbContext assets, AuthenticationDbContext accounts) : IComplaintContextSource
 {
+    public async Task<IReadOnlyDictionary<Guid, string>> DisplayNamesAsync(Guid[] userIds, CancellationToken ct) =>
+        await accounts.UserAccounts.AsNoTracking().Where(account => userIds.Contains(account.Id))
+            .ToDictionaryAsync(account => account.Id, account => account.DisplayName, ct);
+
     public async Task<bool> IsValidAsync(ComplaintContext c, CancellationToken ct)
     {
         if (c.ApartmentUnitId.HasValue && !await apartments.ApartmentUnits.AnyAsync(a => a.Id == c.ApartmentUnitId, ct)) return false;

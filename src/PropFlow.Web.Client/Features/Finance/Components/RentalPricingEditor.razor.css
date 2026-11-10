@@ -5,3 +5,5 @@ input, select { padding:8px 10px; border:1px solid #dbe5f4; border-radius:8px; b
 button { border:0; border-radius:8px; padding:9px 14px; background:#0284c7; color:white; cursor:pointer; }
 button:disabled { opacity:.6; cursor:default; }
 table { width:100%; border-collapse:collapse; } td,th { padding:10px; text-align:left; border-bottom:1px solid #dbe5f4; }
+.selected-price-version { color: #0369a1; font-size: .85rem; margin: 0; }
+.selected-price-row { background: #eef8ff; }

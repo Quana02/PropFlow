@@ -441,7 +441,8 @@ public sealed class ResidentOnboardingHttpTests(AuthDatabaseFixture database) : 
         var managerRoleId = await administration.Roles.Where(role => role.Code == "MANAGER").Select(role => role.Id).SingleAsync();
         administration.UserRoleAssignments.Add(new UserRoleAssignment(user.Id, managerRoleId, now));
         await administration.SaveChangesAsync();
-        return new AccountResponse(user.Id, user.Username, user.DisplayName, user.Email, null, "ACTIVE", true, "MANAGER", [SystemPermissionCodes.ManageOperations]);
+        return new AccountResponse(user.Id, user.Username, user.DisplayName, user.Email, null, "ACTIVE", true, "MANAGER",
+            [SystemPermissionCodes.ManageOperations, SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange]);
     }
 
     private static async Task AssertSafeProblemAsync(HttpResponseMessage response)

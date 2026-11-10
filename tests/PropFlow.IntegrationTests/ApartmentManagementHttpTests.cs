@@ -645,7 +645,7 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
     {
         var permissions = role switch
         {
-            "MANAGER" => new[] { SystemPermissionCodes.ManageOperations }, "STAFF" => new[] { SystemPermissionCodes.PerformAssignedOperations },
+            "MANAGER" => new[] { SystemPermissionCodes.ManageOperations, SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange }, "STAFF" => new[] { SystemPermissionCodes.PerformAssignedOperations },
             "ACCOUNTANT" => new[] { SystemPermissionCodes.ManageFinance }, "RESIDENT" => new[] { SystemPermissionCodes.UseResidentServices },
             "ADMIN" => new[] { SystemPermissionCodes.ManageInternalAccounts, SystemPermissionCodes.ViewAdministrationActivity, SystemPermissionCodes.ViewSystemOverview, SystemPermissionCodes.ManagePaymentDestination }, _ => []
         };

@@ -13,17 +13,27 @@ public sealed class AuthStore(AuthenticationDbContext db) : IAuthStore
 {
     public async Task<T> SerializedAsync<T>(string key, Func<Task<T>> action, CancellationToken ct)
     {
+        // The host already shares an explicit transaction for Administration writes and audit.
+        if (db.Database.CurrentTransaction is not null)
+            return await LockAndSaveAsync(key, action, ct);
+
         // All participating contexts use the same database and sequential operations.
         // Npgsql reuses the ambient enlisted connection between contexts.
         using var transaction = new TransactionScope(TransactionScopeOption.Required,
             new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted }, TransactionScopeAsyncFlowOption.Enabled);
+        var result = await LockAndSaveAsync(key, action, ct);
+        transaction.Complete();
+        return result;
+    }
+
+    private async Task<T> LockAndSaveAsync<T>(string key, Func<Task<T>> action, CancellationToken ct)
+    {
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
         db.ChangeTracker.Clear();
         try
         {
             var result = await action();
             await db.SaveChangesAsync(ct);
-            transaction.Complete();
             return result;
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgres)
@@ -42,6 +52,11 @@ public sealed class AuthStore(AuthenticationDbContext db) : IAuthStore
         return new(409, "account_conflict", "Thông tin tài khoản không thể sử dụng. Vui lòng kiểm tra lại.");
     }
     public Task<UserAccount?> UserAsync(Guid id, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<UserAccount?> UserForUpdateAsync(Guid id, CancellationToken ct) =>
+        db.UserAccounts.FromSqlInterpolated($"SELECT * FROM auth.users WHERE id = {id} FOR UPDATE").SingleOrDefaultAsync(ct);
+    public Task<List<ResidentAccountSummary>> ReadResidentAccountSummariesAsync(Guid[] ids, CancellationToken ct) =>
+        db.UserAccounts.Where(user => ids.Contains(user.Id)).Select(user => new ResidentAccountSummary(
+            user.Id, user.Username, user.Email, user.Status, user.EmailVerified, user.LockoutUntil)).ToListAsync(ct);
     public Task<UserAccount?> UsernameAsync(string username, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.Username == username, ct);
     public Task<UserAccount?> EmailAsync(string email, CancellationToken ct) => db.UserAccounts.SingleOrDefaultAsync(x => x.Email == email, ct);
     public Task<bool> PhoneInUseAsync(string phone, Guid? except, CancellationToken ct) => db.UserAccounts.AnyAsync(x => x.PhoneNumber == phone && x.Id != except, ct);

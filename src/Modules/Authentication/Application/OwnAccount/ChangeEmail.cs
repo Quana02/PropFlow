@@ -7,15 +7,16 @@ namespace PropFlow.Modules.Authentication.Application;
 
 public sealed partial class AuthUseCases
 {
+    // Preserve the stored purpose so pending codes and resend limits survive deployment.
     private const string EmailChangePurpose = "ADMIN_EMAIL_CHANGE";
 
-    // FE-01.6: only ADMIN may change their own account email.
+    // FE-01.6: change the authenticated user's own account email.
     public async Task<ChallengeResponse> RequestEmailChangeAsync(Guid id, ChangeEmailRequest request, CancellationToken ct)
     {
         var target = EmailChangeTarget(request.NewEmail);
         var outgoing = await store.SerializedAsync("user:" + id, async () =>
         {
-            var user = await EmailChangeAdminAsync(id, ct);
+            var user = await EmailChangeUserAsync(id, ct);
             var valid = secrets.VerifyPassword(user, request.CurrentPassword);
             if (!valid || user.IsLockedOutAt(Now))
             {
@@ -60,7 +61,7 @@ public sealed partial class AuthUseCases
         var target = EmailChangeTarget(request.NewEmail);
         var success = await store.SerializedAsync("user:" + id, async () =>
         {
-            var user = await EmailChangeAdminAsync(id, ct);
+            var user = await EmailChangeUserAsync(id, ct);
             if (user.IsLockedOutAt(Now)) return false;
             var challenge = await store.PrivilegedChallengeAsync(request.ChallengeId, ct);
             if (challenge is null || challenge.UserId != id || challenge.Purpose != EmailChangePurpose ||
@@ -87,11 +88,15 @@ public sealed partial class AuthUseCases
         if (!success) throw InvalidChallenge();
     }
 
-    private async Task<UserAccount> EmailChangeAdminAsync(Guid id, CancellationToken ct)
+    private async Task<UserAccount> EmailChangeUserAsync(Guid id, CancellationToken ct)
     {
-        var user = await ActiveUserAsync(id, ct);
-        if ((await access.GetAsync(id, ct))?.Role != "ADMIN")
-            throw new AuthFailure(403, "forbidden", "Chỉ Admin được tự đổi email tài khoản.");
+        // Serialize the eligibility check with account-status writes until the email transaction commits.
+        var user = await store.UserForUpdateAsync(id, ct);
+        if (user is null || user.Status != AccountStatus.ACTIVE)
+            throw InvalidCredentials();
+        var grant = await access.GetAsync(id, ct);
+        if (grant?.Role is not ("ADMIN" or "MANAGER" or "STAFF" or "ACCOUNTANT"))
+            throw new AuthFailure(403, "access_unavailable", "Tài khoản chưa được cấp quyền truy cập. Vui lòng liên hệ quản trị viên.");
         return user;
     }
 

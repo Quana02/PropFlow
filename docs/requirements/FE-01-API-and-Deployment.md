@@ -11,7 +11,8 @@ Tài liệu hợp nhất quyết định triển khai, API và vận hành FE-01
 - Xác thực tiêu thụ `Residents.Contracts`; Residents có thể dùng public contract của Apartments để kiểm tra ownership. Không truy cập DbContext/domain của module khác.
 - Mật khẩu 12–128 ký tự, không trim/normalize, hash bằng PasswordHasher. Mặc định khóa 15 phút sau 5 lần sai; rate limit login 10/phút, registration/recovery 5/15 phút.
 - Không có Remember Me. Token chỉ giữ trong bộ nhớ WASM; không lưu password/OTP/token vào browser storage. Route sau đăng nhập theo role và safe authorized return URL.
-- Hồ sơ tự sửa chỉ gồm tên hiển thị và điện thoại; username/email/role/status chỉ đọc. FE-01 không sửa hồ sơ cư dân/quan hệ cư trú, avatar hoặc phương tiện.
+- Hồ sơ tự sửa gồm tên hiển thị và điện thoại. Username, role, status và email chỉ đọc trong form cập nhật hồ sơ. ADMIN, MANAGER, STAFF và ACCOUNTANT tự đổi email qua luồng riêng. RESIDENT liên hệ Ban quản lý để khởi tạo yêu cầu, rồi tự xác minh trong Resident Portal. FE-01 giữ nguyên hồ sơ cư dân và quan hệ cư trú.
+- ADMIN quản lý tên hiển thị và số điện thoại của tài khoản Ban quản lý qua API và quyền FE-15.1. [Hợp đồng quản trị hồ sơ](FE-15-Administration.md#fe-151--xem-và-chỉnh-sửa-hồ-sơ-tài-khoản-ban-quản-lý)
 - Security event có baseline retention 30 ngày tại log sink; không lưu secret hoặc payload nhạy cảm. Quy tắc này độc lập với lịch sử nghiệp vụ của [FE-15](FE-15-Administration.md).
 - Giữ quan hệ DBML đã duyệt; corrective migration phải báo lỗi khi dữ liệu bất nhất, không tự xóa hoặc dựng dữ liệu để chạy qua.
 
@@ -34,6 +35,12 @@ All paths below are relative to `/api/v1/auth`. Request/response DTOs live in `A
 | POST password/change | ChangePasswordRequest | 204 | Bearer, current password + CSRF |
 | GET me | None | 200 AccountResponse | Bearer; current account only |
 | PUT me | UpdateProfileRequest | 200 AccountResponse | Bearer; current account only |
+| POST email/change | ChangeEmailRequest | 200 ChallengeResponse | Bearer ADMIN/MANAGER/STAFF/ACCOUNTANT, current password, CSRF, auth-login limit |
+| POST email/verify | VerifyEmailChangeRequest | 204 | Bearer ADMIN/MANAGER/STAFF/ACCOUNTANT, own challenge, CSRF, auth-login limit |
+| GET resident-accounts | search, pageIndex, pageSize | 200 ResidentAccountPage | Bearer MANAGER + READ_RESIDENT_ACCOUNTS |
+| POST resident-accounts/{residentId}/email-change | RequestResidentEmailChange | 204 | Bearer MANAGER + REQUEST_RESIDENT_EMAIL_CHANGE, CSRF, auth-login limit |
+| GET resident-email-change | — | 200 ResidentEmailChangePending | Bearer RESIDENT, own pending request or null challengeId |
+| POST resident-email-change/verify | VerifyResidentEmailChange | 204 | Bearer RESIDENT, own manager-issued challenge, current password, CSRF, auth-login limit |
 
 `RegisterRequest` requires username, display name, email, password, phone number, identity type and identity number. Resident matching uses exactly four normalized values on the same Resident row: email (`trim + lowercase`), phone (canonical FE-02 representation), identity type (`CCCD` or `CMND`) and digits-only identity number (`CCCD`: 12 digits; `CMND`: 9 or 12 digits). Phone is required but is not a globally unique Resident identifier and is never used as a standalone lookup key.
 
@@ -52,7 +59,7 @@ The email OTP challenge is bound to the matched Resident fingerprint. Activation
 - Direct client routes are public Web-host shell endpoints with prerender disabled. Web routing removes copied server authorization metadata only for client components; their `[Authorize]` attributes remain on the component types for WASM AuthorizeRouteView. Protected API endpoints independently enforce Bearer authentication and account scope. Ten HTTP route tests cover direct navigation without rendering protected data.
 - Concurrent 401s within one WASM instance share a refresh and retry at most once. 403 never refreshes. Buffered JSON requests are replayable; large/streaming bodies are not automatically retried.
 - Tabs have independent memory/refresh locks. A stale refresh returns 401 without deleting a newer cookie issued concurrently in another tab. The losing tab may require login; cross-tab coordination is not implemented.
-- Logout clears local auth immediately and revokes the current rotation chain. Other device sessions remain. If server logout fails, the login page offers retry and says server revocation is unconfirmed.
+- Logout clears local auth immediately and requests revocation of the current rotation chain. Other device sessions remain. HTTP 204 confirms logout and the Login page stays silent. If the outcome is unconfirmed, Login offers retry below the form. The tab defers login, refresh and password reset completion until revocation is confirmed, because login replaces the refresh cookie and password reset clears it. The tab keeps a boolean pending marker in session storage so reloading it does not restore the old cookie. The marker contains no account identifier, access token, refresh cookie or credentials.
 - Password change/reset revokes all refresh tokens. Existing JWTs remain valid until normal expiry; this implementation does not claim immediate JWT revocation.
 - OTP: six digits, five minutes, five attempts; resend after 60 seconds, five/hour/account; old challenges are cancelled. Recovery proof is separately random, hashed, one-use, and expires after five minutes.
 
@@ -117,6 +124,28 @@ dotnet test tests/PropFlow.IntegrationTests --filter FullyQualifiedName~WebShell
 
 AuthenticationFlowTests require PostgreSQL and CREATE DATABASE permission. The test connection comes from `ConnectionStrings:PropFlowTestDatabase` in API User Secrets/environment; when that key is absent, the test helper derives the dedicated database name `propflow_test` from `ConnectionStrings:PropFlowDatabase`. It rejects every database name other than `propflow_test`. Each authentication flow then creates a uniquely named `propflow_fe01_test_<guid>`, verifies every context points at it, applies migrations, and drops only that isolated database afterward. Existing DatabaseVerificationTests use the separately prepared full schema in `propflow_test`; they are not part of the isolated FE-01 test command above.
 
+## Tự đổi email tài khoản nội bộ
+
+ADMIN, MANAGER, STAFF và ACCOUNTANT mở “Tài khoản của tôi” và chọn “Đổi email”. Máy chủ xác định tài khoản từ bearer identity. Tài khoản phải ACTIVE, có quyền truy cập hiện hành và không bị khóa tạm thời. `ChangeEmailRequest` gồm `NewEmail` và `CurrentPassword`. Email phải hợp lệ, khác email hiện tại và chưa được tài khoản khác sử dụng sau chuẩn hóa `trim + uppercase`. Máy chủ kiểm tra mật khẩu theo password hasher và chính sách lockout hiện hành, rồi gửi OTP **chỉ đến email mới**. Email tài khoản giữ giá trị cũ trong khi chờ xác minh.
+
+`VerifyEmailChangeRequest` gồm `ChallengeId`, `NewEmail`, `Code`. Challenge gắn với tài khoản hiện tại, mục đích đổi email, email cũ/mới và password hash hiện hành. Mã dùng một lần; 6 số, 5 phút, 5 lần thử; gửi lại sau 60 giây, tối đa 5 lần/giờ/tài khoản theo policy FE-01. Yêu cầu mới hủy challenge cũ; việc quay lại form hoặc rời trang không thay đổi email, challenge chưa dùng tự hết hạn. Gửi lại cần nhập lại mật khẩu hiện tại, không lưu mật khẩu ở browser storage.
+
+Khi xác minh, máy chủ kiểm tra lại trạng thái, quyền truy cập, lockout, ràng buộc challenge và tính duy nhất của email. Giao dịch khóa dòng tài khoản trong lúc kiểm tra và cập nhật để tuần tự hóa với thao tác thay đổi trạng thái. Unique index trên `auth.users.email` chặn xung đột tại commit. Giao dịch cập nhật email đã xác minh, tiêu thụ challenge, hủy mã khôi phục mật khẩu cũ và thu hồi toàn bộ refresh session của tài khoản. Access token cũ bị từ chối vì claim `email` được đối chiếu với email hiện hành trên mỗi request. Phản hồi xóa refresh cookie. Giao diện yêu cầu đăng nhập lại bằng username hiện có và hiển thị email mới từ API sau khi đăng nhập.
+
+Request sai mật khẩu, mã hoặc CSRF trả 400. Bearer thiếu, không hợp lệ hoặc không còn hiện hành trả 401. Mất quyền truy cập giữa lúc xác thực request và kiểm tra trong giao dịch trả 403. Trùng email trả 409, vượt giới hạn gửi trả 429. DTO chỉ chứa trường phục vụ đổi email và xác minh challenge. Bản ghi OTP dùng `auth.privileged_action_challenges` và chỉ lưu hash. Giữ mã purpose lưu trữ `ADMIN_EMAIL_CHANGE` để mã đang chờ và giới hạn gửi tiếp tục có hiệu lực sau triển khai. Nhật ký xác thực chỉ ghi action/status/account/trace, không ghi email/password/OTP/payload.
+
+## Đổi email cư dân theo yêu cầu Ban quản lý
+
+Thay thế quyết định mở tự đổi email cho cả năm role. Hai endpoint tự đổi email trả 403 cho RESIDENT. Challenge tự đổi email cũ của cư dân bị từ chối kể cả với OTP đúng và tự hết hạn. Khi hoàn tất yêu cầu do MANAGER khởi tạo, máy chủ hủy thêm challenge tự đổi email cũ của tài khoản đó. Challenge nội bộ giữ nguyên purpose và thời hạn.
+
+Danh sách phân trang theo hồ sơ FE-02 của deployment hiện hành, tìm theo mã, họ tên hoặc email liên hệ. Tài khoản chỉ được hiển thị khi liên kết có vai trò RESIDENT. Hồ sơ chưa liên kết và liên kết không khả dụng có trạng thái riêng. Chỉ hồ sơ ACTIVE có liên kết hợp lệ với tài khoản RESIDENT đang hoạt động, không bị khóa, mới được gửi yêu cầu.
+
+Yêu cầu đổi email gồm `newEmail`, `reason` (1 mất quyền truy cập hộp thư, 2 sửa địa chỉ khai báo sai, 3 đổi hộp thư sử dụng) và `identityCheckedInPerson` bắt buộc là true. Phản hồi 204 không chứa mã hay ID thử thách. Cư dân đã đăng nhập lấy ID và hạn của yêu cầu riêng, rồi gửi `challengeId`, `newEmail`, `currentPassword` và `code`. OTP giữ thời hạn, số lần thử, giới hạn gửi lại và giới hạn theo giờ của Authentication. Gửi yêu cầu mới sau thời gian chờ sẽ thay thế yêu cầu cũ.
+
+Máy chủ kiểm tra lại quyền MANAGER, trạng thái hai tài khoản, liên kết đang hoạt động và tính duy nhất của email khi xác minh. Giao dịch khóa dòng tài khoản và liên kết, cập nhật email đã xác minh, hủy mã khôi phục và thu hồi refresh session. Cư dân đăng nhập lại bằng username hiện có. `auth.users.email` phục vụ xác minh và khôi phục FE-01. `residents.residents.email` là email liên hệ do MANAGER quản lý theo FE-02 và có thể khác email tài khoản. [Quy trình vận hành](FE-01-Implementation-Decisions.md) · [Ranh giới FE-02](FE-02-Resident-Onboarding-API.md) · [Quyền FE-15](FE-15-Administration.md)
+
+Triển khai sau khi áp dụng migration `20261109154611_AddManagedResidentEmailChallenge` của Authentication và `20261109154621_GrantManagerResidentAccountPermissions` của Administration. Access token MANAGER đã cấp được làm mới để nhận tập quyền hiện hành. Nếu phiên không làm mới được, MANAGER đăng nhập lại.
+
 ## Truy vết FE-01
 
 | FE item | Frontend | Application | Kiểm chứng chính |
@@ -126,5 +155,5 @@ AuthenticationFlowTests require PostgreSQL and CREATE DATABASE permission. The t
 | FE-01.3 | Otp, ResumeRegistration | Registration.ActivateAsync/ResumeRegistrationAsync | Activation, resend cancellation, expiry, attempts |
 | FE-01.4 | ForgotPassword, Otp, ResetPassword | Recovery | Neutral recovery, one-use proof, revoke |
 | FE-01.5 | ChangePassword | OwnAccount.ChangePasswordAsync | Password change, revoked refresh |
-| FE-01.6 | Account | OwnAccount.GetAccountAsync/UpdateAccountAsync | Own profile, forbidden access, privilege fields ignored |
+| FE-01.6 | Account, ChangeEmail, ResidentAccounts, VerifyResidentEmail | OwnAccount và ManagedResidentEmail | Bốn role nội bộ tự đổi, cư dân xác minh yêu cầu do MANAGER tạo, OTP, uniqueness, thu hồi phiên, giữ riêng email liên hệ |
 | FE-01.7 | Account/resident logout, Login retry | Sessions.LogoutAsync | Current-chain revoke, other device survives, local race handling |

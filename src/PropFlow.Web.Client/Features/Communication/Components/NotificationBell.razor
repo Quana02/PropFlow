@@ -1,0 +1,136 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Features.Resident.Portal.Services
+@using PropFlow.Web.Client.Features.ServiceRequests.Services
+@inject ResidentFinanceNoticeState Notices
+@inject ResidentNotificationConnectionFactory ConnectionFactory
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<div class="notification-bell" @onkeydown="HandleKey">
+    <button type="button" class="notification-trigger" aria-label="@BellLabel" aria-expanded="@open" @onclick="ToggleAsync">
+        <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+        @if (Notices.UnreadCount > 0)
+        {
+            <span class="notification-badge" aria-hidden="true">@(Notices.UnreadCount > 99 ? "99+" : Notices.UnreadCount.ToString())</span>
+        }
+    </button>
+    @if (open)
+    {
+        <section class="notification-panel" aria-label="Thông báo của bạn">
+            <header><strong>Thông báo</strong><button type="button" disabled="@(writing || Notices.UnreadCount == 0)" @onclick="ReadAllAsync">Đánh dấu tất cả đã đọc</button></header>
+            @if (Notices.Loading) { <p role="status">Đang tải thông báo…</p> }
+            @if (Notices.Error is { } error) { <p role="alert">@error <button type="button" @onclick="Notices.ReloadAsync">Thử lại</button></p> }
+            @if (!Notices.Loading && Notices.Error is null && Notices.Items.Length == 0) { <p>Bạn chưa có thông báo.</p> }
+            @foreach (var item in Notices.Items)
+            {
+                <button @key="item.Id" type="button" class="notification-item @(item.IsRead ? null : "unread")"
+                    disabled="@writing" @onclick="() => OpenAsync(item)">
+                    <span class="notification-copy"><strong>@item.Title</strong><span>@item.Message</span>
+                        <small>@Source(item.SourceType) · <time datetime="@item.CreatedAt.ToString("O")">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</time></small></span>
+                    @if (!item.IsRead) { <span class="unread-dot" aria-label="Chưa đọc"></span> }
+                </button>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Connect { get; set; } = true;
+
+    private readonly CancellationTokenSource cancellation = new();
+    private RealtimeReconciliationPulse? reconciliation;
+    private HubConnection? connection;
+    private Task? connectionStart;
+    private bool open, writing;
+    private string BellLabel => Notices.UnreadCount == 0 ? "Thông báo" : $"Thông báo, {Notices.UnreadCount} chưa đọc";
+
+    protected override void OnInitialized()
+    {
+        Notices.Changed += Refresh;
+        if (!Connect) return;
+        Notices.Reset();
+        reconciliation = new(() => InvokeAsync(Notices.ReloadAsync));
+        reconciliation.Start();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Connect) connectionStart = StartAsync();
+        return Task.CompletedTask;
+    }
+
+    private async Task StartAsync()
+    {
+        await Notices.ReloadAsync();
+        if (cancellation.IsCancellationRequested) return;
+        try
+        {
+            connection = ConnectionFactory.Create();
+            connection.On<ResidentNotice>("FinanceNotificationCreated", notice => InvokeAsync(async () =>
+            {
+                Notices.Receive(notice);
+                await Notices.ReloadAsync();
+            }));
+            connection.Reconnected += _ => InvokeAsync(Notices.ReloadAsync);
+            await connection.StartAsync(cancellation.Token);
+            await Notices.ReloadAsync();
+        }
+        catch (Exception) when (!cancellation.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+    }
+
+    private async Task ToggleAsync()
+    {
+        open = !open;
+        if (open) await Notices.ReloadAsync();
+    }
+
+    private void HandleKey(KeyboardEventArgs args) { if (args.Key == "Escape") open = false; }
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task OpenAsync(ResidentNotice item)
+    {
+        if (writing) return;
+        writing = true;
+        try
+        {
+            if (!item.IsRead && !await Notices.ReadAsync(item.Id)) return;
+            if (item.ActionPath is { } path && path.StartsWith("/", StringComparison.Ordinal) &&
+                !path.StartsWith("//", StringComparison.Ordinal) && !path.Contains('\\'))
+            {
+                open = false;
+                Navigation.NavigateTo(path);
+            }
+        }
+        finally { writing = false; }
+    }
+
+    private async Task ReadAllAsync()
+    {
+        if (writing) return;
+        writing = true;
+        try { await Notices.ReadAllAsync(); }
+        finally { writing = false; }
+    }
+
+    private static string Source(string? value) => value switch
+    {
+        "SERVICE_REQUEST" => "Yêu cầu dịch vụ",
+        "MAINTENANCE" or "ASSET_STATUS" => "Vận hành tòa nhà",
+        "COMPLAINT" => "Phản ánh",
+        "INVOICE" or "PAYMENT" => "Tài chính",
+        _ => "PropFlow"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        Notices.Changed -= Refresh;
+        await cancellation.CancelAsync();
+        if (reconciliation is not null) await reconciliation.DisposeAsync();
+        if (connectionStart is not null) await connectionStart;
+        if (connection is not null) await connection.DisposeAsync();
+        if (Connect) Notices.Reset();
+        cancellation.Dispose();
+    }
+}
