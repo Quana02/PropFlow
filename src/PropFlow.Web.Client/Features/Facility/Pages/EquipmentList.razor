@@ -147,29 +147,20 @@
                        @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
             </div>
 
-            <!-- Lọc theo Cơ sở vật chất -->
-            <div class="w-full sm:w-48 relative">
-                <PropFlowSelect Options="FacilityOptions" @bind-Value="FilterFacilityIdString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" />
-            </div>
-
-            <!-- Lọc theo Trạng thái -->
-            <div class="w-full sm:w-48 relative">
-                <PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo trạng thái" />
-            </div>
-
-            <!-- Lọc theo Loại thiết bị -->
-            <div class="w-full sm:w-48 relative fe04-light-select">
-                <PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="EquipmentTypeFilterString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" />
-            </div>
-
+            <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
+                                 OnReset="ResetDraft" OnApply="ApplyDraft">
+                <label>Cơ sở vật chất<PropFlowSelect Options="FacilityOptions" @bind-Value="FilterFacilityIdString" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" /></label>
+                <label>Trạng thái<PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" Variant="Filter" AriaLabel="Lọc theo trạng thái" /></label>
+                <label>Loại thiết bị<PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="EquipmentTypeFilterString" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" /></label>
+            </PropFlowFilterPopover>
         </div>
 
         <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500">
             <span>Hiển thị <b class="text-slate-900">@(PagedResult.Items?.Count ?? 0)</b> trên <b>@PagedResult.TotalCount</b> thiết bị</span>
             <button type="button"
                     class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs"
-                    title="Đặt lại bộ lọc"
-                    @onclick="ResetFilter">
+                    title="Tải lại" aria-label="Tải lại"
+                    @onclick="LoadData" disabled="@IsLoading">
                 <span class="material-symbols-outlined text-base">refresh</span>
             </button>
         </div>
@@ -805,20 +796,20 @@
 
     private string StatusFilterString
     {
-        get => Filter.Status?.ToString() ?? "";
+        get => draftFilter.Status?.ToString() ?? "";
         set
         {
-            Filter.Status = Enum.TryParse<EquipmentStatus>(value, out var s) ? s : null;
+            draftFilter.Status = Enum.TryParse<EquipmentStatus>(value, out var s) ? s : null;
         }
     }
 
     private string FilterFacilityIdString
     {
-        get => Filter.BuildingLevelOnly ? "building-level" : Filter.FacilityId?.ToString() ?? "";
+        get => draftFilter.BuildingLevelOnly ? "building-level" : draftFilter.FacilityId?.ToString() ?? "";
         set
         {
-            Filter.BuildingLevelOnly = value == "building-level";
-            Filter.FacilityId = Guid.TryParse(value, out var g) ? g : null;
+            draftFilter.BuildingLevelOnly = value == "building-level";
+            draftFilter.FacilityId = Guid.TryParse(value, out var g) ? g : null;
         }
     }
 
@@ -830,8 +821,8 @@
 
     private string EquipmentTypeFilterString
     {
-        get => Filter.EquipmentTypeId?.ToString() ?? "";
-        set => Filter.EquipmentTypeId = Guid.TryParse(value, out var id) ? id : null;
+        get => draftFilter.EquipmentTypeId?.ToString() ?? "";
+        set => draftFilter.EquipmentTypeId = Guid.TryParse(value, out var id) ? id : null;
     }
 
     private string EquipmentTypeFormString
@@ -911,18 +902,21 @@
         }
     }
 
+    private int listVersion;
     private async Task LoadData()
     {
+        var version = ++listVersion;
         IsLoading = true;
         ErrorMessage = null;
         PagedResult = new();
         try
         {
             var result = await EquipmentApiClient.GetEquipmentsAsync(Filter);
+            if (version != listVersion) return;
             if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
             else ErrorMessage = result.Message ?? "Không thể tải thiết bị.";
         }
-        finally { IsLoading = false; }
+        finally { if (version == listVersion) IsLoading = false; }
     }
 
     private async Task LoadSummaryAsync()
@@ -966,8 +960,18 @@
         if (e.Key == "Enter") await ApplyFilter();
     }
 
+    private EquipmentFilterModel draftFilter = new();
+    private int ActiveFilterCount => new[] { Filter.FacilityId is not null || Filter.BuildingLevelOnly, Filter.Status is not null, Filter.EquipmentTypeId is not null }.Count(active => active);
+    private void OpenFilters() => draftFilter = new() { FacilityId = Filter.FacilityId, BuildingLevelOnly = Filter.BuildingLevelOnly, Status = Filter.Status, EquipmentTypeId = Filter.EquipmentTypeId };
+    private void ResetDraft() => draftFilter = new();
+    private async Task ApplyDraft()
+    {
+        if ((Filter.FacilityId, Filter.BuildingLevelOnly, Filter.Status, Filter.EquipmentTypeId) == (draftFilter.FacilityId, draftFilter.BuildingLevelOnly, draftFilter.Status, draftFilter.EquipmentTypeId)) return;
+        (Filter.FacilityId, Filter.BuildingLevelOnly, Filter.Status, Filter.EquipmentTypeId) = (draftFilter.FacilityId, draftFilter.BuildingLevelOnly, draftFilter.Status, draftFilter.EquipmentTypeId);
+        await ApplyFilter();
+    }
+
     private async Task ApplyFilter() { Filter.PageIndex = 1; await LoadData(); }
-    private async Task ResetFilter() { Filter = new(); await LoadData(); }
     private async Task ChangePage(int p) { if (p >= 1 && p <= PagedResult.TotalPages) { Filter.PageIndex = p; await LoadData(); } }
 
     private void OpenCreateDialog()

@@ -11,10 +11,12 @@
         <header class="panel-header"><div><h2 id="invoice-list-heading">Hóa đơn đã phát hành</h2><p>Tra cứu theo mã hóa đơn, tên cư dân hoặc căn hộ.</p></div><button class="refresh-button" type="button" @onclick="Load" disabled="@loading" aria-label="Tải lại hóa đơn"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Tải lại</button></header>
         <div class="invoice-toolbar">
             <label class="invoice-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input type="search" aria-label="Tìm hóa đơn" placeholder="Mã hóa đơn, cư dân, căn hộ…" @bind="Search" @bind:event="oninput" /></label>
-            <PropFlowSelect @bind-Value="PeriodFilter" Options="PeriodOptions" AriaLabel="Lọc kỳ hóa đơn" Variant="Filter" />
-            <PropFlowSelect @bind-Value="TypeFilter" Options="TypeOptions" AriaLabel="Lọc loại hóa đơn" Variant="Filter" />
-            <PropFlowSelect @bind-Value="SettlementFilter" Options="SettlementOptions" AriaLabel="Lọc thanh toán" Variant="Filter" />
-            <button class="reset-button" type="button" @onclick="ResetFilters" disabled="@(!HasFilters)">Xóa bộ lọc</button>
+            <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters"
+                                 OnReset="ResetDraft" OnApply="ApplyDraft">
+                <label>Kỳ thu<PropFlowSelect @bind-Value="PeriodFilter" Options="PeriodOptions" AriaLabel="Lọc kỳ hóa đơn" Variant="Filter" /></label>
+                <label>Loại hóa đơn<PropFlowSelect @bind-Value="TypeFilter" Options="TypeOptions" AriaLabel="Lọc loại hóa đơn" Variant="Filter" /></label>
+                <label>Thanh toán<PropFlowSelect @bind-Value="SettlementFilter" Options="SettlementOptions" AriaLabel="Lọc thanh toán" Variant="Filter" /></label>
+            </PropFlowFilterPopover>
         </div>
         <div class="table-scroll"><table class="invoice-table"><thead><tr><th>MÃ HÓA ĐƠN / LOẠI</th><th>CƯ DÂN / CĂN HỘ</th><th>KỲ THU / HẠN TRẢ</th><th class="money">TỔNG TIỀN</th><th class="money">CÒN PHẢI THU</th><th>TRẠNG THÁI</th><th class="document-cell">CHỨNG TỪ</th></tr></thead><tbody>
         @if (loading) { <tr><td colspan="7" class="empty-state" role="status">Đang tải hóa đơn…</td></tr> }
@@ -32,15 +34,24 @@
     private ManagerInvoiceFilter filter = new();
     private int page = 1, pageSize = 10;
     private string Search { get => filter.Search; set { filter = filter with { Search = value }; page = 1; } }
-    private string PeriodFilter { get => filter.Period; set { filter = filter with { Period = value }; page = 1; } }
-    private string TypeFilter { get => filter.Type; set { filter = filter with { Type = value }; page = 1; } }
-    private string SettlementFilter { get => filter.Settlement; set { filter = filter with { Settlement = value }; page = 1; } }
+    private string PeriodFilter { get => draftFilter.Period; set => draftFilter = draftFilter with { Period = value }; }
+    private string TypeFilter { get => draftFilter.Type; set => draftFilter = draftFilter with { Type = value }; }
+    private string SettlementFilter { get => draftFilter.Settlement; set => draftFilter = draftFilter with { Settlement = value }; }
     private HouseholdInvoice[] Filtered => ManagerInvoiceList.Filter(invoices, filter, DateOnly.FromDateTime(DateTime.Today));
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(Filtered.Length / (double)pageSize));
     private int CurrentPage => Math.Clamp(page, 1, TotalPages);
     private IEnumerable<HouseholdInvoice> PageItems => Filtered.Skip((CurrentPage - 1) * pageSize).Take(pageSize);
-    private bool HasFilters => filter != new ManagerInvoiceFilter();
-    private void ResetFilters() { filter = new(); page = 1; }
+    private ManagerInvoiceFilter draftFilter = new();
+    private int ActiveFilterCount => new[] { filter.Period, filter.Type, filter.Settlement }.Count(value => value.Length > 0);
+    private void OpenFilters() => draftFilter = filter;
+    private void ResetDraft() => draftFilter = new();
+    private void ApplyDraft()
+    {
+        var next = draftFilter with { Search = filter.Search };
+        if (next == filter) return;
+        filter = next;
+        page = 1;
+    }
     private void ChangePageSize(string value) { if (int.TryParse(value, out var size) && size is 10 or 20 or 50) pageSize = size; page = 1; }
     private IReadOnlyList<PropFlowSelectOption> PeriodOptions => [new("", "Tất cả kỳ thu"), .. invoices.Select(i => i.Period).Distinct().OrderDescending().Select(p => new PropFlowSelectOption(p.ToString("yyyy-MM"), p.ToString("MM/yyyy")))];
     private static readonly PropFlowSelectOption[] TypeOptions = [new("", "Tất cả loại hóa đơn"), new("SERVICE_FEE", "Phí dịch vụ"), new("MONTHLY_RENTAL", "Tiền thuê tháng")];
