@@ -180,8 +180,7 @@ public sealed partial class SupportChatService(CommunicationDbContext db, ISuppo
             { System(chat, "Phiên hỗ trợ kết thúc do liên kết cư trú hoặc quyền tài khoản đã thay đổi."); chat.Close(Now); changed.Add(chat); await db.SaveChangesAsync(ct); continue; }
             var presence = await db.SupportManagerPresence.Where(p => p.Available &&
                 db.SupportManagerConnections.Any(c => c.ManagerUserId == p.UserId && c.ExpiresAt > Now) &&
-                !db.SupportConversations.Any(c => c.ManagerUserId == p.UserId && c.Status == "ACTIVE") &&
-                !db.EmergencyCalls.Any(c => c.ManagerUserId == p.UserId && c.Status != "ENDED"))
+                !db.SupportConversations.Any(c => c.ManagerUserId == p.UserId && c.Status == "ACTIVE"))
                 .OrderBy(p => p.LastAssignedAt != null).ThenBy(p => p.LastAssignedAt).ThenBy(p => p.UserId).FirstOrDefaultAsync(ct);
             if (presence is null) break;
             var manager = await actors.FindAsync(presence.UserId, ct);

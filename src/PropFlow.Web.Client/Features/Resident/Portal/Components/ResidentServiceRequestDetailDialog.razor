@@ -228,11 +228,7 @@
         "MORNING" => "Buổi sáng", "AFTERNOON" => "Buổi chiều", "EVENING" => "Buổi tối", "ANYTIME" => "Cả ngày", _ => "Chưa chọn"
     };
     private static string AreaLabel(string? code) => PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.Label(code);
-    private static string PriorityLabel(string? code) => code switch
-    {
-        "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp",
-        "NORMAL" => "Bình thường", _ => "Chưa xác định"
-    };
+    private static string PriorityLabel(string? code) => code == "URGENT" ? "Khẩn cấp" : "Bình thường";
     private static string StatusTransition(string? from, string? to) => string.IsNullOrWhiteSpace(from)
         ? StatusLabel(to ?? string.Empty)
         : $"{StatusLabel(from)} → {StatusLabel(to ?? string.Empty)}";

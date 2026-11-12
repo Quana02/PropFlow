@@ -74,8 +74,7 @@ public sealed record StaffServiceRequestDetailResponse(
     decimal BaseServiceCost = 0,
     decimal ProposedAdditionalCost = 0,
     string? AdditionalCostNote = null,
-    AdditionalCostConsentView? AdditionalCostConsent = null,
-    ServiceRequestHandlingPlan? ApprovedRecommendation = null);
+    AdditionalCostConsentView? AdditionalCostConsent = null);
 
 public sealed record UpdateStaffServiceRequestProgressRequest(string Detail);
 public sealed record CompleteStaffServiceRequestWorkRequest(

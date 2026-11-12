@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '../..');
 const source = fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/js/app-shell-nav.js'), 'utf8');
 const modulePromise = import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 
-async function fixture(activePosition = 600, scrollHeight = 800) {
+async function fixture(activePosition = 600) {
     const { initializeScrolling } = await modulePromise;
     const observers = [];
     class Observer {
@@ -20,7 +20,7 @@ async function fixture(activePosition = 600, scrollHeight = 800) {
     const listeners = new Map();
     let bottom = 400;
     const viewport = {
-        scrollTop: 0, clientHeight: 300, scrollHeight,
+        scrollTop: 0, clientHeight: 300,
         getBoundingClientRect: () => ({ top: 100, bottom }),
         querySelector: () => active,
         addEventListener: (name, handler) => listeners.set(name, handler),
@@ -30,50 +30,12 @@ async function fixture(activePosition = 600, scrollHeight = 800) {
         getBoundingClientRect: () => ({ top: 100 + position - viewport.scrollTop, bottom: 144 + position - viewport.scrollTop })
     });
     let active = activePosition === null ? null : item(activePosition);
-    const rail = { dataset: {}, querySelector: () => viewport };
-    const handle = initializeScrolling(rail);
-    return { viewport, listeners, observers, handle, item, rail,
+    const handle = initializeScrolling({ querySelector: () => viewport });
+    return { viewport, listeners, observers, handle, item,
         setActive(position) { active = item(position); observers[0].fire(); },
         resize(value) { bottom = value; observers[1].fire(); } };
 }
 const flush = () => new Promise(resolve => queueMicrotask(resolve));
-
-test('scroll hints indicate hidden manager routes without moving the viewport', async () => {
-    const f = await fixture(0);
-    await flush();
-    assert.equal(f.rail.dataset.canScrollUp, 'false');
-    assert.equal(f.rail.dataset.canScrollDown, 'true');
-    assert.equal(f.viewport.scrollTop, 0);
-    f.viewport.scrollTop = 250;
-    f.listeners.get('scroll')();
-    assert.equal(f.rail.dataset.canScrollUp, 'true');
-    assert.equal(f.rail.dataset.canScrollDown, 'true');
-    f.viewport.scrollTop = 500;
-    f.listeners.get('scroll')();
-    assert.equal(f.rail.dataset.canScrollUp, 'true');
-    assert.equal(f.rail.dataset.canScrollDown, 'false');
-    f.handle.dispose();
-    assert.equal(f.listeners.size, 0);
-    assert.deepEqual(f.rail.dataset, {});
-});
-
-test('short menus have no scroll effect and returning to the top shows only the downward hint', async () => {
-    const short = await fixture(0, 150);
-    await flush();
-    assert.equal(short.rail.dataset.canScrollUp, 'false');
-    assert.equal(short.rail.dataset.canScrollDown, 'false');
-    short.handle.dispose();
-    const long = await fixture(0);
-    await flush();
-    long.viewport.scrollTop = 500;
-    long.listeners.get('scroll')();
-    assert.equal(long.rail.dataset.canScrollDown, 'false');
-    long.viewport.scrollTop = 0;
-    long.listeners.get('scroll')();
-    assert.equal(long.rail.dataset.canScrollUp, 'false');
-    assert.equal(long.rail.dataset.canScrollDown, 'true');
-    long.handle.dispose();
-});
 
 test('initial active item outside six rows is revealed by moving only the nav viewport', async () => {
     const f = await fixture();

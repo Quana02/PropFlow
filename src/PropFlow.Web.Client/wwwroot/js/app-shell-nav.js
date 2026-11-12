@@ -136,12 +136,6 @@ export function initializeScrolling(element) {
   let queued = false;
   let forceNext = false;
   let lastActive = null;
-  const updateHints = () => {
-    if (disposed) return;
-    const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-    element.dataset.canScrollUp = String(maxScroll > 1 && viewport.scrollTop > 1);
-    element.dataset.canScrollDown = String(maxScroll > 1 && viewport.scrollTop < maxScroll - 1);
-  };
   const reveal = item => {
     if (!item || viewport.clientHeight === 0) return;
     const bounds = viewport.getBoundingClientRect();
@@ -160,12 +154,10 @@ export function initializeScrolling(element) {
       if (forceNext || active !== lastActive) reveal(active);
       forceNext = false;
       lastActive = active;
-      updateHints();
     });
   };
-  const focused = event => { reveal(event.target.closest("a")); updateHints(); };
+  const focused = event => reveal(event.target.closest("a"));
   viewport.addEventListener("focusin", focused);
-  viewport.addEventListener("scroll", updateHints, { passive: true });
   // Handles delayed authorization rendering, normal NavLink changes and admin query tabs.
   const changes = new MutationObserver(() => schedule());
   changes.observe(viewport, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "aria-current"] });
@@ -178,9 +170,6 @@ export function initializeScrolling(element) {
       changes.disconnect();
       size.disconnect();
       viewport.removeEventListener("focusin", focused);
-      viewport.removeEventListener("scroll", updateHints);
-      delete element.dataset.canScrollUp;
-      delete element.dataset.canScrollDown;
     }
   };
 }

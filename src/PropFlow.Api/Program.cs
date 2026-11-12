@@ -14,11 +14,7 @@ using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Infrastructure;
 using PropFlow.Modules.AiClassification.Infrastructure.Persistence;
-using PropFlow.Modules.AiClassification.Application.ServiceRequestClassification;
-using PropFlow.Modules.AiClassification.Infrastructure;
 using PropFlow.Modules.AiRecommendation.Infrastructure.Persistence;
-using PropFlow.Modules.AiRecommendation.Application.ServiceRequestRecommendation;
-using PropFlow.Modules.AiRecommendation.Infrastructure;
 using PropFlow.Modules.Administration.Infrastructure.Persistence;
 using PropFlow.Modules.Apartments.Infrastructure.Persistence;
 using PropFlow.Modules.Authentication.Infrastructure.Persistence;
@@ -129,26 +125,6 @@ builder.Services.AddOptions<ChatAiOptions>().BindConfiguration("AiChatbot:Gemini
     .Validate(options => options.Valid, "Cấu hình AI chatbot không hợp lệ.").ValidateOnStart();
 builder.Services.AddHttpClient("ResidentChatGemini", client => client.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddSingleton<IChatAi, GeminiChat>();
-builder.Services.AddHttpClient("ServiceRequestGemini", (services, client) =>
-{
-    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
-    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
-    client.MaxResponseContentBufferSize = 512 * 1024;
-}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-builder.Services.AddScoped(services =>
-{
-    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
-    return new GeminiStructuredClient(services.GetRequiredService<IHttpClientFactory>().CreateClient("ServiceRequestGemini"),
-        options.ApiKey, options.AnswerModel, options.Ready);
-});
-builder.Services.AddScoped<IServiceRequestClassifier, GeminiServiceRequestClassifier>();
-builder.Services.AddScoped<PropFlow.Modules.AiClassification.Application.ResidentDraftReview.IResidentDraftReviewer, GeminiResidentDraftReviewer>();
-builder.Services.AddScoped<ResidentServiceRequestDraftChecker>();
-builder.Services.AddScoped<IServiceRequestAdvisor, GeminiServiceRequestAdvisor>();
-builder.Services.AddScoped<ManagerServiceRequestClassification>();
-builder.Services.AddScoped<ManagerServiceRequestRecommendation>();
-builder.Services.AddScoped<IAssignedServiceRequestRecommendationSource, AssignedServiceRequestRecommendationSource>();
 builder.Services.AddScoped<IResidentKnowledgeSearch, ResidentKnowledgeSearch>();
 builder.Services.AddScoped<IChatResidentScope, ChatResidentScope>();
 builder.Services.AddScoped<ResidentChat>();
@@ -156,12 +132,6 @@ builder.Services.AddScoped<KnowledgeIndex>();
 builder.Services.AddHostedService<KnowledgeIndexWorker>();
 builder.Services.AddScoped<ISupportChatActors, SupportChatActors>();
 builder.Services.AddScoped<ISupportChat, SupportChatService>();
-builder.Services.AddScoped<PropFlow.Modules.Communication.Application.EmergencyCalls.IEmergencyCalls, EmergencyCallService>();
-builder.Services.AddSingleton<PropFlow.Modules.Communication.Application.EmergencyCalls.IEmergencyCallRealtime, EmergencyCallRealtime>();
-builder.Services.AddSingleton<EmergencyFrameGate>();
-builder.Services.AddOptions<EmergencyRtcOptions>().BindConfiguration("Communication:EmergencyCalls").Validate(x => x.Valid, "Cấu hình cuộc gọi khẩn cấp không hợp lệ.").ValidateOnStart();
-builder.Services.AddScoped<PropFlow.Modules.Communication.Application.EmergencyCalls.IEmergencyRtcConfiguration, EmergencyRtcConfigurationProvider>();
-builder.Services.AddHostedService<EmergencyCallDispatchWorker>();
 builder.Services.AddSingleton<ISupportChatRealtime, SupportChatRealtime>();
 builder.Services.AddSingleton<SupportChatFrameGate>();
 builder.Services.AddHostedService<SupportChatDispatchWorker>();
@@ -496,12 +466,6 @@ builder.Services.AddRateLimiter(options =>
         context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
             PermitLimit = Math.Clamp(builder.Configuration.GetValue("AiChatbot:QuestionsPerMinute", 10), 1, 100),
             Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-    options.AddPolicy(PropFlow.Api.Controllers.ManagerServiceRequestClassificationController.AnalyzeRateLimit, context =>
-        RateLimitPartition.GetFixedWindowLimiter(context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = Math.Clamp(builder.Configuration.GetValue("AiClassification:RequestsPerMinute", 5), 1, 30),
-            Window = TimeSpan.FromMinutes(1), QueueLimit = 0
-        }));
     options.RejectionStatusCode = 429;
     options.OnRejected = async (context, ct) =>
     {
@@ -530,16 +494,6 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(window), QueueLimit = 0 }));
     }
     var residentSubmitLimit = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:PermitLimit", 5);
-    options.AddPolicy("emergency-call-start", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 6, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-    options.AddPolicy("resident-service-request-draft-check", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = builder.Configuration.GetValue("AiClassification:DraftChecksPerMinute", 5),
-            Window = TimeSpan.FromMinutes(1), QueueLimit = 0
-        }));
     var residentSubmitWindow = builder.Configuration.GetValue("ServiceRequests:RateLimits:Submit:WindowMinutes", 1);
     options.AddPolicy("resident-service-request-submit", context =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -601,7 +555,6 @@ app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>(
     .RequireAuthorization(policy => policy.RequireRole(SystemRoleCodes.Resident));
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/notifications", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<SupportChatHub>("/hubs/support-chat", options => options.CloseOnAuthenticationExpiration = true);
-app.MapHub<EmergencyCallHub>("/hubs/emergency-calls", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 
