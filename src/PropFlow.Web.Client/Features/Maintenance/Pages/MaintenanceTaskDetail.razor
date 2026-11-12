@@ -40,6 +40,7 @@
             </div>
             <div class="hero-actions">
                 <span class="request-code"><span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>@Task.TaskNumber</span>
+                @if (Task.Status is not MaintenanceTaskStatus.CLOSED and not MaintenanceTaskStatus.CANCELLED) { <button class="secondary-action" @onclick="CancelTask"><span class="material-symbols-outlined" aria-hidden="true">cancel</span>Hủy công việc</button> }
                 <a class="secondary-action" href="/maintenance?workspace=tasks"><span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>Quay lại danh sách</a>
 
             </div>
@@ -201,6 +202,8 @@
         ConfirmationTone = tone;
         PendingConfirmation = action;
     }
+    private void CancelTask() { var feedback = Toasts.BeginOperation(toastLifetime); RequestConfirmation("Bạn có muốn hủy công việc bảo trì này không?", async () => { Busy = true; var response = await Api.CancelTaskAsync(TaskId); Busy = false; if (response.Data is null) { feedback.Publish(() => Toasts.Error(response.Message ?? "Không thể hủy công việc.")); return; } Task = response.Data; await ReloadHistory(); feedback.Publish(() => Toasts.Success("Đã hủy công việc bảo trì.")); }); }
+    private void RequestConfirmation(string message, Func<Task> action) { ConfirmationMessage = message; PendingConfirmation = action; }
     private async Task Confirm() { var action = PendingConfirmation; if (action is null || Busy) return; await action(); if (!Busy) PendingConfirmation = null; }
     private async Task ReloadHistory() { var result = await Api.HistoryDetailAsync(TaskId); History = result.Data; }
 

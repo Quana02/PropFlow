@@ -42,4 +42,5 @@ public interface IMaintenanceAssetSource
         facilityId is { } value ? MarkUnderMaintenanceAsync(value, equipmentId, actor, ct) : Task.CompletedTask;
     Task MarkActiveAsync(Guid? facilityId, Guid? equipmentId, Guid actor, CancellationToken ct) =>
         facilityId is { } value ? MarkActiveAsync(value, equipmentId, actor, ct) : Task.CompletedTask;
+    Task MarkUnavailableAsync(Guid? facilityId, Guid? equipmentId, Guid actor, CancellationToken ct) => Task.CompletedTask;
 }

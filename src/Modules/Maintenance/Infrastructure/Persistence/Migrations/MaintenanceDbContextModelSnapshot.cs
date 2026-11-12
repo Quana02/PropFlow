@@ -428,6 +428,12 @@ namespace PropFlow.Modules.Maintenance.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("facility_id");
 
+                    b.Property<bool>("IsEmergency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_emergency");
+
                     b.Property<DateTimeOffset?>("PlannedStartAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("planned_start_at");

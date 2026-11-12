@@ -119,6 +119,10 @@ public class FacilityService : IFacilityService
 
     public async Task<FacilityDto> SetFacilityStatusAsync(Guid id, SetFacilityStatusCommand command, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.Status == MasterDataStatus.UNDER_MAINTENANCE)
+            throw new InvalidOperationException("Trạng thái đang bảo trì chỉ được cập nhật từ quy trình bảo trì.");
+
         var facility = await _store.FacilityAsync(id, true, false, cancellationToken);
 
         if (facility == null)

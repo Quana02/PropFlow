@@ -329,15 +329,6 @@
                                                             </div>
                                                         </button>
                                                         <button type="button"
-                                                                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-800 transition-colors"
-                                                                @onclick="() => ChangeStatus(item, EquipmentStatus.UNDER_MAINTENANCE)">
-                                                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                                                            <div class="text-left">
-                                                                <div class="font-bold">Đang bảo trì</div>
-
-                                                            </div>
-                                                        </button>
-                                                        <button type="button"
                                                                 class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-rose-50 text-slate-700 hover:text-rose-800 transition-colors"
                                                                 @onclick="() => ChangeStatus(item, EquipmentStatus.INACTIVE)">
                                                             <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
@@ -752,10 +743,10 @@
 
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
         new("", "Tất cả trạng thái"),
-        new("ACTIVE", "● Đang hoạt động"),
-        new("UNDER_MAINTENANCE", "● Đang bảo trì"),
-        new("INACTIVE", "● Ngừng hoạt động"),
-        new("OUT_OF_SERVICE", "● Ngừng phục vụ")
+        new("ACTIVE", "Đang hoạt động"),
+        new("UNDER_MAINTENANCE", "Đang bảo trì"),
+        new("INACTIVE", "Ngừng hoạt động"),
+        new("OUT_OF_SERVICE", "Ngừng phục vụ")
     ];
 
     private IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions => [new("", "Tất cả loại thiết bị"), .. EquipmentTypes.OrderBy(x => EquipmentTypeText.Display(x.Name)).Select(x => new PropFlowSelectOption(x.Id.ToString(), EquipmentTypeText.Display(x.Name)))];

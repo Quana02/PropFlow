@@ -29,7 +29,8 @@ public class MaintenanceTask
         string? description = null,
         string? priorityCode = null,
         DateTimeOffset? plannedStartAt = null,
-        DateTimeOffset? dueAt = null)
+        DateTimeOffset? dueAt = null,
+        bool isEmergency = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(taskNumber);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -51,6 +52,7 @@ public class MaintenanceTask
         Status = MaintenanceTaskStatus.OPEN;
         PlannedStartAt = plannedStartAt;
         DueAt = dueAt;
+        IsEmergency = isEmergency;
         CreatedBy = createdBy;
         CreatedAt = now;
         UpdatedAt = now;
@@ -70,6 +72,7 @@ public class MaintenanceTask
     public MaintenanceTaskStatus Status { get; private set; }
     public DateTimeOffset? PlannedStartAt { get; private set; }
     public DateTimeOffset? DueAt { get; private set; }
+    public bool IsEmergency { get; private set; }
     public DateTimeOffset? StartedAt { get; private set; }
     public DateTimeOffset? CompletedAt { get; private set; }
     public DateTimeOffset? ClosedAt { get; private set; }

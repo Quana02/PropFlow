@@ -29,6 +29,7 @@ public interface IMaintenanceApiClient
     Task<ApiResult<MaintenanceTaskModel>> TaskAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<AssignableMaintenanceStaffModel>>> AssignableStaffAsync(CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> AssignTaskAsync(Guid taskId, AssignMaintenanceTaskModel model, CancellationToken ct = default);
+    Task<ApiResult<MaintenanceTaskModel>> CancelTaskAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> ReviewResultAsync(Guid taskId, Guid resultId, ReviewMaintenanceResultModel model, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> AssociateTaskAssetAsync(Guid taskId, AssociateMaintenanceTaskAssetModel model, CancellationToken ct = default);
 }

@@ -1,10 +1,12 @@
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging
 @using PropFlow.Web.Client.Features.Finance.Services
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @using PropFlow.Web.Client.Features.ServiceRequests.Services
 @inject ResidentFinanceNoticeState Notices
 @inject ResidentNotificationConnectionFactory ConnectionFactory
 @inject NavigationManager Navigation
+@inject ILogger<NotificationBell> Logger
 @implements IAsyncDisposable
 
 <div class="notification-bell" @onkeydown="HandleKey">
@@ -56,14 +58,12 @@
 
     protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && Connect) connectionStart = StartAsync();
+        if (firstRender && Connect) connectionStart = Task.WhenAll(StartAsync(), Notices.ReloadAsync());
         return Task.CompletedTask;
     }
 
     private async Task StartAsync()
     {
-        await Notices.ReloadAsync();
-        if (cancellation.IsCancellationRequested) return;
         try
         {
             connection = ConnectionFactory.Create();
@@ -73,11 +73,14 @@
                 await Notices.ReloadAsync();
             }));
             connection.Reconnected += _ => InvokeAsync(Notices.ReloadAsync);
-            await connection.StartAsync(cancellation.Token);
+            await ConnectionFactory.StartAsync(connection, cancellation.Token);
             await Notices.ReloadAsync();
         }
-        catch (Exception) when (!cancellation.IsCancellationRequested) { }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            Logger.LogWarning("Notification realtime startup failed ({ErrorType}).", exception.GetType().Name);
+        }
     }
 
     private async Task ToggleAsync()
