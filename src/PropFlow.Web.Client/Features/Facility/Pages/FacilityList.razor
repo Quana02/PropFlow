@@ -154,21 +154,17 @@
                            @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
                 </div>
 
-                <!-- Status Dropdown Filter -->
-                <div class="w-full sm:w-56 relative">
-                    <div class="fe04-light-select"><PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" @bind-Value:after="ApplyFilter" /></div>
-                </div>
-
-                <!-- FacilityType Dropdown Filter -->
-                <div class="w-full sm:w-56 relative">
-                    <div class="fe04-light-select"><PropFlowSelect Options="FacilityTypeFilterOptions" @bind-Value="FacilityTypeFilterString" @bind-Value:after="ApplyFilter" /></div>
-                </div>
+                <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
+                                     OnReset="ResetDraft" OnApply="ApplyDraft">
+                    <label>Trạng thái<PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" Variant="Filter" AriaLabel="Trạng thái" /></label>
+                    <label>Loại cơ sở vật chất<PropFlowSelect Options="FacilityTypeFilterOptions" @bind-Value="FacilityTypeFilterString" Variant="Filter" AriaLabel="Loại cơ sở vật chất" /></label>
+                </PropFlowFilterPopover>
             </div>
 
             <!-- Right: Filter actions & View counts -->
             <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-[#64748b]">
                 <span class="font-medium">Hiển thị <b class="text-[#0f172a]">@(PagedResult.Items?.Count ?? 0)</b> / @PagedResult.TotalCount hạng mục</span>
-                <button class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs" title="Đặt lại bộ lọc" @onclick="ResetFilter">
+                <button class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs" title="Tải lại" aria-label="Tải lại" @onclick="LoadData" disabled="@IsLoading">
                     <span class="material-symbols-outlined text-base">refresh</span>
                 </button>
             </div>
@@ -183,7 +179,8 @@
                 <p class="text-xs font-semibold text-[#0284c7]">Đang tải dữ liệu Cơ sở vật chất...</p>
             </div>
         }
-        else if (PagedResult.Items == null || !PagedResult.Items.Any())
+        else if (PagedResult.Items is null || (!PagedResult.Items.Any() &&
+                 (PagedResult.TotalCount == 0 || PagedResult.PageIndex <= PagedResult.TotalPages)))
         {
             <div class="fe04-empty flex py-12 flex-col items-center justify-center space-y-3 bg-white/80">
                 <span class="material-symbols-outlined text-[64px] text-slate-300">domain_disabled</span>
@@ -324,7 +321,7 @@
             </div>
 
             <TablePagination Page="PagedResult.PageIndex" TotalPages="PagedResult.TotalPages" Busy="IsLoading" Label="Phân trang cơ sở vật chất"
-                Previous="@(() => ChangePage(PagedResult.PageIndex - 1))" Next="@(() => ChangePage(PagedResult.PageIndex + 1))">
+                PageChanged="ChangePage">
                 <span>Bản ghi @(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)–@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount)) / @PagedResult.TotalCount</span>
             </TablePagination>
                     }
@@ -513,7 +510,7 @@
 }
 @if (IsSaveConfirmationOpen)
 {
-    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedFacilityToEdit is null ? "Bạn có muốn tạo cơ sở vật chất này không?" : "Bạn có muốn cập nhật cơ sở vật chất này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveFacility" OnCancel="CloseSaveConfirmation" />
+    <PropFlowConfirmationDialog Title="@(SelectedFacilityToEdit is null ? "Thêm cơ sở vật chất?" : "Cập nhật cơ sở vật chất?")" Message="Thông tin đã nhập sẽ được lưu vào danh mục cơ sở vật chất của chung cư." ConfirmText="Lưu cơ sở vật chất" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveFacility" OnCancel="CloseSaveConfirmation" />
 }
 
 @code {
@@ -568,10 +565,10 @@
 
     private string StatusFilterString
     {
-        get => Filter.Status?.ToString() ?? "";
+        get => draftFilter.Status?.ToString() ?? "";
         set
         {
-            Filter.Status = Enum.TryParse<MasterDataStatus>(value, out var s) ? s : null;
+            draftFilter.Status = Enum.TryParse<MasterDataStatus>(value, out var s) ? s : null;
         }
     }
 
@@ -645,18 +642,21 @@
         }
     }
 
+    private int listVersion;
     private async Task LoadData()
     {
+        var version = ++listVersion;
         IsLoading = true;
         ErrorMessage = null;
         PagedResult = new();
         try
         {
             var result = await FacilityApiClient.GetFacilitiesAsync(Filter);
+            if (version != listVersion) return;
             if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
             else ErrorMessage = result.Message ?? "Không thể tải cơ sở vật chất.";
         }
-        finally { IsLoading = false; }
+        finally { if (version == listVersion) IsLoading = false; }
     }
 
     private async Task LoadSummaryAsync()
@@ -677,8 +677,18 @@
         if (e.Key == "Enter") await ApplyFilter();
     }
 
+    private FacilityFilterModel draftFilter = new();
+    private int ActiveFilterCount => new[] { Filter.Status is not null, Filter.FacilityTypeId is not null }.Count(active => active);
+    private void OpenFilters() => draftFilter = new() { Status = Filter.Status, FacilityTypeId = Filter.FacilityTypeId };
+    private void ResetDraft() => draftFilter = new();
+    private async Task ApplyDraft()
+    {
+        if ((Filter.Status, Filter.FacilityTypeId) == (draftFilter.Status, draftFilter.FacilityTypeId)) return;
+        (Filter.Status, Filter.FacilityTypeId) = (draftFilter.Status, draftFilter.FacilityTypeId);
+        await ApplyFilter();
+    }
+
     private async Task ApplyFilter() { Filter.PageIndex = 1; await LoadData(); }
-    private async Task ResetFilter() { Filter = new(); await LoadData(); }
     private async Task ChangePage(int p) { if (p >= 1 && p <= PagedResult.TotalPages) { Filter.PageIndex = p; await LoadData(); } }
 
     private void OpenCreateDialog()
@@ -809,8 +819,8 @@
 
     private string FacilityTypeFilterString
     {
-        get => Filter.FacilityTypeId?.ToString() ?? "";
-        set => Filter.FacilityTypeId = Guid.TryParse(value, out var id) ? id : null;
+        get => draftFilter.FacilityTypeId?.ToString() ?? "";
+        set => draftFilter.FacilityTypeId = Guid.TryParse(value, out var id) ? id : null;
     }
 
     private string CreateFacilityTypeId { get => CreateFormModel.FacilityTypeId?.ToString() ?? ""; set => CreateFormModel.FacilityTypeId = Guid.TryParse(value, out var id) ? id : null; }

@@ -1,0 +1,123 @@
+@using PropFlow.Modules.ServiceRequests.Contracts
+
+<section class="request-overview" aria-labelledby="request-information-title" aria-busy="@(busy || loading)">
+    <header class="overview-header">
+        <div class="overview-heading">
+            <span class="overview-icon material-symbols-outlined" aria-hidden="true">assignment</span>
+            <div><h2 id="request-information-title">Thông tin yêu cầu</h2><p>Nội dung cư dân cung cấp và đề xuất hỗ trợ xử lý</p></div>
+        </div>
+        @if (classification?.CanAnalyze == true || recommendation?.CanAnalyze == true)
+        {
+            <button class="ai-analyze" type="button" @onclick="AnalyzeAsync" disabled="@(busy || loading)"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>@(busy ? "Đang phân tích…" : "Phân tích AI")</button>
+        }
+    </header>
+
+    <div class="request-title-block">
+        <small>Tiêu đề yêu cầu</small>
+        <div class="request-title-row">
+            <h3>@Request.Title</h3>
+            <span class="priority-badge @PriorityClass(DisplayPriority)" aria-label="Mức ưu tiên: @PriorityLabel(DisplayPriority)">
+                @if (DisplayPriority == "URGENT") { <span class="material-symbols-outlined" aria-hidden="true">warning</span> }
+                @PriorityLabel(DisplayPriority)
+                @if (PendingPlan is not null) { <span class="priority-origin">· Đề xuất</span> }
+            </span>
+            @if (editingPlan || recommendation?.CanSetPriority == true)
+            {
+                <select aria-label="Mức ưu tiên Manager chọn" @bind="priority" disabled="@(busy || loading)">
+                    <option value="">Chọn mức ưu tiên</option>
+                    @foreach (var optionCode in ManagerRecommendationPriorities.Codes) { <option value="@optionCode">@PriorityLabel(optionCode)</option> }
+                </select>
+            }
+        </div>
+        <span class="request-location"><span class="material-symbols-outlined" aria-hidden="true">location_on</span>@Location</span>
+    </div>
+
+    <dl class="fact-grid">
+        <div class="category-fact">
+            <dt>Hạng mục dịch vụ</dt>
+            <dd><span>@DisplayCategory</span>
+                @if (PendingCategory is not null) { <span class="suggestion-tag">Đề xuất</span> }
+                else if (classification?.Suggestion?.ReviewDecision is not null) { <span class="confirmed-tag">Đã xác nhận</span> }
+            </dd>
+            @if (PendingCategory is not null)
+            {
+                @if (editingCategory)
+                {
+                    <select aria-label="Hạng mục Manager chọn" @bind="selectedCategory" disabled="@(busy || loading)">
+                        @foreach (var category in classification!.Categories) { <option value="@category.Id">@category.Name</option> }
+                    </select>
+                }
+                <div class="inline-actions">
+                    <button type="button" @onclick="SaveCategoryAsync" disabled="@(busy || loading || selectedCategory is null)">@(selectedCategory == PendingCategory.SuggestedCategoryId ? "Xác nhận" : "Lưu hạng mục")</button>
+                    <button class="text-action" type="button" @onclick="() => editingCategory = !editingCategory" disabled="@(busy || loading)">@(editingCategory ? "Thu gọn" : "Chỉnh")</button>
+                </div>
+            }
+        </div>
+        <div><dt>Cư dân gửi yêu cầu</dt><dd>@(Request.ResidentName ?? "Chưa xác định")</dd></div>
+        <div><dt>Thời gian tiếp nhận</dt><dd>@Request.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm")</dd></div>
+        <div><dt>Khung giờ thuận tiện</dt><dd>@PreferredTime</dd></div>
+        <div><dt>Thiết bị liên quan</dt><dd>@(Request.Equipment?.Name ?? "Không có")</dd></div>
+        <div><dt>Kênh tiếp nhận</dt><dd>Cổng cư dân</dd></div>
+    </dl>
+
+    <div class="description-block">
+        <h4><span class="material-symbols-outlined" aria-hidden="true">subject</span>Mô tả hiện trạng</h4>
+        <p>@Request.Description</p>
+    </div>
+
+    <div class="handling-section">
+        <div class="handling-heading"><h4><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>Phương án xử lý</h4>
+            @if (PendingPlan is not null) { <span class="suggestion-tag">Đề xuất</span> }
+            else if (DisplayPlan is not null) { <span class="confirmed-tag">Đã xác nhận</span> }
+        </div>
+        <div class="handling-grid">
+            <section>
+                <h5><span class="material-symbols-outlined" aria-hidden="true">build</span>Hướng xử lý</h5>
+                @if (editingPlan)
+                {
+                    <textarea aria-label="Hướng xử lý" @bind="action" @bind:event="oninput" maxlength="800" rows="4" disabled="@(busy || loading)"></textarea>
+                }
+                else { <p>@(DisplayPlan?.Action ?? "Chưa có đề xuất hướng xử lý.")</p> }
+            </section>
+            <section>
+                <h5><span class="material-symbols-outlined" aria-hidden="true">engineering</span>Nguồn lực</h5>
+                @if (editingPlan)
+                {
+                    <textarea aria-label="Nguồn lực cần thiết" @bind="resources" @bind:event="oninput" maxlength="500" rows="4" disabled="@(busy || loading)"></textarea>
+                }
+                else { <p>@(DisplayPlan?.Resources ?? "Chưa có đề xuất nguồn lực.")</p> }
+            </section>
+        </div>
+        @if (DisplayPlan?.MaintenanceRequired == true && !editingPlan) { <p class="maintenance-note">Cân nhắc kiểm tra hoặc bảo trì.</p> }
+        @if (editingPlan)
+        {
+            <label class="maintenance-choice"><input type="checkbox" @bind="maintenance" disabled="@(busy || loading)" />Cân nhắc kiểm tra hoặc bảo trì</label>
+            @if (PlanChanged)
+            {
+                <label class="review-note">Lý do chỉnh đề xuất <input @bind="note" @bind:event="oninput" maxlength="500" required disabled="@(busy || loading)" /></label>
+            }
+        }
+        @if (recommendation?.CanReview == true || recommendation?.CanSetPriority == true)
+        {
+            <div class="plan-actions">
+                <button type="button" @onclick="SavePlanAsync" disabled="@(busy || loading || !CanSavePlan)">@(recommendation.CanReview ? PlanChanged ? "Lưu phương án đã chỉnh" : "Xác nhận phương án" : "Lưu ưu tiên thủ công")</button>
+                @if (recommendation.CanReview) { <button class="text-action" type="button" @onclick="TogglePlanEditing" disabled="@(busy || loading)">@(editingPlan ? "Hủy chỉnh sửa" : "Chỉnh phương án")</button> }
+            </div>
+        }
+        @if (PendingPlan is not null) { <small class="review-help">Đề xuất chỉ được áp dụng sau khi Manager xác nhận.</small> }
+        @if (recommendation?.Suggestion?.ReviewNote is { } reviewNote && DisplayPlan is not null) { <p class="review-help">Lý do chỉnh: @reviewNote</p> }
+        @if (classification?.Suggestion?.Reason is not null || recommendation?.Suggestion?.Reason is not null)
+        {
+            <details class="ai-reason"><summary>Xem cơ sở đề xuất</summary>
+                @if (classification?.Suggestion?.Reason is { } categoryReason) { <p><strong>Hạng mục:</strong> @categoryReason</p> }
+                @if (recommendation?.Suggestion?.Reason is { } planReason) { <p><strong>Phương án:</strong> @planReason</p> }
+            </details>
+        }
+    </div>
+    @if (loading) { <p class="ai-message" role="status">Đang tải đề xuất…</p> }
+    @if (error is not null) { <p class="ai-message error" role="alert">@error</p><button class="retry-action" type="button" @onclick="LoadAsync" disabled="@(busy || loading)">Tải lại đề xuất</button> }
+    @if (classification?.UnavailableReason is { } categoryUnavailable) { <p class="ai-message" role="status">@categoryUnavailable</p> }
+    @if (recommendation?.UnavailableReason is { } planUnavailable) { <p class="ai-message" role="status">@planUnavailable</p> }
+    @if (classification?.Suggestion?.Failure is { } categoryFailure) { <p class="ai-message error" role="status">@categoryFailure</p> }
+    @if (recommendation?.Suggestion?.Failure is { } planFailure) { <p class="ai-message error" role="status">@planFailure</p> }
+</section>

@@ -77,14 +77,17 @@
 .review-button { border: 1px solid var(--pending-line); background: var(--pending-surface); color: var(--pending-text); }
 .action-cell button:disabled { cursor: wait; opacity: .55; }
 
-.reject-row td { padding: 9px 12px 13px; background: rgba(244,63,94,.035); }
-.reject-box { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
-.reject-box label { margin-right: auto; color: #be123c; font-size: 9px; font-weight: 700; }
-.reject-box input { width: min(330px, 45vw); border: 1px solid #fecdd3; border-radius: 9px; padding: 7px 9px; background: var(--pending-surface); color: var(--pending-text); font-size: 10px; }
-.reject-box button { padding: 7px 10px; border-radius: 9px; font-size: 9px; font-weight: 700; cursor: pointer; }
-.cancel-reject { border: 1px solid var(--pending-line); background: var(--pending-surface); color: var(--pending-muted); }
-.submit-reject { border: 0; background: #e11d48; color: #fff; }
-.submit-reject:disabled { cursor: not-allowed; opacity: .5; }
+.reject-reason { display: grid; gap: .4rem; font-weight: 650; }
+.reject-reason input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: .65rem .75rem;
+    border: 1px solid var(--dialog-line);
+    border-radius: .65rem;
+    color: var(--dialog-ink);
+    background: var(--dialog-surface);
+    font: inherit;
+}
 .retry-button { display: block; margin: -14px auto 18px; padding: 7px 12px; border: 1px solid var(--pending-line); border-radius: 9px; background: var(--pending-surface); color: var(--pending-text); cursor: pointer; }
 .pending-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; color: var(--pending-muted); font-size: 9px; }
 .pending-pagination > div { display: flex; align-items: center; gap: 7px; }
@@ -104,6 +107,4 @@
     .pending-actions { justify-content: flex-start; }
     .pending-summary, .pending-filters { grid-template-columns: 1fr; }
     .pending-status-filters { grid-column: auto; }
-    .reject-box { align-items: stretch; flex-direction: column; }
-    .reject-box input { width: 100%; }
 }

@@ -52,11 +52,12 @@
                     <button type="button" aria-label="Xóa tìm kiếm" @onclick="ClearSearch"><span class="material-symbols-outlined">close</span></button>
                 }
             </label>
-            <div class="quick-filters" aria-label="Bộ lọc nhanh">
-                <button type="button" class="@(priorityFilter == "URGENT" ? "is-active" : null)" @onclick='() => TogglePriority("URGENT")'><span class="material-symbols-outlined">priority_high</span>Khẩn cấp</button>
-                <button type="button" class="@(unassignedOnly ? "is-active" : null)" @onclick="ToggleUnassigned"><span class="material-symbols-outlined">person_off</span>Chưa phân công</button>
-                <button type="button" class="@(submittedWithinDays == 30 ? "is-active" : null)" @onclick="ToggleRecentThirtyDays"><span class="material-symbols-outlined">calendar_month</span>30 ngày gần nhất</button>
-            </div>
+            <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters"
+                                 OnReset="ResetDraft" OnApply="ApplyDraft">
+                <label><input type="checkbox" @bind="draftUrgent" />Khẩn cấp</label>
+                <label><input type="checkbox" @bind="draftUnassigned" />Chưa phân công</label>
+                <label><input type="checkbox" @bind="draftRecent" />30 ngày gần nhất</label>
+            </PropFlowFilterPopover>
         </div>
 
         @if (loading)
@@ -115,7 +116,7 @@
         }
 
         <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(totalCount / (double)PageSize))" Busy="loading" Label="Phân trang yêu cầu"
-            Previous="PreviousPage" Next="NextPage">
+            PageChanged="ChangePageAsync">
             <span>Hiển thị @items.Count / @totalCount yêu cầu phù hợp</span>
         </TablePagination>
     </section>
@@ -183,19 +184,27 @@
     public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private async Task SelectStatus(string status) { selectedStatus = status; page = 1; await LoadAsync(); }
-    private async Task TogglePriority(string priority) { priorityFilter = priorityFilter == priority ? null : priority; page = 1; await LoadAsync(); }
-    private async Task ToggleUnassigned() { unassignedOnly = !unassignedOnly; page = 1; await LoadAsync(); }
-    private async Task ToggleRecentThirtyDays() { submittedWithinDays = submittedWithinDays == 30 ? null : 30; page = 1; await LoadAsync(); }
+    private bool draftUrgent, draftUnassigned, draftRecent;
+    private int ActiveFilterCount => (priorityFilter is null ? 0 : 1) + (unassignedOnly ? 1 : 0) + (submittedWithinDays is null ? 0 : 1);
+    private void OpenFilters() => (draftUrgent, draftUnassigned, draftRecent) = (priorityFilter == "URGENT", unassignedOnly, submittedWithinDays == 30);
+    private void ResetDraft() => draftUrgent = draftUnassigned = draftRecent = false;
+    private async Task ApplyDraft()
+    {
+        var next = (draftUrgent ? "URGENT" : null, draftUnassigned, draftRecent ? (int?)30 : null);
+        if ((priorityFilter, unassignedOnly, submittedWithinDays) == next) return;
+        (priorityFilter, unassignedOnly, submittedWithinDays) = next;
+        page = 1;
+        await LoadAsync();
+    }
     private async Task ClearSearch() { searchText = null; page = 1; await LoadAsync(); }
     private async Task ResetFilters() { searchText = null; selectedStatus = "ALL"; priorityFilter = null; unassignedOnly = false; submittedWithinDays = null; page = 1; await LoadAsync(); }
-    private async Task PreviousPage() { if (page > 1) { page--; await LoadAsync(); } }
-    private async Task NextPage() { if (page * PageSize < totalCount) { page++; await LoadAsync(); } }
+    private async Task ChangePageAsync(int target) { page = target; await LoadAsync(); }
     private async Task HandleSearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args) { if (args.Key == "Enter") { page = 1; await LoadAsync(); } }
     private void OpenDetail(Guid id) => Navigation.NavigateTo($"/manager/service-requests/{id}");
 
     private static string StatusLabel(string status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đã tiếp nhận", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang tiến hành", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status };
     private static string StatusClass(string status) => status switch { "SUBMITTED" => "status-amber", "UNDER_REVIEW" or "ASSIGNED" => "status-violet", "IN_PROGRESS" => "status-blue", "RESOLVED" or "CLOSED" => "status-emerald", _ => "" };
-    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", _ => "Tiêu chuẩn" };
+    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", null => "Chưa xác định", _ => "Tiêu chuẩn" };
     private static string PriorityClass(string? priority) => priority switch { "URGENT" => "priority-urgent", "HIGH" => "priority-high", _ => "priority-standard" };
     private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));
     private static string ApartmentLabel(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestListItem x) => x.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{x.ApartmentUnitNumber} · Tầng {x.FloorNumber}";

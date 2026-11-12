@@ -8,6 +8,9 @@
     align-items: center;
     --app-nav-item-size: 2.75rem;
     --app-nav-gap: 0.5rem;
+    --app-nav-edge-size: 1.25rem;
+    --app-nav-padding-start: 0.35rem;
+    --app-nav-padding-end: 0.7rem;
     max-height: calc(100dvh - 1.5rem);
     overflow: visible;
     border: 2px solid var(--app-line, #dce8f1);
@@ -47,7 +50,7 @@
     width: auto;
     min-height: 0;
     max-height: none;
-    padding: 0.35rem 0.5rem 0.7rem;
+    padding: var(--app-nav-padding-start) 0.5rem var(--app-nav-padding-end);
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -188,15 +191,61 @@
    The handle never scrolls; the viewport cap also works on short screens. */
 .app-nav-scroll {
     min-height: 0;
-    max-height: min(calc(6 * var(--app-nav-item-size) + 5 * var(--app-nav-gap) + 1.05rem), calc(100dvh - 5rem));
+    max-height: min(
+        calc(6 * var(--app-nav-item-size) + 5 * var(--app-nav-gap) + var(--app-nav-padding-start) + var(--app-nav-padding-end)),
+        max(0px, calc(100dvh - 5rem - 2 * var(--app-nav-edge-size)))
+    );
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior-y: contain;
+    scroll-padding-block: var(--app-nav-padding-start) var(--app-nav-padding-end);
     scrollbar-width: none;
     -ms-overflow-style: none;
     border-radius: 1rem;
 }
 .app-nav-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+.app-nav-scroll-edge {
+    display: grid;
+    place-items: center;
+    flex: 0 0 var(--app-nav-edge-size);
+    width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0.8rem;
+    background: linear-gradient(var(--app-nav-fade-direction),
+        color-mix(in srgb, var(--app-accent, #0284c7) 14%, transparent), transparent);
+    color: var(--app-accent, #0284c7);
+    cursor: pointer;
+}
+
+.app-nav-scroll-edge[hidden] { display: none; }
+.app-nav-scroll-edge:disabled { visibility: hidden; }
+.app-nav-scroll-edge:hover { background-color: color-mix(in srgb, currentColor 10%, transparent); }
+.app-nav-scroll-edge:focus-visible,
+.app-nav-scroll:focus-visible {
+    outline: 2px solid var(--app-accent, #0284c7);
+    outline-offset: -2px;
+}
+.app-nav-scroll-edge::before {
+    content: "";
+    width: 0.42rem;
+    height: 0.42rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: translateY(var(--app-nav-chevron-offset)) rotate(var(--app-nav-chevron-angle));
+}
+.app-nav-scroll-up {
+    --app-nav-fade-direction: to bottom;
+    --app-nav-chevron-angle: 225deg;
+    --app-nav-chevron-offset: 0.1rem;
+}
+.app-nav-scroll-down {
+    --app-nav-fade-direction: to top;
+    --app-nav-chevron-angle: 45deg;
+    --app-nav-chevron-offset: -0.1rem;
+}
+
 .app-nav-scroll ::deep .operations-nav,
 .app-nav-scroll ::deep .staff-nav,
 .app-nav-scroll ::deep .admin-nav,

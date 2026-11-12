@@ -73,7 +73,7 @@
             @if (Manager)
             {
                 <TablePagination Page="page" TotalPages="TotalPages" Busy="busy" Label="Phân trang thông báo"
-                Previous="PreviousAsync" Next="NextAsync">
+                PageChanged="ChangePageAsync">
                 <span>@data.Total thông báo</span>
             </TablePagination>
             }
@@ -170,7 +170,8 @@
         }
         finally { publishing = false; }
     }
-    private Task PreviousAsync() { page--; mobileReading = false; return LoadAsync(); }
-    private Task NextAsync() { page++; mobileReading = false; return LoadAsync(); }
+    private Task PreviousAsync() => ChangePageAsync(page - 1);
+    private Task NextAsync() => ChangePageAsync(page + 1);
+    private Task ChangePageAsync(int target) { page = target; mobileReading = false; return LoadAsync(); }
     public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= OnRealtimeAsync; refresh?.Dispose(); cancellation.Cancel(); cancellation.Dispose(); }
 }

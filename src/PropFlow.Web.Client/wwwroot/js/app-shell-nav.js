@@ -132,16 +132,58 @@ export function initialize(element) {
 export function initializeScrolling(element) {
   const viewport = element.querySelector(".app-nav-scroll");
   if (!viewport) return { dispose() {} };
+  const content = viewport.querySelector(".app-nav-scroll-content");
+  const up = element.querySelector(".app-nav-scroll-up");
+  const down = element.querySelector(".app-nav-scroll-down");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let disposed = false;
   let queued = false;
   let forceNext = false;
   let lastActive = null;
+  const scrollRange = () => viewport.scrollHeight - viewport.clientHeight;
+  const updateEdge = (button, overflow, available) => {
+    if (!available && button === button.ownerDocument.activeElement) {
+      viewport.focus({ preventScroll: true });
+    }
+    button.disabled = !available;
+    button.hidden = !overflow;
+  };
+  const updateEdges = () => {
+    const range = scrollRange();
+    // Allow for rounding in scrollHeight/clientHeight and fractional scrollTop.
+    const overflow = viewport.clientHeight > 0 && range > 1;
+    updateEdge(up, overflow, overflow && viewport.scrollTop > 0.5);
+    updateEdge(down, overflow, overflow && viewport.scrollTop < range - 0.5);
+  };
+  const scrollByItems = direction => {
+    const item = content.querySelector("a[title]");
+    if (!item) return;
+    viewport.scrollBy({
+      top: direction * item.offsetHeight * 2.75,
+      behavior: reducedMotion.matches ? "instant" : "smooth"
+    });
+  };
+  const scrollUp = () => scrollByItems(-1);
+  const scrollDown = () => scrollByItems(1);
+  const wheelOnRail = event => {
+    if (event.ctrlKey || !event.deltaY) return;
+    // The viewport handles wheel input natively when it has room to scroll.
+    const canScroll = scrollRange() > 1;
+    if (canScroll && viewport.contains(event.target)) return;
+    event.preventDefault();
+    if (!canScroll) return;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.clientHeight : 1;
+    viewport.scrollTop += event.deltaY * unit;
+  };
   const reveal = item => {
     if (!item || viewport.clientHeight === 0) return;
     const bounds = viewport.getBoundingClientRect();
     const target = item.getBoundingClientRect();
-    if (target.top < bounds.top) viewport.scrollTop -= bounds.top - target.top;
-    else if (target.bottom > bounds.bottom) viewport.scrollTop += target.bottom - bounds.bottom;
+    const padding = window.getComputedStyle(viewport);
+    const top = bounds.top + (parseFloat(padding.scrollPaddingTop) || 0);
+    const bottom = bounds.bottom - (parseFloat(padding.scrollPaddingBottom) || 0);
+    if (target.top < top) viewport.scrollTop -= top - target.top;
+    else if (target.bottom > bottom) viewport.scrollTop += target.bottom - bottom;
   };
   const schedule = (force = false) => {
     forceNext ||= force;
@@ -150,19 +192,25 @@ export function initializeScrolling(element) {
     queueMicrotask(() => {
       queued = false;
       if (disposed) return;
-      const active = viewport.querySelector('a[aria-current="page"], a.active, a.is-selected');
+      const active = content.querySelector('a[aria-current="page"]') ?? content.querySelector("a.active, a.is-selected");
       if (forceNext || active !== lastActive) reveal(active);
       forceNext = false;
       lastActive = active;
+      updateEdges();
     });
   };
   const focused = event => reveal(event.target.closest("a"));
   viewport.addEventListener("focusin", focused);
+  viewport.addEventListener("scroll", updateEdges, { passive: true });
+  up.addEventListener("click", scrollUp);
+  down.addEventListener("click", scrollDown);
+  element.addEventListener("wheel", wheelOnRail, { passive: false });
   // Handles delayed authorization rendering, normal NavLink changes and admin query tabs.
-  const changes = new MutationObserver(() => schedule());
-  changes.observe(viewport, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "aria-current"] });
+  const changes = new MutationObserver(records => schedule(records.some(record => record.type === "childList")));
+  changes.observe(content, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "aria-current"] });
   const size = new ResizeObserver(() => schedule(true));
   size.observe(viewport);
+  size.observe(content);
   schedule(true);
   return {
     dispose() {
@@ -170,6 +218,10 @@ export function initializeScrolling(element) {
       changes.disconnect();
       size.disconnect();
       viewport.removeEventListener("focusin", focused);
+      viewport.removeEventListener("scroll", updateEdges);
+      up.removeEventListener("click", scrollUp);
+      down.removeEventListener("click", scrollDown);
+      element.removeEventListener("wheel", wheelOnRail);
     }
   };
 }

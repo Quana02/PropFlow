@@ -87,6 +87,17 @@ else
 
         <aside class="work-side-column">
             <section class="work-card summary-card"><header><h2>Tóm tắt nhiệm vụ</h2><strong>#@Code</strong></header><dl><div><dt>Tiêu đề sự cố</dt><dd>@RequestTitle</dd></div><div><dt>Danh mục</dt><dd>@(detail.CategoryName ?? "Chưa phân loại")</dd></div><div><dt>Mức độ ưu tiên</dt><dd class="danger-text">@PriorityLabel</dd></div><div><dt>Ngày phân công</dt><dd>@AssignedAtLabel</dd></div><div><dt>Trạng thái</dt><dd>@StatusLabel</dd></div></dl></section>
+            @if (detail.ApprovedRecommendation is { } approved)
+            {
+                <section class="work-card summary-card" aria-labelledby="approved-handling-title">
+                    <header><h2 id="approved-handling-title">Hướng xử lý đã được Manager duyệt</h2></header>
+                    <dl>
+                        @if (approved.Action is not null) { <div><dt>Hướng xử lý</dt><dd>@approved.Action</dd></div> }
+                        @if (approved.Resources is not null) { <div><dt>Nguồn lực</dt><dd>@approved.Resources</dd></div> }
+                        <div><dt>Kiểm tra hoặc bảo trì</dt><dd>@(approved.MaintenanceRequired == true ? "Nên xem xét" : "Theo hướng xử lý đã duyệt")</dd></div>
+                    </dl>
+                </section>
+            }
             <section class="work-card summary-card"><header><h2>Vị trí và thiết bị</h2><span class="success-text">@ServiceArea</span></header><dl><div><dt>Vị trí xử lý</dt><dd>@Location</dd></div><div><dt>Thiết bị liên quan</dt><dd>@Equipment</dd></div><div><dt>Mô tả yêu cầu</dt><dd>@detail.Description</dd></div></dl></section>
         </aside>
     </div>
@@ -247,7 +258,7 @@ else
         detail?.ApartmentUnitNumber is { } unit ? $"{unit} · Tầng {detail.FloorNumber}" : detail?.FacilityName ?? "Chưa gắn vị trí";
     private string Equipment => detail?.EquipmentName ?? "Chưa gắn thiết bị";
     private string ServiceArea => PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.Label(detail?.ServiceAreaCode);
-    private string PriorityLabel => detail?.PriorityCode switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", _ => "Tiêu chuẩn" };
+    private string PriorityLabel => detail?.PriorityCode switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", null => "Chưa xác định", _ => "Tiêu chuẩn" };
     private string StatusLabel => detail?.AdditionalCostConsent?.Status == "PENDING" ? "Chờ cư dân xác nhận phí" : detail?.AdditionalCostConsent?.Status == "REJECTED" ? "Cư dân đã từ chối dịch vụ" : detail?.Status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => "Không xác định" };
     private string AssignedAtLabel => detail is null ? "Chưa xác định" : detail.AssignedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string UpdatedAtLabel => detail is null ? "Chưa xác định" : detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");

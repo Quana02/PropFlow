@@ -1,16 +1,12 @@
 @inherits LayoutComponentBase
-@implements IAsyncDisposable
-@inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentFinanceNoticeState FinanceNotices
+@implements IDisposable
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
-@using Microsoft.AspNetCore.SignalR.Client
-@using PropFlow.Web.Client.Features.Finance.Services
-@inject PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentNotificationConnectionFactory NotificationConnections
 @inject PropFlow.Web.Client.Features.Resident.Shared.Services.IResidentApiClient Residents
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 
 <HeadContent>
-    <link rel="stylesheet" href="css/resident-portal.css?v=20261105-1" />
+    <link rel="stylesheet" href="css/resident-portal.css?v=20261112-1" />
 </HeadContent>
 
 <div class="resident-portal">
@@ -46,33 +42,12 @@
 @code {
     private ResidentPortalProfileContext _profileContext = ResidentPortalProfileContext.Loading;
 
-    private readonly CancellationTokenSource _noticeCancellation = new();
-    private Task? _noticeRefresh;
-    private HubConnection? _noticeConnection;
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         Navigation.LocationChanged += ContactLocationChanged;
-        FinanceNotices.Reset();
-        await Task.WhenAll(LoadProfileAsync(), FinanceNotices.ReloadAsync());
+        return LoadProfileAsync();
     }
-    private async Task RefreshNoticesAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try { await _noticeConnection!.StartAsync(ct); await InvokeAsync(FinanceNotices.ReloadAsync); return; }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch { try { await Task.Delay(TimeSpan.FromSeconds(3), ct); } catch (OperationCanceledException) { return; } }
-        }
-    }
-    public async ValueTask DisposeAsync()
-    {
-        Navigation.LocationChanged -= ContactLocationChanged;
-        _noticeCancellation.Cancel();
-        if (_noticeRefresh is not null) await _noticeRefresh;
-        if (_noticeConnection is not null) await _noticeConnection.DisposeAsync();
-        FinanceNotices.Reset();
-        _noticeCancellation.Dispose();
-    }
+    public void Dispose() => Navigation.LocationChanged -= ContactLocationChanged;
     private void ContactLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) => _ = InvokeAsync(StateHasChanged);
 
     private async Task LoadProfileAsync()
@@ -92,19 +67,6 @@
         }
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await JSRuntime.InvokeVoidAsync("propFlowResident.init");
-            _noticeConnection = NotificationConnections.Create();
-            _noticeConnection.On<ResidentNotice>("FinanceNotificationCreated", notice => InvokeAsync(async () =>
-            {
-                FinanceNotices.Receive(notice);
-                await FinanceNotices.ReloadAsync();
-            }));
-            _noticeConnection.Reconnected += _ => InvokeAsync(FinanceNotices.ReloadAsync);
-            _noticeRefresh = RefreshNoticesAsync(_noticeCancellation.Token);
-        }
-    }
+    protected override Task OnAfterRenderAsync(bool firstRender) =>
+        firstRender ? JSRuntime.InvokeVoidAsync("propFlowResident.init").AsTask() : Task.CompletedTask;
 }

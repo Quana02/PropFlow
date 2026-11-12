@@ -113,8 +113,8 @@
                     </tbody>
                 </table>
             </div>
-            <TablePagination Page="results.PageIndex" TotalPages="TotalPages" Label="Phân trang tài khoản cư dân"
-                Previous="@(() => LoadAsync(results.PageIndex - 1))" Next="@(() => LoadAsync(results.PageIndex + 1))">
+            <TablePagination Page="results.PageIndex" TotalPages="TotalPages" Busy="loading" Label="Phân trang tài khoản cư dân"
+                PageChanged="LoadAsync">
                 <span>@results.TotalCount hồ sơ</span>
             </TablePagination>
         }

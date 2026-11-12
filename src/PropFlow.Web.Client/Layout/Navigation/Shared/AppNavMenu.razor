@@ -13,24 +13,28 @@
          title="Kéo để di chuyển menu" aria-label="Di chuyển menu bằng cách kéo hoặc phím mũi tên">
         <span aria-hidden="true">⋮⋮</span>
     </div>
-    <div class="app-nav-scroll">
-        <AuthorizeView Roles="ADMIN"><AdminNavMenu /></AuthorizeView>
-        <AuthorizeView Roles="ACCOUNTANT"><AccountantNavMenu /></AuthorizeView>
-        <AuthorizeView Roles="MANAGER" Policy="@AssetPermissions.ViewPolicy"><OperationsNavMenu /></AuthorizeView>
-        <AuthorizeView Roles="STAFF" Policy="@AssetPermissions.ViewPolicy"><StaffNavMenu /></AuthorizeView>
+    <button type="button" class="app-nav-scroll-edge app-nav-scroll-up" aria-label="Cuộn lên" title="Cuộn lên" hidden></button>
+    <div class="app-nav-scroll" role="group" aria-label="Danh sách chức năng" tabindex="-1">
+        <div class="app-nav-scroll-content">
+            <AuthorizeView Roles="ADMIN"><AdminNavMenu /></AuthorizeView>
+            <AuthorizeView Roles="ACCOUNTANT"><AccountantNavMenu /></AuthorizeView>
+            <AuthorizeView Roles="MANAGER" Policy="@AssetPermissions.ViewPolicy"><OperationsNavMenu /></AuthorizeView>
+            <AuthorizeView Roles="STAFF" Policy="@AssetPermissions.ViewPolicy"><StaffNavMenu /></AuthorizeView>
+        </div>
     </div>
+    <button type="button" class="app-nav-scroll-edge app-nav-scroll-down" aria-label="Cuộn xuống" title="Cuộn xuống" hidden></button>
 </div>
 
 @code {
     private bool disposed;
     private ElementReference railRef;
     private IJSObjectReference? module;
-    private IJSObjectReference? dragHandle;
+    private IJSObjectReference? railHandle;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-nav.js?v=20261109-2");
+        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-shell-nav.js?v=20261112-3");
         if (disposed) { await imported.DisposeAsync(); return; }
         module = imported;
         var initialized = await module.InvokeAsync<IJSObjectReference>("initialize", railRef);
@@ -40,7 +44,7 @@
             await initialized.DisposeAsync();
             return;
         }
-        dragHandle = initialized;
+        railHandle = initialized;
     }
 
     public async ValueTask DisposeAsync()
@@ -49,10 +53,10 @@
         disposed = true;
         try
         {
-            if (dragHandle is not null)
+            if (railHandle is not null)
             {
-                await dragHandle.InvokeVoidAsync("dispose");
-                await dragHandle.DisposeAsync();
+                await railHandle.InvokeVoidAsync("dispose");
+                await railHandle.DisposeAsync();
             }
             if (module is not null) await module.DisposeAsync();
         }
