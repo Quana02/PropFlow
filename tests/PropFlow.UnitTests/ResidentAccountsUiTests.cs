@@ -50,7 +50,7 @@ public sealed class ResidentAccountsUiTests
         var html = await RenderAsync<ResidentAccounts>("MANAGER", true);
         Assert.Contains("aria-label=\"Bảng tài khoản cư dân\"", html);
         Assert.Contains("41 hồ sơ", html);
-        Assert.Matches("aria-current=\"page\" aria-label=\"Trang 1 trên 3\"[^>]*>1 / 3</span>", html);
+        Assert.Matches("aria-current=\"page\" aria-label=\"Trang 1 trên 3\"[^>]*>\\s*1 / 3\\s*</button>", html);
         Assert.Matches("<button type=\"button\" title=\"Trang sau\"", html);
         Assert.Contains("title=\"LOGIN@EXAMPLE.INVALID\"", html);
         Assert.Contains("contact@example.invalid", html);
@@ -73,6 +73,7 @@ public sealed class ResidentAccountsUiTests
     [InlineData(3, 3, false, false, true)]
     [InlineData(2, 3, true, true, true)]
     [InlineData(1, 0, false, true, true)]
+    [InlineData(1, 1, false, true, true)]
     public async Task Pagination_marks_current_page_and_disables_arrows_at_boundaries_or_while_loading(
         int page, int totalPages, bool busy, bool previousDisabled, bool nextDisabled)
     {
@@ -80,20 +81,23 @@ public sealed class ResidentAccountsUiTests
         {
             [nameof(TablePagination.Page)] = page,
             [nameof(TablePagination.TotalPages)] = totalPages,
-            [nameof(TablePagination.Busy)] = busy
+            [nameof(TablePagination.Busy)] = busy,
+            [nameof(TablePagination.PageChanged)] = EventCallback.Factory.Create<int>(this, _ => { })
         });
 
         if (totalPages == 0)
         {
-            Assert.Matches("aria-label=\"Không có trang kết quả\"[^>]*>0 / 0</span>", html);
+            Assert.Matches("aria-label=\"Không có trang kết quả\"[^>]*>\\s*0 / 0\\s*</button>", html);
             Assert.DoesNotContain("aria-current", html);
         }
         else
         {
-            Assert.Matches($"aria-current=\"page\" aria-label=\"Trang {page} trên {totalPages}\"[^>]*>{page} / {totalPages}</span>", html);
+            Assert.Matches($"aria-current=\"page\" aria-label=\"Trang {page} trên {totalPages}\"[^>]*>\\s*{page} / {totalPages}\\s*</button>", html);
         }
+        Assert.Equal(previousDisabled, Regex.IsMatch(html, "<button type=\"button\" disabled[^>]*title=\"Trang đầu\""));
         Assert.Equal(previousDisabled, Regex.IsMatch(html, "<button type=\"button\" disabled[^>]*title=\"Trang trước\""));
         Assert.Equal(nextDisabled, Regex.IsMatch(html, "<button type=\"button\" disabled[^>]*title=\"Trang sau\""));
+        Assert.Equal(nextDisabled, Regex.IsMatch(html, "<button type=\"button\" disabled[^>]*title=\"Trang cuối\""));
     }
 
     private static async Task<string> RenderAsync<T>(string role, bool hasReadPermission,

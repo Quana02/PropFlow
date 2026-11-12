@@ -14,17 +14,6 @@ export function copyMessageText(text) {
     return navigator.clipboard.writeText(text);
 }
 
-export function openMessageDetails(dialog) {
-    if (!dialog?.isConnected || dialog.open) return;
-    dialog.oncancel = event => {
-        event.preventDefault();
-        dialog.querySelector("button[autofocus]").click();
-    };
-    dialog.showModal();
-}
-
-export function closeMessageDetails(dialog) {
-    dialog?.close();
 }
 
 export function visibleMessages(thread) {

@@ -47,7 +47,7 @@
    @if (initialized && data.TotalCount > 0)
    {
        <TablePagination Page="data.PageIndex" TotalPages="TotalPages" Busy="loading" Label="Phân trang cư dân"
-           Previous="@(() => GoPage(data.PageIndex - 1))" Next="@(() => GoPage(data.PageIndex + 1))">
+           PageChanged="GoPage">
            <span>@data.TotalCount cư dân</span>
        </TablePagination>
    }

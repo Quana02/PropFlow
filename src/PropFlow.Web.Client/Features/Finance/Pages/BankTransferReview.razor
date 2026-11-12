@@ -1,3 +1,4 @@
+@using PropFlow.Web.Client.Shared.Feedback
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/finance/payments/bank-transfers"
 @layout PropFlow.Web.Client.Layout.AccountantLayout
@@ -21,33 +22,54 @@
     } }
     </tbody></table></section>
     <TablePagination Page="page" TotalPages="@((data?.Total ?? 0) > 0 ? Pages : 0)" Busy="loading" Label="Phân trang giao dịch"
-        Previous="PreviousAsync" Next="NextAsync">
+        PageChanged="ChangePageAsync">
         <span>@(data?.Total ?? 0) giao dịch</span>
     </TablePagination>
 </div>
 
 @if (selected is not null)
 {
-    <div class="bank-backdrop"><section class="bank-dialog" role="dialog" aria-modal="true" aria-labelledby="bank-transfer-title">
-        <header><div><small>GIAO DỊCH ĐÃ NHẬN TỪ NGÂN HÀNG</small><h2 id="bank-transfer-title">SePay #@selected.TransactionId</h2></div><button type="button" disabled="@saving" @onclick="Close">Đóng</button></header>
-        <dl><div><dt>Số tiền nhận</dt><dd>@Money(selected.Amount)</dd></div><div><dt>Đã phân bổ</dt><dd>@Money(selected.AllocatedAmount)</dd></div><div><dt>Chưa phân bổ</dt><dd>@Money(selected.Amount - selected.AllocatedAmount)</dd></div><div><dt>Kết quả kiểm tra</dt><dd>@Outcome(selected.Outcome)</dd></div></dl>
-        <p class="bank-memo">Nội dung ngân hàng: @(selected.Content ?? "Không có")</p>
-        @if (!string.IsNullOrWhiteSpace(selected.ReviewNote)) { <p>Ghi chú trước: @selected.ReviewNote</p> }
-        @if (selected.Status == "REVIEW")
-        {
-            @if (selected.PaymentId is null)
+    <PropFlowConfirmationDialog Title="@($"SePay #{selected.TransactionId}")"
+        Message="Giao dịch đã nhận từ ngân hàng."
+        Tone="@(selected.Status == "REVIEW" ? DialogTone.Decision : DialogTone.Info)" Wide
+        Busy="@saving" CancelText="Quay lại" OnCancel="Close">
+        <ChildContent>
+            <div class="bank-dialog-content">
+                <dl><div><dt>Số tiền nhận</dt><dd>@Money(selected.Amount)</dd></div><div><dt>Đã phân bổ</dt><dd>@Money(selected.AllocatedAmount)</dd></div><div><dt>Chưa phân bổ</dt><dd>@Money(selected.Amount - selected.AllocatedAmount)</dd></div><div><dt>Kết quả kiểm tra</dt><dd>@Outcome(selected.Outcome)</dd></div></dl>
+                <p class="bank-memo">Nội dung ngân hàng: @(selected.Content ?? "Không có")</p>
+                @if (!string.IsNullOrWhiteSpace(selected.ReviewNote)) { <p>Ghi chú trước: @selected.ReviewNote</p> }
+                @if (selected.Status == "REVIEW")
+                {
+                    @if (selected.PaymentId is null)
+                    {
+                        <div class="invoice-search"><input @bind="invoiceSearch" placeholder="Tìm hóa đơn, căn hộ hoặc cư dân" aria-label="Tìm hóa đơn" /><button type="button" disabled="@saving" @onclick="FindInvoicesAsync">Tìm hóa đơn</button></div>
+                        <label>Hóa đơn nhận khoản thu<PropFlowSelect Value="@(invoiceId == Guid.Empty ? "" : invoiceId.ToString())" ValueChanged="SelectInvoice" Options="InvoiceOptions" Searchable="true" Disabled="saving" Placeholder="Chọn hóa đơn" AriaLabel="Hóa đơn nhận khoản thu SePay" /></label>
+                        <label>Số tiền phân bổ (VND)<input type="number" step="1" min="1" max="@selected.Amount" @bind="allocation" /></label>
+                        <p>Chỉ phân bổ trong số tiền thực nhận và số còn nợ. Nếu còn tiền dư, giao dịch tiếp tục nằm trong danh sách cần xử lý.</p>
+                    }
+                    else { <p>Khoản thu đã được ghi nhận. Hãy xử lý phần tiền dư theo quy trình kế toán và ghi rõ kết quả trước khi đóng giao dịch.</p> }
+                    <label>Ghi chú xử lý bắt buộc<textarea maxlength="1000" @bind="reviewNote" placeholder="Nêu lý do gắn hóa đơn, xử lý tiền dư hoặc bỏ qua giao dịch"></textarea></label>
+                    @if (!string.IsNullOrWhiteSpace(dialogError)) { <p class="bank-error" role="alert">@dialogError</p> }
+                }
+            </div>
+        </ChildContent>
+        <Actions>
+            @if (selected.Status == "REVIEW")
             {
-                <div class="invoice-search"><input @bind="invoiceSearch" placeholder="Tìm hóa đơn, căn hộ hoặc cư dân" aria-label="Tìm hóa đơn" /><button type="button" disabled="@saving" @onclick="FindInvoicesAsync">Tìm hóa đơn</button></div>
-                <label>Hóa đơn nhận khoản thu<PropFlowSelect Value="@(invoiceId == Guid.Empty ? "" : invoiceId.ToString())" ValueChanged="SelectInvoice" Options="InvoiceOptions" Searchable="true" Disabled="saving" Placeholder="Chọn hóa đơn" AriaLabel="Hóa đơn nhận khoản thu SePay" /></label>
-                <label>Số tiền phân bổ (VND)<input type="number" step="1" min="1" max="@selected.Amount" @bind="allocation" /></label>
-                <p>Chỉ phân bổ trong số tiền thực nhận và số còn nợ. Nếu còn tiền dư, giao dịch tiếp tục nằm trong danh sách cần xử lý.</p>
+                <button type="button" class="pf-dialog__danger" disabled="@(saving || reviewNote.Trim().Length < 3)" @onclick="DismissAsync">
+                    Đóng giao dịch theo ghi chú
+                </button>
+                @if (selected.PaymentId is null)
+                {
+                    <button class="pf-dialog__primary" type="button" disabled="@(saving || invoiceId == Guid.Empty || allocation <= 0 || allocation > selected.Amount || reviewNote.Trim().Length < 3)" @onclick="AssignAsync">@(saving ? "Đang gửi…" : "Gắn hóa đơn & đối soát")</button>
+                }
             }
-            else { <p>Khoản thu đã được ghi nhận. Hãy xử lý phần tiền dư theo quy trình kế toán và ghi rõ kết quả trước khi đóng giao dịch.</p> }
-            <label>Ghi chú xử lý bắt buộc<textarea maxlength="1000" @bind="reviewNote" placeholder="Nêu lý do gắn hóa đơn, xử lý tiền dư hoặc bỏ qua giao dịch"></textarea></label>
-            @if (!string.IsNullOrWhiteSpace(dialogError)) { <p class="bank-error" role="alert">@dialogError</p> }
-            <footer><button type="button" disabled="@(saving || reviewNote.Trim().Length < 3)" @onclick="DismissAsync">Đóng giao dịch theo ghi chú</button>@if (selected.PaymentId is null) { <button class="primary" type="button" disabled="@(saving || invoiceId == Guid.Empty || allocation <= 0 || allocation > selected.Amount || reviewNote.Trim().Length < 3)" @onclick="AssignAsync">@(saving ? "Đang gửi…" : "Gắn hóa đơn & đối soát")</button> }</footer>
-        }
-    </section></div>
+            else
+            {
+                <button type="button" class="pf-dialog__primary" autofocus @onclick="Close">Đóng</button>
+            }
+        </Actions>
+    </PropFlowConfirmationDialog>
 }
 
 @code {
@@ -83,19 +105,13 @@
     }
     private Task ResetAsync() { page = 1; data = null; return ReloadAsync(); }
     private Task StatusChanged(string value) { status = value; return ResetAsync(); }
-    private Task PreviousAsync()
+    private Task ChangePageAsync(int target)
     {
-        if (loading || page <= 1) return Task.CompletedTask;
-        page--;
+        if (loading) return Task.CompletedTask;
+        page = target;
         return ReloadAsync();
     }
 
-    private Task NextAsync()
-    {
-        if (loading || page >= Pages) return Task.CompletedTask;
-        page++;
-        return ReloadAsync();
-    }
     private async Task OpenAsync(Guid id)
     {
         var result = await Api.SendAsync<BankTransferRow>(HttpMethod.Get, $"api/v1/payments/bank-transfers/{id}", ct: cancellation.Token);

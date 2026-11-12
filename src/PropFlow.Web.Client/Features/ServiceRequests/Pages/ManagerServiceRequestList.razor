@@ -115,7 +115,7 @@
         }
 
         <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(totalCount / (double)PageSize))" Busy="loading" Label="Phân trang yêu cầu"
-            Previous="PreviousPage" Next="NextPage">
+            PageChanged="ChangePageAsync">
             <span>Hiển thị @items.Count / @totalCount yêu cầu phù hợp</span>
         </TablePagination>
     </section>
@@ -188,8 +188,7 @@
     private async Task ToggleRecentThirtyDays() { submittedWithinDays = submittedWithinDays == 30 ? null : 30; page = 1; await LoadAsync(); }
     private async Task ClearSearch() { searchText = null; page = 1; await LoadAsync(); }
     private async Task ResetFilters() { searchText = null; selectedStatus = "ALL"; priorityFilter = null; unassignedOnly = false; submittedWithinDays = null; page = 1; await LoadAsync(); }
-    private async Task PreviousPage() { if (page > 1) { page--; await LoadAsync(); } }
-    private async Task NextPage() { if (page * PageSize < totalCount) { page++; await LoadAsync(); } }
+    private async Task ChangePageAsync(int target) { page = target; await LoadAsync(); }
     private async Task HandleSearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args) { if (args.Key == "Enter") { page = 1; await LoadAsync(); } }
     private void OpenDetail(Guid id) => Navigation.NavigateTo($"/manager/service-requests/{id}");
 

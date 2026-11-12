@@ -97,7 +97,7 @@
                 <button type="button" @onclick="LoadAsync">Thử lại</button>
             </div>
         }
-        else if (Requests.Count > 0)
+        else if (Requests.Count > 0 || (totalCount > 0 && currentPage > TotalPages))
         {
             <div class="staff-table-wrap">
             <table>
@@ -119,7 +119,7 @@
             </table>
             </div>
             <TablePagination Page="currentPage" TotalPages="TotalPages" Busy="loading" Label="Phân trang danh sách yêu cầu"
-                Previous="PreviousPageAsync" Next="NextPageAsync">
+                PageChanged="GoToPageAsync">
                 <span>@totalCount yêu cầu</span>
             </TablePagination>
         }
@@ -214,8 +214,6 @@
     private async Task SearchAsync() { currentPage = 1; await LoadAsync(); }
     private async Task ClearSearch() { requestCodeSearch = null; currentPage = 1; await LoadAsync(); }
     private async Task ResetFilters() { statusFilter = "ALL"; requestCodeSearch = null; currentPage = 1; await LoadAsync(); }
-    private Task PreviousPageAsync() => GoToPageAsync(currentPage - 1);
-    private Task NextPageAsync() => GoToPageAsync(currentPage + 1);
     private async Task GoToPageAsync(int page) { currentPage = Math.Clamp(page, 1, TotalPages); await LoadAsync(); }
     private static string LocationLabel(PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestListItem request) =>
         request.ApartmentUnitNumber is not null ? $"{request.ApartmentUnitNumber} · Tầng {request.FloorNumber}" :

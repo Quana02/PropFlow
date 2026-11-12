@@ -33,7 +33,7 @@
         @if (ForManager)
         {
             <ManagerSupportConversationList Conversations="conversations" SelectedId="selected?.Id"
-                Page="page" Busy="busy" Loading="loading" OnSelect="Select" OnPrevious="Previous" OnNext="Next" />
+                Page="page" Busy="busy" Loading="loading" OnSelect="Select" OnPageChanged="ChangePageAsync" />
         }
         else
         {
@@ -214,63 +214,59 @@
 {
     <PropFlowConfirmationDialog Title="@(action.Close ? "Kết thúc cuộc trò chuyện?" : "Chuyển cuộc trò chuyện?")"
         Message="@(action.Close ? "Các tin đã gửi vẫn được giữ trong lịch sử. Bản nháp chưa gửi sẽ bị xóa khi kết thúc phiên." : "Bản nháp đang soạn sẽ bị xóa khi chuyển sang cuộc trò chuyện khác.")"
-        ConfirmText="@(action.Close ? "Kết thúc phiên" : "Chuyển cuộc trò chuyện")" CancelText="Ở lại" Destructive="false"
+        ConfirmText="@(action.Close ? "Kết thúc phiên" : "Chuyển cuộc trò chuyện")" CancelText="Ở lại" Tone="@(action.Close ? DialogTone.Danger : DialogTone.Confirm)"
         Busy="@busy" OnConfirm="ConfirmAction" OnCancel="CancelConfirmation" />
 }
 
 @if (!identityChanged && messageAction is { } pending)
 {
     <PropFlowConfirmationDialog Title="@pending.Title" Message="@pending.Message" ConfirmText="@pending.ConfirmText"
-        Destructive="@(pending.Kind != MessageActionKind.Forward)" Busy="@busy"
+        Tone="@(pending.Kind == MessageActionKind.Forward ? DialogTone.Confirm : DialogTone.Danger)" Busy="@busy"
         OnConfirm="ConfirmMessageAction" OnCancel="CancelMessageAction" />
 }
 @if (!identityChanged && messageDetails is { } details)
 {
     var recipient = details.Kind == "MANAGER" ? selected?.ResidentName : selected?.ManagerName;
     var received = details.DeliveredAt is not null || details.SeenAt is not null;
-    <dialog @ref="detailsDialog" class="support-details" aria-labelledby="support-details-title">
-        <header class="support-details-header">
-            <h2 id="support-details-title">Thông tin tin nhắn</h2>
-            <button type="button" autofocus aria-label="Đóng" title="Đóng" @onclick="CloseMessageDetails">
-                <span class="material-symbols-outlined" aria-hidden="true">close</span>
-            </button>
-        </header>
-        <div class="support-details-preview">
-            <article class="support-details-bubble @(IsMine(details) ? "mine" : null)">
-                <strong>@details.SenderName</strong>
-                <p>@details.Text</p>
-                <time datetime="@details.CreatedAt.ToString("O")">@DetailsTime(details.CreatedAt)</time>
-                @if (details.RecalledAt is { } recalled)
+    <PropFlowConfirmationDialog Title="Thông tin tin nhắn" Tone="DialogTone.Info" OnCancel="CloseMessageDetails">
+        <ChildContent>
+            <div class="support-details-preview">
+                <article class="support-details-bubble @(IsMine(details) ? "mine" : null)">
+                    <strong>@details.SenderName</strong>
+                    <p>@details.Text</p>
+                    <time datetime="@details.CreatedAt.ToString("O")">@DetailsTime(details.CreatedAt)</time>
+                    @if (details.RecalledAt is { } recalled)
+                    {
+                        <small>Đã thu hồi · @DetailsTime(recalled)</small>
+                    }
+                </article>
+            </div>
+            <section class="support-details-receipt">
+                <h3>@(details.SeenAt is not null ? "Đã xem (1)" : received ? "Đã nhận (1)" : "Đã nhận (0)")</h3>
+                @if (received)
                 {
-                    <small>Đã thu hồi · @DetailsTime(recalled)</small>
-                }
-            </article>
-        </div>
-        <section class="support-details-receipt">
-            <h3>@(details.SeenAt is not null ? "Đã xem (1)" : received ? "Đã nhận (1)" : "Đã nhận (0)")</h3>
-            @if (received)
-            {
-                <div class="support-details-recipient">
-                    <span class="material-symbols-outlined support-details-avatar" aria-hidden="true">person</span>
-                    <div>
-                        <strong>@(recipient ?? "Người nhận")</strong>
-                        @if (details.DeliveredAt is { } deliveredAt)
-                        {
-                            <small>Đã nhận · @DetailsTime(deliveredAt)</small>
-                        }
-                        @if (details.SeenAt is { } seenAt)
-                        {
-                            <small>Đã xem · @DetailsTime(seenAt)</small>
-                        }
+                    <div class="support-details-recipient">
+                        <span class="material-symbols-outlined support-details-avatar" aria-hidden="true">person</span>
+                        <div>
+                            <strong>@(recipient ?? "Người nhận")</strong>
+                            @if (details.DeliveredAt is { } deliveredAt)
+                            {
+                                <small>Đã nhận · @DetailsTime(deliveredAt)</small>
+                            }
+                            @if (details.SeenAt is { } seenAt)
+                            {
+                                <small>Đã xem · @DetailsTime(seenAt)</small>
+                            }
+                        </div>
                     </div>
-                </div>
-            }
-            else
-            {
-                <p>Chưa có xác nhận đã nhận.</p>
-            }
-        </section>
-    </dialog>
+                }
+                else
+                {
+                    <p>Chưa có xác nhận đã nhận.</p>
+                }
+            </section>
+        </ChildContent>
+    </PropFlowConfirmationDialog>
 }
 
 @code {
@@ -299,7 +295,7 @@
     private long draftRevision;
     private CancellationTokenSource? draftDebounce;
     private IJSObjectReference? workspaceModule;
-    private ElementReference workspace, thread, detailsDialog;
+    private ElementReference workspace, thread;
     private string ConversationStatus => selected?.Status switch {
         "WAITING" => "Yêu cầu đang chờ Manager sẵn sàng. Bạn vẫn có thể gửi thêm nội dung.",
         "ACTIVE" => selected.ManagerOnline ? "Đang trao đổi với Ban quản lý" : "Manager đang mất kết nối. Tin đã gửi vẫn được lưu; bạn có thể chờ hoặc kết thúc phiên.",
@@ -508,8 +504,13 @@
         if (selected is null) return;
         if (ForManager) await Connection.PublishTyping(selected.Id, false); else await Connection.PublishDraft(selected.Id, "");
     }
-    private async Task Previous() { if (page > 1) { page--; await Reload(); } }
-    private async Task Next() { page++; await Reload(); }
+    private Task Previous() => page > 1 ? ChangePageAsync(page - 1) : Task.CompletedTask;
+    private Task Next() => ChangePageAsync(page + 1);
+    private async Task ChangePageAsync(int target)
+    {
+        page = target;
+        await Reload();
+    }
     private async Task Poll()
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1)); var tick = 0;
@@ -534,11 +535,6 @@
             await module.InvokeVoidAsync("bindComposer", workspace);
         }
         if (disposed || workspaceModule is null) return;
-        if (openDetails && messageDetails is not null)
-        {
-            openDetails = false;
-            await workspaceModule.InvokeVoidAsync("openMessageDetails", detailsDialog);
-        }
         if (focusSelectionId is Guid messageId)
         {
             focusSelectionId = null;
