@@ -245,6 +245,122 @@ namespace PropFlow.Modules.Communication.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PropFlow.Modules.Communication.Domain.EmergencyCalls.EmergencyCall", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Apartment")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ConnectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EndedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ManagerConnectionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("ManagerMediaConnected")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ManagerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("ManagerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResidentConnectionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("ResidentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("ResidentMediaConnected")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ResidentName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("ResidentUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ManagerUserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('CONNECTING','CONNECTED')");
+
+                    b.HasIndex("ResidentUserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 'ENDED'");
+
+                    b.HasIndex("ResidentUserId", "ClientRequestId")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("emergency_calls", "communication", t =>
+                        {
+                            t.HasCheckConstraint("ck_emergency_call_state", "\"Status\" IN ('WAITING','CONNECTING','CONNECTED','ENDED') AND ((\"Status\" = 'ENDED') = (\"EndedAt\" IS NOT NULL)) AND (\"Status\" NOT IN ('CONNECTING','CONNECTED') OR (\"ManagerUserId\" IS NOT NULL AND \"ManagerConnectionId\" IS NOT NULL)) AND \"Revision\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.Communication.Domain.EmergencyCalls.EmergencyConnection", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ExpiresAt");
+
+                    b.ToTable("emergency_connections", "communication");
+                });
+
             modelBuilder.Entity("PropFlow.Modules.Communication.Domain.Notifications.FinanceEmail", b =>
                 {
                     b.Property<Guid>("Id")

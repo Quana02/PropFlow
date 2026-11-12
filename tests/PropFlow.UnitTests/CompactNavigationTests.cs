@@ -77,6 +77,8 @@ public sealed class CompactNavigationTests
             if (count > 0) Assert.Single(links.Where(link => link.Contains("aria-current=\"page\"", StringComparison.Ordinal)));
             else Assert.DoesNotContain("/knowledge/documents", html);
             Assert.Contains("class=\"app-nav-scroll\"", html);
+            Assert.Contains("app-nav-scroll-hint", html);
+            Assert.DoesNotContain("app-nav-scroll-button", html);
         });
     }
 }

@@ -15,6 +15,60 @@ public sealed class SubmitServiceRequestTests
     private static readonly DateTimeOffset Now = new(2026, 10, 2, 3, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task Description_only_request_is_saved_unclassified_for_manager_review()
+    {
+        var residence = new ActiveResidentResidence(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var store = new FakeStore(null);
+        var command = new CreateResidentServiceRequestRequest(null, null,
+            "  Vòi nước trong bếp bị rò.\nNhờ kiểm tra giúp tôi.  ", null, null, null, null);
+
+        var result = await Handler(store, residence).HandleAsync(Guid.NewGuid(), command, default);
+
+        Assert.Equal(SubmitServiceRequestOutcome.Created, result.Outcome);
+        var request = Assert.IsType<ServiceRequest>(store.Request);
+        Assert.Equal("Vòi nước trong bếp bị rò. Nhờ kiểm tra giúp tôi.", request.Title);
+        Assert.Equal(command.Description.Trim(), request.Description);
+        Assert.Equal(residence.ApartmentUnitId, request.ApartmentUnitId);
+        Assert.Null(request.CategoryId);
+        Assert.Null(request.FinalPriorityCode);
+        Assert.Null(request.ServiceAreaCode);
+        Assert.Null(request.FacilityId);
+        Assert.Equal(0, store.CategoryLookups);
+    }
+
+    [Fact]
+    public async Task Long_description_keeps_full_content_and_produces_short_title()
+    {
+        var store = new FakeStore(null);
+        var description = string.Join(" ", Enumerable.Repeat("Nước bị rò trong bếp.", 30));
+        var command = new CreateResidentServiceRequestRequest(null, null, description, null, null, null, null);
+
+        var result = await Handler(store, new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()))
+            .HandleAsync(Guid.NewGuid(), command, default);
+
+        Assert.Equal(SubmitServiceRequestOutcome.Created, result.Outcome);
+        Assert.Equal(description, store.Request!.Description);
+        Assert.InRange(store.Request.Title.Length, 1, 120);
+        Assert.EndsWith("…", store.Request.Title);
+    }
+
+    [Theory]
+    [InlineData("", null, null, "invalid_description")]
+    [InlineData("Quá ngắn", null, null, "invalid_description")]
+    [InlineData("Vòi nước bị rò cần kiểm tra.", "UNKNOWN", null, "invalid_priority")]
+    [InlineData("Vòi nước bị rò cần kiểm tra.", null, "UNKNOWN", "invalid_service_area")]
+    public async Task Simplified_input_still_enforces_server_validation(string description, string? priority, string? area, string code)
+    {
+        var store = new FakeStore(null);
+        var result = await Handler(store, new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())).HandleAsync(
+            Guid.NewGuid(), new(null, null, description, area, priority, null, null), default);
+
+        Assert.Equal(SubmitServiceRequestOutcome.InvalidInput, result.Outcome);
+        Assert.Equal(code, result.ErrorCode);
+        Assert.Null(store.Request);
+    }
+
+    [Fact]
     public async Task Public_requests_use_the_active_facility_catalog_and_reject_an_inactive_facility()
     {
         var active = new MaintenanceAssetReference(Guid.NewGuid(), "F-1", "Tiện ích từ danh mục", "FACILITY", "ACTIVE", null);
@@ -170,11 +224,15 @@ public sealed class SubmitServiceRequestTests
 
     private sealed class FakeStore(Guid? categoryId) : IServiceRequestSubmissionStore
     {
+        public int CategoryLookups { get; private set; }
         public ServiceRequest? Request { get; private set; }
         public ServiceRequestActivity? Activity { get; private set; }
 
-        public Task<Guid?> FindActiveCategoryIdAsync(string categoryCode, CancellationToken ct) =>
-            Task.FromResult(categoryId);
+        public Task<Guid?> FindActiveCategoryIdAsync(string categoryCode, CancellationToken ct)
+        {
+            CategoryLookups++;
+            return Task.FromResult(categoryId);
+        }
 
         public Task AddAsync(
             ServiceRequest request,

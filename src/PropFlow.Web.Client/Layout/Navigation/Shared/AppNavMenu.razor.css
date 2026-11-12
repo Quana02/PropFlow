@@ -39,6 +39,65 @@
     outline-offset: -2px;
 }
 
+.app-nav-scroll-hint {
+    display: none;
+    position: absolute;
+    z-index: 1;
+    inset-inline: 0;
+    height: 1.35rem;
+    place-items: center;
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+}
+.app-nav-hint-up {
+    top: 2.25rem;
+    --hint-offset: -3px;
+    background: linear-gradient(to bottom, #0284c7 30%, transparent);
+}
+.app-nav-hint-down {
+    bottom: 0;
+    --hint-offset: 3px;
+    border-radius: 0 0 1rem 1rem;
+    background: linear-gradient(to top, #0284c7 30%, transparent);
+}
+.app-floating-nav[data-can-scroll-up="true"] .app-nav-hint-up,
+.app-floating-nav[data-can-scroll-down="true"] .app-nav-hint-down { display: grid; }
+.app-nav-scroll-hint > span { animation: app-nav-scroll-cue 1.8s ease-in-out infinite; }
+@keyframes app-nav-scroll-cue {
+    0%, 100% { opacity: .8; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(var(--hint-offset)); }
+}
+.app-nav-scroll-label {
+    display: none;
+    position: absolute;
+    right: calc(100% + .65rem);
+    bottom: .3rem;
+    padding: .5rem .7rem;
+    border: 1px solid #38bdf8;
+    border-radius: .65rem;
+    background: #075985;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, .22);
+    font-size: .75rem;
+    font-weight: 700;
+    line-height: 1.35;
+    white-space: nowrap;
+    pointer-events: none;
+}
+.app-floating-nav[data-dock-side="left"] .app-nav-scroll-label { right: auto; left: calc(100% + .65rem); }
+.app-floating-nav[data-can-scroll-down="true"] .app-nav-scroll-label,
+.app-floating-nav[data-can-scroll-up="true"] .app-nav-scroll-label { display: block; }
+.app-nav-scroll-label-up { display: none; }
+.app-floating-nav[data-can-scroll-down="false"] .app-nav-scroll-label-down { display: none; }
+.app-floating-nav[data-can-scroll-down="false"] .app-nav-scroll-label-up { display: inline; }
+.app-floating-nav.is-dragging .app-nav-scroll-label { display: none; }
+@media (prefers-reduced-motion: reduce) {
+    .app-nav-scroll-hint > span { animation: none; opacity: .85; }
+}
+
 .app-floating-nav ::deep .app-rail,
 .app-floating-nav ::deep .admin-nav,
 .app-floating-nav ::deep .operations-nav,
