@@ -43,3 +43,4 @@ dt { color:var(--admin-muted,#64748b); } dd { margin:0; overflow-wrap:anywhere; 
 details { margin-top:1rem; } summary { cursor:pointer; color:var(--admin-muted,#64748b); font-size:.75rem; }
 @media(max-width:850px) { .audit-filters { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:520px) { .audit-filters { grid-template-columns:1fr; } .audit-dialog { padding:1rem; } dl { grid-template-columns:1fr; gap:.4rem; } dd { margin-bottom:.5rem; } }
+.audit-dialog-content { display: grid; gap: .75rem; min-width: 0; }

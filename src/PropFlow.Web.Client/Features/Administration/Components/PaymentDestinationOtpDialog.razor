@@ -1,12 +1,13 @@
 @using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Shared.Feedback
 @implements IDisposable
 
-<div class="otp-backdrop" role="presentation" @onclick="Cancel">
-    <section class="otp-dialog" role="dialog" aria-modal="true" aria-labelledby="payment-otp-title" @onclick:stopPropagation="true">
-        <header>
-            <span class="material-symbols-outlined" aria-hidden="true">mark_email_read</span>
-            <div><h2 id="payment-otp-title">Xác nhận bằng email OTP</h2><p>Mã đã được gửi tới <strong>@Challenge.MaskedEmail</strong></p></div>
-        </header>
+<PropFlowConfirmationDialog Title="Xác nhận bằng email OTP"
+    Tone="@(Action == "DEACTIVATE" ? DialogTone.Danger : DialogTone.Confirm)"
+    Message="@($"Mã xác minh đã được gửi tới {Challenge.MaskedEmail}.")"
+    ConfirmText="Xác minh" BusyText="Đang xác minh…" Busy="@Busy"
+    ConfirmDisabled="@(otpCode.Length != 6)" FocusContent CloseOnBackdrop="true" OnConfirm="Confirm" OnCancel="Cancel">
+    <ChildContent>
         <div class="otp-body">
             <p>Nhập mã gồm 6 chữ số để @(Action == "CONNECT" ? "kết nối tài khoản SePay" : Action == "WEBHOOK" ? "thiết lập nhận thông báo giao dịch" : Action == "DEACTIVATE" ? "vô hiệu hóa cấu hình nhận tiền" : "kích hoạt cấu hình nhận tiền").</p>
             <label>Mã xác minh
@@ -20,14 +21,8 @@
             </div>
             @if (!string.IsNullOrWhiteSpace(Error)) { <p class="otp-error" role="alert">@Error</p> }
         </div>
-        <footer>
-            <button type="button" class="secondary" disabled="@Busy" @onclick="Cancel">Hủy</button>
-            <button type="button" class="primary" disabled="@(Busy || otpCode.Length != 6)" @onclick="Confirm">
-                @(Busy ? "Đang xác minh…" : "Xác nhận")
-            </button>
-        </footer>
-    </section>
-</div>
+    </ChildContent>
+</PropFlowConfirmationDialog>
 
 @code {
     [Parameter, EditorRequired] public PrivilegedActionChallengeResult Challenge { get; set; } = null!;

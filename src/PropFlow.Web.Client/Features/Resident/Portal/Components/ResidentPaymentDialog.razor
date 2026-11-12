@@ -20,7 +20,7 @@
     </form>
 </section>
 </div>
-@if (confirming) { <PropFlowConfirmationDialog Title="Gửi xác nhận thanh toán?" Message="@($"Gửi khoản {Money(amount)} đ của hóa đơn {Invoice.Number} cho kế toán kiểm tra?")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="busy" OnConfirm="Submit" OnCancel="() => confirming = false" /> }
+@if (confirming) { <PropFlowConfirmationDialog Title="Gửi xác nhận thanh toán?" Message="@($"Kế toán sẽ kiểm tra khoản thanh toán {Money(amount)} đ của hóa đơn {Invoice.Number}.")" ConfirmText="Gửi xác nhận" Busy="busy" OnConfirm="Submit" OnCancel="() => confirming = false" /> }
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
 

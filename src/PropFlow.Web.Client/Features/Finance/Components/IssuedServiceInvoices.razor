@@ -22,7 +22,7 @@
         else { @foreach (var i in PageItems) { <tr @key="i.Id"><td><strong><a href="@($"/finance/invoices/{i.Id}")">@i.Number</a></strong><small>@(i.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ")</small></td><td><strong>@i.ResidentName</strong><small>Căn hộ @i.Apartment</small></td><td><span class="period-pill">@i.Period.ToString("MM/yyyy")</span><small class="@(IsOverdue(i) ? "overdue-text" : null)">Hạn: @(i.DueDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</small></td><td class="money">@Money(i.Total)</td><td class="money"><strong>@Money(i.Outstanding)</strong>@if (i.Paid > 0) { <small>Đã thu @Money(i.Paid)</small> }</td><td><span class="status-pill @StatusClass(i)">@StatusName(i)</span></td><td><FinanceTableActions><FinanceSendInvoiceButton InvoiceId="i.Id" /><FinanceDocumentButton @key="i.Id" Path="@($"api/v1/billing/cycle/invoices/{i.Id}/print")" Label="In hóa đơn" /></FinanceTableActions></td></tr> } }
         </tbody></table></div>
         <TablePagination Page="CurrentPage" TotalPages="@(Filtered.Length == 0 ? 0 : TotalPages)" Busy="loading" Label="Phân trang hóa đơn"
-            Previous="@(() => page = CurrentPage - 1)" Next="@(() => page = CurrentPage + 1)">
+            PageChanged="@(target => page = target)">
             <span>@(Filtered.Length == 0 ? "Không có kết quả" : $"Hiển thị {(CurrentPage - 1) * pageSize + 1}–{Math.Min(CurrentPage * pageSize, Filtered.Length)} / {Filtered.Length} hóa đơn")</span>
             <label class="pagination-size">Số dòng <PropFlowSelect Value="@pageSize.ToString()" ValueChanged="ChangePageSize" Options="PageSizeOptions" AriaLabel="Số dòng mỗi trang" Variant="Filter" /></label>
         </TablePagination>

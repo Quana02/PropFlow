@@ -24,7 +24,7 @@
 {
     <PropFlowConfirmationDialog Title="@(decision.Value ? "Đồng ý chi phí phát sinh?" : "Từ chối yêu cầu dịch vụ?")"
         Message="@(decision.Value ? $"Bạn đồng ý phí phát sinh {Money(pending.Amount)} để tiếp tục xử lý yêu cầu." : "Yêu cầu sẽ bị từ chối và bộ phận xử lý sẽ dừng công việc.")"
-        ConfirmText="Xác nhận" CancelText="Quay lại" Destructive="@(!decision.Value)" Busy="busy" OnConfirm="Submit" OnCancel="Cancel" />
+        ConfirmText="Xác nhận" CancelText="Quay lại" Tone="@(decision.Value ? DialogTone.Confirm : DialogTone.Danger)" Busy="busy" OnConfirm="Submit" OnCancel="Cancel" />
 }
 
 @code {

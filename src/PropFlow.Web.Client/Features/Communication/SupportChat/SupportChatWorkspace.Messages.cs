@@ -16,7 +16,7 @@ public partial class SupportChatWorkspace
     private Guid? pendingReplyId, focusSelectionId;
     private SupportMessageView? replyTo, messageDetails;
     private PendingMessageAction? messageAction;
-    private bool selecting, sending, sendFailed, focusReply, openDetails;
+    private bool selecting, sending, sendFailed, focusReply;
     private DateTimeOffset nextReceiptAttempt;
 
     private bool HasSelectedContent => selectedMessages.Count > 0 &&
@@ -96,7 +96,7 @@ public partial class SupportChatWorkspace
         if (selected is null) return;
         var title = ids.Length == 1 ? "Thu hồi tin nhắn?" : $"Thu hồi {ids.Length} tin nhắn?";
         messageAction = new(selected.Id, MessageActionKind.Recall, ids, title,
-            "Nội dung các tin đã chọn sẽ được ẩn với cả hai bên trong hội thoại này.", "Thu hồi");
+            "Cả hai bên sẽ không còn thấy nội dung của các tin nhắn đã chọn.", "Thu hồi");
     }
 
     private async Task PrepareForward(Guid[] ids)
@@ -172,7 +172,6 @@ public partial class SupportChatWorkspace
             if (result.IsSuccess)
             {
                 messageDetails = result.Data;
-                openDetails = messageDetails is not null;
             }
             else feedback.Publish(() => OperationError(result));
         }
@@ -180,11 +179,7 @@ public partial class SupportChatWorkspace
         finally { busy = false; }
     }
 
-    private async Task CloseMessageDetails()
-    {
-        if (workspaceModule is not null) await workspaceModule.InvokeVoidAsync("closeMessageDetails", detailsDialog);
-        messageDetails = null;
-    }
+    private void CloseMessageDetails() => messageDetails = null;
 
     private string DetailsTime(DateTimeOffset timestamp)
     {
@@ -200,7 +195,6 @@ public partial class SupportChatWorkspace
         CancelSelection();
         messageAction = null;
         messageDetails = replyTo = null;
-        openDetails = false;
         pendingReplyId = null;
         sendFailed = false;
         focusReply = false;

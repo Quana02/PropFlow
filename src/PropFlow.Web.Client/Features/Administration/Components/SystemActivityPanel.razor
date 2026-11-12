@@ -1,3 +1,4 @@
+@using PropFlow.Web.Client.Shared.Feedback
 @using PropFlow.Web.Client.Features.Administration.Models
 @using PropFlow.Web.Client.Features.Administration.Services
 @using PropFlow.Web.Client.Shared.Forms
@@ -30,7 +31,7 @@
         }
         </tbody></table></div>
         <TablePagination Page="data.Page" TotalPages="@((int)Math.Ceiling(data.Total / (double)data.PageSize))" Busy="loading"
-            Label="Phân trang nhật ký hệ thống" Previous="PreviousAsync" Next="NextAsync">
+            Label="Phân trang nhật ký hệ thống" PageChanged="ChangePageAsync">
             <span>@data.Total hoạt động</span>
         </TablePagination>
     }
@@ -55,29 +56,32 @@
 }
 @if (selected is not null)
 {
-    <div class="audit-overlay" @onclick="Close" @onkeydown="ModalKey"><section class="audit-dialog" role="dialog" aria-modal="true" aria-labelledby="audit-detail-title" tabindex="-1" @ref="dialog" @onclick:stopPropagation>
-        <header><div><h2 id="audit-detail-title">Chi tiết hoạt động</h2><p>@ActionLabel(selected) · @ModuleLabel(selected.Module)</p></div><button type="button" class="secondary" data-autofocus aria-label="Đóng chi tiết hoạt động" @onclick="Close">Đóng</button></header>
-        <dl><dt>Thời gian</dt><dd>@LocalTime(selected.Timestamp).ToString("dd/MM/yyyy · HH:mm:ss")</dd><dt>Người thực hiện</dt><dd>@ActorLabel(selected)</dd>
-        <dt>Đối tượng</dt><dd>@EntityLabel(selected.EntityType) @selected.TargetUsername</dd><dt>Kết quả</dt><dd>@OutcomeLabel(selected.Outcome) @if(selected.HttpStatus.HasValue){<small>HTTP @selected.HttpStatus</small>}</dd></dl>
-        @if (selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
-        { <div class="legacy-change">@(selected.Action == "internal_account_created" ? "Tài khoản nội bộ được tạo" : Transition(selected.OldRole ?? selected.OldStatus, selected.NewRole ?? selected.NewStatus))</div> }
-        @{ var businessChanges = selected.Changes?.Where(change => FieldLabel(change.Field) is not null).ToArray() ?? []; }
-        @if (businessChanges.Length > 0)
-        {
-            <div class="audit-table-wrap"><table class="changes"><thead><tr><th>Trường thay đổi</th><th>Trước</th><th>Sau</th></tr></thead><tbody>
-            @foreach (var change in businessChanges) { <tr><td>@FieldLabel(change.Field)</td><td>@FieldValue(change.Field, change.Before)</td><td>@FieldValue(change.Field, change.After)</td></tr> }
-            </tbody></table></div>
-        }
-        else if (!selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
-        { <p class="audit-note">Bản ghi kết quả thao tác; không lưu nội dung yêu cầu hoặc thông tin xác thực.</p> }
-        <details><summary tabindex="0">Mã tham chiếu</summary><dl><dt>Đối tượng</dt><dd class="reference">@(selected.EntityId?.ToString() ?? selected.TargetAccountId?.ToString() ?? "Không có")</dd><dt>Người dùng</dt><dd class="reference">@(selected.ActorUserId?.ToString() ?? "Chưa xác định")</dd><dt>Liên kết thao tác</dt><dd class="reference">@(selected.CorrelationId ?? selected.Id.ToString())</dd></dl></details>
-    </section></div>
+    <PropFlowConfirmationDialog Title="Chi tiết hoạt động" Tone="DialogTone.Info" Wide
+        Message="@($"{ActionLabel(selected)} · {ModuleLabel(selected.Module)}")" OnCancel="Close">
+        <ChildContent>
+            <div class="audit-dialog-content">
+                <dl><dt>Thời gian</dt><dd>@LocalTime(selected.Timestamp).ToString("dd/MM/yyyy · HH:mm:ss")</dd><dt>Người thực hiện</dt><dd>@ActorLabel(selected)</dd>
+                <dt>Đối tượng</dt><dd>@EntityLabel(selected.EntityType) @selected.TargetUsername</dd><dt>Kết quả</dt><dd>@OutcomeLabel(selected.Outcome) @if(selected.HttpStatus.HasValue){<small>HTTP @selected.HttpStatus</small>}</dd></dl>
+                @if (selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
+                { <div class="legacy-change">@(selected.Action == "internal_account_created" ? "Tài khoản nội bộ được tạo" : Transition(selected.OldRole ?? selected.OldStatus, selected.NewRole ?? selected.NewStatus))</div> }
+                @{ var businessChanges = selected.Changes?.Where(change => FieldLabel(change.Field) is not null).ToArray() ?? []; }
+                @if (businessChanges.Length > 0)
+                {
+                    <div class="audit-table-wrap"><table class="changes"><thead><tr><th>Trường thay đổi</th><th>Trước</th><th>Sau</th></tr></thead><tbody>
+                    @foreach (var change in businessChanges) { <tr><td>@FieldLabel(change.Field)</td><td>@FieldValue(change.Field, change.Before)</td><td>@FieldValue(change.Field, change.After)</td></tr> }
+                    </tbody></table></div>
+                }
+                else if (!selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
+                { <p class="audit-note">Bản ghi kết quả thao tác; không lưu nội dung yêu cầu hoặc thông tin xác thực.</p> }
+                <details><summary tabindex="0">Mã tham chiếu</summary><dl><dt>Đối tượng</dt><dd class="reference">@(selected.EntityId?.ToString() ?? selected.TargetAccountId?.ToString() ?? "Không có")</dd><dt>Người dùng</dt><dd class="reference">@(selected.ActorUserId?.ToString() ?? "Chưa xác định")</dd><dt>Liên kết thao tác</dt><dd class="reference">@(selected.CorrelationId ?? selected.Id.ToString())</dd></dl></details>
+            </div>
+        </ChildContent>
+    </PropFlowConfirmationDialog>
 }
 
 @code {
     private PagedAdministrationActivities? data;
-    private AdministrationActivity? selected, lastFocused;
-    private ElementReference dialog;
+    private AdministrationActivity? selected;
     private ElementReference filterDialog;
     private IJSObjectReference? focusModule;
     private bool loading;
@@ -99,12 +103,6 @@
             focusModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2");
             await focusModule.InvokeVoidAsync("open", filterDialog);
         }
-        if (selected is not null && selected != lastFocused)
-        {
-            lastFocused = selected;
-            focusModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2");
-            await focusModule.InvokeVoidAsync("open", dialog);
-        }
     }
     private async Task LoadAsync()
     {
@@ -121,16 +119,14 @@
     private Task FilterKey(KeyboardEventArgs e) => e.Key == "Escape" ? CloseFilters() : Task.CompletedTask;
     private void ResetDraft() { module = action = outcome = actor = ""; dateFrom = dateTo = null; filterError = null; }
     private Task ResetAsync() { module = action = outcome = actor = ""; dateFrom = dateTo = null; applied = new(); page = 1; return LoadAsync(); }
-    private Task PreviousAsync() { page--; return LoadAsync(); }
-    private Task NextAsync() { page++; return LoadAsync(); }
-    private async Task Close() { if (focusModule is not null) await focusModule.InvokeVoidAsync("close", dialog); selected = null; lastFocused = null; }
-    private Task ModalKey(KeyboardEventArgs e) => e.Key == "Escape" ? Close() : Task.CompletedTask;
+    private Task ChangePageAsync(int target) { page = target; return LoadAsync(); }
+    private void Close() => selected = null;
     private DateTimeOffset LocalTime(DateTimeOffset value) => data?.TimeZoneId is { } zone ? TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(zone)) : value.ToUniversalTime();
     public async ValueTask DisposeAsync()
     {
         lifetime.Cancel(); lifetime.Dispose();
         if (focusModule is null) return;
-        try { if (filterFocused) await focusModule.InvokeVoidAsync("close", filterDialog); if (selected is not null) await focusModule.InvokeVoidAsync("close", dialog); await focusModule.DisposeAsync(); }
+        try { if (filterFocused) await focusModule.InvokeVoidAsync("close", filterDialog); await focusModule.DisposeAsync(); }
         catch (JSDisconnectedException) { }
     }
     private static string OutcomeLabel(string value) => value switch { "SUCCESS" => "Thành công", "DENIED" => "Bị từ chối", _ => "Thất bại" };

@@ -37,7 +37,7 @@ public sealed class UiFixRenderTests
         var residents = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<ResidentManagement>());
         var residentHtml = await renderer.Dispatcher.InvokeAsync(residents.ToHtmlString);
         Assert.Contains("table-pagination", residentHtml);
-        Assert.Matches("aria-current=\"page\" aria-label=\"Trang 1 trên 3\"[^>]*>1 / 3</span>", WebUtility.HtmlDecode(residentHtml));
+        Assert.Matches("aria-current=\"page\" aria-label=\"Trang 1 trên 3\"[^>]*>\\s*1 / 3\\s*</button>", WebUtility.HtmlDecode(residentHtml));
         var date = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<PropFlowDatePicker>(ParameterView.FromDictionary(
             new Dictionary<string, object?> { ["Value"] = new DateOnly(2026,10,16), ["AriaLabel"] = "Ngày bắt đầu bảo trì" })));
         var dateHtml = await renderer.Dispatcher.InvokeAsync(date.ToHtmlString);

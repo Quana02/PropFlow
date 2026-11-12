@@ -184,7 +184,8 @@
                 <p class="text-sm text-slate-500 font-medium">Đang tải danh sách thiết bị...</p>
             </div>
         }
-        else if (PagedResult.Items == null || !PagedResult.Items.Any())
+        else if (PagedResult.Items is null || (!PagedResult.Items.Any() &&
+                 (PagedResult.TotalCount == 0 || PagedResult.PageIndex <= PagedResult.TotalPages)))
         {
             <div class="fe04-empty flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
                 <span class="material-symbols-outlined text-[64px] text-slate-300">precision_manufacturing</span>
@@ -368,7 +369,7 @@
             </div>
 
             <TablePagination Page="PagedResult.PageIndex" TotalPages="PagedResult.TotalPages" Busy="IsLoading" Label="Phân trang thiết bị"
-                Previous="@(() => ChangePage(PagedResult.PageIndex - 1))" Next="@(() => ChangePage(PagedResult.PageIndex + 1))">
+                PageChanged="ChangePage">
                 <span>Bản ghi @(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)–@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount)) / @PagedResult.TotalCount</span>
             </TablePagination>
                     }
@@ -721,7 +722,7 @@
 
 @if (IsSaveConfirmationOpen)
 {
-    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedEquipmentToEdit is null ? "Bạn có muốn tạo thiết bị này không?" : "Bạn có muốn cập nhật thiết bị này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveEquipment" OnCancel="CloseSaveConfirmation" />
+    <PropFlowConfirmationDialog Title="@(SelectedEquipmentToEdit is null ? "Thêm thiết bị?" : "Cập nhật thiết bị?")" Message="Thông tin đã nhập sẽ được lưu vào danh mục thiết bị của chung cư." ConfirmText="Lưu thiết bị" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveEquipment" OnCancel="CloseSaveConfirmation" />
 }
 
 @if (IsManager && IsEquipmentTypeDialogOpen)
