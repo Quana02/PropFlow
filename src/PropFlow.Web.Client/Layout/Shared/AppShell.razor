@@ -24,6 +24,10 @@
         </div>
 
         <div class="app-header-actions">
+            @if (Session.User is not null)
+            {
+                <PropFlow.Web.Client.Features.Communication.Components.NotificationBell />
+            }
             @if (ShowWeatherAndClock)
             {
                 <div class="app-weather" aria-label="Thời tiết Thành phố Hồ Chí Minh">
@@ -81,10 +85,6 @@
                     <button type="button" disabled="@busy" @onclick="Logout">Đăng xuất</button>
                 </div>
             </details>
-            @if (Session.User is not null)
-            {
-                <PropFlow.Web.Client.Features.Communication.Components.NotificationBell />
-            }
         </div>
     </header>
 
