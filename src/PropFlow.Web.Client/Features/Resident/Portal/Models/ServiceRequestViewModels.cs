@@ -15,41 +15,13 @@ public static class ServiceRequestStatuses
 
 public sealed class SubmitServiceRequestForm
 {
-    [Required(ErrorMessage = "Vui lòng chọn loại dịch vụ.")]
-    public string CategoryCode { get; set; } = "REPAIR";
-
-    [Required(ErrorMessage = "Vui lòng chọn phạm vi tiếp nhận.")]
-    [RegularExpression("PRIVATE|PUBLIC", ErrorMessage = "Phạm vi tiếp nhận không hợp lệ.")]
-    public string ScopeCode { get; set; } = "PRIVATE";
-
-    [Required(ErrorMessage = "Vui lòng chọn loại yêu cầu.")]
-    public string RequestTypeCode { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Vui lòng nhập tiêu đề yêu cầu.")]
-    [StringLength(200, ErrorMessage = "Tiêu đề không được vượt quá 200 ký tự.")]
-    public string Title { get; set; } = string.Empty;
-
     [Required(ErrorMessage = "Vui lòng mô tả vấn đề cần hỗ trợ.")]
     [StringLength(3500, MinimumLength = 10, ErrorMessage = "Mô tả cần từ 10 đến 3500 ký tự.")]
     public string Description { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng chọn khu vực hỗ trợ.")]
-    public string ServiceAreaCode { get; set; } = "MASTER_BATHROOM";
+    public DateOnly? PreferredDate { get; set; }
 
-    [StringLength(300, ErrorMessage = "Vị trí chi tiết không được vượt quá 300 ký tự.")]
-    public string? LocationDetail { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng chọn mức độ ảnh hưởng.")]
-    [RegularExpression("STANDARD|SERIOUS|EMERGENCY", ErrorMessage = "Mức độ ảnh hưởng không hợp lệ.")]
-    public string ImpactCode { get; set; } = "STANDARD";
-
-    [Required]
-    [RegularExpression("NORMAL|URGENT", ErrorMessage = "Mức độ ưu tiên không hợp lệ.")]
-    public string PriorityCode { get; set; } = "NORMAL";
-
-    public DateOnly? PreferredDate { get; set; } = DateOnly.FromDateTime(DateTime.Today.AddDays(1));
-
-    public string? PreferredTimeCode { get; set; } = "MORNING";
+    public string? PreferredTimeCode { get; set; }
 }
 
 public sealed record ServiceRequestListItemViewModel(

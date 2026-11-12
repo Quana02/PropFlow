@@ -18,6 +18,8 @@ public class CommunicationDbContext : DbContext
     public DbSet<AnnouncementVersion> AnnouncementVersions => Set<AnnouncementVersion>();
     public DbSet<AnnouncementAudience> AnnouncementAudiences => Set<AnnouncementAudience>();
     public DbSet<SupportConversation> SupportConversations => Set<SupportConversation>();
+    public DbSet<PropFlow.Modules.Communication.Domain.EmergencyCalls.EmergencyCall> EmergencyCalls => Set<PropFlow.Modules.Communication.Domain.EmergencyCalls.EmergencyCall>();
+    public DbSet<PropFlow.Modules.Communication.Domain.EmergencyCalls.EmergencyConnection> EmergencyConnections => Set<PropFlow.Modules.Communication.Domain.EmergencyCalls.EmergencyConnection>();
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportManagerPresence> SupportManagerPresence => Set<SupportManagerPresence>();
     public DbSet<SupportManagerConnection> SupportManagerConnections => Set<SupportManagerConnection>();

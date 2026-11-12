@@ -67,6 +67,7 @@ public sealed class ResidentPaymentCardTests
     }
     private sealed class Api(ResidentServiceRequestPaymentView view) : IResidentServiceRequestApiClient
     {
+        public Task<ApiResult<ResidentServiceRequestDraftReview>> CheckDraftAsync(CheckResidentServiceRequestDraft request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ApiResult<ResidentServiceRequestFacility[]>> GetFacilitiesAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ApiResult<ResidentServiceRequestPaymentView>> GetPaymentAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ResidentServiceRequestPaymentView>(true, view));
         public Task<ApiResult<ApiFileContent>> GetPaymentQrAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(new ApiResult<ApiFileContent>(true, new([137,80,78,71], "image/png")));

@@ -195,7 +195,7 @@
 
     private static string StatusLabel(string status) => status switch { "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đã tiếp nhận", "ASSIGNED" => "Đã phân công", "IN_PROGRESS" => "Đang tiến hành", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => status };
     private static string StatusClass(string status) => status switch { "SUBMITTED" => "status-amber", "UNDER_REVIEW" or "ASSIGNED" => "status-violet", "IN_PROGRESS" => "status-blue", "RESOLVED" or "CLOSED" => "status-emerald", _ => "" };
-    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", _ => "Tiêu chuẩn" };
+    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", "LOW" => "Thấp", null => "Chưa xác định", _ => "Tiêu chuẩn" };
     private static string PriorityClass(string? priority) => priority switch { "URGENT" => "priority-urgent", "HIGH" => "priority-high", _ => "priority-standard" };
     private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));
     private static string ApartmentLabel(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestListItem x) => x.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{x.ApartmentUnitNumber} · Tầng {x.FloorNumber}";
