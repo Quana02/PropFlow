@@ -24,7 +24,7 @@
 </div>
 @if (confirming)
 {
-    <PropFlowConfirmationDialog Title="Xác nhận thu tiền?" Message="@($"Bạn có muốn ghi nhận thu {amount.ToString("N0", Vi)} đ cho hóa đơn {Invoice.InvoiceNumber} không?")" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="ConfirmSave" OnCancel="() => confirming = false" />
+    <PropFlowConfirmationDialog Title="Xác nhận thu tiền?" Message="@($"Khoản thu {amount.ToString("N0", Vi)} đ sẽ được ghi nhận cho hóa đơn {Invoice.InvoiceNumber}.")" ConfirmText="Ghi nhận khoản thu" Busy="@busy" OnConfirm="ConfirmSave" OnCancel="() => confirming = false" />
 }
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();

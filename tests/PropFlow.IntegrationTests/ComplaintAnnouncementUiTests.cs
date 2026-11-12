@@ -107,7 +107,7 @@ public sealed class ComplaintAnnouncementUiTests
         });
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () => (await renderer.RenderComponentAsync<AnnouncementWorkspace>(ParameterView.FromDictionary(new Dictionary<string, object?> { ["Manager"] = manager }))).ToHtmlString());
-        Assert.DoesNotContain("<form", html);
+        Assert.DoesNotContain("id=\"compose-title\"", html);
         Assert.Equal(manager, html.Contains(Text("Đăng thông báo")));
         Assert.Contains("id=\"announcement-detail-title\"", html);
         Assert.Equal(manager, html.Contains("class=\"table-pagination\"", StringComparison.Ordinal));

@@ -49,7 +49,7 @@
                 @if (Role is "MANAGER" or "STAFF")
                 {
                     <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(items.Total / (double)items.PageSize))" Busy="busy" Label="Phân trang phản ánh"
-                    Previous="PreviousAsync" Next="NextAsync">
+                    PageChanged="ChangePageAsync">
                     <span>@items.Total phản ánh</span>
                 </TablePagination>
                 }
@@ -246,8 +246,9 @@
     private void Open(Guid id) => Navigation.NavigateTo($"{Root}/{id}");
     private void Back() => Navigation.NavigateTo(Root);
     private Task SearchAsync() { page = 1; return LoadAsync(); }
-    private Task PreviousAsync() { page--; return LoadAsync(); }
-    private Task NextAsync() { page++; return LoadAsync(); }
+    private Task PreviousAsync() => ChangePageAsync(page - 1);
+    private Task NextAsync() => ChangePageAsync(page + 1);
+    private Task ChangePageAsync(int target) { page = target; return LoadAsync(); }
     public async ValueTask DisposeAsync()
     {
         toastLifetime.Dispose();

@@ -50,7 +50,7 @@
     @if (TotalPages > 1 || Page > 1)
     {
         <TablePagination Page="Page" TotalPages="TotalPages" Busy="@(Busy || Loading)" Label="Phân trang hội thoại"
-                         Previous="OnPrevious" Next="OnNext">
+                         PageChanged="OnPageChanged">
             <span>@Conversations?.Total hội thoại</span>
         </TablePagination>
     }
@@ -63,8 +63,7 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public bool Loading { get; set; }
     [Parameter] public EventCallback<Guid> OnSelect { get; set; }
-    [Parameter] public EventCallback OnPrevious { get; set; }
-    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
 
     private int TotalPages => (int)Math.Ceiling((Conversations?.Total ?? 0) / 12d);
 

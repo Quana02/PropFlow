@@ -129,7 +129,7 @@
     }
 </div>
 
-@if (PendingConfirmation is not null) { <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@ConfirmationMessage" ConfirmText="Có" CancelText="Không" Busy="@Busy" BusyText="Đang xử lý…" OnConfirm="Confirm" OnCancel="() => PendingConfirmation = null" /> }
+@if (PendingConfirmation is not null) { <PropFlowConfirmationDialog Title="@ConfirmationTitle" Message="@ConfirmationMessage" ConfirmText="@ConfirmationActionText" Tone="@ConfirmationTone" Busy="@Busy" BusyText="Đang xử lý…" OnConfirm="Confirm" OnCancel="() => PendingConfirmation = null" /> }
 @if (SelectedEvidenceUrl is not null) { <div class="mtd-image-lightbox" role="presentation" @onclick="() => SelectedEvidenceUrl = null"><img src="@SelectedEvidenceUrl" alt="Ảnh minh chứng phóng to" @onclick:stopPropagation="true" /></div> }
 
 @code {
@@ -138,7 +138,9 @@
     [Parameter] public Guid TaskId { get; set; }
     private MaintenanceTaskModel? Task; private MaintenanceHistoryDetailModel? History; private IReadOnlyList<AssetModel> Assets = []; private IReadOnlyList<AssignableMaintenanceStaffModel> Staff = [];
     private bool Loading = true, Busy, ShowAssignment, LinkPickerOpen, EvidenceLoading; private string? Error, EvidenceError, SelectedEvidenceUrl; private readonly Dictionary<Guid, string> EvidenceUrls = []; private string StaffSearch = string.Empty, RequestSearch = string.Empty, ReviewNote = string.Empty; private List<Guid> SelectedStaffIds = []; private IReadOnlyList<ServiceRequestMaintenanceReference> Candidates = []; private Guid? SelectedRequestId;
-    private Func<Task>? PendingConfirmation; private string ConfirmationMessage = string.Empty;
+    private Func<Task>? PendingConfirmation;
+    private string ConfirmationTitle = string.Empty, ConfirmationMessage = string.Empty, ConfirmationActionText = string.Empty;
+    private DialogTone ConfirmationTone;
     private HubConnection? HubConnection; private Guid? JoinedTaskId; private readonly SemaphoreSlim RealtimeRefreshGate = new(1, 1); private bool Disposed;
     protected override async Task OnParametersSetAsync() { Loading = true; Error = null; Task = null; History = null; await Load(); Loading = false; await EnsureRealtimeConnectionAsync(); }
     private async Task Load() { var assets = await Api.AssetsAsync(); Assets = assets.Data ?? []; var task = await Api.TaskAsync(TaskId); if (!task.IsSuccess || task.Data is null) { Error = task.Message ?? "Không tìm thấy công việc bảo trì."; return; } Task = task.Data; var history = await Api.HistoryDetailAsync(TaskId); History = history.Data; await LoadEvidenceAsync(); }
@@ -180,17 +182,25 @@
     private void SetStaff(Guid id, bool selected) { if (selected && !SelectedStaffIds.Contains(id)) SelectedStaffIds.Add(id); else if (!selected) SelectedStaffIds.Remove(id); }
     private void Assign() {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
-        RequestConfirmation("Bạn có muốn cập nhật nhóm nhân viên xử lý công việc này không?", async () => { Busy = true; var result = await Api.AssignTaskAsync(TaskId, new() { StaffUserIds = SelectedStaffIds }); Busy = false; if (result.Data is null) { operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể phân công công việc.")); return; } Task = result.Data; ShowAssignment = false; await ReloadHistory(); operationFeedback.Publish(() => Toasts.Success("Đã cập nhật phân công công việc.")); });
+        RequestConfirmation("Lưu phân công?", "Nhóm nhân viên đã chọn sẽ phụ trách công việc bảo trì này.", "Lưu phân công", async () => { Busy = true; var result = await Api.AssignTaskAsync(TaskId, new() { StaffUserIds = SelectedStaffIds }); Busy = false; if (result.Data is null) { operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể phân công công việc.")); return; } Task = result.Data; ShowAssignment = false; await ReloadHistory(); operationFeedback.Publish(() => Toasts.Success("Đã cập nhật phân công công việc.")); });
     }
     private void OpenLinkPicker() { LinkPickerOpen = true; _ = LoadCandidates(); }
     private async Task LoadCandidates() { var result = await ServiceRequestApi.SearchLinkCandidatesAsync(RequestSearch); Candidates = result.Data ?? []; }
     private void LinkRequest() {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
-        RequestConfirmation("Bạn có chắc chắn muốn liên kết yêu cầu dịch vụ đã chọn không?", async () => { if (SelectedRequestId is null) return; Busy = true; var result = await Api.LinkTaskServiceRequestAsync(TaskId, new() { ServiceRequestId = SelectedRequestId.Value }); Busy = false; if (result.Data is null) { operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể liên kết yêu cầu dịch vụ.")); return; } Task = result.Data; LinkPickerOpen = false; operationFeedback.Publish(() => Toasts.Success("Đã liên kết yêu cầu dịch vụ.")); });
+        RequestConfirmation("Liên kết yêu cầu dịch vụ?", "Công việc bảo trì sẽ được liên kết với yêu cầu đã chọn.", "Liên kết", async () => { if (SelectedRequestId is null) return; Busy = true; var result = await Api.LinkTaskServiceRequestAsync(TaskId, new() { ServiceRequestId = SelectedRequestId.Value }); Busy = false; if (result.Data is null) { operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể liên kết yêu cầu dịch vụ.")); return; } Task = result.Data; LinkPickerOpen = false; operationFeedback.Publish(() => Toasts.Success("Đã liên kết yêu cầu dịch vụ.")); });
     }
     private void Review(Guid resultId, string decision) {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
-        RequestConfirmation(decision == "approve" ? "Bạn có muốn chấp nhận kết quả và đóng công việc này không?" : "Bạn có muốn yêu cầu nhân viên xử lý thêm không?", async () => { Busy = true; var response = await Api.ReviewResultAsync(TaskId, resultId, new() { Decision = decision, ReviewNote = string.IsNullOrWhiteSpace(ReviewNote) ? null : ReviewNote.Trim() }); Busy = false; if (response.Data is null) { operationFeedback.Publish(() => Toasts.Error(response.Message ?? "Không thể nghiệm thu kết quả.")); return; } Task = response.Data; ReviewNote = string.Empty; await ReloadHistory(); operationFeedback.Publish(() => Toasts.Success("Đã lưu kết quả nghiệm thu.")); });
+        RequestConfirmation(decision == "approve" ? "Nghiệm thu và đóng công việc?" : "Yêu cầu xử lý thêm?", decision == "approve" ? "Kết quả được chấp nhận và công việc bảo trì sẽ được đóng." : "Công việc sẽ được trả lại cho nhân viên để tiếp tục xử lý.", decision == "approve" ? "Nghiệm thu và đóng" : "Yêu cầu xử lý thêm", async () => { Busy = true; var response = await Api.ReviewResultAsync(TaskId, resultId, new() { Decision = decision, ReviewNote = string.IsNullOrWhiteSpace(ReviewNote) ? null : ReviewNote.Trim() }); Busy = false; if (response.Data is null) { operationFeedback.Publish(() => Toasts.Error(response.Message ?? "Không thể nghiệm thu kết quả.")); return; } Task = response.Data; ReviewNote = string.Empty; await ReloadHistory(); operationFeedback.Publish(() => Toasts.Success("Đã lưu kết quả nghiệm thu.")); }, decision == "approve" ? DialogTone.Danger : DialogTone.Confirm);
+    }
+    private void RequestConfirmation(string title, string message, string actionText, Func<Task> action, DialogTone tone = DialogTone.Confirm)
+    {
+        ConfirmationTitle = title;
+        ConfirmationMessage = message;
+        ConfirmationActionText = actionText;
+        ConfirmationTone = tone;
+        PendingConfirmation = action;
     }
     private void CancelTask() { var feedback = Toasts.BeginOperation(toastLifetime); RequestConfirmation("Bạn có muốn hủy công việc bảo trì này không?", async () => { Busy = true; var response = await Api.CancelTaskAsync(TaskId); Busy = false; if (response.Data is null) { feedback.Publish(() => Toasts.Error(response.Message ?? "Không thể hủy công việc.")); return; } Task = response.Data; await ReloadHistory(); feedback.Publish(() => Toasts.Success("Đã hủy công việc bảo trì.")); }); }
     private void RequestConfirmation(string message, Func<Task> action) { ConfirmationMessage = message; PendingConfirmation = action; }

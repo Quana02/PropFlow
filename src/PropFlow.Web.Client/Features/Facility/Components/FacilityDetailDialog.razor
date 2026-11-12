@@ -97,7 +97,8 @@
                             <p class="text-sm text-rose-700">@EquipmentLoadError</p>
                         </div>
                     }
-                    else if (EquipmentPagedResult?.Items?.Count == 0)
+                    else if (EquipmentPagedResult?.Items?.Count == 0 &&
+                             (EquipmentPagedResult.TotalCount == 0 || EquipmentPagedResult.PageIndex <= EquipmentPagedResult.TotalPages))
                     {
                         <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
                             <span class="material-symbols-outlined text-4xl text-slate-300">devices_other</span>
@@ -161,10 +162,11 @@
                                     </div>
                                 }
                             </div>
-                            @if (EquipmentPagedResult != null && EquipmentPagedResult.TotalPages > 1)
+                            @if (EquipmentPagedResult is not null &&
+                                 (EquipmentPagedResult.TotalPages > 1 || EquipmentPagedResult.PageIndex > EquipmentPagedResult.TotalPages))
                             {
                                 <TablePagination Page="EquipmentPagedResult.PageIndex" TotalPages="EquipmentPagedResult.TotalPages" Busy="IsLoadingEquipment" Label="Phân trang thiết bị liên quan"
-                                    Previous="@(() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex - 1))" Next="@(() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex + 1))">
+                                    PageChanged="ChangeEquipmentPage">
                                     <span>@EquipmentPagedResult.TotalCount thiết bị</span>
                                 </TablePagination>
                             }

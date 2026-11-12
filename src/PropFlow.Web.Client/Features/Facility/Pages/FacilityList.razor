@@ -183,7 +183,8 @@
                 <p class="text-xs font-semibold text-[#0284c7]">Đang tải dữ liệu Cơ sở vật chất...</p>
             </div>
         }
-        else if (PagedResult.Items == null || !PagedResult.Items.Any())
+        else if (PagedResult.Items is null || (!PagedResult.Items.Any() &&
+                 (PagedResult.TotalCount == 0 || PagedResult.PageIndex <= PagedResult.TotalPages)))
         {
             <div class="fe04-empty flex py-12 flex-col items-center justify-center space-y-3 bg-white/80">
                 <span class="material-symbols-outlined text-[64px] text-slate-300">domain_disabled</span>
@@ -324,7 +325,7 @@
             </div>
 
             <TablePagination Page="PagedResult.PageIndex" TotalPages="PagedResult.TotalPages" Busy="IsLoading" Label="Phân trang cơ sở vật chất"
-                Previous="@(() => ChangePage(PagedResult.PageIndex - 1))" Next="@(() => ChangePage(PagedResult.PageIndex + 1))">
+                PageChanged="ChangePage">
                 <span>Bản ghi @(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)–@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount)) / @PagedResult.TotalCount</span>
             </TablePagination>
                     }
@@ -513,7 +514,7 @@
 }
 @if (IsSaveConfirmationOpen)
 {
-    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedFacilityToEdit is null ? "Bạn có muốn tạo cơ sở vật chất này không?" : "Bạn có muốn cập nhật cơ sở vật chất này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveFacility" OnCancel="CloseSaveConfirmation" />
+    <PropFlowConfirmationDialog Title="@(SelectedFacilityToEdit is null ? "Thêm cơ sở vật chất?" : "Cập nhật cơ sở vật chất?")" Message="Thông tin đã nhập sẽ được lưu vào danh mục cơ sở vật chất của chung cư." ConfirmText="Lưu cơ sở vật chất" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveFacility" OnCancel="CloseSaveConfirmation" />
 }
 
 @code {
