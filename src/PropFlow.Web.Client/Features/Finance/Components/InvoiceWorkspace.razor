@@ -22,11 +22,16 @@
 <form @onsubmit="Search" @onsubmit:preventDefault>
 <div class="fields">
     <label>Mã hóa đơn<input @bind="search" /></label>
-    <label>Căn hộ<PropFlowSelect @bind-Value="ApartmentFilterValue" Options="ApartmentFilterOptions" AriaLabel="Lọc căn hộ" Searchable="true" /></label>
-    <label>Trạng thái hóa đơn<PropFlowSelect @bind-Value="status" Options="StatusOptions" AriaLabel="Trạng thái hóa đơn" /></label>
-    <label>Thanh toán<PropFlowSelect @bind-Value="settlement" Options="SettlementOptions" AriaLabel="Trạng thái thanh toán" /></label>
-    <label>Kỳ thu giao từ<PropFlowDatePicker @bind-Value="from" ValidityChanged="v => fromValid = v" AriaLabel="Kỳ thu từ" Disabled="busy" /></label><label>Đến ngày<PropFlowDatePicker @bind-Value="to" ValidityChanged="v => toValid = v" AriaLabel="Kỳ thu đến" Disabled="busy" /></label>
-    <button type="submit" disabled="@(loading || busy)">Tìm kiếm / lọc</button>
+    <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@(loading || busy)" OnOpen="OpenFilters"
+                         OnReset="ResetDraft" Validate="ValidateDraft" OnApply="ApplyDraft">
+        <label>Căn hộ<PropFlowSelect @bind-Value="ApartmentFilterValue" Options="ApartmentFilterOptions" AriaLabel="Lọc căn hộ" Searchable="true" /></label>
+        <label>Trạng thái hóa đơn<PropFlowSelect @bind-Value="status" Options="StatusOptions" AriaLabel="Trạng thái hóa đơn" /></label>
+        <label>Thanh toán<PropFlowSelect @bind-Value="settlement" Options="SettlementOptions" AriaLabel="Trạng thái thanh toán" /></label>
+        <label>Kỳ thu giao từ<PropFlowDatePicker @bind-Value="from" ValidityChanged="v => fromValid = v" AriaLabel="Kỳ thu từ" Disabled="busy" /></label>
+        <label>Đến ngày<PropFlowDatePicker @bind-Value="to" ValidityChanged="v => toValid = v" AriaLabel="Kỳ thu đến" Disabled="busy" /></label>
+        @if (filterError is not null) { <p role="alert">@filterError</p> }
+    </PropFlowFilterPopover>
+    <button type="submit" disabled="@(loading || busy)">Tìm kiếm</button>
 </div></form>
 @if (loading) { <p role="status">Đang tải hóa đơn…</p> }
 else if (data is not null)
@@ -153,8 +158,42 @@ else if (data is not null)
     protected override async Task OnParametersSetAsync() {
         if (InitialInvoiceId.HasValue && InitialInvoiceId != lastRequestedInvoice) { lastRequestedInvoice = InitialInvoiceId; await Open(InitialInvoiceId.Value); }
     }
-    private async Task Load(int target) { loading = true; var result = await Api.GetAsync<InvoicePage>("invoices?" + BillingWorkspaceApi.Query(applied) + $"&page={target}"); if (result.IsSuccess) { data = result.Data; page = target; } else { data = null; error = result.Message; } loading = false; }
-    private async Task Search() { if (!fromValid || !toValid) { error = "Ngày lọc không hợp lệ."; return; } error = null; applied = new(search, status, apartmentFilter, from, to, settlement); await Load(1); }
+    private int listVersion;
+    private async Task Load(int target) { var version = ++listVersion; loading = true; var result = await Api.GetAsync<InvoicePage>("invoices?" + BillingWorkspaceApi.Query(applied) + $"&page={target}"); if (version != listVersion) return; if (result.IsSuccess) { data = result.Data; page = target; } else { data = null; error = result.Message; } loading = false; }
+    private string? filterError;
+    private int ActiveFilterCount => new[] { !string.IsNullOrEmpty(applied.Status), applied.ApartmentId.HasValue,
+        !string.IsNullOrEmpty(applied.Settlement), applied.From.HasValue || applied.To.HasValue }.Count(active => active);
+    private void OpenFilters()
+    {
+        status = applied.Status ?? ""; settlement = applied.Settlement ?? "";
+        (apartmentFilter, from, to) = (applied.ApartmentId, applied.From, applied.To);
+        fromValid = toValid = true;
+        filterError = null;
+    }
+    private void ResetDraft()
+    {
+        status = settlement = "";
+        apartmentFilter = null;
+        from = to = null;
+        fromValid = toValid = true;
+        filterError = null;
+    }
+    private bool ValidateDraft()
+    {
+        filterError = fromValid && toValid ? null : "Ngày lọc không hợp lệ.";
+        if (filterError is not null) StateHasChanged();
+        return filterError is null;
+    }
+    private Task ApplyDraft() => ApplyQuery(new(applied.Search, NullIfEmpty(status), apartmentFilter, from, to, NullIfEmpty(settlement)));
+    private Task Search() => ApplyQuery(applied with { Search = NullIfEmpty(search.Trim()) });
+    private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
+    private async Task ApplyQuery(InvoiceFilter next)
+    {
+        if (next == applied) return;
+        error = null;
+        applied = next;
+        await Load(1);
+    }
     private async Task Open(Guid id) { busy = true; error = null; var result = await Api.GetAsync<InvoiceView>($"invoices/{id}"); detail = result.Data; if (!result.IsSuccess) error = result.Message; else { focusDetail = true; issueDue = detail!.DueDate; cancelReason = ""; var p = await Api.PaymentsAsync(id); payments = p.Data ?? []; paymentsError = p.IsSuccess ? null : p.Message; } busy = false; }
     private void NewDraft() { detail = null; editing = true; focusEditor = true; editId = null; invoiceNumber = ""; apartmentId = Guid.Empty; note = ""; lines = [new()]; }
     private void EditDraft() { if (detail is null) return; editing = true; focusEditor = true; editId = detail.Id; invoiceNumber = detail.InvoiceNumber; apartmentId = detail.ApartmentUnitId; periodStart = detail.PeriodStart; periodEnd = detail.PeriodEnd; dueDate = detail.DueDate; note = detail.Note ?? ""; lines = detail.Lines.Select(x => new LineInput { RateId = x.RateId ?? Guid.Empty, Quantity = x.Quantity, Description = x.Description }).ToList(); }

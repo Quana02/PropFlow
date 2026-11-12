@@ -3,13 +3,21 @@
 @using PropFlow.Web.Client.Features.Administration.Services
 @using PropFlow.Web.Client.Shared.Forms
 @inject IAdministrationApiClient Api
-@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <section class="system-audit">
     <header class="panel-heading"><span class="material-symbols-outlined">history</span><div><h1>Nhật ký hệ thống</h1><p>Thao tác và thay đổi dữ liệu trên các phân hệ · Chỉ đọc</p></div></header>
     <div class="audit-toolbar">
-        <button type="button" class="secondary filter-toggle" aria-haspopup="dialog" aria-expanded="@showFilters" @onclick="OpenFilters" disabled="@loading"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Bộ lọc @if (ActiveFilterCount > 0) { <strong>@ActiveFilterCount</strong> }</button>
+        <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters"
+                             OnReset="ResetDraft" Validate="ValidateDraft" OnApply="ApplyAsync">
+            <label>Phân hệ<PropFlowSelect Value="@module" ValueChanged="v => module = v" Options="ModuleOptions" Placeholder="Tất cả phân hệ" AriaLabel="Lọc theo phân hệ" /></label>
+            <label>Hành động<PropFlowSelect Value="@action" ValueChanged="v => action = v" Options="ActionOptions" Placeholder="Tất cả hành động" AriaLabel="Lọc theo hành động" /></label>
+            <label>Kết quả<PropFlowSelect Value="@outcome" ValueChanged="v => outcome = v" Options="OutcomeOptions" Placeholder="Tất cả kết quả" AriaLabel="Lọc theo kết quả" /></label>
+            <label>Người thực hiện<input @bind="actor" @bind:event="oninput" placeholder="Tên tài khoản, họ tên hoặc mã người dùng" maxlength="100" /></label>
+            <label>Từ ngày<input type="date" @bind="dateFrom" /></label>
+            <label>Đến ngày<input type="date" @bind="dateTo" /></label>
+            @if (filterError is not null) { <p class="filter-error" role="alert">@filterError</p> }
+        </PropFlowFilterPopover>
         @if (ActiveFilterCount > 0) { <button type="button" class="secondary" @onclick="ResetAsync" disabled="@loading">Xóa bộ lọc</button> }
         <button type="button" class="secondary" @onclick="LoadAsync" disabled="@loading"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Làm mới</button>
         <span class="audit-count">@(data?.Total ?? 0) hoạt động</span>
@@ -36,24 +44,6 @@
         </TablePagination>
     }
 </section>
-@if (showFilters)
-{
-    <div class="audit-overlay" @onclick="CloseFilters" @onkeydown="FilterKey"><section class="audit-dialog filter-dialog" role="dialog" aria-modal="true" aria-labelledby="audit-filter-title" tabindex="-1" @ref="filterDialog" @onclick:stopPropagation>
-        <header><div><h2 id="audit-filter-title">Bộ lọc nhật ký hệ thống</h2><p>Chọn điều kiện để thu hẹp danh sách hoạt động.</p></div><button type="button" class="secondary" data-autofocus aria-label="Đóng bộ lọc" @onclick="CloseFilters">Đóng</button></header>
-        <form @onsubmit="ApplyAsync" @onsubmit:preventDefault>
-            <div class="audit-filters">
-                <label>Phân hệ<PropFlowSelect Value="@module" ValueChanged="v => module = v" Options="ModuleOptions" Placeholder="Tất cả phân hệ" AriaLabel="Lọc theo phân hệ" /></label>
-                <label>Hành động<PropFlowSelect Value="@action" ValueChanged="v => action = v" Options="ActionOptions" Placeholder="Tất cả hành động" AriaLabel="Lọc theo hành động" /></label>
-                <label>Kết quả<PropFlowSelect Value="@outcome" ValueChanged="v => outcome = v" Options="OutcomeOptions" Placeholder="Tất cả kết quả" AriaLabel="Lọc theo kết quả" /></label>
-                <label>Người thực hiện<input @bind="actor" @bind:event="oninput" placeholder="Tên tài khoản, họ tên hoặc mã người dùng" maxlength="100" /></label>
-                <label>Từ ngày<input type="date" @bind="dateFrom" /></label>
-                <label>Đến ngày<input type="date" @bind="dateTo" /></label>
-            </div>
-            @if (filterError is not null) { <p class="filter-error" role="alert">@filterError</p> }
-            <footer class="filter-actions"><button type="button" class="secondary" @onclick="ResetDraft">Đặt lại</button><button type="button" class="secondary" @onclick="CloseFilters">Hủy</button><button type="submit" disabled="@loading">Áp dụng</button></footer>
-        </form>
-    </section></div>
-}
 @if (selected is not null)
 {
     <PropFlowConfirmationDialog Title="Chi tiết hoạt động" Tone="DialogTone.Info" Wide
@@ -82,10 +72,7 @@
 @code {
     private PagedAdministrationActivities? data;
     private AdministrationActivity? selected;
-    private ElementReference filterDialog;
-    private IJSObjectReference? focusModule;
     private bool loading;
-    private bool showFilters, filterFocused;
     private string? filterError;
     private string? error;
     private string module = "", action = "", outcome = "", actor = "";
@@ -95,15 +82,6 @@
     private int ActiveFilterCount => new[] { !string.IsNullOrWhiteSpace(applied.Module), !string.IsNullOrWhiteSpace(applied.Action), !string.IsNullOrWhiteSpace(applied.Outcome), !string.IsNullOrWhiteSpace(applied.Actor), applied.DateFrom.HasValue, applied.DateTo.HasValue }.Count(x => x);
     private readonly CancellationTokenSource lifetime = new();
     protected override Task OnInitializedAsync() => LoadAsync();
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (showFilters && !filterFocused)
-        {
-            filterFocused = true;
-            focusModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261015.2");
-            await focusModule.InvokeVoidAsync("open", filterDialog);
-        }
-    }
     private async Task LoadAsync()
     {
         loading = true; error = null;
@@ -113,21 +91,32 @@
         if (result.IsSuccess) { data = result.Data; page = data?.Page ?? 1; }
         else { data = null; error = result.Message ?? "Không thể tải nhật ký hệ thống. Vui lòng thử lại."; }
     }
-    private async Task ApplyAsync() { if (dateFrom > dateTo) { filterError = "Ngày bắt đầu không được sau ngày kết thúc."; return; } applied = new(module, action, outcome, actor.Trim(), dateFrom, dateTo); page = 1; await CloseFilters(); await LoadAsync(); }
-    private void OpenFilters() { module = applied.Module ?? ""; action = applied.Action ?? ""; outcome = applied.Outcome ?? ""; actor = applied.Actor ?? ""; dateFrom = applied.DateFrom; dateTo = applied.DateTo; filterError = null; showFilters = true; }
-    private async Task CloseFilters() { if (focusModule is not null && filterFocused) await focusModule.InvokeVoidAsync("close", filterDialog); showFilters = false; filterFocused = false; filterError = null; }
-    private Task FilterKey(KeyboardEventArgs e) => e.Key == "Escape" ? CloseFilters() : Task.CompletedTask;
+    private bool ValidateDraft()
+    {
+        filterError = dateFrom > dateTo ? "Ngày bắt đầu không được sau ngày kết thúc." : null;
+        if (filterError is not null) StateHasChanged();
+        return filterError is null;
+    }
+    private async Task ApplyAsync()
+    {
+        var next = new SystemActivityFilter(EmptyToNull(module), EmptyToNull(action), EmptyToNull(outcome), EmptyToNull(actor.Trim()), dateFrom, dateTo);
+        if (next == applied) return;
+        applied = next;
+        page = 1;
+        await LoadAsync();
+    }
+    private static string? EmptyToNull(string value) => value.Length == 0 ? null : value;
+    private void OpenFilters() { module = applied.Module ?? ""; action = applied.Action ?? ""; outcome = applied.Outcome ?? ""; actor = applied.Actor ?? ""; dateFrom = applied.DateFrom; dateTo = applied.DateTo; filterError = null; }
     private void ResetDraft() { module = action = outcome = actor = ""; dateFrom = dateTo = null; filterError = null; }
     private Task ResetAsync() { module = action = outcome = actor = ""; dateFrom = dateTo = null; applied = new(); page = 1; return LoadAsync(); }
     private Task ChangePageAsync(int target) { page = target; return LoadAsync(); }
     private void Close() => selected = null;
     private DateTimeOffset LocalTime(DateTimeOffset value) => data?.TimeZoneId is { } zone ? TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(zone)) : value.ToUniversalTime();
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        lifetime.Cancel(); lifetime.Dispose();
-        if (focusModule is null) return;
-        try { if (filterFocused) await focusModule.InvokeVoidAsync("close", filterDialog); await focusModule.DisposeAsync(); }
-        catch (JSDisconnectedException) { }
+        lifetime.Cancel();
+        lifetime.Dispose();
+        return ValueTask.CompletedTask;
     }
     private static string OutcomeLabel(string value) => value switch { "SUCCESS" => "Thành công", "DENIED" => "Bị từ chối", _ => "Thất bại" };
     private static string ActorLabel(AdministrationActivity item) => item.ActorDisplayName ?? item.ActorUsername ?? (item.ActorUserId.HasValue ? "Không có thông tin tài khoản" : "Chưa xác định");
