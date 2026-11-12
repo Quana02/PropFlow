@@ -133,6 +133,9 @@ public sealed class AnnouncementRealtimeClient : IAsyncDisposable
                 await EnsureStartedAsync(_lifetime.Token);
                 attempt++;
             }
+
+            if (_connection?.State == HubConnectionState.Connected)
+                await ReconcileAsync();
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {

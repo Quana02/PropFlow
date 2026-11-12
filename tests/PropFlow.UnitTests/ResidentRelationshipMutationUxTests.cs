@@ -24,7 +24,7 @@ public sealed class ResidentRelationshipMutationUxTests
         Assert.Contains("ConfirmEndResidency", source, StringComparison.Ordinal);
         Assert.Contains("ConfirmAddOwnership", source, StringComparison.Ordinal);
         Assert.Contains("ConfirmEndOwnership", source, StringComparison.Ordinal);
-        Assert.Contains("InformationOnly=\"true\"", source, StringComparison.Ordinal);
+        Assert.Contains("Tone=\"DialogTone.Info\"", source, StringComparison.Ordinal);
     }
 
     [Fact]

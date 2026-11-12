@@ -6,7 +6,7 @@
 <span class="finance-reminder"><button type="button" disabled="@(busy || InvoiceIds.Length == 0)" @onclick="BeginSend"><span class="material-symbols-outlined">mail</span> @(Label ?? $"Gửi nhắc thanh toán ({InvoiceIds.Length} hóa đơn)")</button></span>
 @if (confirming)
 {
-    <PropFlowConfirmationDialog Title="Gửi nhắc thanh toán?" Message="Bạn có muốn gửi nhắc thanh toán cho cư dân của các hóa đơn đã chọn không?" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
+    <PropFlowConfirmationDialog Title="Gửi nhắc thanh toán?" Message="Cư dân sẽ nhận lời nhắc thanh toán cho các hóa đơn đã chọn." ConfirmText="Gửi lời nhắc" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
 }
 
 @code {

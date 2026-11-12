@@ -1,3 +1,4 @@
+@using PropFlow.Web.Client.Shared.Feedback
 @implements IDisposable
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/admin/dashboard"
@@ -71,7 +72,7 @@ else
         <InternalAccountTable Accounts="accounts" OnDetail="OpenProfile" OnAccess="OpenAccessAsync" OnRole="OpenRole" OnStatus="OpenStatus" />
     }
     <TablePagination Page="page" TotalPages="@AccountTotalPages" Busy="accountsLoading" Label="Phân trang tài khoản"
-        Previous="PreviousPageAsync" Next="NextPageAsync">
+        PageChanged="ChangeAccountPageAsync">
         <span>@(pageData?.Total ?? 0) tài khoản</span>
     </TablePagination>
     </section>
@@ -83,9 +84,49 @@ else
     <InternalAccountProfileDialog @key="id" AccountId="id" OnSaved="ApplyProfile" OnClose="CloseProfile" />
 }
 @if (showCreate) { <div class="admin-modal" role="dialog" aria-modal="true"><div class="modal-card"><h2>Tạo tài khoản nội bộ</h2>@if (dialogError is not null) { <div class="dialog-message is-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span>@dialogError</span></div> }<input @bind="createUsername" placeholder="Username" /><input @bind="createName" placeholder="Họ và tên" /><input @bind="createEmail" placeholder="Email" /><div class="admin-password-field"><input @bind="createPassword" type="@(showCreatePassword ? "text" : "password")" autocomplete="new-password" aria-label="Mật khẩu" placeholder="Mật khẩu (ít nhất 12 ký tự)" /><button type="button" class="admin-password-toggle" aria-label="@(showCreatePassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")" title="@(showCreatePassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")" aria-pressed="@showCreatePassword" @onclick="() => showCreatePassword = !showCreatePassword"><span class="material-symbols-outlined" aria-hidden="true">@(showCreatePassword ? "visibility_off" : "visibility")</span></button></div><PropFlowSelect @bind-Value="createRole" Options="RoleOptions" AriaLabel="Vai trò tài khoản" /><div class="rbac-actions"><button type="button" @onclick="CancelAccountDialogFeedbackCloseDialogs">Hủy</button><button type="button" class="primary" disabled="@submitting" @onclick="CreateAsync">@(submitting ? "Đang tạo…" : "Tạo tài khoản")</button></div></div></div> }
-@if (selected is not null && action is not null) { <div class="admin-modal" role="dialog" aria-modal="true"><div class="modal-card"><h2>@(action == "role" ? "Đổi vai trò" : "Cập nhật trạng thái")</h2><p>@selected.Username · @selected.Role · @InternalAccountStatus.Label(selected.Status)</p>@if (dialogError is not null) { <div class="dialog-message is-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span>@dialogError</span></div> }@if (action == "role") { <PropFlowSelect @bind-Value="nextRole" Options="AvailableRoleOptions" AriaLabel="Vai trò mới" /><p class="confirmation-note"><span class="material-symbols-outlined" aria-hidden="true">warning</span>Bạn có chắc muốn chuyển tài khoản @selected.Username từ @selected.Role sang @nextRole?</p> } else { <PropFlowSelect @bind-Value="nextStatus" Options="AvailableStatusOptions" AriaLabel="Trạng thái mới" /><p class="confirmation-note"><span class="material-symbols-outlined" aria-hidden="true">warning</span>Bạn có chắc muốn chuyển trạng thái tài khoản @selected.Username sang @InternalAccountStatus.Label(nextStatus)?</p> }<div class="rbac-actions"><button type="button" @onclick="CancelAccountDialogFeedbackCloseDialogs">Hủy</button><button type="button" class="primary" disabled="@submitting" @onclick="SubmitActionAsync">@(submitting ? "Đang xử lý…" : "Xác nhận")</button></div></div></div> }
-@if (showRoles) { <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="role-catalog-title"><div class="modal-card access-dialog"><header><div><h2 id="role-catalog-title">Vai trò và quyền cố định</h2><p>Thông tin chỉ đọc. Quyền được cấu hình cố định bởi hệ thống.</p></div><button type="button" class="modal-close" title="Đóng" aria-label="Đóng danh sách vai trò" @onclick="CancelAccountDialogFeedbackCloseDialogs"><span class="material-symbols-outlined" aria-hidden="true">close</span></button></header>@if (accessLoading) { <p class="empty-state">Đang tải vai trò và quyền…</p> } else { <div class="access-list">@foreach (var item in roleAccess) { <section class="access-role"><div><strong>@item.Code · @item.Name</strong><span class="data-state @(item.IsActive ? "connected" : "disabled")">@(item.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")</span></div>@if (!string.IsNullOrWhiteSpace(item.Description)) { <p>@item.Description</p> }<div class="permission-list">@foreach (var permission in item.Permissions) { <span title="@permission.Description"><small>@permission.Module</small>@permission.Name</span> }</div></section> }</div> }</div></div> }
-@if (accountAccess is not null) { <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="account-access-title"><div class="modal-card access-dialog"><header><div><h2 id="account-access-title">Quyền hiệu lực</h2><p>@accountAccess.DisplayName · @accountAccess.Username</p></div><button type="button" class="modal-close" title="Đóng" aria-label="Đóng quyền hiệu lực" @onclick="CancelAccountDialogFeedbackCloseDialogs"><span class="material-symbols-outlined" aria-hidden="true">close</span></button></header><div class="access-summary"><span class="activity-value-chip">@accountAccess.Role</span><span class="data-state @InternalAccountStatus.Tone(accountAccess.Status)">@InternalAccountStatus.Label(accountAccess.Status)</span></div><div class="permission-list">@foreach (var permission in accountAccess.Permissions) { <span title="@permission.Description"><small>@permission.Module</small>@permission.Name</span> }</div>@if (accountAccess.Permissions.Length == 0) { <p class="empty-state">Vai trò này chưa có quyền hiệu lực.</p> }</div></div> }
+@if (selected is not null && action is not null)
+{
+    <PropFlowConfirmationDialog Title="@(action == "role" ? "Đổi vai trò tài khoản" : "Cập nhật trạng thái tài khoản")"
+        Tone="@(action == "status" && nextStatus != "ACTIVE" ? DialogTone.Danger : DialogTone.Decision)"
+        Message="@($"{selected.Username} · {selected.Role} · {InternalAccountStatus.Label(selected.Status)}")"
+        ConfirmText="@(action == "role" ? "Đổi vai trò" : "Cập nhật trạng thái")"
+        Busy="@submitting" OnConfirm="SubmitActionAsync" OnCancel="CancelAccountDialogFeedbackCloseDialogs">
+        <ChildContent>
+            @if (dialogError is not null)
+            {
+                <div class="dialog-message is-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><span>@dialogError</span></div>
+            }
+            @if (action == "role")
+            {
+                <PropFlowSelect @bind-Value="nextRole" Options="AvailableRoleOptions" AriaLabel="Vai trò mới" />
+                <p class="confirmation-note">Quyền của tài khoản sẽ được cập nhật theo vai trò @nextRole.</p>
+            }
+            else
+            {
+                <PropFlowSelect @bind-Value="nextStatus" Options="AvailableStatusOptions" AriaLabel="Trạng thái mới" />
+                <p class="confirmation-note">Trạng thái tài khoản sẽ chuyển sang “@InternalAccountStatus.Label(nextStatus)”.</p>
+            }
+        </ChildContent>
+    </PropFlowConfirmationDialog>
+}
+@if (showRoles)
+{
+    <PropFlowConfirmationDialog Title="Vai trò và quyền cố định" Tone="DialogTone.Info" Wide
+        Message="Quyền của từng vai trò do hệ thống quy định." OnCancel="CancelAccountDialogFeedbackCloseDialogs">
+        <ChildContent>
+            @if (accessLoading) { <p class="empty-state">Đang tải vai trò và quyền…</p> } else { <div class="access-list">@foreach (var item in roleAccess) { <section class="access-role"><div><strong>@item.Code · @item.Name</strong><span class="data-state @(item.IsActive ? "connected" : "disabled")">@(item.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")</span></div>@if (!string.IsNullOrWhiteSpace(item.Description)) { <p>@item.Description</p> }<div class="permission-list">@foreach (var permission in item.Permissions) { <span title="@permission.Description"><small>@permission.Module</small>@permission.Name</span> }</div></section> }</div> }
+        </ChildContent>
+    </PropFlowConfirmationDialog>
+}
+@if (accountAccess is not null)
+{
+    <PropFlowConfirmationDialog Title="Quyền hiệu lực" Tone="DialogTone.Info" Wide
+        Message="@($"{accountAccess.DisplayName} · {accountAccess.Username}")" OnCancel="CancelAccountDialogFeedbackCloseDialogs">
+        <ChildContent>
+            <div class="access-summary"><span class="activity-value-chip">@accountAccess.Role</span><span class="data-state @InternalAccountStatus.Tone(accountAccess.Status)">@InternalAccountStatus.Label(accountAccess.Status)</span></div><div class="permission-list">@foreach (var permission in accountAccess.Permissions) { <span title="@permission.Description"><small>@permission.Module</small>@permission.Name</span> }</div>@if (accountAccess.Permissions.Length == 0) { <p class="empty-state">Vai trò này chưa có quyền hiệu lực.</p> }
+        </ChildContent>
+    </PropFlowConfirmationDialog>
+}
 
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime accountDialogFeedback = new();
@@ -126,8 +167,12 @@ else
     private async Task LoadAccountsPageAsync(bool includeSummary = false) { accountsLoading = true; error = null; if (includeSummary) { var s = await AdministrationApi.GetSummaryAsync(); if (s.IsSuccess) summary = s.Data; else error = FriendlyError(s, "Không thể tải thống kê tài khoản Ban quản lý."); } var result = await AdministrationApi.GetAccountsAsync(role, search, status, page); if (result.IsSuccess) { pageData = result.Data; page = result.Data!.Page; accounts = result.Data.Items; } else { accounts = []; pageData = null; error = FriendlyError(result, "Không thể tải danh sách tài khoản Ban quản lý."); } accountsLoading = false; }
     private async Task SelectRoleAsync(string value) { role = value; page = 1; await LoadAccountsPageAsync(); }
     private async Task SearchAsync() { page = 1; await LoadAccountsPageAsync(); }
-    private async Task PreviousPageAsync() { if (!accountsLoading && page > 1) { page--; await LoadAccountsPageAsync(); } }
-    private async Task NextPageAsync() { if (!accountsLoading && page < AccountTotalPages) { page++; await LoadAccountsPageAsync(); } }
+    private async Task ChangeAccountPageAsync(int target)
+    {
+        if (accountsLoading) return;
+        page = target;
+        await LoadAccountsPageAsync();
+    }
     private int AccountTotalPages => pageData is { PageSize: > 0 } ? (int)Math.Ceiling(pageData.Total / (double)pageData.PageSize) : 0;
     private int Count(string code) => summary?.RoleCounts.TryGetValue(code, out var value) == true ? value : 0;
     private PropFlowSelectOption[] AvailableRoleOptions => RoleOptions.Where(x => x.Value != selected?.Role).ToArray();

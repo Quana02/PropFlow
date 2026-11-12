@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using PropFlow.Api.Composition;
 using PropFlow.Modules.Complaints.Application;
 using PropFlow.Modules.Complaints.Domain.Complaints;
 using PropFlow.Modules.Complaints.Domain.ComplaintActivities;
 using PropFlow.Modules.Complaints.Infrastructure.Persistence;
+using PropFlow.Modules.Communication.Application;
 using PropFlow.Modules.Communication.Domain.Announcements;
 using PropFlow.Modules.Communication.Infrastructure;
 using PropFlow.Modules.Communication.Infrastructure.Persistence;
@@ -35,6 +37,11 @@ public sealed class ComplaintCommunicationPostgresTests
             await using var residents = new ResidentsDbContext(residentOptions);
             foreach (var db in new DbContext[] { complaints, communication, residents })
                 await db.Database.ExecuteSqlRawAsync(db.Database.GenerateCreateScript());
+            var realtime = new RealtimeProbe(configuration.ConnectionString);
+            await using var services = new ServiceCollection().AddLogging()
+                .AddSingleton<IFinanceNotificationRealtime>(realtime).BuildServiceProvider();
+            ComplaintCommitter Committer(CommunicationDbContext db) => ActivatorUtilities.CreateInstance<ComplaintCommitter>(
+                services, complaints, db, residents, new ComplaintClosureNotice(db));
 
             var now = DateTimeOffset.UtcNow;
             var userId = Guid.NewGuid();
@@ -50,7 +57,7 @@ public sealed class ComplaintCommunicationPostgresTests
                 complaint.Close(Guid.NewGuid(), now.AddSeconds(3));
                 var activity = new ComplaintActivity(complaint.Id, ComplaintActivityType.CLOSED, now.AddSeconds(3));
                 complaints.ComplaintActivities.Add(activity);
-                var failing = new ComplaintCommitter(complaints, failedDb, residents, new ComplaintClosureNotice(failedDb));
+                var failing = Committer(failedDb);
                 await Assert.ThrowsAsync<InvalidOperationException>(() => failing.SaveAsync(new(activity.Id, complaint.Id, resident.Id, activity.CreatedAt), default));
             }
             complaints.ChangeTracker.Clear();
@@ -58,6 +65,7 @@ public sealed class ComplaintCommunicationPostgresTests
             Assert.Equal(ComplaintStatus.RESOLVED, complaint.Status);
             Assert.Empty(await complaints.ComplaintActivities.ToArrayAsync());
             Assert.Empty(await communication.Notifications.ToArrayAsync());
+            Assert.Empty(realtime.Deliveries);
 
             var stale = new ComplaintsDbContext(new DbContextOptionsBuilder<ComplaintsDbContext>().UseNpgsql(configuration.ConnectionString).Options);
             await using (stale)
@@ -66,17 +74,22 @@ public sealed class ComplaintCommunicationPostgresTests
                 complaint.Close(Guid.NewGuid(), now.AddSeconds(4));
                 var activity = new ComplaintActivity(complaint.Id, ComplaintActivityType.CLOSED, now.AddSeconds(4));
                 complaints.ComplaintActivities.Add(activity);
-                var committer = new ComplaintCommitter(complaints, communication, residents, new ComplaintClosureNotice(communication));
+                var committer = Committer(communication);
                 await committer.SaveAsync(new(activity.Id, complaint.Id, resident.Id, activity.CreatedAt), default);
                 var notification = Assert.Single(await communication.Notifications.ToArrayAsync());
                 Assert.Equal(userId, notification.RecipientUserId);
                 Assert.Equal(activity.Id, notification.SourceEventId);
                 Assert.DoesNotContain("Nội dung", notification.Message);
+                var delivery = Assert.Single(realtime.Deliveries);
+                Assert.True(delivery.Committed);
+                Assert.Equal(userId, delivery.Recipient);
+                Assert.Equal(notification.Id, delivery.Notice.Id);
+                Assert.Equal($"/resident/complaints/{complaint.Id}", delivery.Notice.ActionPath);
                 staleComplaint.AddOfficialResponse("Stale response", now.AddSeconds(5));
                 await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => stale.SaveChangesAsync());
-                await new ComplaintClosureNotice(communication).AddAsync(activity.Id, complaint.Id, userId, activity.CreatedAt, default);
-                await communication.SaveChangesAsync();
+                await committer.SaveAsync(new(activity.Id, complaint.Id, resident.Id, activity.CreatedAt), default);
                 Assert.Single(await communication.Notifications.ToArrayAsync());
+                Assert.Single(realtime.Deliveries);
             }
 
             // Execute audience queries and persistence on PostgreSQL, not only the memory provider.
@@ -94,6 +107,19 @@ public sealed class ComplaintCommunicationPostgresTests
             NpgsqlConnection.ClearAllPools();
             await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE)", admin);
             await drop.ExecuteNonQueryAsync();
+        }
+    }
+
+    private sealed class RealtimeProbe(string connectionString) : IFinanceNotificationRealtime
+    {
+        public List<(Guid Recipient, FinanceNotificationUpdate Notice, bool Committed)> Deliveries { get; } = [];
+
+        public async Task CreatedAsync(Guid recipientUserId, FinanceNotificationUpdate notice, CancellationToken ct)
+        {
+            await using var db = new CommunicationDbContext(new DbContextOptionsBuilder<CommunicationDbContext>()
+                .UseNpgsql(connectionString).Options);
+            var committed = await db.Notifications.AnyAsync(x => x.Id == notice.Id && x.RecipientUserId == recipientUserId, ct);
+            Deliveries.Add((recipientUserId, notice, committed));
         }
     }
 

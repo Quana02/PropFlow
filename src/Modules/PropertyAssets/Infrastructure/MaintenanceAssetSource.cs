@@ -94,4 +94,17 @@ public sealed class MaintenanceAssetSource(PropertyAssetsDbContext db) : IMainte
         }
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task MarkUnavailableAsync(Guid? facilityId, Guid? equipmentId, Guid actor, CancellationToken ct)
+    {
+        var facility = facilityId is { } facilityValue ? await db.Facilities.SingleOrDefaultAsync(item => item.Id == facilityValue, ct) : null;
+        var equipment = equipmentId is { } equipmentValue ? await db.Equipment.SingleOrDefaultAsync(item => item.Id == equipmentValue, ct) : null;
+        if (facilityId is not null && facility is null) throw new KeyNotFoundException("Không tìm thấy cơ sở vật chất.");
+        if (equipmentId is not null && equipment is null) throw new KeyNotFoundException("Không tìm thấy thiết bị.");
+        if (facility is not null && equipment?.FacilityId is not null && equipment.FacilityId != facility.Id) throw new ArgumentException("Thiết bị không thuộc cơ sở vật chất đã chọn.");
+        var now = DateTimeOffset.UtcNow;
+        if (facility is not null && equipment is null) facility.SetStatus(MasterDataStatus.UNAVAILABLE, actor, now);
+        else if (equipment is not null) equipment.Deactivate(actor, now);
+        await db.SaveChangesAsync(ct);
+    }
 }

@@ -41,7 +41,7 @@
             }
         </div>
         <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(pageData.Total / (double)pageData.PageSize))" Busy="InteractionBlocked" Label="Phân trang tài liệu"
-            Previous="Previous" Next="Next">
+            PageChanged="ChangePageAsync">
             <span>@pageData.Total tài liệu</span>
         </TablePagination>
     }
@@ -93,13 +93,13 @@
     <PropFlowConfirmationDialog Title="@(publication.Publish ? "Xuất bản tài liệu?" : "Ngừng xuất bản tài liệu?")"
         Message="@(publication.Publish ? $"Xuất bản bản đã lưu của “{publication.Title}” cho {AudienceLabel(publication.Audience).ToLowerInvariant()}?" : $"Ngừng xuất bản “{publication.Title}”? Nhân viên và chatbot sẽ không sử dụng tài liệu này nữa.")"
         ConfirmText="@(publication.Publish ? "Xuất bản" : "Ngừng xuất bản")" CancelText="Hủy"
-        Destructive="@(!publication.Publish)" Busy="@busy" OnConfirm="ConfirmPublication" OnCancel="CancelConfirmation" />
+        Tone="@(publication.Publish ? DialogTone.Confirm : DialogTone.Danger)" Busy="@busy" OnConfirm="ConfirmPublication" OnCancel="CancelConfirmation" />
 }
 else if (pendingImport is { } import)
 {
     <PropFlowConfirmationDialog Title="Thay nội dung đang soạn?"
         Message="@($"Thay nội dung hiện tại bằng nội dung tệp “{import.FileName}”? Nội dung đang soạn sẽ bị thay thế. Bạn vẫn cần lưu bản nháp sau đó.")"
-        ConfirmText="Thay nội dung" CancelText="Giữ nội dung hiện tại" Busy="@busy"
+        Tone="DialogTone.Danger" ConfirmText="Thay nội dung" CancelText="Giữ nội dung hiện tại" Busy="@busy"
         OnConfirm="ConfirmImport" OnCancel="CancelConfirmation" />
 }
 
@@ -140,8 +140,12 @@ else if (pendingImport is { } import)
         finally { busy = loading = false; }
     }
     private async Task Search() { if (InteractionBlocked) return; page = 1; await Load(); }
-    private async Task Previous() { if (InteractionBlocked) return; page--; await Load(); }
-    private async Task Next() { if (InteractionBlocked) return; page++; await Load(); }
+    private async Task ChangePageAsync(int target)
+    {
+        if (InteractionBlocked) return;
+        page = target;
+        await Load();
+    }
     private void NewDocument() { if (InteractionBlocked) return; editorVersion++; detail = null; indexStatus = null; title = content = ""; audience = "RESIDENT"; editorOpen = true; error = null; }
     private void Close() { if (InteractionBlocked) return; editorVersion++; editorOpen = false; detail = null; }
     private async Task Open(Guid id)

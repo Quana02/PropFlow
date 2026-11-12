@@ -5,7 +5,7 @@
 <span class="finance-reminder"><button type="button" disabled="@busy" @onclick="BeginSend"><span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span>@(busy ? "Đang gửi…" : "Gửi hóa đơn")</button></span>
 @if (confirming)
 {
-    <PropFlowConfirmationDialog Title="Gửi hóa đơn?" Message="Bạn có muốn gửi hóa đơn này cho cư dân không?" ConfirmText="Có" CancelText="Không" Destructive="false" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
+    <PropFlowConfirmationDialog Title="Gửi hóa đơn?" Message="Cư dân sẽ nhận được hóa đơn này." ConfirmText="Gửi hóa đơn" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
 }
 
 @code {

@@ -39,7 +39,7 @@
    @if (initialized && data.TotalCount > 0)
    {
        <TablePagination Page="data.PageIndex" TotalPages="TotalPages" Busy="loading" Label="Phân trang căn hộ"
-           Previous="@(() => GoToPage(data.PageIndex - 1))" Next="@(() => GoToPage(data.PageIndex + 1))">
+           PageChanged="GoToPage">
            <span>@data.TotalCount căn hộ</span>
        </TablePagination>
    }
@@ -54,8 +54,8 @@
 
 @if(managingTypes&&CanManage){<PropFlow.Web.Client.Features.Apartment.Components.ApartmentUnitTypeManager Items="apartmentTypes" Loading="unitTypesLoading" Error="@unitTypesError" Changed="TypesChanged" Reload="ReloadTypes" Closed="CloseTypeManager" />}
 
-@if(statusTarget is not null){<PropFlowConfirmationDialog @key="statusDialogVersion" Title="@StatusDialogTitle" Message="@StatusDialogMessage" ConfirmText="@(statusBlocked?"Đã hiểu":statusTarget.Status=="ACTIVE"?"Ngừng quản lý":"Kích hoạt lại")" BusyText="Đang cập nhật…" Busy="@changingStatus" InformationOnly="@statusBlocked" Destructive="@(statusTarget.Status=="ACTIVE")" OnConfirm="ConfirmStatusChange" OnCancel="CloseStatusDialog" />}
-@if(pendingType is not null){<PropFlowConfirmationDialog Title="Áp dụng thông số loại căn hộ mới?" Message="Các thông số bạn đã sửa thủ công sẽ được thay bằng giá trị mặc định của loại mới. Những trường loại mới chưa thiết lập sẽ được giữ nguyên." ConfirmText="Đổi loại và áp dụng" Destructive="false" OnConfirm="ConfirmTypeChange" OnCancel="CancelTypeChange" />}
+@if(statusTarget is not null){<PropFlowConfirmationDialog @key="statusDialogVersion" Title="@StatusDialogTitle" Message="@StatusDialogMessage" ConfirmText="@(statusBlocked?"Đã hiểu":statusTarget.Status=="ACTIVE"?"Ngừng quản lý":"Kích hoạt lại")" BusyText="Đang cập nhật…" Busy="@changingStatus" Tone="@(statusBlocked ? DialogTone.Info : statusTarget.Status == "ACTIVE" ? DialogTone.Danger : DialogTone.Confirm)" OnConfirm="ConfirmStatusChange" OnCancel="CloseStatusDialog" />}
+@if(pendingType is not null){<PropFlowConfirmationDialog Title="Áp dụng thông số loại căn hộ mới?" Message="Các thông số bạn đã sửa thủ công sẽ được thay bằng giá trị mặc định của loại mới. Những trường loại mới chưa thiết lập sẽ được giữ nguyên." ConfirmText="Đổi loại và áp dụng" OnConfirm="ConfirmTypeChange" OnCancel="CancelTypeChange" />}
 
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime editFeedback = new();

@@ -91,6 +91,36 @@ public sealed class MaintenanceStaffWorkViewTests
         Assert.Contains(all.Items, item => item.Id == scheduled.Id && item.ScheduleId == schedule.Id);
     }
 
+    [Fact]
+    public async Task MyTasksAsync_KeepsPendingAcceptanceWithStaffAndShowsOnlyClosedTasksAsCompleted()
+    {
+        await using var db = CreateDb();
+        var staff = Staff("Nhân viên A");
+        var assigned = AddTask(db, "MT-ASSIGNED", "Đã phân công");
+        var inProgress = AddTask(db, "MT-IN-PROGRESS", "Đang thực hiện");
+        var pendingAcceptance = AddTask(db, "MT-PENDING", "Chờ nghiệm thu");
+        var closed = AddTask(db, "MT-CLOSED", "Đã đóng");
+        var assignedAssignment = Assign(db, assigned, staff.UserId);
+        var progressAssignment = Assign(db, inProgress, staff.UserId);
+        var pendingAssignment = Assign(db, pendingAcceptance, staff.UserId);
+        var closedAssignment = Assign(db, closed, staff.UserId);
+        var now = DateTimeOffset.UtcNow;
+        inProgress.MarkAssigned(now); progressAssignment.Start(now);
+        pendingAcceptance.MarkAssigned(now); pendingAcceptance.Start(now); pendingAcceptance.Complete(now); pendingAssignment.Start(now); pendingAssignment.Complete(now);
+        closed.MarkAssigned(now); closed.Start(now); closed.Complete(now); closed.Close(Guid.NewGuid(), now); closedAssignment.Start(now); closedAssignment.Complete(now);
+        await db.SaveChangesAsync();
+        var service = Service(db, staff);
+
+        var myTasks = await service.MyTasksAsync(new(PageSize: 10), staff.UserId, default);
+        var completed = await service.MyTasksAsync(new(CompletedOnly: true, PageSize: 10), staff.UserId, default);
+
+        Assert.Equal(new[] { assigned.Id, inProgress.Id, pendingAcceptance.Id }.OrderBy(id => id), myTasks.Items.Select(item => item.Id).OrderBy(id => id));
+        Assert.DoesNotContain(myTasks.Items, item => item.Id == closed.Id);
+        Assert.Equal(closed.Id, Assert.Single(completed.Items).Id);
+        Assert.DoesNotContain(completed.Items, item => item.Id == pendingAcceptance.Id);
+        Assert.Equal(pendingAcceptance.Id, Assert.Single((await service.MyTasksAsync(new(Status: MaintenanceTaskStatus.COMPLETED), staff.UserId, default)).Items).Id);
+    }
+
     private static MaintenanceDbContext CreateDb() => new(new DbContextOptionsBuilder<MaintenanceDbContext>()
         .UseInMemoryDatabase($"maintenance-staff-work-{Guid.NewGuid()}").Options);
 
@@ -106,8 +136,12 @@ public sealed class MaintenanceStaffWorkViewTests
         return task;
     }
 
-    private static void Assign(MaintenanceDbContext db, MaintenanceTask task, Guid staffId) =>
-        db.MaintenanceAssignments.Add(new MaintenanceAssignment(task.Id, staffId, Guid.NewGuid(), DateTimeOffset.UtcNow));
+    private static MaintenanceAssignment Assign(MaintenanceDbContext db, MaintenanceTask task, Guid staffId)
+    {
+        var assignment = new MaintenanceAssignment(task.Id, staffId, Guid.NewGuid(), DateTimeOffset.UtcNow);
+        db.MaintenanceAssignments.Add(assignment);
+        return assignment;
+    }
 
     private sealed class AssetSource : IMaintenanceAssetSource
     {

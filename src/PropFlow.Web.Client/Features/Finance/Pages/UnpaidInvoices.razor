@@ -53,7 +53,7 @@
             else { @foreach (var item in FilteredItems) { <tr @key="item.Id"><td><input type="checkbox" disabled aria-label="Chọn hóa đơn @item.InvoiceNumber" /></td><td><strong><a href="@($"/finance/invoices/{item.Id}")" aria-label="Chi tiết hóa đơn @item.InvoiceNumber">@item.InvoiceNumber</a></strong><small>@Date(item.IssueDate)</small></td><td><strong>Căn hộ @(item.ApartmentNumber ?? ShortId(item.ApartmentUnitId))</strong><small>@(item.ResidentName ?? "Chưa có người nhận")</small></td><td><strong>@(item.InvoiceType == "MONTHLY_RENTAL" ? "Tiền thuê tháng" : "Phí dịch vụ") @item.BillingPeriodStart.ToString("MM/yyyy")</strong><small>@item.BillingPeriodStart.ToString("dd/MM/yyyy") – @item.BillingPeriodEnd.ToString("dd/MM/yyyy")</small></td><td class="amount-cell"><strong>@Money(item.OutstandingAmount)</strong>@if (item.ConfirmedPaidAmount > 0) { <small>Đã thu @Money(item.ConfirmedPaidAmount)</small> } else { <small>Chưa ghi nhận khoản thu</small> }</td><td class="@DueClass(item)"><strong>@Date(item.DueDate)</strong><small>@DueText(item)</small></td><td><span class="invoice-status @StatusClass(item)">@StatusName(item)</span></td><td><FinanceTableActions><button class="collect-button" type="button" @onclick="() => collecting = item"><span aria-hidden="true">＋</span> Thu tiền</button><FinanceSendInvoiceButton @key="item.Id" InvoiceId="item.Id" /></FinanceTableActions></td></tr> } }
         </tbody></table></div>
         @if (!loading && string.IsNullOrWhiteSpace(error) && data is not null && data.Total > 0) { <TablePagination Page="page" TotalPages="TotalPages" Label="Phân trang"
-            Previous="PreviousPage" Next="NextPage">
+            PageChanged="ChangePageAsync">
             <span>Hiển thị @FilteredItems.Count / @data.Total hóa đơn chưa thanh toán</span>
         </TablePagination> }
     </section>
@@ -102,8 +102,7 @@
     private Task SearchChanged() => LoadAsync(1, 350);
     public void Dispose() { toastLifetime.Dispose(); requests.Dispose(); }
     private Task ReloadAsync() => LoadAsync(page);
-    private Task PreviousPage() => LoadAsync(page - 1);
-    private Task NextPage() => LoadAsync(page + 1);
+    private Task ChangePageAsync(int target) => LoadAsync(target);
     private async Task SetFilter(string value) { filter = value; await LoadAsync(1); }
     private bool MatchesFilter(InvoiceBalance item) => filter switch { "UNPAID" => item.ConfirmedPaidAmount <= 0, "DUE_SOON" => IsDueSoon(item), "PARTIAL" => IsPartial(item), _ => true };
     private bool IsDueSoon(InvoiceBalance item) => item.DueDate is { } due && due.DayNumber >= Today.DayNumber && due.DayNumber - Today.DayNumber <= 3;

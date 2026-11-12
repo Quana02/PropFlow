@@ -143,7 +143,7 @@
                 <p>Đang tải lịch bảo trì…</p>
             </div>
         }
-        else if (!Schedules.Items.Any())
+        else if (!Schedules.Items.Any() && (Schedules.TotalCount == 0 || Schedules.PageIndex <= TotalPages))
         {
             <div class="fe07-empty">
                 <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
@@ -263,7 +263,7 @@
             }
 
             <TablePagination Page="Schedules.PageIndex" TotalPages="TotalPages" Busy="IsLoading" Label="Phân trang lịch bảo trì"
-                Previous="@(() => ChangePage(Schedules.PageIndex - 1))" Next="@(() => ChangePage(Schedules.PageIndex + 1))">
+                PageChanged="ChangePage">
                 <span>@Schedules.TotalCount lịch bảo trì</span>
             </TablePagination>
         }
@@ -301,7 +301,8 @@
             {
                 <div class="fe07-empty" role="status"><span class="fe07-spinner"></span><p>Đang tải lịch sử bảo trì…</p></div>
             }
-            else if (History is null || !History.Page.Items.Any())
+            else if (History is null || (!History.Page.Items.Any() &&
+                     (History.Page.TotalCount == 0 || History.Page.PageIndex <= HistoryTotalPages)))
             {
                 <div class="fe07-empty"><span class="material-symbols-outlined" aria-hidden="true">history</span><h2>Chưa có lịch sử bảo trì</h2><p>Không có công việc nào phù hợp bộ lọc hiện tại.</p></div>
             }
@@ -333,7 +334,7 @@
                     </table>
                 </div>
                 <TablePagination Page="History.Page.PageIndex" TotalPages="HistoryTotalPages" Busy="IsHistoryLoading" Label="Phân trang lịch sử bảo trì"
-                    Previous="@(() => ChangeHistoryPage(History.Page.PageIndex - 1))" Next="@(() => ChangeHistoryPage(History.Page.PageIndex + 1))">
+                    PageChanged="ChangeHistoryPage">
                     <span>Hiển thị @History.Page.Items.Count / @History.Page.TotalCount bản ghi</span>
                 </TablePagination>
             }
@@ -373,7 +374,7 @@
             {
                 <div class="fe07-empty" role="status"><span class="fe07-spinner"></span><p>Đang tải công việc bảo trì…</p></div>
             }
-            else if (!Tasks.Items.Any())
+            else if (!Tasks.Items.Any() && (Tasks.TotalCount == 0 || Tasks.PageIndex <= TaskTotalPages))
             {
                 <div class="fe07-empty"><span class="material-symbols-outlined" aria-hidden="true">assignment</span><h2>Chưa có công việc bảo trì</h2><p>Hãy tạo công việc mới để bắt đầu theo dõi.</p><button class="fe07-primary-action" type="button" @onclick="OpenManualTask"><span class="material-symbols-outlined" aria-hidden="true">add</span>Tạo công việc</button></div>
             }
@@ -399,7 +400,7 @@
                     }
                 </div>
                 <TablePagination Page="Tasks.PageIndex" TotalPages="TaskTotalPages" Busy="IsTasksLoading" Label="Phân trang công việc bảo trì"
-                    Previous="@(() => ChangeTaskPage(Tasks.PageIndex - 1))" Next="@(() => ChangeTaskPage(Tasks.PageIndex + 1))">
+                    PageChanged="ChangeTaskPage">
                     <span>@Tasks.TotalCount công việc</span>
                 </TablePagination>
             }
@@ -409,7 +410,7 @@
 
 @if (PendingConfirmation is not null)
 {
-    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@ConfirmationMessage" ConfirmText="Có" CancelText="Không" Busy="@IsConfirmationBusy" BusyText="Đang xử lý…" OnConfirm="ConfirmPendingAction" OnCancel="CancelPendingAction" />
+    <PropFlowConfirmationDialog Title="@ConfirmationTitle" Message="@ConfirmationMessage" ConfirmText="@ConfirmationActionText" Tone="@ConfirmationTone" Busy="@IsConfirmationBusy" BusyText="Đang xử lý…" OnConfirm="ConfirmPendingAction" OnCancel="CancelPendingAction" />
 }
 
 @if (IsDialogOpen)
@@ -881,7 +882,10 @@
     private bool IsTasksLoading { get; set; }
     private bool IsSaving { get; set; }
     private Func<Task>? PendingConfirmation { get; set; }
-    private string ConfirmationMessage { get; set; } = string.Empty;
+    private string ConfirmationTitle = string.Empty;
+    private string ConfirmationActionText = string.Empty;
+    private DialogTone ConfirmationTone;
+    private string ConfirmationMessage = string.Empty;
     private bool IsConfirmationBusy => IsSaving || IsTaskSaving || IsAssetAssociationSaving || IsAssignmentSaving || IsReviewSaving || IsExtendingSchedule;
     private bool IsDialogOpen { get; set; }
     private ScheduleModel? ScheduleToExtend { get; set; }
@@ -1033,10 +1037,9 @@
         .FirstOrDefault();
     private IReadOnlyList<AssetModel> Facilities => Assets.Where(a => a.AssetType.Equals("FACILITY", StringComparison.OrdinalIgnoreCase)).ToList();
     private IReadOnlyList<AssetModel> Equipment => Assets.Where(a => a.AssetType.Equals("EQUIPMENT", StringComparison.OrdinalIgnoreCase)).ToList();
-    private IReadOnlyList<AssetModel> MaintenanceFacilities => Facilities;
+    private IReadOnlyList<AssetModel> NewMaintenanceFacilities => Facilities.Where(IsAvailableForNewMaintenance).ToList();
     private IReadOnlyList<AssetModel> EquipmentForSelectedFacility => EquipmentFor(AssetAssociationEditor.FacilityId);
     private IReadOnlyList<AssetModel> EquipmentForManualTask => EquipmentFor(TaskEditor.FacilityId);
-    private IReadOnlyList<AssetModel> EquipmentForScheduleEditor => EquipmentFor(Editor.FacilityId).Where(IsUnderMaintenance).ToList();
     private IReadOnlyList<AssetModel> EquipmentForScheduleFilter => Filter.FacilityId is null
         ? Equipment
         : Equipment.Where(asset => asset.FacilityId == Filter.FacilityId).ToList();
@@ -1047,6 +1050,10 @@
         ? Equipment
         : Equipment.Where(asset => asset.FacilityId == HistoryFilter.FacilityId).ToList();
     private static bool IsUnderMaintenance(AssetModel asset) => string.Equals(asset.Status, "UNDER_MAINTENANCE", StringComparison.OrdinalIgnoreCase);
+    private static bool IsAvailableForNewMaintenance(AssetModel asset) => !IsUnderMaintenance(asset);
+    private IReadOnlyList<AssetModel> EquipmentAvailableForNewMaintenance(Guid? facilityId) =>
+        EquipmentFor(facilityId).Where(asset => IsAvailableForNewMaintenance(asset) &&
+            (asset.FacilityId is null || Facilities.FirstOrDefault(facility => facility.Id == asset.FacilityId) is not { } facility || IsAvailableForNewMaintenance(facility))).ToList();
     private IReadOnlyList<AssetModel> EquipmentFor(Guid? facilityId) => facilityId is null ? Equipment : Equipment.Where(asset => asset.FacilityId == facilityId).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Schedules.TotalCount / Schedules.PageSize));
     private int TaskTotalPages => Math.Max(1, (int)Math.Ceiling((double)Tasks.TotalCount / Tasks.PageSize));
@@ -1063,9 +1070,9 @@
     private string HistoryEquipmentFilter { get => HistoryFilter.EquipmentId?.ToString() ?? string.Empty; set => HistoryFilter.EquipmentId = Guid.TryParse(value, out var id) ? id : null; }
     private string HistoryStaffFilter { get => HistoryFilter.StaffUserId?.ToString() ?? string.Empty; set => HistoryFilter.StaffUserId = Guid.TryParse(value, out var id) ? id : null; }
     private string HistorySort { get => HistoryFilter.Sort.ToString(); set => HistoryFilter.Sort = Enum.TryParse<MaintenanceHistorySort>(value, out var sort) ? sort : MaintenanceHistorySort.NEWEST; }
-    private string EditorFacilityIdString { get => Editor.FacilityId?.ToString() ?? string.Empty; set { Editor.FacilityId = ParseId(value); ClearUnmatchedEquipment(Editor.FacilityId, id => Editor.EquipmentId = id, Editor.EquipmentId); } }
+    private string EditorFacilityIdString { get => Editor.FacilityId?.ToString() ?? string.Empty; set { Editor.FacilityId = ParseId(value); ClearUnmatchedEquipment(EditingSchedule is null ? EquipmentAvailableForNewMaintenance(Editor.FacilityId) : EquipmentFor(Editor.FacilityId), id => Editor.EquipmentId = id, Editor.EquipmentId); } }
     private string EditorEquipmentIdString { get => Editor.EquipmentId?.ToString() ?? string.Empty; set => SetEditorEquipment(value); }
-    private string TaskFacilityIdString { get => TaskEditor.FacilityId?.ToString() ?? string.Empty; set { TaskEditor.FacilityId = ParseId(value); ClearUnmatchedEquipment(TaskEditor.FacilityId, id => TaskEditor.EquipmentId = id, TaskEditor.EquipmentId); } }
+    private string TaskFacilityIdString { get => TaskEditor.FacilityId?.ToString() ?? string.Empty; set { TaskEditor.FacilityId = ParseId(value); ClearUnmatchedEquipment(TaskEditor.IsEmergency ? EquipmentAvailableForNewMaintenance(TaskEditor.FacilityId) : EquipmentFor(TaskEditor.FacilityId), id => TaskEditor.EquipmentId = id, TaskEditor.EquipmentId); } }
     private string TaskEquipmentIdString { get => TaskEditor.EquipmentId?.ToString() ?? string.Empty; set => SetTaskEquipment(value); }
     private string AssociationFacilityIdString { get => AssetAssociationEditor.FacilityId?.ToString() ?? string.Empty; set { AssetAssociationEditor.FacilityId = ParseId(value); ClearUnmatchedEquipment(AssetAssociationEditor.FacilityId, id => AssetAssociationEditor.EquipmentId = id, AssetAssociationEditor.EquipmentId); } }
     private string AssociationEquipmentIdString { get => AssetAssociationEditor.EquipmentId?.ToString() ?? string.Empty; set => SetAssociationEquipment(value); }
@@ -1083,11 +1090,11 @@
     private IReadOnlyList<PropFlowSelectOption> HistoryStaffOptions => [new("", IsHistoryStaffLoading ? "Đang tải nhân viên…" : "Tất cả nhân viên"), .. HistoryStaff.Select(staff => new PropFlowSelectOption(staff.UserId.ToString(), $"{staff.DisplayName} ({staff.Username})"))];
     private IReadOnlyList<PropFlowSelectOption> AssignableStaffOptions => [new("", IsTaskFilterStaffLoading ? "Đang tải nhân viên…" : "Tất cả nhân viên"), .. AssignableStaff.Select(staff => new PropFlowSelectOption(staff.UserId.ToString(), $"{staff.DisplayName} ({staff.Username})"))];
     private IReadOnlyList<PropFlowSelectOption> SelectableStaffOptions => [new("", "Chọn nhân viên"), .. SelectableStaff.Select(staff => new PropFlowSelectOption(staff.UserId.ToString(), $"{staff.DisplayName} ({staff.Username})"))];
-    private IReadOnlyList<PropFlowSelectOption> ScheduleFacilityOptions => AssetOptions(IncludeSelected(Facilities, Editor.FacilityId), "Chọn cơ sở vật chất");
-    private IReadOnlyList<PropFlowSelectOption> MaintenanceFacilityOptions => AssetOptions(IncludeSelected(MaintenanceFacilities, TaskEditor.FacilityId), "Chọn cơ sở vật chất");
+    private IReadOnlyList<PropFlowSelectOption> ScheduleFacilityOptions => AssetOptions(EditingSchedule is null ? NewMaintenanceFacilities : IncludeSelected(Facilities, Editor.FacilityId), NewMaintenanceFacilities.Count == 0 && EditingSchedule is null ? "Không có cơ sở vật chất khả dụng" : "Chọn cơ sở vật chất");
+    private IReadOnlyList<PropFlowSelectOption> MaintenanceFacilityOptions => AssetOptions(TaskEditor.IsEmergency ? NewMaintenanceFacilities : IncludeSelected(Facilities, TaskEditor.FacilityId), TaskEditor.IsEmergency && NewMaintenanceFacilities.Count == 0 ? "Không có cơ sở vật chất khả dụng" : "Chọn cơ sở vật chất");
     private static readonly IReadOnlyList<PropFlowSelectOption> TaskPriorityOptions = [new("", "Chọn mức ưu tiên"), new("HIGH", "Cao"), new("MEDIUM", "Trung bình"), new("LOW", "Thấp")];
-    private IReadOnlyList<PropFlowSelectOption> ScheduleEquipmentOptions => AssetOptions(IncludeSelected(EquipmentFor(Editor.FacilityId), Editor.EquipmentId), "Không chọn");
-    private IReadOnlyList<PropFlowSelectOption> ManualTaskEquipmentOptions => AssetOptions(TaskEditor.FacilityId is null ? Equipment : EquipmentForManualTask, "Không chọn");
+    private IReadOnlyList<PropFlowSelectOption> ScheduleEquipmentOptions => AssetOptions(EditingSchedule is null ? EquipmentAvailableForNewMaintenance(Editor.FacilityId) : IncludeSelected(EquipmentFor(Editor.FacilityId), Editor.EquipmentId), EditingSchedule is null && EquipmentAvailableForNewMaintenance(Editor.FacilityId).Count == 0 ? "Không có thiết bị khả dụng" : "Không chọn");
+    private IReadOnlyList<PropFlowSelectOption> ManualTaskEquipmentOptions => AssetOptions(TaskEditor.IsEmergency ? EquipmentAvailableForNewMaintenance(TaskEditor.FacilityId) : (TaskEditor.FacilityId is null ? Equipment : EquipmentForManualTask), TaskEditor.IsEmergency && EquipmentAvailableForNewMaintenance(TaskEditor.FacilityId).Count == 0 ? "Không có thiết bị khả dụng" : "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> AllFacilityOptions => AssetOptions(Facilities, "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> AssociationEquipmentOptions => AssetOptions(EquipmentForSelectedFacility, "Không chọn");
     private IReadOnlyList<PropFlowSelectOption> AssetOptions(IEnumerable<AssetModel> items, string emptyLabel) => [new("", emptyLabel), .. items.Select(asset => new PropFlowSelectOption(asset.Id.ToString(), AssetLabel(asset)))];
@@ -1097,7 +1104,11 @@
     private static Guid? ParseId(string value) => Guid.TryParse(value, out var id) ? id : null;
     private void ClearUnmatchedEquipment(Guid? facilityId, Action<Guid?> setEquipment, Guid? equipmentId)
     {
-        if (facilityId is not null && equipmentId is not null && !EquipmentFor(facilityId).Any(asset => asset.Id == equipmentId)) setEquipment(null);
+        ClearUnmatchedEquipment(EquipmentFor(facilityId), setEquipment, equipmentId);
+    }
+    private static void ClearUnmatchedEquipment(IEnumerable<AssetModel> eligibleEquipment, Action<Guid?> setEquipment, Guid? equipmentId)
+    {
+        if (equipmentId is not null && !eligibleEquipment.Any(asset => asset.Id == equipmentId)) setEquipment(null);
     }
     private void SetEditorEquipment(string value) { Editor.EquipmentId = ParseId(value); SetFacilityFromEquipment(Editor.EquipmentId, id => Editor.FacilityId = id); }
     private void SetTaskEquipment(string value) { TaskEditor.EquipmentId = ParseId(value); SetFacilityFromEquipment(TaskEditor.EquipmentId, id => TaskEditor.FacilityId = id); }
@@ -1347,7 +1358,13 @@
     private void SaveTask()
     {
         if (TaskSourceSchedule is null && !ValidateManualTask()) return;
-        RequestConfirmation(TaskSourceSchedule is null ? "Bạn có muốn tạo công việc bảo trì này không?" : "Bạn có muốn tạo công việc từ lịch bảo trì này không?", ConfirmSaveTask);
+        RequestConfirmation(
+            TaskSourceSchedule is null ? "Tạo công việc bảo trì?" : "Tạo công việc từ lịch bảo trì?",
+            TaskSourceSchedule is null
+                ? "Công việc sẽ được thêm vào danh sách bảo trì."
+                : "Sau khi tạo công việc, bạn chỉ có thể đổi thời điểm bắt đầu và thời điểm kết thúc trong mục Cập nhật lịch bảo trì.",
+            "Tạo công việc",
+            ConfirmSaveTask);
     }
     private bool ValidateManualTask()
     {
@@ -1433,7 +1450,7 @@
             IsServiceRequestPickerOpen = false;
             return;
         }
-        RequestConfirmation($"Bạn có chắc chắn muốn liên kết công việc bảo trì này với yêu cầu dịch vụ {request.RequestNumber} không?", () => ConfirmLinkTaskServiceRequest(ServiceRequestPickerTaskId.Value, request.Id));
+        RequestConfirmation("Liên kết yêu cầu dịch vụ?", $"Công việc bảo trì sẽ được liên kết với yêu cầu {request.RequestNumber}.", "Liên kết", () => ConfirmLinkTaskServiceRequest(ServiceRequestPickerTaskId.Value, request.Id));
     }
     private async Task ConfirmLinkTaskServiceRequest(Guid taskId, Guid serviceRequestId)
     {
@@ -1503,7 +1520,7 @@
     private void SaveAssignment()
     {
         if (TaskForAssignment is null || AssignmentEditor.StaffUserIds.Count == 0) return;
-        RequestConfirmation(HasCurrentAssignees(TaskForAssignment) ? "Bạn có muốn cập nhật nhóm nhân viên xử lý công việc này không?" : "Bạn có muốn phân công công việc này không?", ConfirmSaveAssignment);
+        RequestConfirmation("Lưu phân công?", "Nhóm nhân viên đã chọn sẽ phụ trách công việc bảo trì này.", "Lưu phân công", ConfirmSaveAssignment);
     }
     private async Task ConfirmSaveAssignment()
     {
@@ -1567,8 +1584,8 @@
         else { IsProgressMonitorOpen = false; ErrorMessage = result.Message ?? "Không thể tải thông tin theo dõi tiến độ."; }
     }
     private void CloseProgressMonitor() { if (!IsProgressMonitorLoading) IsProgressMonitorOpen = false; }
-    private void ApproveAndClose() => RequestConfirmation("Bạn có muốn chấp nhận kết quả và đóng công việc này không?", () => ReviewResult("approve"));
-    private void RequestRevision() => RequestConfirmation("Bạn có muốn yêu cầu nhân viên xử lý thêm không?", () => ReviewResult("request-revision"));
+    private void ApproveAndClose() => RequestConfirmation("Nghiệm thu và đóng công việc?", "Kết quả được chấp nhận và công việc bảo trì sẽ được đóng.", "Nghiệm thu và đóng", () => ReviewResult("approve"), DialogTone.Danger);
+    private void RequestRevision() => RequestConfirmation("Yêu cầu xử lý thêm?", "Công việc sẽ được trả lại cho nhân viên để tiếp tục xử lý.", "Yêu cầu xử lý thêm", () => ReviewResult("request-revision"));
     private async Task ReviewResult(string decision)
     {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
@@ -1607,7 +1624,7 @@
             ErrorMessage = "Vui lòng chọn cơ sở vật chất hoặc thiết bị.";
             return;
         }
-        RequestConfirmation("Bạn có muốn lưu liên kết tài sản cho công việc này không?", ConfirmSaveAssetAssociation);
+        RequestConfirmation("Lưu liên kết tài sản?", "Tài sản đã chọn sẽ được liên kết với công việc bảo trì.", "Lưu liên kết", ConfirmSaveAssetAssociation);
     }
     private async Task ConfirmSaveAssetAssociation()
     {
@@ -1647,7 +1664,7 @@
     private void SaveSchedule()
     {
         if (!TryGetScheduleRange(out _, out _)) return;
-        RequestConfirmation(EditingSchedule is null ? "Bạn có muốn tạo lịch bảo trì này không?" : "Bạn có muốn cập nhật lịch bảo trì này không?", ConfirmSaveSchedule);
+        RequestConfirmation(EditingSchedule is null ? "Tạo lịch bảo trì?" : "Cập nhật lịch bảo trì?", "Thông tin đã nhập sẽ được lưu vào lịch bảo trì.", "Lưu lịch", ConfirmSaveSchedule);
     }
     private async Task ConfirmSaveSchedule()
     {
@@ -1674,7 +1691,9 @@
     }
 
     private void ChangeStatus(ScheduleModel schedule, string action)
-        => RequestConfirmation(action == "complete" ? "Bạn có muốn hoàn tất lịch bảo trì này không?" : "Bạn có muốn hủy lịch bảo trì này không?", () => ConfirmChangeStatus(schedule, action));
+        => RequestConfirmation(action == "complete" ? "Hoàn tất lịch bảo trì?" : "Hủy lịch bảo trì?",
+            action == "complete" ? "Lịch sẽ được đánh dấu đã hoàn tất." : "Lịch này sẽ được đánh dấu đã hủy.",
+            action == "complete" ? "Hoàn tất lịch" : "Hủy lịch", () => ConfirmChangeStatus(schedule, action), DialogTone.Danger);
     private async Task ConfirmChangeStatus(ScheduleModel schedule, string action)
     {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
@@ -1704,7 +1723,7 @@
         ScheduleToExtend = null;
     }
     private void SaveScheduleExtension()
-        => RequestConfirmation("Bạn có muốn gia hạn lịch bảo trì này không?", ConfirmSaveScheduleExtension);
+        => RequestConfirmation("Gia hạn lịch bảo trì?", "Thời điểm kết thúc sẽ được cập nhật theo thời hạn mới.", "Gia hạn lịch", ConfirmSaveScheduleExtension);
     private async Task ConfirmSaveScheduleExtension()
     {
         var operationFeedback = Toasts.BeginOperation(toastLifetime);
@@ -1720,10 +1739,13 @@
         await LoadSchedules();
     }
 
-    private void RequestConfirmation(string message, Func<Task> action)
+    private void RequestConfirmation(string title, string message, string actionText, Func<Task> action, DialogTone tone = DialogTone.Confirm)
     {
         if (IsConfirmationBusy) return;
+        ConfirmationTitle = title;
         ConfirmationMessage = message;
+        ConfirmationActionText = actionText;
+        ConfirmationTone = tone;
         PendingConfirmation = action;
     }
     private void CancelPendingAction()

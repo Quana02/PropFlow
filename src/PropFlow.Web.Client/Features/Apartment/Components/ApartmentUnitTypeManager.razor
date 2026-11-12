@@ -44,7 +44,7 @@
 </div>
 @if (deleteTarget is not null)
 {
-    <PropFlowConfirmationDialog Title="Xóa loại căn hộ?" Message="@($"Bạn có chắc muốn xóa loại “{deleteTarget.Name}”? Loại đang được căn hộ sử dụng sẽ không thể xóa.")" Busy="@busy" ConfirmText="Xóa loại" OnConfirm="Delete" OnCancel="CancelDelete" />
+    <PropFlowConfirmationDialog Title="Xóa loại căn hộ?" Message="@($"Loại “{deleteTarget.Name}” sẽ bị xóa khỏi danh mục. Bạn chỉ có thể xóa loại chưa được căn hộ nào sử dụng.")" Busy="@busy" Tone="DialogTone.Danger" ConfirmText="Xóa loại" OnConfirm="Delete" OnCancel="CancelDelete" />
 }
 
 @code {
