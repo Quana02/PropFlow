@@ -1,0 +1,396 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
+@page "/staff/service-requests/{Code}"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Roles = "STAFF")]
+@implements IDisposable
+@using PropFlow.Modules.ServiceRequests.Contracts
+@inject PropFlow.Web.Client.Services.Api.AuthenticatedApiClient CostApi
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.IStaffServiceRequestApiClient Api
+@inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
+
+<PageTitle>Xử lý yêu cầu @Code - PropFlow</PageTitle>
+
+@if (loading)
+{
+    <section class="work-card work-page-state" role="status"><span class="staff-spinner"></span><h2>Đang tải chi tiết yêu cầu…</h2></section>
+}
+else if (!string.IsNullOrWhiteSpace(loadError) || detail is null)
+{
+    <section class="work-card work-page-state is-error" role="alert"><span class="material-symbols-outlined">error</span><h2>Không tải được chi tiết yêu cầu</h2><p>@loadError</p><button type="button" @onclick="LoadAsync">Thử lại</button></section>
+}
+else
+{
+<div class="staff-work-page">
+    <section class="work-heading">
+        <div>
+            <nav><a href="/staff/service-requests"><span class="material-symbols-outlined">arrow_back</span>Quay lại danh sách yêu cầu</a><span>/</span><strong>#@Code</strong></nav>
+            <div class="work-title-row"><h1>@RequestTitle</h1><span class="priority-chip">@PriorityLabel</span><span class="location-chip">@Location</span><span class="zone-chip">@ServiceArea</span></div>
+        </div>
+        <div class="sla-card"><i></i><strong>@StatusLabel</strong><small>Cập nhật @UpdatedAtLabel</small></div>
+    </section>
+
+    @if (!CommonArea || detail.AdditionalCostConsent is not null)
+    {
+    <section class="work-card cost-proposal-card">
+        <header><h2>Chi phí phát sinh</h2></header>
+        <p>Phí ban đầu: @($"{detail.BaseServiceCost:N0} đ"). Phải gửi đề xuất và chờ cư dân đồng ý trước khi thực hiện phần việc phát sinh.</p>
+        @if (detail.AdditionalCostConsent is { } consent)
+        {
+            <p><strong>@($"{consent.Amount:N0} đ")</strong> · @(consent.Status == "PENDING" ? "Đang chờ cư dân xác nhận — tạm dừng xử lý" : consent.Status == "ACCEPTED" ? "Cư dân đã đồng ý — được tiếp tục xử lý" : "Cư dân từ chối — yêu cầu đã tự động kết thúc")</p><p>@consent.Note</p>
+        }
+        @if (!CommonArea && detail.Status == "IN_PROGRESS" && currentStep == 3)
+        {
+            <div class="cost-proposal-form"><label>Chi phí phát sinh (VND)<input type="number" min="1" step="1" @bind="proposalAmount" disabled="@costBusy" /></label><label>Lý do / vật tư cần thực hiện<textarea maxlength="1000" rows="3" @bind="proposalNote" disabled="@costBusy"></textarea></label><button type="button" disabled="@(costBusy || proposalAmount <= 0 || string.IsNullOrWhiteSpace(proposalNote))" @onclick="SendCostProposal">@(costBusy ? "Đang gửi…" : "Gửi cư dân xác nhận chi phí")</button></div>
+        }
+        @if (costError is not null) { <p class="evidence-error" role="alert">@costError</p> }
+    </section>
+    }
+
+    <section class="work-card progress-card" aria-labelledby="progress-title">
+        <header><div><i></i><h2 id="progress-title">Quy trình xử lý yêu cầu tại hiện trường</h2></div><span>Trạng thái: <strong>@CurrentProgressLabel</strong></span></header>
+        <div class="progress-steps">
+            <article class="done"><b><span class="material-symbols-outlined">check</span></b><strong>1. Đã phân công</strong><small>@AssignedAtLabel · Ban Quản lý</small><em>@ServiceArea</em></article>
+            <article class="@StepClass(2)"><b><span class="material-symbols-outlined">@StepIcon(2, "handshake")</span></b><strong>2. Tiếp nhận yêu cầu</strong><small>@(IsStepComplete(2) ? "Đã ký nhận bởi KTV Staff" : "Chờ Staff ký nhận")</small><button type="button" disabled="@(!CanConfirmStep(2))" @onclick="ConfirmReception">@(IsStepComplete(2) ? "Đã xác nhận" : IsStepLocked(2) ? "Chưa mở" : "Xác nhận tiếp nhận")</button></article>
+            <article class="@CombinedWorkStepClass"><b><span class="material-symbols-outlined">@CombinedWorkStepIcon</span></b><strong>3. Thực hiện và báo cáo</strong><small>@CombinedWorkStepDescription</small><button type="button" disabled="@(!CanSubmitCombinedWork)" @onclick="OpenSubmitDialog">@(CombinedWorkCompleted ? "Đã gửi kết quả" : IsStepLocked(3) ? "Chưa mở" : currentStep == 4 ? "Bổ sung ảnh bằng chứng" : "Ghi kết quả và tải ảnh")</button></article>
+            <article class="@ManagerReviewStepClass"><b><span class="material-symbols-outlined">@ManagerReviewStepIcon</span></b><strong>4. Manager nghiệm thu</strong><small>@(ManagerReviewCompleted ? detail.Status == "CLOSED" ? "Manager đã nghiệm thu và đóng yêu cầu" : "Manager đã xác nhận hoàn thành" : SubmittedForReview ? "Đã gửi hồ sơ, chờ Manager xử lý" : "Chờ Staff gửi kết quả và ảnh")</small><em>@(ManagerReviewCompleted ? "Quy trình xử lý đã hoàn tất" : "Staff không có quyền đóng yêu cầu")</em></article>
+        </div>
+        <p class="permission-note"><span class="material-symbols-outlined">info</span><span><strong>Quy tắc tuần tự:</strong> Staff xác nhận bước 2, sau đó nhập tóm tắt và tải ảnh cùng lúc tại bước 3. Bước 4 chỉ do Manager nghiệm thu hoặc đóng yêu cầu.</span></p>
+    </section>
+
+    <section class="work-metrics" aria-label="Mốc thời gian xử lý">
+        <article><small>Thời gian mong muốn</small><strong>@PreferredSchedule</strong><span class="success-text">Do cư dân cung cấp</span><em>Phục vụ điều phối công việc</em></article>
+        <article><small>Ngày phân công</small><strong>@AssignedAtLabel</strong><span class="blue-text">Ban Quản lý phân công</span><em>@(detail.StartedAt.HasValue ? $"Tiếp nhận {detail.StartedAt.Value.ToLocalTime():dd/MM/yyyy · HH:mm}" : "Chưa tiếp nhận")</em></article>
+        <article><small>Tiến độ gần nhất</small><strong>@LatestProgressTime</strong><span class="warning-text">@LatestProgressSummary</span><em>Cập nhật bởi Staff</em></article>
+        <article><small>Trạng thái yêu cầu</small><strong>@StatusLabel</strong><span class="blue-text">@CurrentProgressLabel</span><em>Cập nhật @UpdatedAtLabel</em></article>
+    </section>
+
+    <section class="work-action-bar">
+        <div><i></i><span>Nhân sự thực hiện: <strong>Tài khoản Staff hiện tại</strong> · Chỉ thao tác trên yêu cầu được phân công</span></div>
+        <div>
+            <button type="button" class="progress-action" disabled="@(CostWorkBlocked || !WorkStarted || WorkCompleted)" @onclick="OpenProgressDialog"><span class="material-symbols-outlined">edit_note</span>Cập nhật tiến độ</button>
+        </div>
+    </section>
+
+    <div class="work-columns">
+        <div class="work-main-column">
+            <section class="work-card result-card">
+                <header><div><span class="card-icon green"><span class="material-symbols-outlined">task_alt</span></span><div><h2>Kết quả xử lý gửi BQL nghiệm thu</h2><p>Hồ sơ kỹ thuật do Staff ghi nhận tại hiện trường</p></div></div><span class="ready-chip">@(SubmittedForReview ? "Đã gửi BQL" : currentStep == 4 ? "Thiếu ảnh bằng chứng" : "Bản nháp")</span></header>
+                <div class="result-summary"><small>Tóm tắt kết quả hiện trường</small><p>@ResultSummary</p></div>
+                <div class="evidence-block"><header><strong>Hình ảnh nghiệm thu hiện trường</strong><small>@(Evidence.Count > 0 ? $"{Evidence.Count} ảnh đã tải" : "Chưa tải ảnh bằng chứng")</small></header><div class="evidence-grid">@if (Evidence.Count == 0){<article><span class="material-symbols-outlined">image</span><div><b>Chưa có bằng chứng</b><strong>Nhập kết quả và chọn ảnh tại bước 3</strong><small>JPEG, PNG hoặc WebP · tối đa 10 MB/ảnh</small></div></article>}@foreach (var evidence in Evidence){<button type="button" class="evidence-link" @onclick="() => OpenEvidencePreview(evidence)"><article class="after"><span class="material-symbols-outlined">verified</span><div><b>Ảnh hoàn thành</b><strong>@evidence.FileName</strong><small>@evidence.UploadedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm") · @FormatBytes(evidence.SizeBytes)</small></div></article></button>}</div></div>
+            </section>
+
+            <section class="work-card activity-card">
+                <header><div><span class="card-icon"><span class="material-symbols-outlined">history</span></span><div><h2>Nhật ký hoạt động</h2><p>Ghi nhận theo trình tự thời gian</p></div></div><span>@Activities.Count sự kiện hôm nay</span></header>
+                <ol>@foreach (var activity in Activities){<li><i></i><div><time>@activity.CreatedAt.ToLocalTime().ToString("HH:mm")</time><strong>@(activity.Title ?? ActivityLabel(activity.ActivityType))</strong><small>@(activity.PerformedBy.HasValue ? "Người thực hiện" : "Hệ thống")</small><p>@(activity.Detail ?? activity.WorkResult)</p></div></li>}</ol>
+            </section>
+        </div>
+
+        <aside class="work-side-column">
+            <section class="work-card summary-card"><header><h2>Tóm tắt nhiệm vụ</h2><strong>#@Code</strong></header><dl><div><dt>Tiêu đề sự cố</dt><dd>@RequestTitle</dd></div><div><dt>Danh mục</dt><dd>@(detail.CategoryName ?? "Chưa phân loại")</dd></div><div><dt>Mức độ ưu tiên</dt><dd class="danger-text">@PriorityLabel</dd></div><div><dt>Ngày phân công</dt><dd>@AssignedAtLabel</dd></div><div><dt>Trạng thái</dt><dd>@StatusLabel</dd></div></dl></section>
+            @if (detail.ApprovedRecommendation is { } approved)
+            {
+                <section class="work-card summary-card" aria-labelledby="approved-handling-title">
+                    <header><h2 id="approved-handling-title">Hướng xử lý đã được Manager duyệt</h2></header>
+                    <dl>
+                        @if (approved.Action is not null) { <div><dt>Hướng xử lý</dt><dd>@approved.Action</dd></div> }
+                        @if (approved.Resources is not null) { <div><dt>Nguồn lực</dt><dd>@approved.Resources</dd></div> }
+                        <div><dt>Kiểm tra hoặc bảo trì</dt><dd>@(approved.MaintenanceRequired == true ? "Nên xem xét" : "Theo hướng xử lý đã duyệt")</dd></div>
+                    </dl>
+                </section>
+            }
+            <section class="work-card summary-card"><header><h2>Vị trí và thiết bị</h2><span class="success-text">@ServiceArea</span></header><dl><div><dt>Vị trí xử lý</dt><dd>@Location</dd></div><div><dt>Thiết bị liên quan</dt><dd>@Equipment</dd></div><div><dt>Mô tả yêu cầu</dt><dd>@detail.Description</dd></div></dl></section>
+        </aside>
+    </div>
+</div>
+}
+
+@if (showProgressDialog)
+{
+    <div class="work-dialog-backdrop" @onclick="CancelProgressFeedbackCloseProgressDialog"><section class="work-dialog" role="dialog" aria-modal="true" aria-labelledby="progress-dialog-title" @onclick:stopPropagation="true"><header><div><span class="card-icon"><span class="material-symbols-outlined">edit_note</span></span><div><h2 id="progress-dialog-title">Cập nhật tiến độ hiện trường</h2><p>#@Code · @Location</p></div></div><button type="button" aria-label="Đóng" @onclick="CancelProgressFeedbackCloseProgressDialog"><span class="material-symbols-outlined">close</span></button></header><label><span>Nội dung cập nhật</span><textarea rows="5" maxlength="2000" aria-describedby="staff-progress-error" aria-invalid="@(progressError is not null)" @bind="progressNote" placeholder="Ví dụ: Đã khóa van tổng, tháo van cũ và kiểm tra đường ống…"></textarea>@if (progressError is not null) { <small id="staff-progress-error" class="evidence-error" role="alert">@progressError</small> }</label><footer><button type="button" class="cancel" @onclick="CancelProgressFeedbackCloseProgressDialog">Thoát</button><button type="button" class="confirm" disabled="@(string.IsNullOrWhiteSpace(progressNote))" @onclick="SaveProgress">Lưu tiến độ</button></footer></section></div>
+}
+
+@if (showSubmitDialog)
+{
+    <div class="work-dialog-backdrop" @onclick="CloseSubmitDialog">
+        <section class="work-dialog evidence-dialog" role="dialog" aria-modal="true" aria-labelledby="evidence-dialog-title" @onclick:stopPropagation="true">
+            <header>
+                <div><span class="card-icon green"><span class="material-symbols-outlined">task_alt</span></span><div><h2 id="evidence-dialog-title">Hoàn thành và gửi kết quả</h2><p>#@Code · Nhập tóm tắt và chọn tối đa 5 ảnh</p></div></div>
+                <button type="button" aria-label="Đóng" disabled="@uploadingEvidence" @onclick="CloseSubmitDialog"><span class="material-symbols-outlined">close</span></button>
+            </header>
+            <div class="evidence-dialog-body">
+                <label><span>Tóm tắt kết quả xử lý</span><textarea rows="5" minlength="10" maxlength="4000" disabled="@(uploadingEvidence || currentStep == 4)" @bind="resultDraft" placeholder="Mô tả công việc đã xử lý và kết quả kiểm tra sau khi hoàn thành…"></textarea><small>Từ 10 đến 4000 ký tự.@(currentStep == 4 ? " Tóm tắt đã được lưu, vui lòng bổ sung ảnh để hoàn tất." : null)</small></label>
+                <p>Chi phí phát sinh đã được cư dân chấp thuận: @($"{detail?.ProposedAdditionalCost ?? 0:N0} đ"). Muốn đổi phí, hãy gửi đề xuất mới trước khi báo hoàn thành.</p>
+                <label class="evidence-picker">
+                    <InputFile OnChange="SelectEvidence" accept="image/jpeg,image/png,image/webp" multiple disabled="@uploadingEvidence" />
+                    <span class="material-symbols-outlined">cloud_upload</span>
+                    <strong>Chọn ảnh từ thiết bị</strong>
+                    <small>JPEG, PNG hoặc WebP · tối đa 10 MB/ảnh</small>
+                </label>
+                @if (selectedEvidence.Count > 0)
+                {
+                    <div class="evidence-selection-heading"><strong>Ảnh đã chọn</strong><span>@selectedEvidence.Count/5 ảnh</span></div>
+                    <ul class="evidence-selection-list">
+                        @foreach (var file in selectedEvidence)
+                        {
+                            <li><span class="material-symbols-outlined">image</span><div><strong>@file.Name</strong><small>@FormatBytes(file.Size)</small></div><button type="button" aria-label="Bỏ ảnh @file.Name" disabled="@uploadingEvidence" @onclick="() => RemoveEvidence(file)"><span class="material-symbols-outlined">delete</span></button></li>
+                        }
+                    </ul>
+                }
+                @if (!string.IsNullOrWhiteSpace(evidenceError))
+                {
+                    <p class="evidence-error" role="alert"><span class="material-symbols-outlined">error</span>@evidenceError</p>
+                }
+            </div>
+            <footer><button type="button" class="cancel" disabled="@uploadingEvidence" @onclick="CloseSubmitDialog">Thoát</button><button type="button" class="confirm green-confirm" disabled="@(uploadingEvidence || resultDraft.Trim().Length is < 10 or > 4000 || selectedEvidence.Count == 0 || additionalCost < 0 || (additionalCost > 0 && string.IsNullOrWhiteSpace(additionalCostNote)))" @onclick="SubmitForReview">@(uploadingEvidence ? "Đang lưu…" : "Lưu kết quả và ảnh")</button></footer>
+        </section>
+    </div>
+}
+
+@if (showEvidencePreview)
+{
+    <div class="work-dialog-backdrop" @onclick="CloseEvidencePreview">
+        <section class="work-dialog evidence-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="evidence-preview-title" @onclick:stopPropagation="true">
+            <header><div><span class="card-icon"><span class="material-symbols-outlined">image</span></span><div><h2 id="evidence-preview-title">Ảnh bằng chứng</h2><p>@evidencePreviewName</p></div></div><button type="button" aria-label="Đóng" @onclick="CloseEvidencePreview"><span class="material-symbols-outlined">close</span></button></header>
+            <div class="evidence-preview-body">
+                @if (loadingEvidencePreview) { <div class="evidence-preview-state"><span class="staff-spinner"></span><strong>Đang tải ảnh…</strong></div> }
+                else if (!string.IsNullOrWhiteSpace(evidencePreviewError)) { <div class="evidence-preview-state is-error"><span class="material-symbols-outlined">broken_image</span><strong>Không tải được ảnh</strong><p>@evidencePreviewError</p></div> }
+                else if (!string.IsNullOrWhiteSpace(evidencePreviewSource)) { <img src="@evidencePreviewSource" alt="Ảnh bằng chứng @evidencePreviewName" /> }
+            </div>
+            <footer><button type="button" class="cancel" @onclick="CloseEvidencePreview">Đóng</button></footer>
+        </section>
+    </div>
+}
+
+@code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime progressFeedback = new();
+    private void CancelProgressFeedbackCloseProgressDialog() { CloseProgressDialog(); if (!showProgressDialog) progressFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
+    [Parameter] public string? Code { get; set; }
+    private int currentStep = 3;
+    private bool loading;
+    private string? loadError;
+    private bool showProgressDialog;
+    private bool showSubmitDialog;
+    private bool showEvidencePreview;
+    private bool uploadingEvidence;
+    private bool loadingEvidencePreview;
+    private string? progressNote;
+    private string? progressError;
+
+    private string? evidenceError;
+    private string? evidencePreviewName;
+    private string? evidencePreviewSource;
+    private string? evidencePreviewError;
+    private string resultDraft = string.Empty;
+    private decimal additionalCost;
+    private string? additionalCostNote;
+    private readonly List<IBrowserFile> selectedEvidence = [];
+    private PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse? detail;
+    private bool disposed;
+    private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? realtimeRefresh;
+
+    protected override async Task OnInitializedAsync()
+    {
+        realtimeRefresh = new(
+            () => InvokeAsync(LoadCoreAsync),
+            afterRefresh: () => InvokeAsync(StateHasChanged));
+        Realtime.Changed += HandleRealtimeChangedAsync;
+        await Realtime.EnsureStartedAsync();
+    }
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private Task LoadAsync() => realtimeRefresh?.RefreshNowAsync() ?? LoadCoreAsync();
+
+    private async Task LoadCoreAsync()
+    {
+        loading = true;
+        loadError = null;
+
+        var result = await Api.GetAsync(Code ?? string.Empty);
+        loading = false;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            detail = null;
+            loadError = result.Message ?? "Không tìm thấy yêu cầu được phân công cho bạn.";
+            return;
+        }
+        Apply(result.Data);
+    }
+
+    private Task HandleRealtimeChangedAsync(Guid requestId) =>
+        disposed || detail is { } current && requestId != Guid.Empty && requestId != current.Id
+            ? Task.CompletedTask
+            : realtimeRefresh?.RequestAsync() ?? Task.CompletedTask;
+
+    public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
+
+    private bool CostWorkBlocked => detail?.AdditionalCostConsent?.Status is "PENDING" or "REJECTED" || detail?.Status == "CANCELLED";
+    private decimal proposalAmount;
+    private string proposalNote = "";
+    private bool costBusy;
+    private string? costError;
+    private async Task SendCostProposal()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (detail is null || costBusy || CommonArea) return;
+        costBusy = true; costError = null;
+        try {
+            var result = await CostApi.SendAsync<AdditionalCostConsentView>(HttpMethod.Post, $"api/v1/staff/service-requests/{detail.Id}/additional-cost", new ProposeAdditionalCostRequest(proposalAmount, proposalNote, detail.AdditionalCostConsent?.ProposalId));
+            if (!result.IsSuccess) { if (result.ValidationErrors?.Count is not > 0 && result.StatusCode is null or 0 or >= 500) operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Chưa thể gửi đề xuất chi phí.")); else costError = result.Message ?? "Chưa thể gửi đề xuất chi phí."; return; }
+            proposalAmount = 0; proposalNote = ""; await LoadAsync();
+        } finally { costBusy = false; }
+    }
+    private bool WorkStarted => currentStep >= 3;
+    private bool WorkCompleted => currentStep >= 4;
+    private bool SubmittedForReview => currentStep >= 5;
+    private bool CombinedWorkCompleted => currentStep >= 5;
+    private bool ManagerReviewCompleted => currentStep >= 6;
+    private bool CanSubmitCombinedWork => !CostWorkBlocked && currentStep is (3 or 4);
+    private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestActivityItem> Activities => detail?.Activities ?? [];
+    private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestEvidenceItem> Evidence => detail?.Evidence ?? [];
+    private string RequestTitle => detail?.Title ?? "Yêu cầu dịch vụ";
+    private bool CommonArea => PropFlow.Modules.ServiceRequests.Contracts.ServiceRequestAreaCodes.IsCommonArea(detail?.ServiceAreaCode);
+    private string Location => CommonArea ? detail?.FacilityName ?? ServiceArea :
+        detail?.ApartmentUnitNumber is { } unit ? $"{unit} · Tầng {detail.FloorNumber}" : detail?.FacilityName ?? "Chưa gắn vị trí";
+    private string Equipment => detail?.EquipmentName ?? "Chưa gắn thiết bị";
+    private string ServiceArea => PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.Label(detail?.ServiceAreaCode);
+    private string PriorityLabel => detail?.PriorityCode switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", null => "Chưa xác định", _ => "Tiêu chuẩn" };
+    private string StatusLabel => detail?.AdditionalCostConsent?.Status == "PENDING" ? "Chờ cư dân xác nhận phí" : detail?.AdditionalCostConsent?.Status == "REJECTED" ? "Cư dân đã từ chối dịch vụ" : detail?.Status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => "Không xác định" };
+    private string AssignedAtLabel => detail is null ? "Chưa xác định" : detail.AssignedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
+    private string UpdatedAtLabel => detail is null ? "Chưa xác định" : detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
+    private string PreferredSchedule => detail?.PreferredDate is null ? "Chưa đăng ký" :
+        $"{detail.PreferredDate:dd/MM/yyyy} · {PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.TimeSlot(detail.PreferredTimeCode)}";
+    private string CurrentProgressLabel => CostWorkBlocked ? detail?.Status == "CANCELLED" ? "Đã từ chối dịch vụ" : "Chờ cư dân xác nhận phí" : currentStep switch { 2 => "Chờ tiếp nhận · Bước 2/4", 3 => "Đang thực hiện · Bước 3/4", 4 => "Thiếu ảnh bằng chứng · Bước 3/4", 5 => "Chờ Manager nghiệm thu · Bước 4/4", 6 => "Đã hoàn tất · Bước 4/4", _ => "Đã phân công · Bước 1/4" };
+    private string LatestProgressTime => Activities.FirstOrDefault() is { } activity ? $"{activity.CreatedAt.ToLocalTime():HH:mm} hôm nay" : "Chưa cập nhật";
+    private string LatestProgressSummary => Activities.FirstOrDefault()?.Title ?? "Chưa có tiến độ";
+    private string ResultSummary => LatestWorkResult()?.WorkResult ?? "Bản nháp kết quả đang được Staff hoàn thiện trước khi gửi Ban Quản lý nghiệm thu.";
+    private string CombinedWorkStepClass => CombinedWorkCompleted ? "done" : CanSubmitCombinedWork ? "active" : "locked";
+    private string CombinedWorkStepIcon => CombinedWorkCompleted ? "check" : IsStepLocked(3) ? "lock" : "construction";
+    private string CombinedWorkStepDescription => CombinedWorkCompleted ? $"Đã gửi tóm tắt và {Evidence.Count} ảnh" : IsStepLocked(3) ? "Hoàn thành bước 2 trước" : currentStep == 4 ? "Tóm tắt đã lưu, cần bổ sung ảnh" : "Ghi tóm tắt kết quả kèm ảnh";
+    private string ManagerReviewStepClass => ManagerReviewCompleted ? "done" : SubmittedForReview ? "active" : "locked";
+    private string ManagerReviewStepIcon => ManagerReviewCompleted ? "check" : SubmittedForReview ? "fact_check" : "lock";
+
+    private bool IsStepComplete(int step) => currentStep > step;
+    private bool IsStepLocked(int step) => currentStep < step;
+    private bool CanConfirmStep(int step) => !CostWorkBlocked && currentStep == step;
+    private string StepClass(int step) => IsStepComplete(step) ? "done" : CanConfirmStep(step) ? "active" : "locked";
+    private string StepIcon(int step, string activeIcon) => IsStepComplete(step) ? "check" : IsStepLocked(step) ? "lock" : activeIcon;
+
+    private async Task ConfirmReception()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (!CanConfirmStep(2) || detail is null) return;
+        var result = await Api.AcceptAsync(detail.Id);
+        if (!operationFeedback.Apply(() => ApplyResult(result, "Đã xác nhận bước 2. Bước 3 đã được mở."))) return;
+    }
+
+    private void SelectEvidence(InputFileChangeEventArgs args)
+    {
+        evidenceError = null;
+        if (args.FileCount > 5) { selectedEvidence.Clear(); evidenceError = "Chỉ được chọn tối đa 5 ảnh bằng chứng."; return; }
+        var files = args.GetMultipleFiles(5).ToList();
+        var allowedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png", "image/webp" };
+        if (files.Any(file => !allowedTypes.Contains(file.ContentType))) { selectedEvidence.Clear(); evidenceError = "Chỉ chấp nhận ảnh JPEG, PNG hoặc WebP."; return; }
+        if (files.Any(file => file.Size > 10 * 1024 * 1024)) { selectedEvidence.Clear(); evidenceError = "Mỗi ảnh không được vượt quá 10 MB."; return; }
+        selectedEvidence.Clear();
+        selectedEvidence.AddRange(files);
+    }
+    private void RemoveEvidence(IBrowserFile file) => selectedEvidence.Remove(file);
+    private async Task OpenEvidencePreview(PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestEvidenceItem evidence)
+    {
+        showEvidencePreview = true;
+        loadingEvidencePreview = true;
+        evidencePreviewName = evidence.FileName;
+        evidencePreviewSource = null;
+        evidencePreviewError = null;
+        var result = await Api.DownloadEvidenceAsync(evidence.DownloadUrl);
+        loadingEvidencePreview = false;
+        if (!result.IsSuccess || result.Data is null) { evidencePreviewError = result.Message ?? "Không thể tải ảnh bằng chứng."; return; }
+        if (!result.Data.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) { evidencePreviewError = "Tệp bằng chứng không phải định dạng ảnh."; return; }
+        evidencePreviewSource = $"data:{result.Data.ContentType};base64,{Convert.ToBase64String(result.Data.Bytes)}";
+    }
+    private void CloseEvidencePreview(){ showEvidencePreview = false; evidencePreviewSource = null; evidencePreviewError = null; }
+    private void OpenProgressDialog(){ if (CostWorkBlocked) return; progressNote = progressError = null; showProgressDialog = true; }
+    private void CloseProgressDialog() => showProgressDialog = false;
+    private async Task SaveProgress()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, progressFeedback);
+
+        if (string.IsNullOrWhiteSpace(progressNote) || detail is null) return;
+        progressError = null;
+        var result = await Api.ProgressAsync(detail.Id, new(progressNote.Trim()));
+        if (disposed) return;
+        if (!result.IsSuccess || result.Data is null)
+        {
+            if (result.ValidationErrors?.Count > 0) progressError = string.Join(" ", result.ValidationErrors.Values.SelectMany(value => value));
+            else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể lưu cập nhật tiến độ."));
+            return;
+        }
+        Apply(result.Data); operationFeedback.Publish(() => Toasts.Success("Đã lưu cập nhật tiến độ.")); showProgressDialog = false;
+    }
+    private void OpenSubmitDialog(){ if (!CanSubmitCombinedWork || detail is null) return; resultDraft = currentStep == 4 ? LatestWorkResult()?.WorkResult ?? string.Empty : string.Empty; additionalCost = detail.ProposedAdditionalCost; additionalCostNote = detail.AdditionalCostNote; selectedEvidence.Clear(); evidenceError = null; showSubmitDialog = true; }
+    private void CloseSubmitDialog(){ if (uploadingEvidence) return; showSubmitDialog = false; selectedEvidence.Clear(); evidenceError = null; }
+    private async Task SubmitForReview()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        var normalizedResult = resultDraft.Trim();
+        if (normalizedResult.Length is < 10 or > 4000 || selectedEvidence.Count == 0 || additionalCost < 0 || (additionalCost > 0 && string.IsNullOrWhiteSpace(additionalCostNote)) || !CanSubmitCombinedWork || detail is null || uploadingEvidence) return;
+        uploadingEvidence = true;
+        evidenceError = null;
+        try
+        {
+            if (currentStep == 3)
+            {
+                var completion = await Api.CompleteAsync(detail.Id, new(normalizedResult, additionalCost, additionalCostNote));
+                if (!completion.IsSuccess || completion.Data is null) { if (completion.ValidationErrors?.Count > 0) evidenceError = completion.Message ?? "Không thể lưu tóm tắt kết quả."; else operationFeedback.Publish(() => Toasts.Error(completion.Message ?? "Không thể lưu tóm tắt kết quả.")); return; }
+                Apply(completion.Data);
+            }
+
+            var evidence = await Api.UploadEvidenceAsync(detail.Id, selectedEvidence);
+            if (!evidence.IsSuccess || evidence.Data is null) { if (evidence.ValidationErrors?.Count > 0) evidenceError = evidence.Message ?? "Không thể lưu ảnh bằng chứng."; else operationFeedback.Publish(() => Toasts.Error(evidence.Message ?? "Không thể lưu ảnh bằng chứng.")); return; }
+            Apply(evidence.Data);
+            operationFeedback.Publish(() => Toasts.Success("Đã lưu kết quả và ảnh bằng chứng. Hồ sơ đang chờ Manager nghiệm thu."));
+            showSubmitDialog = false;
+            selectedEvidence.Clear();
+        }
+        finally
+        {
+            uploadingEvidence = false;
+        }
+    }
+
+    private bool ApplyResult(PropFlow.Web.Client.Services.Api.ApiResult<PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse> result, string success)
+    {
+        if (disposed) return false;
+        if (!result.IsSuccess || result.Data is null) { Toasts.Error(result.ValidationErrors?.Values.SelectMany(value => value).FirstOrDefault() ?? result.Message ?? "Không thể cập nhật yêu cầu."); return false; }
+        Apply(result.Data); Toasts.Success(success); return true;
+    }
+
+    private void Apply(PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestDetailResponse value)
+    {
+        detail = value;
+        var latestResult = LatestWorkResult();
+        var latestRework = Activities.FirstOrDefault(x => x.ActivityType == "REWORK_REQUESTED");
+        var hasPendingResult = latestResult is not null && (latestRework is null || latestResult.CreatedAt > latestRework.CreatedAt);
+        currentStep = value.Status switch
+        {
+            "ASSIGNED" => 2,
+            "IN_PROGRESS" when !hasPendingResult => 3,
+            "IN_PROGRESS" when value.Evidence.Any(x => x.ActivityId == latestResult!.Id) => 5,
+            "IN_PROGRESS" => 4,
+            "RESOLVED" or "CLOSED" => 6,
+            _ => 3
+        };
+    }
+
+    private PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestActivityItem? LatestWorkResult() =>
+        Activities.Where(x => x.ActivityType == "WORK_RESULT_ADDED").OrderByDescending(x => x.CreatedAt).FirstOrDefault();
+    private static string ActivityLabel(string type) => type switch { "ASSIGNED" => "Được phân công", "STATUS_CHANGED" => "Thay đổi trạng thái", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Hoàn thành công việc", "REWORK_REQUESTED" => "Yêu cầu xử lý lại", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng yêu cầu", _ => type };
+    private static string FormatBytes(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{bytes / 1024d:0.##} KB";
+}

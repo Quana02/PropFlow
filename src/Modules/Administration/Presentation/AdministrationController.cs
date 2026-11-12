@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.Administration.Application.InternalAccounts;
 using PropFlow.Modules.Administration.Domain.AuditLogs;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Domain.UserAccessHistories;
@@ -20,6 +22,7 @@ namespace PropFlow.Modules.Administration.Presentation;
 public sealed class AdministrationController(
     AdministrationDbContext db,
     IInternalAccountDirectory accounts,
+    ManageInternalAccountProfile profiles,
     IAdministrationTransaction transaction) : ControllerBase
 {
     private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
@@ -32,6 +35,38 @@ public sealed class AdministrationController(
         Title = title,
         Extensions = { ["code"] = code }
     }) { StatusCode = status };
+
+    [HttpGet("internal-accounts/{userId:guid}")]
+    [Authorize(Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(404)]
+    public async Task<ActionResult<InternalAccountProfileResponse>> GetProfile(Guid userId, CancellationToken ct)
+    {
+        var result = await profiles.ReadAsync(userId, ct);
+        return result is null ? ProfileNotFound() : Ok(ProfileResponse(result));
+    }
+
+    [HttpPut("internal-accounts/{userId:guid}/profile")]
+    [Authorize(Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    public async Task<ActionResult<InternalAccountProfileResponse>> UpdateProfile(
+        Guid userId, UpdateInternalAccountProfileRequest request, CancellationToken ct)
+    {
+        var result = await profiles.UpdateAsync(userId, new(request.DisplayName, request.PhoneNumber), ActorId, HttpContext.TraceIdentifier, ct);
+        return result is null ? ProfileNotFound() : Ok(ProfileResponse(result));
+    }
+
+    private static ObjectResult ProfileNotFound() =>
+        Problem(404, "Không tìm thấy tài khoản Ban quản lý này.", "internal_account_not_found");
+
+    private static InternalAccountProfileResponse ProfileResponse(ManagedInternalAccountProfile profile)
+    {
+        var account = profile.Account;
+        return new(account.Id, account.Username, account.DisplayName, account.Email, account.PhoneNumber,
+            profile.Role, account.Status, account.EmailVerified);
+    }
 
     [HttpGet("internal-accounts/summary")]
     [Authorize(Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts)]
@@ -199,30 +234,42 @@ public sealed class AdministrationController(
         return Ok(new PagedAdministrationActivitiesResponse(total, page, pageSize, items));
     }
 
-    private static AdministrationActivityResponse MapActivity(AuditLog log, IReadOnlyDictionary<Guid, InternalAccountRecord> identities, IReadOnlyDictionary<Guid, string> roles)
+    internal static AdministrationActivityResponse MapActivity(AuditLog log, IReadOnlyDictionary<Guid, InternalAccountRecord> identities, IReadOnlyDictionary<Guid, string> roles)
     {
         ActivityMetadata metadata;
         try { metadata = JsonSerializer.Deserialize<ActivityMetadata>(log.NewValues ?? "{}") ?? new(); }
         catch (JsonException) { metadata = new(); }
         identities.TryGetValue(log.ActorUserId ?? Guid.Empty, out var actor);
-        identities.TryGetValue(log.EntityId ?? Guid.Empty, out var target);
-        roles.TryGetValue(log.EntityId ?? Guid.Empty, out var currentRole);
+        identities.TryGetValue(log.EntityType == "InternalAccount" ? log.EntityId ?? Guid.Empty : Guid.Empty, out var target);
+        roles.TryGetValue(log.EntityType == "InternalAccount" ? log.EntityId ?? Guid.Empty : Guid.Empty, out var currentRole);
         return new(log.Id, log.CreatedAt, log.Action,
             log.ActorUserId, actor?.Username, actor?.DisplayName,
-            log.EntityId, target?.Username ?? metadata.Username, target?.DisplayName,
+            log.EntityType == "InternalAccount" ? log.EntityId : null, target?.Username ?? metadata.Username, target?.DisplayName,
             metadata.Role ?? metadata.NewRole ?? currentRole, target?.Status,
-            metadata.OldRole, metadata.NewRole, metadata.OldStatus, metadata.NewStatus ?? metadata.Status);
+            metadata.OldRole, metadata.NewRole, metadata.OldStatus, metadata.NewStatus ?? metadata.Status,
+            metadata.Module ?? "Administration", log.EntityType, log.EntityId, metadata.Label, metadata.Outcome ?? "SUCCESS",
+            metadata.Changes ?? [], log.CorrelationId, metadata.HttpStatus);
     }
 
     private void AddHistory(Guid userId, AccessActionType action, Guid? oldRole = null, Guid? newRole = null, AccountStatus? oldStatus = null, AccountStatus? newStatus = null) => db.UserAccessHistories.Add(new UserAccessHistory(userId, action, DateTimeOffset.UtcNow, oldRole, newRole, oldStatus, newStatus, performedBy: ActorId));
     private void AddAudit(string action, Guid userId, object values) => db.AuditLogs.Add(new AuditLog(action, "InternalAccount", DateTimeOffset.UtcNow, ActorId, userId, newValues: JsonSerializer.Serialize(values), ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), correlationId: HttpContext.TraceIdentifier));
 }
 
-public sealed record ActivityMetadata(string? Username = null, string? Role = null, string? OldRole = null, string? NewRole = null, string? Status = null, string? OldStatus = null, string? NewStatus = null);
+public sealed record ActivityMetadata(string? Username = null, string? Role = null, string? OldRole = null, string? NewRole = null, string? Status = null, string? OldStatus = null, string? NewStatus = null,
+    string? Module = null, string? Label = null, string? Outcome = null, AuditFieldChange[]? Changes = null, int? HttpStatus = null);
 
 public sealed record InternalAccountSummaryResponse(int Total, int Active, int Disabled, int Locked, IReadOnlyDictionary<string, int> RoleCounts);
 public sealed record PagedInternalAccountsResponse(int Total, int Page, int PageSize, IReadOnlyList<InternalAccountResponse> Items);
 public sealed record InternalAccountResponse(Guid Id, string Username, string DisplayName, string? Email, string Role, string Status);
+public sealed record InternalAccountProfileResponse(Guid Id, string Username, string DisplayName, string? Email,
+    string? PhoneNumber, string Role, string Status, bool EmailVerified);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record UpdateInternalAccountProfileRequest(
+    [Required(ErrorMessage = "Tên hiển thị không được để trống."), StringLength(150, ErrorMessage = "Tên hiển thị tối đa 150 ký tự.")] string DisplayName,
+    [property: JsonRequired]
+    [StringLength(20, ErrorMessage = "Số điện thoại tối đa 20 ký tự.")] string? PhoneNumber);
+
 public sealed record CreateInternalAccountRequest(
     [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập."), StringLength(50, MinimumLength = 3, ErrorMessage = "Tên đăng nhập phải có từ 3 đến 50 ký tự."), RegularExpression(@"[a-zA-Z0-9_.-]+", ErrorMessage = "Tên đăng nhập chỉ gồm chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.")] string Username,
     [Required(ErrorMessage = "Vui lòng nhập họ và tên."), StringLength(150, ErrorMessage = "Họ và tên không được vượt quá 150 ký tự.")] string DisplayName,
@@ -235,8 +282,10 @@ public sealed record ChangeStatusRequest([Required(ErrorMessage = "Vui lòng ch�
 public sealed record PermissionResponse(string Code, string Name, string Module, string? Description);
 public sealed record RoleAccessResponse(string Code, string Name, string? Description, bool IsActive, IReadOnlyList<PermissionResponse> Permissions);
 public sealed record InternalAccountAccessResponse(Guid UserId, string Username, string DisplayName, string Status, string Role, IReadOnlyList<PermissionResponse> Permissions);
-public sealed record PagedAdministrationActivitiesResponse(int Total, int Page, int PageSize, IReadOnlyList<AdministrationActivityResponse> Items);
+public sealed record PagedAdministrationActivitiesResponse(int Total, int Page, int PageSize, IReadOnlyList<AdministrationActivityResponse> Items, string? TimeZoneId = null);
 public sealed record AdministrationActivityResponse(Guid Id, DateTimeOffset Timestamp, string Action,
     Guid? ActorUserId, string? ActorUsername, string? ActorDisplayName,
     Guid? TargetAccountId, string? TargetUsername, string? TargetDisplayName, string? TargetRole, string? TargetStatus,
-    string? OldRole, string? NewRole, string? OldStatus, string? NewStatus);
+    string? OldRole, string? NewRole, string? OldStatus, string? NewStatus,
+    string Module = "Administration", string? EntityType = null, Guid? EntityId = null, string? Label = null, string Outcome = "SUCCESS",
+    IReadOnlyList<AuditFieldChange>? Changes = null, string? CorrelationId = null, int? HttpStatus = null);

@@ -141,6 +141,7 @@ namespace PropFlow.Modules.Complaints.Infrastructure.Persistence.Migrations
                         .HasColumnName("title");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")
@@ -246,6 +247,7 @@ namespace PropFlow.Modules.Complaints.Infrastructure.Persistence.Migrations
                         .HasDefaultValueSql("now()");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
+                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")

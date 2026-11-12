@@ -1,0 +1,20 @@
+.voice-field-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem; margin-bottom: .55rem; }
+.voice-field-heading label { margin: 0; }
+.voice-button, .draft-check-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .55rem .75rem; border: 1px solid #bae6fd; border-radius: .7rem; background: #f0f9ff; color: #0369a1; font: inherit; font-size: .78rem; font-weight: 750; cursor: pointer; }
+.voice-button .material-symbols-outlined, .draft-check-button .material-symbols-outlined { font-size: 1.15rem; }
+.voice-button.is-listening { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
+.voice-button:disabled, .draft-check-button:disabled { opacity: .6; cursor: default; }
+.voice-button:focus-visible, .draft-check-button:focus-visible { outline: 2px solid #0284c7; outline-offset: 3px; }
+.voice-privacy { display: block; margin-top: .5rem; color: var(--app-muted, #64748b); font-size: .72rem; line-height: 1.6; }
+.voice-status, .voice-interim, .voice-notice, .draft-schedule { margin: .6rem 0 0; font-size: .8rem; line-height: 1.65; }
+.voice-status { display: flex; align-items: center; gap: .5rem; color: #dc2626; font-weight: 700; }
+.voice-recording-dot { width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; animation: voice-listening 1.2s ease-in-out infinite; }
+.voice-interim { padding: .6rem .8rem; border-left: 3px solid #38bdf8; color: var(--app-muted, #64748b); font-style: italic; }
+.voice-notice { color: var(--app-muted, #64748b); }
+.draft-check-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin-top: .8rem; }
+.draft-check-actions > span { color: var(--app-muted, #64748b); font-size: .74rem; line-height: 1.5; }
+.draft-schedule { color: var(--app-text, #334155); }
+textarea[readonly] { background: rgba(148, 163, 184, .08); }
+@keyframes voice-listening { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .voice-recording-dot { animation: none; } }
+@media (max-width: 36rem) { .voice-button { width: 100%; } .draft-check-actions { align-items: flex-start; flex-direction: column; } }

@@ -13,7 +13,7 @@ public class ApartmentUnit
         int floorNumber,
         DateTimeOffset now,
         Guid apartmentUnitTypeId,
-        decimal usableAreaM2 = 1,
+        decimal usableAreaM2 = 25,
         int? bedroomCount = null,
         int? bathroomCount = null,
         DateOnly? handoverDate = null,
@@ -29,7 +29,7 @@ public class ApartmentUnit
         UnitNumber = unitNumber.Trim();
         FloorNumber = floorNumber;
         if (apartmentUnitTypeId == Guid.Empty) throw new ArgumentException("Apartment unit type is required.", nameof(apartmentUnitTypeId));
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(usableAreaM2, 0);
+        ArgumentOutOfRangeException.ThrowIfLessThan(usableAreaM2, 25);
         ArgumentOutOfRangeException.ThrowIfNegative(floorNumber);
         if (bedroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bedroomCount));
         if (bathroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bathroomCount));
@@ -81,7 +81,7 @@ public class ApartmentUnit
         FloorNumber = floorNumber;
         ArgumentException.ThrowIfNullOrWhiteSpace(unitNumber);
         if (apartmentUnitTypeId == Guid.Empty) throw new ArgumentException("Apartment unit type is required.", nameof(apartmentUnitTypeId));
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(usableAreaM2, 0);
+        ArgumentOutOfRangeException.ThrowIfLessThan(usableAreaM2, 25);
         ArgumentOutOfRangeException.ThrowIfNegative(floorNumber);
         if (bedroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bedroomCount));
         if (bathroomCount is < 0) throw new ArgumentOutOfRangeException(nameof(bathroomCount));

@@ -10,4 +10,6 @@ public interface IEquipmentService
     Task<EquipmentDto> CreateEquipmentAsync(CreateEquipmentCommand command, CancellationToken cancellationToken = default);
     Task<EquipmentDto> UpdateEquipmentAsync(Guid id, UpdateEquipmentCommand command, CancellationToken cancellationToken = default);
     Task<EquipmentDto> SetEquipmentStatusAsync(Guid id, SetEquipmentStatusCommand command, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EquipmentTypeDto>> GetEquipmentTypesAsync(bool activeOnly, CancellationToken cancellationToken = default);
+    Task<EquipmentTypeDto> CreateEquipmentTypeAsync(CreateEquipmentTypeCommand command, CancellationToken cancellationToken = default);
 }

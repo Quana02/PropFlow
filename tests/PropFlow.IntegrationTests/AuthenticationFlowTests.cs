@@ -27,6 +27,10 @@ using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Apartments.Domain.ApartmentUnits;
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.Apartments.Infrastructure.Persistence;
+using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
+using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Infrastructure;
+using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 
 namespace PropFlow.IntegrationTests;
 
@@ -44,8 +48,19 @@ public sealed record RegistrationResidentSeed(
 public sealed class AuthTestMail : IAuthEmail
 {
     public ConcurrentDictionary<string, string> Codes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool FailNext { get; set; }
     public Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct)
-    { Codes[email] = code; return Task.CompletedTask; }
+    {
+        if (FailNext) { FailNext = false; throw new InvalidOperationException("Test delivery failure"); }
+        Codes[email] = code; return Task.CompletedTask;
+    }
+    public Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct)
+    {
+        Codes[email] = code;
+        return Task.CompletedTask;
+    }
+    public Task SendEmailChangeCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct) =>
+        SendCodeAsync(email, code, false, expiryMinutes, ct);
 }
 public sealed class AuthTestClock : TimeProvider
 {
@@ -70,6 +85,8 @@ public sealed class AuthFlowFactory(string connection) : PropFlowApiFactory
         {
             services.RemoveAll<IAuthEmail>(); services.AddSingleton<IAuthEmail>(Mail);
             services.RemoveAll<TimeProvider>(); services.AddSingleton<TimeProvider>(Clock);
+            services.RemoveAll<IServiceRequestEvidenceStorage>();
+            services.AddScoped<IServiceRequestEvidenceStorage, LocalServiceRequestEvidenceStorage>();
         });
     }
 }
@@ -85,7 +102,8 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         while (root != null && !File.Exists(Path.Combine(root.FullName, "PropFlow.sln"))) root = root.Parent;
         if (root == null) throw new DirectoryNotFoundException("Không tìm thấy PropFlow.sln từ thư mục kiểm thử.");
         var configured = new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString());
-        if (configured.Database != "propflow_test") throw new InvalidOperationException("Auth tests require the configured propflow_test connection as the isolated test server source.");
+        if (configured.Database != TestDatabaseConfiguration.GetExpectedDatabaseName())
+            throw new InvalidOperationException("Auth tests require the configured whitelisted test database as the isolated test server source.");
         databaseName = "propflow_fe01_test_" + Guid.NewGuid().ToString("N");
         configured.Database = "postgres";
         adminConnection = configured.ConnectionString;
@@ -104,6 +122,9 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         // Initial schemas must exist before the cross-module integrity migrations run.
         await services.GetRequiredService<AuthenticationDbContext>().GetService<IMigrator>().MigrateAsync("20260914101250_CorrectAuthenticationEmailOtpVerification");
         await services.GetRequiredService<PropertyAssetsDbContext>().Database.MigrateAsync();
+        var property = services.GetRequiredService<PropertyAssetsDbContext>();
+        property.Buildings.Add(new Building("Chung cư kiểm thử", "Địa chỉ kiểm thử", DateTimeOffset.UtcNow, numberOfFloors: 100));
+        await property.SaveChangesAsync();
         await services.GetRequiredService<ApartmentsDbContext>().Database.MigrateAsync();
         await services.GetRequiredService<ResidentsDbContext>().GetService<IMigrator>().MigrateAsync("20260914063807_InitialResidents");
         await services.GetRequiredService<AdministrationDbContext>().Database.MigrateAsync();
@@ -214,7 +235,7 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
                 resident.Id,
                 apartment.Id,
                 HouseholdRole.HOUSEHOLD_HEAD,
-                ResidencyType.OWNER_OCCUPIED,
+                currentOwnership ? ResidencyType.OWNER_OCCUPIED : ResidencyType.TENANT,
                 DateOnly.FromDateTime(now.AddDays(-5).DateTime),
                 now);
             if (endedResidency)
@@ -265,6 +286,26 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         if (csrf) { var token = await client.GetFromJsonAsync<CsrfResponse>("api/v1/auth/csrf"); request.Headers.Add("X-CSRF-TOKEN", token!.Token); }
         return await client.SendAsync(request);
     }
+
+    [Fact]
+    public async Task Query_access_token_authenticates_both_resident_hubs_but_not_rest_endpoints()
+    {
+        using var client = Client();
+        var email = $"hub-auth-{Guid.NewGuid():N}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var (_, session) = await RegisterActivateAndLoginAsync(client, email);
+        var accessToken = Uri.EscapeDataString(session.AccessToken);
+
+        foreach (var hub in new[] { "support-chat", "announcements" })
+        {
+            using var negotiation = await client.PostAsync($"/hubs/{hub}/negotiate?negotiateVersion=1&access_token={accessToken}", null);
+            Assert.Equal(HttpStatusCode.OK, negotiation.StatusCode);
+        }
+
+        using var profile = await client.GetAsync($"api/v1/auth/me?access_token={accessToken}");
+        Assert.Equal(HttpStatusCode.Unauthorized, profile.StatusCode);
+    }
+
     private async Task<RegisterRequest> RegistrationRequestAsync(string username, string displayName, string email, string password = Password)
     {
         using var scope = database.Factory.Services.CreateScope();
@@ -273,6 +314,27 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             .Select(x => new { x.PhoneNumber, x.IdentityType, x.IdentityNumber })
             .SingleAsync();
         return new(username, displayName, email, password, resident.PhoneNumber, resident.IdentityType, resident.IdentityNumber);
+    }
+
+    [Fact, Trait("UseCase", "FE-01.6")]
+    public async Task Linked_resident_cannot_start_a_self_service_email_change()
+    {
+        using var client = Client();
+        var contactEmail = $"resident-contact-{Guid.NewGuid():N}@example.invalid";
+        var seed = await database.SeedRegistrationResidentAsync(contactEmail, currentOwnership: true);
+        var (_, session) = await RegisterActivateAndLoginAsync(client, contactEmail);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+        var accountEmail = $"resident-account-{Guid.NewGuid():N}@example.invalid";
+
+        using var request = await Post(client, "email/change", new ChangeEmailRequest(accountEmail, Password), true);
+        Assert.Equal(HttpStatusCode.Forbidden, request.StatusCode);
+        Assert.False(database.Factory.Mail.Codes.ContainsKey(accountEmail));
+
+        using var profile = await client.GetAsync("api/v1/residents/me");
+        Assert.Equal(HttpStatusCode.OK, profile.StatusCode);
+        using var resident = JsonDocument.Parse(await profile.Content.ReadAsStringAsync());
+        Assert.Equal(seed.ResidentId, resident.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal(contactEmail, resident.RootElement.GetProperty("email").GetString());
     }
 
     [Fact, Trait("UseCase", "FE-01.1")]
@@ -514,7 +576,7 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             await administration.SaveChangesAsync();
         }
         var manager = new AccountResponse(user.Id, user.Username, user.DisplayName, user.Email, null, "ACTIVE", true,
-            "MANAGER", [SystemPermissionCodes.ManageOperations]);
+            "MANAGER", [SystemPermissionCodes.ManageOperations, SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange]);
         var token = database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(manager, DateTimeOffset.UtcNow).AccessToken;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -767,6 +829,25 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
     }
 
     [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
+    public async Task Tenant_head_cannot_activate_if_apartment_gains_an_owner_after_registration()
+    {
+        using var client = Client();
+        var username = "tenant_" + Guid.NewGuid().ToString("N")[..12];
+        var email = username + "@example.invalid";
+        var head = await database.SeedRegistrationResidentAsync(email, activeResidency: true);
+        using var registration = await Post(client, "register", await RegistrationRequestAsync(username, "Chủ hộ thuê", email));
+        Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
+        var challenge = (await registration.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+        Assert.NotEqual(Guid.Empty, challenge.ChallengeId);
+
+        await database.SeedRegistrationResidentAsync($"new-owner-{Guid.NewGuid():N}@example.invalid", currentOwnership: true, apartmentId: head.ApartmentId);
+        using var verification = await Post(client, "registration/verify", new VerifyChallengeRequest(challenge.ChallengeId, database.Factory.Mail.Codes[email]));
+        await AssertConflictAsync(verification, "eligibility_changed", "Thông tin cư dân không khớp hoặc chưa đủ điều kiện đăng ký tài khoản.");
+        using var scope = database.Factory.Services.CreateScope();
+        Assert.Null((await scope.ServiceProvider.GetRequiredService<ResidentsDbContext>().Residents.AsNoTracking().SingleAsync(x => x.Id == head.ResidentId)).UserId);
+    }
+
+    [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
     public async Task Missing_eligibility_cannot_activate_and_wrong_OTP_attempts_are_persisted()
     {
         using var client = Client();
@@ -786,6 +867,56 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         using var failedScope = database.Factory.Services.CreateScope();
         Assert.False(await failedScope.ServiceProvider.GetRequiredService<AuthenticationDbContext>().UserAccounts
             .AnyAsync(x => x.Username == username || x.Email == email.ToUpperInvariant()));
+    }
+
+    [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
+    public async Task Failed_email_delivery_releases_registration_email_for_retry()
+    {
+        using var client = Client();
+        var token = Guid.NewGuid().ToString("N")[..10];
+        var username = "mail_retry_" + token;
+        var email = $"mail-retry-{token}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var request = await RegistrationRequestAsync(username, "Thử lại gửi mail", email);
+        database.Factory.Mail.FailNext = true;
+        using var failed = await Post(client, "register", request);
+        Assert.Equal(HttpStatusCode.InternalServerError, failed.StatusCode);
+        try
+        {
+            database.Factory.Clock.Offset = TimeSpan.FromSeconds(61);
+            using var retry = await Post(client, "register", request);
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+            var next = (await retry.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+            Assert.NotEqual(Guid.Empty, next.ChallengeId);
+            using var activation = await Post(client, "registration/verify", new VerifyChallengeRequest(next.ChallengeId, database.Factory.Mail.Codes[email]));
+            Assert.Equal(HttpStatusCode.NoContent, activation.StatusCode);
+        }
+        finally { database.Factory.Mail.FailNext = false; database.Factory.Clock.Offset = TimeSpan.Zero; }
+    }
+
+    [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
+    public async Task Failed_eligibility_verification_releases_registration_email_for_corrected_retry()
+    {
+        using var client = Client();
+        var token = Guid.NewGuid().ToString("N")[..10];
+        var username = "elig_retry_" + token;
+        var email = $"elig-retry-{token}@example.invalid";
+        var seed = await database.SeedResidentAsync(email);
+        using var registration = await Post(client, "register", await RegistrationRequestAsync(username, "Thử lại hồ sơ", email));
+        var challenge = (await registration.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+        await database.ChangeRegistrationMatchFieldAsync(seed, "phone");
+        using var failed = await Post(client, "registration/verify", new VerifyChallengeRequest(challenge.ChallengeId, database.Factory.Mail.Codes[email]));
+        Assert.Equal(HttpStatusCode.Conflict, failed.StatusCode);
+        try
+        {
+            database.Factory.Clock.Offset = TimeSpan.FromSeconds(61);
+            using var retry = await Post(client, "register", await RegistrationRequestAsync(username, "Thử lại hồ sơ", email));
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+            var next = (await retry.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+            using var activation = await Post(client, "registration/verify", new VerifyChallengeRequest(next.ChallengeId, database.Factory.Mail.Codes[email]));
+            Assert.Equal(HttpStatusCode.NoContent, activation.StatusCode);
+        }
+        finally { database.Factory.Clock.Offset = TimeSpan.Zero; }
     }
 
     [Fact, Trait("UseCase", "FE-01.1/FE-01.3")]
@@ -923,6 +1054,96 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "login", new LoginRequest(account.Username, "incorrect password"), true)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "login", new LoginRequest(account.Username, Password), true)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { }, true)).StatusCode);
+    }
+
+    [Theory, Trait("UseCase", "FE-01.5/FE-01.6/FE-01.7")]
+    [InlineData("ADMIN")]
+    [InlineData("MANAGER")]
+    [InlineData("ACCOUNTANT")]
+    [InlineData("STAFF")]
+    public async Task Internal_account_can_update_own_profile_and_manage_password_and_session(string role)
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var now = database.Factory.Clock.GetUtcNow();
+        var user = new UserAccount($"profile_{suffix}", "pending", "Tên ban đầu", now,
+            $"{suffix}@example.invalid", status: AccountStatus.ACTIVE, emailVerified: true);
+        using (var scope = database.Factory.Services.CreateScope())
+        {
+            var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            var access = scope.ServiceProvider.GetRequiredService<AdministrationDbContext>();
+            var secrets = scope.ServiceProvider.GetRequiredService<IAuthSecrets>();
+            user.ChangePasswordHash(secrets.HashPassword(user, Password), null, now);
+            auth.UserAccounts.Add(user);
+            await auth.SaveChangesAsync();
+            var roleId = await access.Roles.Where(item => item.Code == role).Select(item => item.Id).SingleAsync();
+            access.UserRoleAssignments.Add(new PropFlow.Modules.Administration.Domain.UserRoleAssignments.UserRoleAssignment(user.Id, roleId, now));
+            await access.SaveChangesAsync();
+            if (role == "STAFF")
+                await scope.ServiceProvider.GetRequiredService<ServiceRequestsDbContext>().Database.MigrateAsync();
+        }
+
+        using var client = Client();
+        using var login = await Post(client, "login", new LoginRequest(user.Username, Password), true);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var session = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
+        client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
+
+        const string accountPath = "api/v1/auth/me";
+        var before = (await client.GetFromJsonAsync<AccountResponse>(accountPath))!;
+        Assert.Equal(user.Id, before.Id);
+        Assert.Equal(user.Username, before.Username);
+        Assert.Equal(user.Email, before.Email);
+        Assert.Equal(role, before.Role);
+        Assert.Equal("ACTIVE", before.Status);
+        Assert.True(before.EmailVerified);
+
+        if (role == "STAFF")
+        {
+            var landing = await client.GetFromJsonAsync<StaffServiceRequestListResponse>(
+                "api/v1/staff/service-requests?page=1&pageSize=10");
+            Assert.NotNull(landing);
+            Assert.Empty(landing.Items);
+        }
+
+        using var invalid = await client.PutAsJsonAsync(accountPath, new UpdateProfileRequest(" ", new string('1', 21)));
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        var phoneNumber = $"+84{Random.Shared.NextInt64(1_000_000_000, 10_000_000_000)}";
+        using var update = await client.PutAsJsonAsync(accountPath, new
+        {
+            displayName = "Tên đã cập nhật",
+            phoneNumber,
+            username = "other",
+            email = "other@example.invalid",
+            role = "RESIDENT",
+            status = "DISABLED"
+        });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var after = (await client.GetFromJsonAsync<AccountResponse>(accountPath))!;
+        Assert.Equal("Tên đã cập nhật", after.DisplayName);
+        Assert.Equal(phoneNumber, after.PhoneNumber);
+        Assert.Equal(before.Id, after.Id);
+        Assert.Equal(before.Username, after.Username);
+        Assert.Equal(before.Email, after.Email);
+        Assert.Equal(before.Role, after.Role);
+        Assert.Equal(before.Status, after.Status);
+        Assert.Equal(before.EmailVerified, after.EmailVerified);
+        Assert.Equal(before.Permissions.Order(), after.Permissions.Order());
+
+        const string newPassword = "A new passphrase for profile tests 42!";
+        using var wrongPassword = await Post(client, "password/change", new ChangePasswordRequest("incorrect password", newPassword), true);
+        Assert.Equal(HttpStatusCode.BadRequest, wrongPassword.StatusCode);
+        using var passwordChange = await Post(client, "password/change", new ChangePasswordRequest(Password, newPassword), true);
+        Assert.Equal(HttpStatusCode.NoContent, passwordChange.StatusCode);
+
+        client.DefaultRequestHeaders.Authorization = null;
+        using var revoked = await Post(client, "refresh", new { }, true);
+        Assert.Equal(HttpStatusCode.Unauthorized, revoked.StatusCode);
+        using var relogin = await Post(client, "login", new LoginRequest(user.Username, newPassword), true);
+        Assert.Equal(HttpStatusCode.OK, relogin.StatusCode);
+        using var logout = await Post(client, "logout", new { }, true);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        using var afterLogout = await Post(client, "refresh", new { }, true);
+        Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
     }
 
     [Fact, Trait("UseCase", "FE-01.2/FE-01.6")]

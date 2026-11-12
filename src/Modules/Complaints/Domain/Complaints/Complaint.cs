@@ -92,6 +92,16 @@ public class Complaint
         UpdatedAt = now;
     }
 
+    public void AssociateContext(Guid? apartmentUnitId, Guid? serviceRequestId, Guid? facilityId, Guid? equipmentId, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        ApartmentUnitId = apartmentUnitId;
+        RelatedServiceRequestId = serviceRequestId;
+        FacilityId = facilityId;
+        EquipmentId = equipmentId;
+        UpdatedAt = now;
+    }
+
     public void MarkUnderReview(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
@@ -109,6 +119,15 @@ public class Complaint
             throw new InvalidOperationException("Complaint must be under review before follow-up handling.");
 
         Status = ComplaintStatus.FOLLOW_UP;
+        UpdatedAt = now;
+    }
+
+    public void FinishFollowUp(DateTimeOffset now)
+    {
+        if (Status != ComplaintStatus.FOLLOW_UP || Followups.Any(item => item.IsActive))
+            throw new InvalidOperationException("All assigned follow-up work must be finished.");
+
+        Status = ComplaintStatus.UNDER_REVIEW;
         UpdatedAt = now;
     }
 

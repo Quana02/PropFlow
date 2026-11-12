@@ -30,11 +30,13 @@ A time-bounded Resident-to-Apartment association owned by FE-02. It carries the 
 
 ## Resident Self Registration
 
-An FE-01 account-onboarding flow that matches one ACTIVE, unlinked Resident by the same four normalized values: email, phone, identity type and identity number. Eligibility additionally requires an active residency or current ownership. Historical-only relationships do not qualify. Authentication uses Residents public Contracts and does not read Residents or Apartments DbContexts.
+An FE-01 account-onboarding flow that matches one ACTIVE, unlinked Resident by the same four normalized values: email, phone, identity type and identity number. Eligibility additionally requires current ownership or an active HOUSEHOLD_HEAD residency (user decision 2026-11-03). A non-owning household head qualifies only with an active TENANT residency in an apartment that has no current owner (renting from the operator). A tenant head in an owned apartment and a household member without ownership do not qualify. Historical-only relationships do not qualify. Authentication uses Residents public Contracts and does not read Residents or Apartments DbContexts.
 
 ## Household Head
 
 The single active Residency with the Household Head role for an apartment household. It is not a permanent property of a Resident record.
+
+Household Head does not by itself mean owner: an apartment owner is exempt from apartment rent, while a non-owning tenant household head is responsible for rent only when the apartment has no owner. Authorized occupancy is a separate residency basis and must not be treated as tenancy merely because the resident has a household role.
 
 ## Apartment Ownership
 
@@ -55,3 +57,19 @@ The family relationship of an active Household Member residency to its Household
 ## Business Scope Authorization
 
 The domain-level check applied after fixed RBAC authorization. A role and fixed permission do not permit access outside the authorized building, assignment, ownership, residency, or other applicable business scope.
+
+## Pending Payment
+
+A resident-reported or recorded transfer awaiting reconciliation by an Accountant. It does not reduce the invoice balance or unlock service-request feedback.
+
+## Service Request Charge
+
+The payable cost of one Service Request. It consists of an optional Base Service Cost recorded by the Manager before work starts and an optional Additional Cost proposed by Staff and explicitly approved by the Manager during acceptance. Staff proposals are not payable until approved.
+
+## Service Request Invoice
+
+An issued Billing invoice linked one-to-one to a completed Service Request when its approved charge is greater than zero. It snapshots the addressed resident account and drives the exact-amount VietQR payment flow. A zero-charge request does not create an invoice.
+
+## Confirmed Payment
+
+A payment that an Accountant has matched against the received funds. Only confirmed payments reduce the invoice balance and count toward unlocking service-request feedback.

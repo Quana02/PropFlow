@@ -1,57 +1,148 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
-@using Microsoft.AspNetCore.Components.Web
 
-<div class="pf-confirm-backdrop" @onclick="CancelAsync">
-    <section @ref="dialog" class="pf-confirm @(InformationOnly ? "pf-confirm--information" : null)" role="alertdialog" aria-modal="true" aria-labelledby="@titleId" aria-describedby="@messageId" tabindex="-1" @onclick:stopPropagation="true" @onkeydown="HandleKeyDown">
-        <header>
-            <h2 id="@titleId">@if(InformationOnly){<span class="material-symbols-outlined" aria-hidden="true">warning</span>}@Title</h2>
-            <button type="button" disabled="@Busy" title="Đóng" aria-label="Đóng" @onclick="CancelAsync"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+<dialog @ref="dialog" class="pf-dialog @(Wide ? "pf-dialog--wide" : null)"
+        data-tone="@Tone.ToString().ToLowerInvariant()" data-dismiss-on-backdrop="@DismissOnBackdrop"
+        role="dialog" aria-modal="true" closedby="none" aria-labelledby="@titleId"
+        aria-describedby="@DescriptionIds" aria-busy="@IsBusy">
+    <div class="pf-dialog__panel">
+        <header class="pf-dialog__header">
+            <span class="pf-dialog__badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    @switch (Tone)
+                    {
+                        case DialogTone.Danger:
+                            <path d="M10.3 4.4 2.7 18a1.7 1.7 0 0 0 1.5 2.5h15.6a1.7 1.7 0 0 0 1.5-2.5L13.7 4.4a2 2 0 0 0-3.4 0ZM12 9v4m0 3h.01" />
+                            break;
+                        case DialogTone.Info:
+                            <circle cx="12" cy="12" r="9" /><path d="M12 11v5m0-8h.01" />
+                            break;
+                        case DialogTone.Decision:
+                            <path d="M12 20v-6m0 0-6-6m6 6 6-6M6 12V8h4m4 0h4v4" />
+                            break;
+                        default:
+                            <circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.3 2.3 4.7-4.7" />
+                            break;
+                    }
+                </svg>
+            </span>
+            <h2 id="@titleId" tabindex="-1">@Title</h2>
+            <button type="button" class="pf-dialog__close" data-dialog-close disabled="@IsBusy"
+                    aria-label="Đóng" title="Đóng" @onclick="CancelAsync">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                    <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
+            </button>
         </header>
-        <p id="@messageId">@Message</p>
-        <footer>
-            @if (!InformationOnly)
+        @if (!string.IsNullOrWhiteSpace(Message) || !string.IsNullOrWhiteSpace(Detail) || ChildContent is not null)
+        {
+            <div class="pf-dialog__body">
+                @if (!string.IsNullOrWhiteSpace(Message))
+                {
+                    <p id="@messageId" class="pf-dialog__message">@Message</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(Detail))
+                {
+                    <div id="@detailId" class="pf-dialog__detail">
+                        <p>@Detail</p>
+                    </div>
+                }
+                @ChildContent
+            </div>
+        }
+        <footer class="pf-dialog__footer">
+            @if (Tone != DialogTone.Info)
             {
-                <button type="button" class="pf-confirm__cancel" disabled="@Busy" data-autofocus @onclick="CancelAsync">@CancelText</button>
+                <button type="button" class="pf-dialog__secondary" disabled="@IsBusy" autofocus="@(!FocusContent)"
+                        @onclick="CancelAsync">@CancelText</button>
             }
-            <button type="button" class="@(Destructive ? "pf-confirm__destructive" : "pf-confirm__primary")" disabled="@Busy" data-autofocus="@(InformationOnly ? true : null)" @onclick="PrimaryActionAsync">@(Busy ? BusyText : ConfirmText)</button>
+            @if (Actions is not null)
+            {
+                @Actions
+            }
+            else
+            {
+                <button type="button" class="pf-dialog__primary" autofocus="@(Tone == DialogTone.Info)"
+                        disabled="@(IsBusy || ConfirmDisabled)" @onclick="PrimaryActionAsync">
+                    @(IsBusy ? BusyText : ConfirmText ?? (Tone == DialogTone.Info ? "Đóng" : "Xác nhận"))
+                </button>
+            }
         </footer>
-    </section>
-</div>
+    </div>
+</dialog>
 
 @code {
     [Parameter, EditorRequired] public string Title { get; set; } = "";
-    [Parameter, EditorRequired] public string Message { get; set; } = "";
-    [Parameter] public string ConfirmText { get; set; } = "Xác nhận";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string? Detail { get; set; }
+    [Parameter] public string? ConfirmText { get; set; }
     [Parameter] public string CancelText { get; set; } = "Hủy";
     [Parameter] public string BusyText { get; set; } = "Đang xử lý…";
     [Parameter] public bool Busy { get; set; }
-    [Parameter] public bool InformationOnly { get; set; }
-    [Parameter] public bool Destructive { get; set; } = true;
+    [Parameter] public bool ConfirmDisabled { get; set; }
+    [Parameter] public bool Wide { get; set; }
+    [Parameter] public bool FocusContent { get; set; }
+    [Parameter] public bool? CloseOnBackdrop { get; set; }
+    [Parameter] public DialogTone Tone { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
     [Parameter] public EventCallback OnConfirm { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
-    private readonly string titleId = $"pf-confirm-title-{Guid.NewGuid():N}";
-    private readonly string messageId = $"pf-confirm-message-{Guid.NewGuid():N}";
+    private readonly string titleId = $"pf-dialog-title-{Guid.NewGuid():N}";
+    private readonly string messageId = $"pf-dialog-message-{Guid.NewGuid():N}";
+    private readonly string detailId = $"pf-dialog-detail-{Guid.NewGuid():N}";
     private ElementReference dialog;
-    private IJSObjectReference? module;
+    private IJSObjectReference? registration;
+    private bool disposed;
+    private bool invoking;
+
+    private bool IsBusy => Busy || invoking;
+    private string? DescriptionIds => (string.IsNullOrWhiteSpace(Message), string.IsNullOrWhiteSpace(Detail)) switch
+    {
+        (true, true) => null,
+        (false, true) => messageId,
+        (true, false) => detailId,
+        _ => $"{messageId} {detailId}"
+    };
+    private string DismissOnBackdrop => (CloseOnBackdrop ?? (Tone is DialogTone.Confirm or DialogTone.Info)) ? "true" : "false";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261002.1");
-        await module.InvokeVoidAsync("open", dialog);
+
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261110");
+        if (disposed) return;
+
+        var handle = await module.InvokeAsync<IJSObjectReference>("openDialog", dialog);
+        if (disposed) await ReleaseAsync(handle);
+        else registration = handle;
     }
 
-    private Task ConfirmAsync() => Busy ? Task.CompletedTask : OnConfirm.InvokeAsync();
-    private Task CancelAsync() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
-    private Task PrimaryActionAsync() => InformationOnly ? CancelAsync() : ConfirmAsync();
-    private Task HandleKeyDown(KeyboardEventArgs args) => args.Key == "Escape" ? CancelAsync() : Task.CompletedTask;
+    private Task CancelAsync() => IsBusy ? Task.CompletedTask : OnCancel.InvokeAsync();
+
+    private async Task PrimaryActionAsync()
+    {
+        if (IsBusy || ConfirmDisabled) return;
+        if (Tone == DialogTone.Info)
+        {
+            await CancelAsync();
+            return;
+        }
+
+        invoking = true;
+        try { await OnConfirm.InvokeAsync(); }
+        finally { invoking = false; }
+    }
 
     public async ValueTask DisposeAsync()
     {
-        if (module is null) return;
-        await module.InvokeVoidAsync("close", dialog);
-        await module.DisposeAsync();
+        disposed = true;
+        if (registration is not null) await ReleaseAsync(registration);
+    }
+
+    private static async ValueTask ReleaseAsync(IJSObjectReference handle)
+    {
+        await using (handle) await handle.InvokeVoidAsync("close");
     }
 }

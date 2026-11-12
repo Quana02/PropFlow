@@ -1,0 +1,216 @@
+@page "/residents/accounts"
+@layout PropFlow.Web.Client.Layout.MainLayout
+@attribute [Authorize(Policy = ResidentAccountPolicies.Read)]
+@using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Modules.Authentication.Contracts
+
+<PageTitle>Tài khoản cư dân - PropFlow</PageTitle>
+
+<div class="accounts">
+    <header class="page-header">
+        <div class="heading-group">
+            <svg class="heading-icon icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4"/><circle cx="17" cy="16" r="3"/><path d="M17 12v1m0 6v1m-4-4h1m6 0h1"/></svg>
+            <div>
+                <h1>Tài khoản cư dân</h1>
+                <p>Quản lý tài khoản đăng nhập và yêu cầu thay đổi email của cư dân.</p>
+            </div>
+        </div>
+        <a class="secondary" href="/residents">
+            <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5m7 7-7-7 7-7"/></svg>
+            Quay lại quản lý cư dân
+        </a>
+    </header>
+
+    <section class="directory" aria-label="Danh sách tài khoản cư dân" aria-busy="@loading">
+        <div class="toolbar">
+            <form class="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+                <div class="search-field">
+                    <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4 4"/></svg>
+                    <input id="account-search" type="search" aria-label="Tìm cư dân" placeholder="Tìm theo họ tên, mã cư dân hoặc email liên hệ"
+                           @bind="searchInput" @bind:event="oninput" maxlength="150" />
+                </div>
+                <button class="secondary" type="submit" disabled="@loading">Tìm kiếm</button>
+            </form>
+            @if (!loading && loadError is null)
+            {
+                <span class="result-count" role="status"><span aria-hidden="true"></span>@results.TotalCount hồ sơ</span>
+            }
+        </div>
+        @if (search.Length > 0)
+        {
+            <div class="active-filter">
+                <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v5l-4 2v-7Z"/></svg>
+                <span>Từ khóa <strong>@search</strong></span>
+                <button class="icon-button" type="button" title="Xóa bộ lọc từ khóa" aria-label="Xóa bộ lọc từ khóa" disabled="@loading" @onclick="ClearSearchAsync">
+                    <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                </button>
+            </div>
+        }
+
+        @if (loading)
+        {
+            <div class="directory-state" role="status">
+                <span class="spinner" aria-hidden="true"></span>
+                <strong>Đang tải tài khoản cư dân…</strong>
+            </div>
+        }
+        else if (loadError is not null)
+        {
+            <div class="directory-state" role="alert">
+                <svg class="state-icon icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg>
+                <strong>Chưa tải được danh sách</strong>
+                <p>@loadError</p>
+                <button class="secondary" type="button" @onclick="() => LoadAsync(requestedPage)">Thử lại</button>
+            </div>
+        }
+        else if (results.Items.Count == 0)
+        {
+            <div class="directory-state">
+                <svg class="state-icon icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h3"/><circle cx="16" cy="15" r="3"/><path d="m18.2 17.2 3 3"/></svg>
+                <strong role="status">Không tìm thấy cư dân phù hợp.</strong>
+                <p>@(search.Length > 0 ? "Hãy thử từ khóa khác hoặc xóa bộ lọc." : "Danh sách hiện chưa có hồ sơ cư dân.")</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Bảng tài khoản cư dân">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Cư dân</th>
+                            <th scope="col">Căn hộ</th>
+                            <th scope="col">Tên đăng nhập</th>
+                            <th scope="col">Email tài khoản</th>
+                            <th scope="col">Email liên hệ</th>
+                            <th scope="col">Trạng thái</th>
+                            <th scope="col" class="actions-column">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in results.Items)
+                        {
+                            <tr @key="item.ResidentId">
+                                <th scope="row"><strong>@item.FullName</strong><small>@item.ResidentCode</small></th>
+                                <td>@ApartmentLabel(item)</td>
+                                <td>@(item.Username ?? "—")</td>
+                                <td><span class="email-cell" title="@item.AccountEmail">@(item.AccountEmail ?? "—")</span></td>
+                                <td><span class="email-cell" title="@item.ContactEmail">@(item.ContactEmail ?? "—")</span></td>
+                                <td>
+                                    <span class="status-badge @StatusTone(item.AccountStatus)">@StatusLabel(item.AccountStatus)</span>
+                                    @if (item.Username is not null)
+                                    {
+                                        <small>@VerificationLabel(item)</small>
+                                    }
+                                </td>
+                                <td class="actions-column">
+                                    <button class="icon-button" type="button" title="Xem chi tiết tài khoản"
+                                            aria-label="@($"Xem chi tiết tài khoản của {item.FullName}")" aria-haspopup="dialog" @onclick="() => Select(item)">
+                                        <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <TablePagination Page="results.PageIndex" TotalPages="TotalPages" Busy="loading" Label="Phân trang tài khoản cư dân"
+                PageChanged="LoadAsync">
+                <span>@results.TotalCount hồ sơ</span>
+            </TablePagination>
+        }
+    </section>
+
+    @if (selected is { } account)
+    {
+        <dialog class="account-dialog" @ref="dialog" aria-labelledby="account-detail-title">
+            <div class="dialog-shell">
+                <header class="dialog-header">
+                    <div class="heading-group">
+                        <svg class="heading-icon icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2"/></svg>
+                        <div><h2 id="account-detail-title">Chi tiết tài khoản cư dân</h2><p>@account.FullName · @account.ResidentCode</p></div>
+                    </div>
+                    <button class="icon-button" type="button" aria-label="Đóng chi tiết" title="Đóng chi tiết" autofocus
+                            data-dialog-close disabled="@saving" @onclick="CloseDetailsAsync">
+                        <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                    </button>
+                </header>
+
+                <div class="dialog-body">
+                    <section class="detail-section" aria-labelledby="resident-info-title">
+                        <h3 id="resident-info-title">Hồ sơ cư dân</h3>
+                        <dl class="details">
+                            <div><dt>Họ và tên</dt><dd>@account.FullName</dd></div>
+                            <div><dt>Mã cư dân</dt><dd>@account.ResidentCode</dd></div>
+                            <div><dt>Căn hộ hiện hành</dt><dd>@ApartmentLabel(account)</dd></div>
+                            <div><dt>Email liên hệ (FE-02)</dt><dd>@(account.ContactEmail ?? "Chưa cập nhật")</dd></div>
+                        </dl>
+                        <a class="profile-link" href="@($"/residents/{account.ResidentId}")">Xem hồ sơ cư dân <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-7-7 7 7-7 7"/></svg></a>
+                    </section>
+                    <section class="detail-section" aria-labelledby="login-info-title">
+                        <h3 id="login-info-title">Thông tin đăng nhập</h3>
+                        <dl class="details">
+                            <div><dt>Tên đăng nhập</dt><dd>@(account.Username ?? "—")</dd></div>
+                            <div><dt>Trạng thái tài khoản</dt><dd><span class="status-badge @StatusTone(account.AccountStatus)">@StatusLabel(account.AccountStatus)</span></dd></div>
+                            <div><dt>Email tài khoản hiện tại</dt><dd>@(account.AccountEmail ?? "—")</dd></div>
+                            <div><dt>Xác minh email</dt><dd>@VerificationLabel(account)</dd></div>
+                        </dl>
+                    </section>
+                    @if (!account.CanRequestEmailChange)
+                    {
+                        <p class="info-note">
+                            <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
+                            @(account.AccountStatus is null
+                                ? "Hồ sơ chưa liên kết tài khoản đăng nhập nên chưa thể yêu cầu đổi email."
+                                : "Chỉ có thể yêu cầu đổi email cho tài khoản cư dân đang hoạt động và đủ điều kiện.")
+                        </p>
+                    }
+                    else
+                    {
+                        <AuthorizeView Policy="@ResidentAccountPolicies.RequestEmailChange" Context="requestAccess">
+                            <section class="detail-section" aria-labelledby="request-title">
+                                <h3 id="request-title">Yêu cầu đổi email</h3>
+                                <p class="info-note">
+                                    <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
+                                    <span>Sau khi gửi, cư dân tự nhập mật khẩu hiện tại và mã gửi đến email mới trong Resident Portal. Email tài khoản chỉ đổi sau khi cư dân xác minh thành công.</span>
+                                </p>
+                                <EditForm id="resident-email-request" EditContext="editContext" OnValidSubmit="RequestAsync">
+                                    <DataAnnotationsValidator />
+                                    <fieldset class="request-form" disabled="@saving">
+                                        <div class="form-field">
+                                            <label for="new-account-email">Email mới</label>
+                                            <InputText id="new-account-email" type="email" autocomplete="off" maxlength="255" @bind-Value="form.NewEmail" />
+                                            <ValidationMessage For="() => form.NewEmail" />
+                                        </div>
+                                        <div class="form-field">
+                                            <label for="email-change-reason">Lý do thay đổi</label>
+                                            <PropFlowSelect Id="email-change-reason" Options="ReasonOptions" @bind-Value="form.Reason"
+                                                            Placeholder="Chọn lý do" AriaLabel="Lý do đổi email" Disabled="@saving" />
+                                            <ValidationMessage For="() => form.Reason" />
+                                        </div>
+                                        <div class="attestation">
+                                            <label><InputCheckbox @bind-Value="form.IdentityCheckedInPerson" /> Tôi đã trực tiếp đối chiếu giấy tờ gốc và người xuất trình với hồ sơ cư dân.</label>
+                                            <ValidationMessage For="() => form.IdentityCheckedInPerson" />
+                                        </div>
+                                    </fieldset>
+                                </EditForm>
+                            </section>
+                        </AuthorizeView>
+                    }
+                </div>
+
+                <footer class="dialog-footer">
+                    <button class="secondary" type="button" disabled="@saving" @onclick="CloseDetailsAsync">Đóng</button>
+                    @if (account.CanRequestEmailChange)
+                    {
+                        <AuthorizeView Policy="@ResidentAccountPolicies.RequestEmailChange" Context="requestAccess">
+                            <button class="primary" type="submit" form="resident-email-request" disabled="@(!form.IdentityCheckedInPerson || saving)">
+                                <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/></svg>
+                                @(saving ? "Đang gửi…" : "Xác nhận và gửi mã")
+                            </button>
+                        </AuthorizeView>
+                    }
+                </footer>
+            </div>
+        </dialog>
+    }
+</div>

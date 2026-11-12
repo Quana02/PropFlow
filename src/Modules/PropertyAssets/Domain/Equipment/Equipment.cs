@@ -14,7 +14,7 @@ public class Equipment
         string name,
         DateTimeOffset now,
         Guid? facilityId = null,
-        string? equipmentType = null,
+        Guid? equipmentTypeId = null,
         string? manufacturer = null,
         string? model = null,
         string? serialNumber = null,
@@ -31,7 +31,7 @@ public class Equipment
         FacilityId = facilityId;
         Code = code.Trim();
         Name = name.Trim();
-        EquipmentType = equipmentType?.Trim();
+        EquipmentTypeId = equipmentTypeId;
         Manufacturer = manufacturer?.Trim();
         Model = model?.Trim();
         SerialNumber = serialNumber?.Trim();
@@ -50,7 +50,9 @@ public class Equipment
     public Guid? FacilityId { get; private set; }
     public string Code { get; private set; } = null!;
     public string Name { get; private set; } = null!;
+    // Legacy column retained during the expand/backfill migration.
     public string? EquipmentType { get; private set; }
+    public Guid? EquipmentTypeId { get; private set; }
     public string? Manufacturer { get; private set; }
     public string? Model { get; private set; }
     public string? SerialNumber { get; private set; }
@@ -66,11 +68,12 @@ public class Equipment
 
     // Within-module navigation
     public Facility? Facility { get; private set; }
+    public EquipmentType? Type { get; private set; }
 
     public void Update(
         string name,
         Guid? facilityId,
-        string? equipmentType,
+        Guid? equipmentTypeId,
         EquipmentStatus? status,
         string? manufacturer,
         string? model,
@@ -86,7 +89,7 @@ public class Equipment
 
         Name = name.Trim();
         FacilityId = facilityId;
-        EquipmentType = equipmentType?.Trim();
+        EquipmentTypeId = equipmentTypeId;
         // Only update status if explicitly provided (FE-04.6 owns status management)
         if (status.HasValue)
         {

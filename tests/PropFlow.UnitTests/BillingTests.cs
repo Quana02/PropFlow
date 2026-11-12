@@ -4,6 +4,7 @@ using PropFlow.Modules.Billing.Domain.FeeTypes;
 using PropFlow.Modules.Billing.Domain.InvoiceItems;
 using PropFlow.Modules.Billing.Domain.Invoices;
 using PropFlow.Modules.Billing.Domain.InvoiceStatusHistories;
+using PropFlow.Modules.Billing.Infrastructure.Finance;
 
 namespace PropFlow.UnitTests;
 
@@ -12,6 +13,38 @@ public class BillingTests
     private readonly DateTimeOffset _now = new(2026, 9, 14, 12, 0, 0, TimeSpan.Zero);
     private readonly DateOnly _periodStart = new(2026, 9, 1);
     private readonly DateOnly _periodEnd = new(2026, 9, 30);
+
+    [Fact]
+    public void Invoice_print_escapes_untrusted_descriptions_and_preserves_large_totals()
+    {
+        var invoice = NewInvoice();
+        var actor = Guid.NewGuid();
+        const decimal amount = 123456789012345678m;
+        invoice.AddItem("management", "Phí quản lý", "fixed", 1m, amount, actor, _now,
+            description: "<script>alert(1)</script>");
+        var recipient = new InvoiceRecipient(invoice.Id, actor, "Cư dân", null, "A-101", 50);
+
+        var html = FinanceDocuments.Invoice(invoice, recipient, 0);
+
+        Assert.DoesNotContain("<script>", html);
+        Assert.Contains("&lt;script&gt;", html);
+        Assert.Contains("A-101", html);
+        Assert.Contains("123.456.789.012.345.678 đ", html);
+    }
+
+    [Fact]
+    public void Invoice_print_preserves_fractional_meter_quantity_in_vietnamese_format()
+    {
+        var invoice = NewInvoice();
+        var actor = Guid.NewGuid();
+        invoice.AddItem("ELECTRICITY", "Tiền điện", "KWH", 12.345m, 3000m, actor, _now, unitName: "kWh");
+        var recipient = new InvoiceRecipient(invoice.Id, actor, "Cư dân", null, "A-101", 50);
+
+        var html = FinanceDocuments.Invoice(invoice, recipient, 0);
+
+        Assert.Contains("12,345 kWh", html);
+        Assert.Contains("37.035 đ", html);
+    }
 
     [Fact]
     public void FeeType_Constructor_CreatesActiveFeeTypeAndNormalizesCodes()

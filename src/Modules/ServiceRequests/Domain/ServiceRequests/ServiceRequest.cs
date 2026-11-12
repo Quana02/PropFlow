@@ -25,7 +25,11 @@ public class ServiceRequest
         Guid? categoryId = null,
         Guid? facilityId = null,
         Guid? equipmentId = null,
-        string? finalPriorityCode = null)
+        string? finalPriorityCode = null,
+        string? serviceAreaCode = null,
+        DateOnly? preferredDate = null,
+        string? preferredTimeCode = null,
+        Guid? submittedByUserId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(requestNumber);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -38,6 +42,7 @@ public class ServiceRequest
         RequestNumber = requestNumber.Trim();
         ResidentId = residentId;
         ResidentApartmentId = residentApartmentId;
+        SubmittedByUserId = submittedByUserId;
         
         ApartmentUnitId = apartmentUnitId;
         CategoryId = categoryId;
@@ -46,6 +51,9 @@ public class ServiceRequest
         Title = title.Trim();
         Description = description.Trim();
         FinalPriorityCode = string.IsNullOrWhiteSpace(finalPriorityCode) ? null : finalPriorityCode.Trim().ToUpperInvariant();
+        ServiceAreaCode = string.IsNullOrWhiteSpace(serviceAreaCode) ? null : serviceAreaCode.Trim().ToUpperInvariant();
+        PreferredDate = preferredDate;
+        PreferredTimeCode = string.IsNullOrWhiteSpace(preferredTimeCode) ? null : preferredTimeCode.Trim().ToUpperInvariant();
         Status = ServiceRequestStatus.SUBMITTED;
         SubmittedAt = now;
         CreatedAt = now;
@@ -56,6 +64,7 @@ public class ServiceRequest
     public string RequestNumber { get; private set; } = null!;
     public Guid ResidentId { get; private set; }
     public Guid ResidentApartmentId { get; private set; }
+    public Guid? SubmittedByUserId { get; private set; }
     
     public Guid? ApartmentUnitId { get; private set; }
     public Guid? CategoryId { get; private set; }
@@ -64,11 +73,25 @@ public class ServiceRequest
     public string Title { get; private set; } = null!;
     public string Description { get; private set; } = null!;
     public string? FinalPriorityCode { get; private set; }
+    public string? ServiceAreaCode { get; private set; }
+    public DateOnly? PreferredDate { get; private set; }
+    public string? PreferredTimeCode { get; private set; }
     public ServiceRequestStatus Status { get; private set; }
     public DateTimeOffset SubmittedAt { get; private set; }
     public DateTimeOffset? ResolvedAt { get; private set; }
     public DateTimeOffset? ClosedAt { get; private set; }
     public Guid? ClosedBy { get; private set; }
+    public decimal BaseServiceCost { get; private set; }
+    public decimal ProposedAdditionalCost { get; private set; }
+    public string? AdditionalCostNote { get; private set; }
+    public decimal ApprovedAdditionalCost { get; private set; }
+    public Guid? AdditionalCostProposalId { get; private set; }
+    public string AdditionalCostConsentStatus { get; private set; } = "NONE";
+    public DateTimeOffset? AdditionalCostProposedAt { get; private set; }
+    public DateTimeOffset? AdditionalCostRespondedAt { get; private set; }
+    public Guid? AdditionalCostRespondedBy { get; private set; }
+    public bool IsWaitingForCostConsent => AdditionalCostConsentStatus == "PENDING";
+    public Guid? ServiceInvoiceId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -114,6 +137,13 @@ public class ServiceRequest
         UpdatedAt = now;
     }
 
+    public void UpdateServiceArea(string? serviceAreaCode, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        ServiceAreaCode = string.IsNullOrWhiteSpace(serviceAreaCode) ? null : serviceAreaCode.Trim().ToUpperInvariant();
+        UpdatedAt = now;
+    }
+
     public void MarkAssigned(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
@@ -124,9 +154,84 @@ public class ServiceRequest
         UpdatedAt = now;
     }
 
+    public void SetBaseServiceCost(decimal amount, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        EnsureMoney(amount, nameof(amount));
+        if (Status is not (ServiceRequestStatus.UNDER_REVIEW or ServiceRequestStatus.ASSIGNED))
+            throw new InvalidOperationException("Service cost can only be set before work starts.");
+        BaseServiceCost = amount;
+        UpdatedAt = now;
+    }
+
+    public void ProposeAdditionalCost(decimal amount, string? note, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        EnsureMoney(amount, nameof(amount));
+        if (Status != ServiceRequestStatus.IN_PROGRESS)
+            throw new InvalidOperationException("Additional cost can only be proposed while work is in progress.");
+        if (ServiceInvoiceId is not null)
+            throw new InvalidOperationException("Không thể đổi phí khi đã phát hành hóa đơn.");
+        var normalized = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        if (amount > 0 && string.IsNullOrWhiteSpace(normalized))
+            throw new ArgumentException("Additional cost note is required when the amount is greater than zero.", nameof(note));
+        if (normalized?.Length > 1000)
+            throw new ArgumentException("Additional cost note is too long.", nameof(note));
+        ProposedAdditionalCost = amount;
+        AdditionalCostNote = normalized;
+        ApprovedAdditionalCost = 0;
+        AdditionalCostProposalId = amount > 0 ? Guid.NewGuid() : null;
+        AdditionalCostConsentStatus = amount > 0 ? "PENDING" : "NONE";
+        AdditionalCostProposedAt = amount > 0 ? now : null;
+        AdditionalCostRespondedAt = null;
+        AdditionalCostRespondedBy = null;
+        UpdatedAt = now;
+    }
+
+    public void RespondToAdditionalCost(Guid proposalId, Guid residentUserId, bool accepted, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        ThrowIfEmpty(residentUserId, nameof(residentUserId));
+        if (Status is not (ServiceRequestStatus.IN_PROGRESS or ServiceRequestStatus.ASSIGNED) ||
+            !IsWaitingForCostConsent || AdditionalCostProposalId != proposalId)
+            throw new InvalidOperationException("Đề xuất chi phí đã thay đổi hoặc đã được phản hồi.");
+        AdditionalCostConsentStatus = accepted ? "ACCEPTED" : "REJECTED";
+        AdditionalCostRespondedAt = now;
+        AdditionalCostRespondedBy = residentUserId;
+        if (!accepted) Cancel(now);
+        UpdatedAt = now;
+    }
+
+    public void EnsureCostConsent()
+    {
+        if (ProposedAdditionalCost > 0 && AdditionalCostConsentStatus != "ACCEPTED")
+            throw new InvalidOperationException("Cần được cư dân chấp thuận chi phí phát sinh trước khi tiếp tục công việc.");
+    }
+
+    public void ApproveAdditionalCost(decimal amount, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        EnsureMoney(amount, nameof(amount));
+        if (Status != ServiceRequestStatus.IN_PROGRESS || amount > ProposedAdditionalCost)
+            throw new InvalidOperationException("Approved additional cost must not exceed the staff proposal.");
+        EnsureCostConsent();
+        ApprovedAdditionalCost = amount;
+        UpdatedAt = now;
+    }
+
+    public void LinkServiceInvoice(Guid invoiceId, DateTimeOffset now)
+    {
+        ThrowIfEmpty(invoiceId, nameof(invoiceId));
+        if (ServiceInvoiceId is not null && ServiceInvoiceId != invoiceId)
+            throw new InvalidOperationException("A different service invoice is already linked.");
+        ServiceInvoiceId = invoiceId;
+        UpdatedAt = now;
+    }
+
     public void MarkInProgress(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
+        EnsureCostConsent();
         if (Status is not (ServiceRequestStatus.ASSIGNED or ServiceRequestStatus.IN_PROGRESS))
             throw new InvalidOperationException("Only assigned service requests can move in progress.");
 
@@ -137,6 +242,7 @@ public class ServiceRequest
     public void Resolve(DateTimeOffset now)
     {
         EnsureNotClosedOrCancelled();
+        EnsureCostConsent();
         if (Status is not (ServiceRequestStatus.ASSIGNED or ServiceRequestStatus.IN_PROGRESS))
             throw new InvalidOperationException("Only assigned or in-progress service requests can be resolved.");
 
@@ -175,5 +281,11 @@ public class ServiceRequest
     {
         if (value == Guid.Empty)
             throw new ArgumentException($"{paramName} cannot be empty.", paramName);
+    }
+
+    private static void EnsureMoney(decimal amount, string paramName)
+    {
+        if (amount < 0 || amount >= 1000000000000000000m || amount != decimal.Round(amount, 0))
+            throw new ArgumentOutOfRangeException(paramName, "Amount must be a non-negative whole VND value within numeric(18,0).");
     }
 }

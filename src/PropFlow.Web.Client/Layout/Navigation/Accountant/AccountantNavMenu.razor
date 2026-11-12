@@ -31,16 +31,14 @@
                     <circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" />
                 </svg>
             </NavLink>
+            <NavLink href="/finance/invoices" Match="NavLinkMatch.All" class="rail-link"
+                     title="Hóa đơn đã phát hành" aria-label="Hóa đơn đã phát hành">
+                <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+            </NavLink>
+            <NavLink href="/finance/payments/bank-transfers" Match="NavLinkMatch.All" class="rail-link"
+                     title="Đối soát giao dịch SePay" aria-label="Đối soát giao dịch SePay">
+                <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
+            </NavLink>
         </AuthorizeView>
-    </div>
-
-    <div class="rail-bottom">
-        <NavLink href="/account"
-                 class="rail-link"
-                 title="Tài khoản"
-                 aria-label="Tài khoản"
-                 Match="NavLinkMatch.All">
-            <span class="material-symbols-outlined" aria-hidden="true">person</span>
-        </NavLink>
     </div>
 </nav>

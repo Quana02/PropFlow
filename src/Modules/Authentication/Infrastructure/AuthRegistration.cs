@@ -10,6 +10,7 @@ using PropFlow.Modules.Authentication.Application;
 using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 using PropFlow.Modules.Authentication.Presentation;
 using PropFlow.Modules.Authentication.Contracts;
+using PropFlow.Modules.Authentication.Application.PrivilegedActions;
 
 namespace PropFlow.Modules.Authentication.Infrastructure;
 
@@ -36,7 +37,10 @@ public static class AuthRegistration
         services.AddHostedService(sp => sp.GetRequiredService<AuthEmailQueue>());
         services.AddScoped<IAuthStore, AuthStore>();
         services.AddScoped<IInternalAccountDirectory, InternalAccountDirectory>();
+        services.AddScoped<IAuditActorLookup, InternalAccountDirectory>();
+        services.AddScoped<IPrivilegedActionOtp, PrivilegedActionOtp>();
         services.AddScoped<AuthUseCases>();
+        services.AddScoped<IInternalAccountProfiles>(sp => sp.GetRequiredService<AuthUseCases>());
         services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly);
         services.Configure<ApiBehaviorOptions>(options => options.InvalidModelStateResponseFactory = context =>
         {
@@ -80,6 +84,22 @@ public static class AuthRegistration
             };
             options.Events = new JwtBearerEvents
             {
+                OnMessageReceived = context =>
+                {
+                    if ((context.HttpContext.Request.Path.StartsWithSegments("/hubs/maintenance") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/service-requests") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/resident-notifications") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/notifications") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/support-chat") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/emergency-calls") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/announcements")) &&
+                        context.Request.Query.TryGetValue("access_token", out var accessToken))
+                    {
+                        context.Token = accessToken;
+                    }
+
+                    return Task.CompletedTask;
+                },
                 OnTokenValidated = async context =>
                 {
                     if (context.Principal is null ||

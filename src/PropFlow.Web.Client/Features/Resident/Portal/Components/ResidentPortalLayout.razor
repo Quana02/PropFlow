@@ -1,10 +1,12 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 @inject PropFlow.Web.Client.Features.Resident.Shared.Services.IResidentApiClient Residents
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 
 <HeadContent>
-    <link rel="stylesheet" href="css/resident-portal.css?v=20261003-2" />
+    <link rel="stylesheet" href="css/resident-portal.css?v=20261112-1" />
 </HeadContent>
 
 <div class="resident-portal">
@@ -31,6 +33,8 @@
             </footer>
 
             <ResidentNavigation />
+            @if (!Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/contact-management", StringComparison.OrdinalIgnoreCase))
+            { <PropFlow.Web.Client.Features.AiChatbot.Components.ResidentChatWidget /> }
         </div>
     </CascadingValue>
 </div>
@@ -38,7 +42,13 @@
 @code {
     private ResidentPortalProfileContext _profileContext = ResidentPortalProfileContext.Loading;
 
-    protected override Task OnInitializedAsync() => LoadProfileAsync();
+    protected override Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += ContactLocationChanged;
+        return LoadProfileAsync();
+    }
+    public void Dispose() => Navigation.LocationChanged -= ContactLocationChanged;
+    private void ContactLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) => _ = InvokeAsync(StateHasChanged);
 
     private async Task LoadProfileAsync()
     {
@@ -57,11 +67,6 @@
         }
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await JSRuntime.InvokeVoidAsync("propFlowResident.init");
-        }
-    }
+    protected override Task OnAfterRenderAsync(bool firstRender) =>
+        firstRender ? JSRuntime.InvokeVoidAsync("propFlowResident.init").AsTask() : Task.CompletedTask;
 }

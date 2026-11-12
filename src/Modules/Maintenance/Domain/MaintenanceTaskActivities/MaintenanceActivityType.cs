@@ -10,6 +10,7 @@ public enum MaintenanceActivityType
     WORK_LOG_ADDED,
     RESULT_SUBMITTED,
     MANAGER_REVIEWED,
+    SERVICE_REQUEST_LINKED,
     COMPLETED,
     CLOSED
 }

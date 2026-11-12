@@ -1,0 +1,111 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="pf-filter" @ref="root">
+    <button type="button" class="pf-filter-trigger" title="Bộ lọc" aria-haspopup="dialog"
+            aria-controls="@id" aria-expanded="false" aria-disabled="@((Disabled || applying) ? "true" : "false")"
+            popovertarget="@id" disabled="@(controller is null)"
+            @onclick="OpenAsync">
+        <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Bộ lọc
+        @if (ActiveCount > 0) { <strong>@ActiveCount</strong> }
+    </button>
+    <section id="@id" class="pf-filter-popover" popover="auto" role="dialog" aria-labelledby="@titleId">
+        <header>
+            <h2 id="@titleId">Bộ lọc</h2>
+            <button type="button" class="pf-filter-close" aria-label="Đóng bộ lọc" title="Đóng bộ lọc"
+                    popovertarget="@id" popovertargetaction="hide">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </header>
+        <div class="pf-filter-fields">
+            @if (open)
+            {
+                <div class="pf-filter-controls" @key="fieldVersion">@ChildContent</div>
+            }
+        </div>
+        <footer>
+            <button type="button" @onclick="ResetAsync">Đặt lại</button>
+            <button type="button" class="pf-filter-apply" disabled="@(Disabled || applying)" @onclick="ApplyAsync">Áp dụng</button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    [Parameter] public int ActiveCount { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnOpen { get; set; }
+    [Parameter] public EventCallback OnReset { get; set; }
+    [Parameter] public Func<bool>? Validate { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnApply { get; set; }
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    private readonly string id = $"pf-filter-{Guid.NewGuid():N}";
+    private string titleId => $"{id}-title";
+    private ElementReference root;
+    private IJSObjectReference? module;
+    private IJSObjectReference? controller;
+    private DotNetObjectReference<PropFlowFilterPopover>? self;
+    private bool open, applying, disposed;
+    private int fieldVersion;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowFilterPopover.razor.js?v=20261112.1");
+        if (disposed) { await imported.DisposeAsync(); return; }
+        module = imported;
+        self = DotNetObjectReference.Create(this);
+        var connected = await module.InvokeAsync<IJSObjectReference>("connect", root, self);
+        if (disposed) { await connected.InvokeVoidAsync("disconnect"); await connected.DisposeAsync(); return; }
+        controller = connected;
+        StateHasChanged();
+    }
+
+    private Task OpenAsync()
+    {
+        if (open || Disabled || applying) return Task.CompletedTask;
+        open = true;
+        return OnOpen.InvokeAsync();
+    }
+
+    private async Task ResetAsync()
+    {
+        await OnReset.InvokeAsync();
+        fieldVersion++;
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (Disabled || applying || Validate?.Invoke() == false) return;
+        applying = true;
+        try
+        {
+            await controller!.InvokeVoidAsync("close");
+            await OnApply.InvokeAsync();
+        }
+        finally { applying = false; }
+    }
+
+    [JSInvokable]
+    public void Closed()
+    {
+        open = false;
+        if (!disposed) StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        try
+        {
+            if (controller is not null)
+            {
+                await controller.InvokeVoidAsync("disconnect");
+                await controller.DisposeAsync();
+            }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        finally { self?.Dispose(); }
+    }
+}

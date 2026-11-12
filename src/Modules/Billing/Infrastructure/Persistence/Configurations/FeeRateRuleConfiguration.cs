@@ -22,6 +22,12 @@ public class FeeRateRuleConfiguration : IEntityTypeConfiguration<FeeRateRule>
         });
 
         builder.HasKey(rule => rule.Id);
+        builder.Property(rule => rule.ApartmentUnitId).HasColumnName("apartment_unit_id");
+        builder.Property(rule => rule.ApartmentTypeId).HasColumnName("apartment_type_id");
+        builder.HasIndex(rule => new { rule.ApartmentTypeId, rule.FeeTypeId, rule.BillingFrequencyCode, rule.EffectiveFrom }).IsUnique()
+            .HasFilter("apartment_type_id IS NOT NULL AND is_active = true");
+        builder.HasIndex(rule => new { rule.ApartmentUnitId, rule.FeeTypeId, rule.EffectiveFrom }).IsUnique()
+            .HasFilter("apartment_unit_id IS NOT NULL AND is_active = true");
         builder.Property(rule => rule.Id).HasColumnName("id");
 
         builder.Property(rule => rule.FeeTypeId).HasColumnName("fee_type_id").IsRequired();

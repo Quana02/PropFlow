@@ -1,0 +1,33 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
+@using Microsoft.JSInterop
+@using PropFlow.Web.Client.Features.Finance.Services
+@inject BillingWorkspaceApi Api
+@inject IJSRuntime Js
+@implements IAsyncDisposable
+<button type="button" disabled="@busy" @onclick="Export">@(busy ? "Đang xuất…" : "Xuất Excel")</button>
+
+@code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    private bool busy;  private IJSObjectReference? module;
+    private async Task Export() {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (busy) return; busy = true;
+        try {
+            var r = await Api.FileAsync(Path);
+            if (!r.IsSuccess || r.Data is null) { operationFeedback.Publish(() => Toasts.Error(r.Message)); return; }
+            if (!operationFeedback.IsCurrent) return;
+            if (module is null)
+            {
+                var imported = await Js.InvokeAsync<IJSObjectReference>("import", "./js/finance-documents.js");
+                if (!operationFeedback.IsCurrent) { await imported.DisposeAsync(); return; }
+                module = imported;
+            }
+            await module.InvokeVoidAsync("download", r.Data.Content, r.Data.ContentType, r.Data.FileName);
+        } catch (JSException) { operationFeedback.Publish(() => Toasts.Error("Chưa thể tải file. Vui lòng thử lại.")); }
+        finally { busy = false; }
+    }
+    public async ValueTask DisposeAsync() { toastLifetime.Dispose();  if (module is not null) await module.DisposeAsync(); }
+}

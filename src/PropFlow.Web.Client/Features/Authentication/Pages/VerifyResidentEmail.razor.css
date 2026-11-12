@@ -1,0 +1,13 @@
+.email-verification {
+    width: min(100%, 44rem); margin-inline: auto; padding: clamp(1rem, 3vw, 2rem);
+    color: var(--app-text); background: var(--app-surface); border: 1px solid var(--app-line); border-radius: 1rem;
+}
+.email-verification h1 { margin: .6rem 0; }
+.email-verification a { color: var(--app-accent); }
+fieldset { display: grid; min-width: 0; border: 0; padding: 0; gap: .6rem; margin: 1rem 0; }
+.email-verification ::deep input, .email-verification button {
+    border: 1px solid var(--app-line); border-radius: .5rem; padding: .65rem .8rem; background: var(--app-surface); color: inherit;
+}
+.email-verification button[type=submit] { justify-self: start; background: #075985; color: #fff; }
+.email-verification button:disabled { opacity: .55; }
+.email-verification ::deep .validation-message { color: var(--app-text); font-size: .9rem; }

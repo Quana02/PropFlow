@@ -18,9 +18,12 @@ using PropFlow.Modules.Billing.Domain.Invoices;
 using PropFlow.Modules.Billing.Domain.InvoiceStatusHistories;
 using PropFlow.Modules.Billing.Infrastructure.Persistence;
 using PropFlow.Modules.Communication.Domain.Announcements;
+using PropFlow.Modules.Communication.Domain.EmergencyCalls;
 using PropFlow.Modules.Communication.Domain.Notifications;
 using PropFlow.Modules.Communication.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Domain.Payments;
+using PropFlow.Modules.Payments.Domain.PaymentDestinations;
+using PropFlow.Modules.Payments.Domain.PaymentInstructions;
 using PropFlow.Modules.Payments.Infrastructure.Persistence;
 using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
@@ -43,6 +46,8 @@ using PropFlow.Modules.Complaints.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestCategories;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestFeedbacks;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceAssignments;
@@ -76,7 +81,7 @@ public class EfCoreMetadataTests
         Assert.Equal("property_assets", buildingEntity.GetSchema());
         Assert.NotNull(buildingEntity.FindPrimaryKey());
         Assert.Equal("id", buildingEntity.FindPrimaryKey()!.Properties.Single().GetColumnName());
-        Assert.True(buildingEntity.FindProperty("Code")!.IsIndex());
+        Assert.Null(buildingEntity.FindProperty("Code"));
 
         // Facility
         var facilityEntity = model.FindEntityType(typeof(Facility));
@@ -357,10 +362,19 @@ public class EfCoreMetadataTests
         Assert.Contains(roleSeedData, row => string.Equals(row["Code"] as string, SystemRoleCodes.Admin, StringComparison.Ordinal));
         var designTimePermissionEntity = designTimeModel.FindEntityType(typeof(Permission));
         Assert.NotNull(designTimePermissionEntity);
-        Assert.Equal(7, designTimePermissionEntity.GetSeedData().Count());
+        var permissionSeedData = designTimePermissionEntity.GetSeedData();
+        Assert.Equal(10, permissionSeedData.Count());
         var designTimeRolePermissionEntity = designTimeModel.FindEntityType(typeof(RolePermission));
         Assert.NotNull(designTimeRolePermissionEntity);
-        Assert.Equal(7, designTimeRolePermissionEntity.GetSeedData().Count());
+        var rolePermissionSeedData = designTimeRolePermissionEntity.GetSeedData();
+        Assert.Equal(10, rolePermissionSeedData.Count());
+        var managerId = Assert.Single(roleSeedData, row => Equals(row["Code"], SystemRoleCodes.Manager))["Id"];
+        foreach (var code in new[] { SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange })
+        {
+            var permissionId = Assert.Single(permissionSeedData, row => Equals(row["Code"], code))["Id"];
+            var assignment = Assert.Single(rolePermissionSeedData, row => Equals(row["PermissionId"], permissionId));
+            Assert.Equal(managerId, assignment["RoleId"]);
+        }
 
         // No external entities
         Assert.Null(model.FindEntityType(typeof(UserAccount)));
@@ -436,7 +450,11 @@ public class EfCoreMetadataTests
         var model = context.Model;
 
         Assert.Equal("service_requests", model.GetDefaultSchema());
-        Assert.Equal(4, model.GetEntityTypes().Count());
+        Assert.Equal(7, model.GetEntityTypes().Count());
+        var costOutbox = model.FindEntityType(typeof(PropFlow.Shared.Messaging.OutboxEvent));
+        Assert.NotNull(costOutbox);
+        Assert.Equal("resident_notification_outbox", costOutbox.GetTableName());
+        Assert.Equal("service_requests", costOutbox.GetSchema());
 
         var categoryEntity = model.FindEntityType(typeof(ServiceRequestCategory));
         Assert.NotNull(categoryEntity);
@@ -475,6 +493,25 @@ public class EfCoreMetadataTests
         Assert.Contains(activityEntity.GetForeignKeys(), fk =>
             fk.PrincipalEntityType.ClrType == typeof(ServiceRequestAssignment) &&
             fk.Properties.Single().Name == nameof(ServiceRequestActivity.AssignmentId));
+
+        var feedbackEntity = model.FindEntityType(typeof(ServiceRequestFeedback));
+        Assert.NotNull(feedbackEntity);
+        Assert.Equal("service_request_feedbacks", feedbackEntity.GetTableName());
+        Assert.Equal("service_requests", feedbackEntity.GetSchema());
+        Assert.Contains(feedbackEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequest) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestFeedback.ServiceRequestId));
+
+        var evidenceEntity = model.FindEntityType(typeof(ServiceRequestEvidenceFile));
+        Assert.NotNull(evidenceEntity);
+        Assert.Equal("service_request_evidence_files", evidenceEntity.GetTableName());
+        Assert.Equal("service_requests", evidenceEntity.GetSchema());
+        Assert.Contains(evidenceEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequest) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestEvidenceFile.ServiceRequestId));
+        Assert.Contains(evidenceEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(ServiceRequestActivity) &&
+            fk.Properties.Single().Name == nameof(ServiceRequestEvidenceFile.ActivityId));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
             fk.Properties.Any(p => p.Name is "ResidentId" or "ResidentApartmentId" or "ApartmentUnitId" or "FacilityId" or "EquipmentId" or "StaffUserId" or "AssignedBy" or "ClosedBy" or "PerformedBy"));
@@ -533,7 +570,15 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("maintenance", model.GetDefaultSchema());
-        Assert.Equal(5, model.GetEntityTypes().Count());
+        Assert.Equal(7, model.GetEntityTypes().Count());
+        var residentOutbox = model.FindEntityType(typeof(PropFlow.Shared.Messaging.OutboxEvent));
+        Assert.NotNull(residentOutbox);
+        Assert.Equal("resident_notification_outbox", residentOutbox.GetTableName());
+        Assert.Equal("maintenance", residentOutbox.GetSchema());
+        var attachmentEntity = model.FindEntityType(typeof(MaintenanceResultAttachment));
+        Assert.NotNull(attachmentEntity);
+        Assert.Equal("maintenance_result_attachments", attachmentEntity.GetTableName());
+        Assert.Contains(attachmentEntity.GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(MaintenanceResult));
 
         var scheduleEntity = model.FindEntityType(typeof(MaintenanceSchedule));
         Assert.NotNull(scheduleEntity);
@@ -620,7 +665,19 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("billing", model.GetDefaultSchema());
-        Assert.Equal(5, model.GetEntityTypes().Count());
+        Assert.Equal(8, model.GetEntityTypes().Count());
+        var usageEntity = model.FindEntityType(typeof(PropFlow.Modules.Billing.Domain.ElectricityUsages.ElectricityUsage));
+        Assert.NotNull(usageEntity);
+        Assert.Equal("electricity_usages", usageEntity.GetTableName());
+        Assert.Equal("billing", usageEntity.GetSchema());
+        var pricingOutbox = model.FindEntityType(typeof(PropFlow.Modules.Billing.Domain.PricingChanges.PricingChange));
+        Assert.NotNull(pricingOutbox);
+        Assert.Equal("pricing_change_outbox", pricingOutbox.GetTableName());
+        Assert.Equal("billing", pricingOutbox.GetSchema());
+        var recipientEntity = model.FindEntityType(typeof(InvoiceRecipient));
+        Assert.NotNull(recipientEntity);
+        Assert.Equal("invoice_recipients", recipientEntity.GetTableName());
+        Assert.Contains(recipientEntity.GetForeignKeys(), fk => fk.PrincipalEntityType.ClrType == typeof(Invoice));
 
         var feeTypeEntity = model.FindEntityType(typeof(FeeType));
         Assert.NotNull(feeTypeEntity);
@@ -654,7 +711,8 @@ public class EfCoreMetadataTests
             index.Properties.Select(property => property.Name).SequenceEqual([
                 nameof(Invoice.ApartmentUnitId),
                 nameof(Invoice.BillingPeriodStart),
-                nameof(Invoice.BillingPeriodEnd)
+                nameof(Invoice.BillingPeriodEnd),
+                nameof(Invoice.Type)
             ]));
         Assert.Equal("numeric(18,0)", invoiceEntity.FindProperty(nameof(Invoice.Subtotal))!.GetColumnType());
         Assert.Equal("numeric(18,0)", invoiceEntity.FindProperty(nameof(Invoice.TotalAmount))!.GetColumnType());
@@ -704,7 +762,17 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("payments", model.GetDefaultSchema());
-        Assert.Equal(3, model.GetEntityTypes().Count());
+        Assert.Equal(10, model.GetEntityTypes().Count());
+        var sandbox = designTimeModel.FindEntityType(typeof(PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePaySandboxConnection));
+        Assert.NotNull(sandbox);
+        Assert.Contains(sandbox.GetCheckConstraints(), x => x.Name == "ck_sepay_sandbox_singleton");
+        var oauth = designTimeModel.FindEntityType(typeof(PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthConnection));
+        Assert.NotNull(oauth);
+        Assert.Contains(oauth.GetCheckConstraints(), x => x.Name == "ck_sepay_oauth_singleton");
+        var bankTransfer = model.FindEntityType(typeof(PropFlow.Modules.Payments.Domain.BankTransfers.BankTransfer));
+        Assert.NotNull(bankTransfer);
+        Assert.Contains(bankTransfer.GetIndexes(), index => index.IsUnique && index.Properties.Single().Name == "TransactionId");
+        Assert.True(bankTransfer.FindProperty("Revision")!.IsConcurrencyToken);
 
         var paymentEntity = model.FindEntityType(typeof(Payment));
         Assert.NotNull(paymentEntity);
@@ -742,6 +810,30 @@ public class EfCoreMetadataTests
         Assert.Equal("payment_operations", operationEntity.GetTableName());
         Assert.Contains(operationEntity.GetIndexes(), index =>
             index.IsUnique && index.Properties.Single().Name == nameof(PaymentOperation.Key));
+
+        var destinationEntity = model.FindEntityType(typeof(PaymentDestination));
+        Assert.NotNull(destinationEntity);
+        Assert.Equal("payment_destinations", destinationEntity.GetTableName());
+        Assert.Equal("sepay_account_id", destinationEntity.FindProperty(nameof(PaymentDestination.SePayAccountId))!.GetColumnName());
+        Assert.True(destinationEntity.FindProperty(nameof(PaymentDestination.SePayAccountId))!.IsNullable);
+        Assert.Contains(destinationEntity.GetIndexes(), index =>
+            index.Properties.Single().Name == nameof(PaymentDestination.SePayAccountId));
+        Assert.Contains(destinationEntity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(PaymentDestination.Version));
+        Assert.Contains(destinationEntity.GetIndexes(), index =>
+            index.IsUnique &&
+            index.GetFilter() == "is_active = true" &&
+            index.Properties.Single().Name == nameof(PaymentDestination.IsActive));
+
+        var instructionEntity = model.FindEntityType(typeof(PaymentInstruction));
+        Assert.NotNull(instructionEntity);
+        Assert.Equal("payment_instructions", instructionEntity.GetTableName());
+        Assert.Contains(instructionEntity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(PaymentInstruction.TransferCode));
+        Assert.Contains(instructionEntity.GetIndexes(), index =>
+            index.IsUnique && index.Properties.Single().Name == nameof(PaymentInstruction.InvoiceId));
+        Assert.Contains(instructionEntity.GetForeignKeys(), fk =>
+            fk.PrincipalEntityType.ClrType == typeof(PaymentDestination));
 
         Assert.DoesNotContain(model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()), fk =>
             fk.Properties.Any(p => p.Name is "InvoiceId" or "SubmittedBy" or "ConfirmedBy" or "RejectedBy" or "ChangedBy"));
@@ -880,7 +972,29 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("communication", model.GetDefaultSchema());
-        Assert.Equal(4, model.GetEntityTypes().Count());
+        Assert.Equal(11, model.GetEntityTypes().Count());
+        var emergencyEntity = model.FindEntityType(typeof(EmergencyCall));
+        Assert.NotNull(emergencyEntity);
+        Assert.Equal("emergency_calls", emergencyEntity.GetTableName());
+        Assert.Equal("communication", emergencyEntity.GetSchema());
+        Assert.Empty(emergencyEntity.GetForeignKeys());
+        Assert.Contains(emergencyEntity.GetIndexes(), index => index.IsUnique
+            && index.Properties.Select(property => property.Name).SequenceEqual([nameof(EmergencyCall.ResidentUserId)])
+            && index.GetFilter() == "\"Status\" <> 'ENDED'");
+        Assert.Contains(emergencyEntity.GetIndexes(), index => index.IsUnique
+            && index.Properties.Select(property => property.Name).SequenceEqual([nameof(EmergencyCall.ManagerUserId)])
+            && index.GetFilter() == "\"Status\" IN ('CONNECTING','CONNECTED')");
+        var emergencyConnectionEntity = model.FindEntityType(typeof(EmergencyConnection));
+        Assert.NotNull(emergencyConnectionEntity);
+        Assert.Equal("emergency_connections", emergencyConnectionEntity.GetTableName());
+        Assert.Equal("communication", emergencyConnectionEntity.GetSchema());
+        Assert.Empty(emergencyConnectionEntity.GetForeignKeys());
+        var emailEntity = model.FindEntityType(typeof(FinanceEmail));
+        Assert.NotNull(emailEntity);
+        Assert.Equal("finance_emails", emailEntity.GetTableName());
+        Assert.Empty(emailEntity.GetForeignKeys());
+        Assert.Contains(emailEntity.GetIndexes(), index => index.IsUnique
+            && index.Properties.Select(property => property.Name).SequenceEqual([nameof(FinanceEmail.EventId), nameof(FinanceEmail.UserId)]));
 
         var notificationEntity = model.FindEntityType(typeof(Notification));
         Assert.NotNull(notificationEntity);

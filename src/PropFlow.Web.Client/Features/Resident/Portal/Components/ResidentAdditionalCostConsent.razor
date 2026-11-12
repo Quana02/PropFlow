@@ -1,0 +1,56 @@
+@using PropFlow.Modules.ServiceRequests.Contracts
+@using PropFlow.Web.Client.Services.Api
+@using PropFlow.Web.Client.Shared.Feedback
+@inject AuthenticatedApiClient Api
+
+@if (Consent is { } proposal)
+{
+    <section class="cost-consent" aria-label="Xác nhận chi phí phát sinh">
+        <h3>Chi phí phát sinh cần xác nhận</h3>
+        <p>Chi phí ban đầu: <strong>@Money(BaseCost)</strong></p>
+        <p>Chi phí phát sinh: <strong>@Money(proposal.Amount)</strong> · Tổng dự kiến: <strong>@Money(BaseCost + proposal.Amount)</strong></p>
+        <p class="reason">@proposal.Note</p>
+        @if (proposal.Status == "PENDING")
+        {
+            <p>Công việc đang chờ phản hồi của bạn. Đồng ý để bộ phận xử lý tiếp tục; từ chối sẽ tự động kết thúc yêu cầu dịch vụ.</p>
+            <div class="actions"><button type="button" disabled="@busy" @onclick="() => Ask(true)">Đồng ý chi phí và tiếp tục</button><button type="button" class="reject" disabled="@busy" @onclick="() => Ask(false)">Từ chối dịch vụ</button></div>
+        }
+        else if (proposal.Status == "ACCEPTED") { <p role="status">Bạn đã đồng ý chi phí phát sinh. Bộ phận xử lý được tiếp tục công việc.</p> }
+        else if (proposal.Status == "REJECTED") { <p role="status">Bạn đã từ chối chi phí phát sinh. Yêu cầu dịch vụ đã được tự động từ chối.</p> }
+        @if (error is not null) { <p role="alert">@error</p><button type="button" disabled="@busy" @onclick="() => Changed.InvokeAsync()">Tải lại đề xuất</button> }
+    </section>
+}
+@if (pending is not null && decision.HasValue)
+{
+    <PropFlowConfirmationDialog Title="@(decision.Value ? "Đồng ý chi phí phát sinh?" : "Từ chối yêu cầu dịch vụ?")"
+        Message="@(decision.Value ? $"Bạn đồng ý phí phát sinh {Money(pending.Amount)} để tiếp tục xử lý yêu cầu." : "Yêu cầu sẽ bị từ chối và bộ phận xử lý sẽ dừng công việc.")"
+        ConfirmText="Xác nhận" CancelText="Quay lại" Tone="@(decision.Value ? DialogTone.Confirm : DialogTone.Danger)" Busy="busy" OnConfirm="Submit" OnCancel="Cancel" />
+}
+
+@code {
+    [Parameter] public Guid RequestId { get; set; }
+    [Parameter] public decimal BaseCost { get; set; }
+    [Parameter] public AdditionalCostConsentView? Consent { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    private AdditionalCostConsentView? pending;
+    private bool? decision;
+    private bool busy;
+    private string? error;
+    private void Ask(bool accepted) { if (busy || Consent?.Status != "PENDING") return; pending = Consent; decision = accepted; error = null; }
+    private void Cancel() { if (!busy) { pending = null; decision = null; } }
+    private async Task Submit()
+    {
+        if (busy || pending is null || decision is null) return;
+        busy = true;
+        try
+        {
+            var response = await Api.SendAsync<AdditionalCostConsentView>(HttpMethod.Post,
+                $"api/v1/resident/service-requests/{RequestId}/additional-cost/response", new RespondAdditionalCostRequest(pending.ProposalId, decision.Value));
+            pending = null; decision = null;
+            if (response.IsSuccess) await Changed.InvokeAsync();
+            else error = response.Message ?? "Chưa thể xác nhận chi phí. Vui lòng tải lại đề xuất.";
+        }
+        finally { busy = false; }
+    }
+    private static string Money(decimal amount) => amount.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN")) + " đ";
+}

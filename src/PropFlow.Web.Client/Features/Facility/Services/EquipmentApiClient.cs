@@ -12,7 +12,7 @@ public sealed class EquipmentApiClient(AuthenticatedApiClient api) : IEquipmentA
         if (filter.FacilityId.HasValue) query.Add($"facilityId={filter.FacilityId}");
         if (!string.IsNullOrWhiteSpace(filter.SearchKeyword)) query.Add($"searchKeyword={Uri.EscapeDataString(filter.SearchKeyword)}");
         if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
-        if (!string.IsNullOrWhiteSpace(filter.EquipmentType)) query.Add($"equipmentType={Uri.EscapeDataString(filter.EquipmentType)}");
+        if (filter.EquipmentTypeId.HasValue) query.Add($"equipmentTypeId={filter.EquipmentTypeId}");
         query.Add($"pageIndex={filter.PageIndex}");
         query.Add($"pageSize={filter.PageSize}");
         return api.SendAsync<PagedResult<EquipmentModel>>(HttpMethod.Get, $"api/v1/equipments?{string.Join("&", query)}", ct: cancellationToken);
@@ -29,4 +29,10 @@ public sealed class EquipmentApiClient(AuthenticatedApiClient api) : IEquipmentA
 
     public Task<ApiResult<EquipmentModel>> SetEquipmentStatusAsync(Guid id, EquipmentStatus status, CancellationToken cancellationToken = default) =>
         api.SendAsync<EquipmentModel>(HttpMethod.Patch, $"api/v1/equipments/{id}/status", new SetEquipmentStatusModel { Status = status }, ct: cancellationToken);
+
+    public Task<ApiResult<IReadOnlyList<EquipmentTypeModel>>> GetEquipmentTypesAsync(bool activeOnly, CancellationToken cancellationToken = default) =>
+        api.SendAsync<IReadOnlyList<EquipmentTypeModel>>(HttpMethod.Get, $"api/v1/equipment-types?activeOnly={activeOnly.ToString().ToLowerInvariant()}", ct: cancellationToken);
+
+    public Task<ApiResult<EquipmentTypeModel>> CreateEquipmentTypeAsync(CreateEquipmentTypeModel model, CancellationToken cancellationToken = default) =>
+        api.SendAsync<EquipmentTypeModel>(HttpMethod.Post, "api/v1/equipment-types", model, ct: cancellationToken);
 }

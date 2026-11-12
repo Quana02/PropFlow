@@ -122,9 +122,9 @@ public class PropertyAssetsTests
     [Fact]
     public void Facility_Constructor_GeneratesId_AndValidatesCode()
     {
-        Assert.Throws<ArgumentException>(() => new Facility("", "Gym", _now, facilityType: "FITNESS"));
+        Assert.Throws<ArgumentException>(() => new Facility("", "Gym", _now, facilityTypeId: Guid.NewGuid()));
 
-        var facility = new Facility("FAC-01", "Gym", _now, facilityType: "FITNESS");
+        var facility = new Facility("FAC-01", "Gym", _now, facilityTypeId: Guid.NewGuid());
 
         Assert.NotEqual(Guid.Empty, facility.Id);
         Assert.Equal("FAC-01", facility.Code);
@@ -135,7 +135,7 @@ public class PropertyAssetsTests
     [Fact]
     public void Equipment_StateTransitions_WorkCorrectly()
     {
-        var equipment = new Equipment("TB-MAYBOM-HIYORI-01", "Elevator 1", _now, equipmentType: "ELEVATOR");
+        var equipment = new Equipment("TB-MAYBOM-HIYORI-01", "Elevator 1", _now, equipmentTypeId: Guid.NewGuid());
 
         Assert.NotEqual(Guid.Empty, equipment.Id);
         Assert.Equal(EquipmentStatus.ACTIVE, equipment.Status);
@@ -212,11 +212,13 @@ public class PropertyAssetsTests
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         var nonExistentFacilityId = Guid.NewGuid();
+        var equipmentType = AddEquipmentType(dbContext, "TEST");
+        await dbContext.SaveChangesAsync();
         var command = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
             "Test Equipment",
             FacilityId: nonExistentFacilityId,
-            EquipmentType: "TEST");
+            EquipmentTypeId: equipmentType.Id);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.CreateEquipmentAsync(command));
         Assert.Contains("không tồn tại", exception.Message);
@@ -237,20 +239,24 @@ public class PropertyAssetsTests
         dbContext.Facilities.Add(facility);
         await dbContext.SaveChangesAsync();
 
+        var equipmentType = AddEquipmentType(dbContext, "TEST");
+        await dbContext.SaveChangesAsync();
         // Equipment with a valid Facility in the current deployment should succeed.
         var command = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
             "Test Equipment",
             FacilityId: facility.Id,
-            EquipmentType: "TEST");
+            EquipmentTypeId: equipmentType.Id);
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-TESTEQUIPMENT-001", result.Code);
+        Assert.Equal(equipmentType.Id, result.EquipmentTypeId);
+        Assert.Equal(equipmentType.Name, result.EquipmentType);
     }
 
     [Fact]
-    public async Task EquipmentService_CreateEquipment_DuplicateCodeThrowsException()
+    public async Task EquipmentService_CreateEquipment_SameNameAllocatesNextSequence()
     {
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -259,21 +265,24 @@ public class PropertyAssetsTests
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
+        var equipmentType = AddEquipmentType(dbContext, "TEST");
+        await dbContext.SaveChangesAsync();
         // Create first equipment
         var command1 = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
             "First Equipment",
-            EquipmentType: "TEST");
+            EquipmentTypeId: equipmentType.Id);
         await service.CreateEquipmentAsync(command1);
 
-        // Try to create second equipment with same code
+        // The client-supplied code is ignored. Same normalized name must receive the next sequence.
         var command2 = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
-            "Second Equipment",
-            EquipmentType: "TEST");
+            "First Equipment",
+            EquipmentTypeId: equipmentType.Id);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateEquipmentAsync(command2));
-        Assert.Contains("đã tồn tại", exception.Message);
+        var second = await service.CreateEquipmentAsync(command2);
+        Assert.Equal("TB-FIRSTEQUIPMENT-002", second.Code);
+        Assert.NotEqual("TB-FIRSTEQUIPMENT-001", second.Code);
     }
 
     [Fact]
@@ -290,6 +299,8 @@ public class PropertyAssetsTests
         var facility1 = new Facility("FAC-01", "Gym", _now);
         var facility2 = new Facility("FAC-02", "Pool", _now);
         dbContext.Facilities.AddRange(facility1, facility2);
+        var typeA = AddEquipmentType(dbContext, "TEST A");
+        var typeB = AddEquipmentType(dbContext, "TEST B");
         await dbContext.SaveChangesAsync();
 
         // Create equipment linked to facility1
@@ -297,17 +308,19 @@ public class PropertyAssetsTests
             "TB-MAYBOM-HIYORI-01",
             "Test Equipment",
             FacilityId: facility1.Id,
-            EquipmentType: "TEST");
+            EquipmentTypeId: typeA.Id);
         var equipment = await service.CreateEquipmentAsync(command);
 
         // Update equipment to link to facility2 should succeed
         var updateCommand = new UpdateEquipmentCommand(
             "Updated Equipment",
             FacilityId: facility2.Id,
-            EquipmentType: "TEST");
+            EquipmentTypeId: typeB.Id);
 
         var updated = await service.UpdateEquipmentAsync(equipment.Id, updateCommand);
         Assert.Equal(facility2.Id, updated.FacilityId);
+        Assert.Equal(typeB.Id, updated.EquipmentTypeId);
+        Assert.Equal(typeB.Name, updated.EquipmentType);
     }
 
     [Fact]
@@ -326,9 +339,11 @@ public class PropertyAssetsTests
         await dbContext.SaveChangesAsync();
 
         // Update facility properties should succeed
+        var type = AddFacilityType(dbContext, "FITNESS");
+        await dbContext.SaveChangesAsync();
         var updateCommand = new UpdateFacilityCommand(
             "Gym Updated",
-            FacilityType: "FITNESS",
+            FacilityTypeId: type.Id,
             LocationDescription: "Updated location",
             Description: "Updated description");
 
@@ -353,17 +368,22 @@ public class PropertyAssetsTests
         dbContext.Facilities.Add(facility);
         await dbContext.SaveChangesAsync();
 
+        var equipmentType = AddEquipmentType(dbContext, "FITNESS");
+        await dbContext.SaveChangesAsync();
+
         // Create equipment linked to the facility
         var command = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
             "Treadmill",
             FacilityId: facility.Id,
-            EquipmentType: "FITNESS");
+            EquipmentTypeId: equipmentType.Id);
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-TREADMILL-001", result.Code);
         Assert.Equal(facility.Id, result.FacilityId);
+        Assert.Equal(equipmentType.Id, result.EquipmentTypeId);
+        Assert.Equal(equipmentType.Name, result.EquipmentType);
     }
 
     [Fact]
@@ -375,17 +395,19 @@ public class PropertyAssetsTests
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
+        var equipmentType = AddEquipmentType(dbContext, "ELECTRICAL");
+        await dbContext.SaveChangesAsync();
 
         // Create equipment without facility (building-level equipment)
         var command = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
             "Main Transformer",
             FacilityId: null,
-            EquipmentType: "ELECTRICAL");
+            EquipmentTypeId: equipmentType.Id);
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-MAINTRANSFORMER-001", result.Code);
         Assert.Null(result.FacilityId);
     }
 
@@ -398,13 +420,15 @@ public class PropertyAssetsTests
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
+        var equipmentType = AddEquipmentType(dbContext, "FITNESS");
+        await dbContext.SaveChangesAsync();
 
         // Try to create equipment with non-existent facility
         var command = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
             "Treadmill",
             FacilityId: Guid.NewGuid(),
-            EquipmentType: "FITNESS");
+            EquipmentTypeId: equipmentType.Id);
 
         await Assert.ThrowsAsync<ArgumentException>(() => service.CreateEquipmentAsync(command));
     }
@@ -418,6 +442,8 @@ public class PropertyAssetsTests
 
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
+        var equipmentType = AddEquipmentType(dbContext, "FITNESS");
+        await dbContext.SaveChangesAsync();
 
         // Create equipment
         var equipment = new Equipment("TB-MAYBOM-HIYORI-01", "Treadmill", _now);
@@ -430,16 +456,18 @@ public class PropertyAssetsTests
         var updateCommand = new UpdateEquipmentCommand(
             "Treadmill Updated",
             FacilityId: null,
-            EquipmentType: "FITNESS");
+            EquipmentTypeId: equipmentType.Id);
 
         var updated = await service.UpdateEquipmentAsync(equipment.Id, updateCommand);
         Assert.Equal("Treadmill Updated", updated.Name);
         // FE-04.5: Edit should NOT change status
         Assert.Equal(initialStatus, updated.Status);
+        Assert.Equal(equipmentType.Id, updated.EquipmentTypeId);
+        Assert.Equal(equipmentType.Name, updated.EquipmentType);
     }
 
     [Fact]
-    public async Task EquipmentService_SetStatus_ChangesStatusAndUpdatesAuditFields()
+    public async Task EquipmentService_SetStatus_RejectsManualUnderMaintenanceTransition()
     {
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -455,13 +483,13 @@ public class PropertyAssetsTests
 
         var initialUpdatedAt = equipment.UpdatedAt;
 
-        // Change status to UNDER_MAINTENANCE
+        // UNDER_MAINTENANCE is reserved for the maintenance workflow.
         var statusCommand = new SetEquipmentStatusCommand(EquipmentStatus.UNDER_MAINTENANCE, Guid.NewGuid());
-        var updated = await service.SetEquipmentStatusAsync(equipment.Id, statusCommand);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SetEquipmentStatusAsync(equipment.Id, statusCommand));
 
-        Assert.Equal(EquipmentStatus.UNDER_MAINTENANCE, updated.Status);
-        Assert.Equal(statusCommand.UpdatedBy, updated.UpdatedBy);
-        Assert.True(updated.UpdatedAt > initialUpdatedAt);
+        Assert.Contains("quy trình bảo trì", exception.Message);
+        Assert.Equal(EquipmentStatus.ACTIVE, equipment.Status);
+        Assert.Equal(initialUpdatedAt, equipment.UpdatedAt);
     }
 
     [Fact]
@@ -650,8 +678,9 @@ public class PropertyAssetsTests
         var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create facilities
-        var facility1 = new Facility("FAC-01", "Gym", _now, facilityType: "Phòng GYM / Fitness");
-        var facility2 = new Facility("FAC-02", "Pool", _now, facilityType: "Hồ Bơi");
+        var gymType = AddFacilityType(dbContext, "Phòng GYM / Fitness"); var poolType = AddFacilityType(dbContext, "Hồ Bơi");
+        var facility1 = new Facility("FAC-01", "Gym", _now, gymType.Id);
+        var facility2 = new Facility("FAC-02", "Pool", _now, poolType.Id);
         dbContext.Facilities.AddRange(facility1, facility2);
         await dbContext.SaveChangesAsync();
 
@@ -674,17 +703,20 @@ public class PropertyAssetsTests
         var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create facilities
-        var facility1 = new Facility("FAC-01", "Gym", _now, facilityType: "Phòng GYM / Fitness");
-        var facility2 = new Facility("FAC-02", "Pool", _now, facilityType: "Hồ Bơi");
+        var gymType = AddFacilityType(dbContext, "Phòng GYM / Fitness"); var poolType = AddFacilityType(dbContext, "Hồ Bơi");
+        var facility1 = new Facility("FAC-01", "Gym", _now, gymType.Id);
+        var facility2 = new Facility("FAC-02", "Pool", _now, poolType.Id);
         dbContext.Facilities.AddRange(facility1, facility2);
         await dbContext.SaveChangesAsync();
 
         // Filter by FacilityType
-        var query = new FacilityFilterQuery(FacilityType: "Phòng GYM / Fitness", PageIndex: 1, PageSize: 10);
+        var query = new FacilityFilterQuery(FacilityTypeId: gymType.Id, PageIndex: 1, PageSize: 10);
         var result = await service.GetFacilitiesAsync(query);
 
         Assert.Single(result.Items);
         Assert.Equal("FAC-01", result.Items[0].Code);
+        Assert.Equal(gymType.Id, result.Items[0].FacilityTypeId);
+        Assert.Equal(gymType.Name, result.Items[0].FacilityType);
     }
 
     [Fact]
@@ -697,18 +729,24 @@ public class PropertyAssetsTests
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
+        var mepType = AddEquipmentType(dbContext, "Hệ Thống Cơ Điện (MEP)");
+        var electricalType = AddEquipmentType(dbContext, "Hệ Thống Điện & Chiếu Sáng");
+        await dbContext.SaveChangesAsync();
+
         // Create equipment
-        var equipment1 = new Equipment("TB-MAYBOM-HIYORI-01", "Pump", _now, equipmentType: "Hệ Thống Cơ Điện (MEP)");
-        var equipment2 = new Equipment("TB-MAYBOM-HIYORI-02", "Light", _now, equipmentType: "Hệ Thống Điện & Chiếu Sáng");
+        var equipment1 = new Equipment("TB-MAYBOM-HIYORI-01", "Pump", _now, equipmentTypeId: mepType.Id);
+        var equipment2 = new Equipment("TB-MAYBOM-HIYORI-02", "Light", _now, equipmentTypeId: electricalType.Id);
         dbContext.Equipment.AddRange(equipment1, equipment2);
         await dbContext.SaveChangesAsync();
 
         // Filter by EquipmentType
-        var query = new EquipmentFilterQuery(EquipmentType: "Hệ Thống Cơ Điện (MEP)", PageIndex: 1, PageSize: 10);
+        var query = new EquipmentFilterQuery(EquipmentTypeId: mepType.Id, PageIndex: 1, PageSize: 10);
         var result = await service.GetEquipmentsAsync(query);
 
         Assert.Single(result.Items);
         Assert.Equal("TB-MAYBOM-HIYORI-01", result.Items[0].Code);
+        Assert.Equal(mepType.Id, result.Items[0].EquipmentTypeId);
+        Assert.Equal(mepType.Name, result.Items[0].EquipmentType);
     }
 
     [Fact]
@@ -722,15 +760,16 @@ public class PropertyAssetsTests
         var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create facilities with different combinations
-        var facility1 = new Facility("FAC-01", "Gym Pool", _now, facilityType: "Hồ Bơi", initialStatus: MasterDataStatus.ACTIVE);
-        var facility2 = new Facility("FAC-02", "Gym", _now, facilityType: "Phòng GYM / Fitness", initialStatus: MasterDataStatus.ACTIVE);
-        var facility3 = new Facility("FAC-03", "Pool", _now, facilityType: "Hồ Bơi", initialStatus: MasterDataStatus.INACTIVE);
-        var facility4 = new Facility("FAC-04", "Tennis", _now, facilityType: "Sân Tennis / Cầu Lông", initialStatus: MasterDataStatus.ACTIVE);
+        var poolType = AddFacilityType(dbContext, "Hồ Bơi"); var gymType = AddFacilityType(dbContext, "Phòng GYM / Fitness"); var tennisType = AddFacilityType(dbContext, "Sân Tennis / Cầu Lông");
+        var facility1 = new Facility("FAC-01", "Gym Pool", _now, poolType.Id, initialStatus: MasterDataStatus.ACTIVE);
+        var facility2 = new Facility("FAC-02", "Gym", _now, gymType.Id, initialStatus: MasterDataStatus.ACTIVE);
+        var facility3 = new Facility("FAC-03", "Pool", _now, poolType.Id, initialStatus: MasterDataStatus.INACTIVE);
+        var facility4 = new Facility("FAC-04", "Tennis", _now, tennisType.Id, initialStatus: MasterDataStatus.ACTIVE);
         dbContext.Facilities.AddRange(facility1, facility2, facility3, facility4);
         await dbContext.SaveChangesAsync();
 
         // Search with combined criteria: keyword "Pool", Status ACTIVE, FacilityType "Hồ Bơi"
-        var query = new FacilityFilterQuery(SearchKeyword: "Pool", Status: MasterDataStatus.ACTIVE, FacilityType: "Hồ Bơi", PageIndex: 1, PageSize: 10);
+        var query = new FacilityFilterQuery(SearchKeyword: "Pool", Status: MasterDataStatus.ACTIVE, FacilityTypeId: poolType.Id, PageIndex: 1, PageSize: 10);
         var result = await service.GetFacilitiesAsync(query);
 
         // Only facility1 should match ALL criteria
@@ -750,15 +789,16 @@ public class PropertyAssetsTests
         var service = new PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService(CreateStore(dbContext));
 
         // Create 5 facilities, 3 with same FacilityType
+        var gymType = AddFacilityType(dbContext, "Phòng GYM / Fitness"); var poolType = AddFacilityType(dbContext, "Hồ Bơi");
         for (int i = 1; i <= 5; i++)
         {
-            var facility = new Facility($"FAC-{i:00}", $"Facility {i}", _now, facilityType: i <= 3 ? "Phòng GYM / Fitness" : "Hồ Bơi");
+            var facility = new Facility($"FAC-{i:00}", $"Facility {i}", _now, i <= 3 ? gymType.Id : poolType.Id);
             dbContext.Facilities.Add(facility);
         }
         await dbContext.SaveChangesAsync();
 
         // Request page 2 with page size 2, filtered by FacilityType
-        var query = new FacilityFilterQuery(FacilityType: "Phòng GYM / Fitness", PageIndex: 2, PageSize: 2);
+        var query = new FacilityFilterQuery(FacilityTypeId: gymType.Id, PageIndex: 2, PageSize: 2);
         var result = await service.GetFacilitiesAsync(query);
 
         // TotalCount should be 3 (all matching records, not total in database)
@@ -779,27 +819,32 @@ public class PropertyAssetsTests
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
         // Create a facility
-        var facility = new Facility("FAC-01", "Gym", _now, facilityType: "Phòng GYM / Fitness");
+        var facilityType = AddFacilityType(dbContext, "Phòng GYM / Fitness");
+        var facility = new Facility("FAC-01", "Gym", _now, facilityType.Id);
         dbContext.Facilities.Add(facility);
+        var mepType = AddEquipmentType(dbContext, "Hệ Thống Cơ Điện (MEP)");
+        var electricalType = AddEquipmentType(dbContext, "Hệ Thống Điện & Chiếu Sáng");
         await dbContext.SaveChangesAsync();
 
         // Create equipment with different combinations
-        var equipment1 = new Equipment("TB-MAYBOM-HIYORI-01", "Pump A", _now, facilityId: facility.Id, equipmentType: "Hệ Thống Cơ Điện (MEP)");
-        var equipment2 = new Equipment("TB-MAYBOM-HIYORI-02", "Pump B", _now, facilityId: facility.Id, equipmentType: "Hệ Thống Cơ Điện (MEP)");
+        var equipment1 = new Equipment("TB-MAYBOM-HIYORI-01", "Pump A", _now, facilityId: facility.Id, equipmentTypeId: mepType.Id);
+        var equipment2 = new Equipment("TB-MAYBOM-HIYORI-02", "Pump B", _now, facilityId: facility.Id, equipmentTypeId: mepType.Id);
         equipment2.Deactivate(Guid.NewGuid(), _now);
-        var equipment3 = new Equipment("TB-MAYBOM-HIYORI-03", "Light", _now, facilityId: facility.Id, equipmentType: "Hệ Thống Điện & Chiếu Sáng");
-        var equipment4 = new Equipment("EQ-04", "Pump C", _now, equipmentType: "Hệ Thống Cơ Điện (MEP)"); // No facility
+        var equipment3 = new Equipment("TB-MAYBOM-HIYORI-03", "Light", _now, facilityId: facility.Id, equipmentTypeId: electricalType.Id);
+        var equipment4 = new Equipment("EQ-04", "Pump C", _now, equipmentTypeId: mepType.Id); // No facility
         dbContext.Equipment.AddRange(equipment1, equipment2, equipment3, equipment4);
         await dbContext.SaveChangesAsync();
 
         // Search with combined criteria: keyword "Pump", Status ACTIVE, EquipmentType "Hệ Thống Cơ Điện (MEP)", FacilityId
-        var query = new EquipmentFilterQuery(SearchKeyword: "Pump", Status: EquipmentStatus.ACTIVE, EquipmentType: "Hệ Thống Cơ Điện (MEP)", FacilityId: facility.Id, PageIndex: 1, PageSize: 10);
+        var query = new EquipmentFilterQuery(SearchKeyword: "Pump", Status: EquipmentStatus.ACTIVE, EquipmentTypeId: mepType.Id, FacilityId: facility.Id, PageIndex: 1, PageSize: 10);
         var result = await service.GetEquipmentsAsync(query);
 
         // Only equipment1 should match ALL criteria
         Assert.Single(result.Items);
         Assert.Equal("TB-MAYBOM-HIYORI-01", result.Items[0].Code);
         Assert.Equal("Pump A", result.Items[0].Name);
+        Assert.Equal(mepType.Id, result.Items[0].EquipmentTypeId);
+        Assert.Equal(mepType.Name, result.Items[0].EquipmentType);
     }
 
     [Fact]
@@ -812,16 +857,20 @@ public class PropertyAssetsTests
         using var dbContext = new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
         var service = new PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService(CreateStore(dbContext));
 
+        var mepType = AddEquipmentType(dbContext, "Hệ Thống Cơ Điện (MEP)");
+        var electricalType = AddEquipmentType(dbContext, "Hệ Thống Điện & Chiếu Sáng");
+        await dbContext.SaveChangesAsync();
+
         // Create 5 equipment, 3 with same EquipmentType
         for (int i = 1; i <= 5; i++)
         {
-            var equipment = new Equipment($"EQ-{i:00}", $"Equipment {i}", _now, equipmentType: i <= 3 ? "Hệ Thống Cơ Điện (MEP)" : "Hệ Thống Điện & Chiếu Sáng");
+            var equipment = new Equipment($"EQ-{i:00}", $"Equipment {i}", _now, equipmentTypeId: i <= 3 ? mepType.Id : electricalType.Id);
             dbContext.Equipment.Add(equipment);
         }
         await dbContext.SaveChangesAsync();
 
         // Request page 2 with page size 2, filtered by EquipmentType
-        var query = new EquipmentFilterQuery(EquipmentType: "Hệ Thống Cơ Điện (MEP)", PageIndex: 2, PageSize: 2);
+        var query = new EquipmentFilterQuery(EquipmentTypeId: mepType.Id, PageIndex: 2, PageSize: 2);
         var result = await service.GetEquipmentsAsync(query);
 
         // TotalCount should be 3 (all matching records, not total in database)
@@ -829,10 +878,12 @@ public class PropertyAssetsTests
         // Items should be 1 (remaining records on page 2)
         Assert.Single(result.Items);
         Assert.Equal("EQ-03", result.Items[0].Code);
+        Assert.Equal(mepType.Id, result.Items[0].EquipmentTypeId);
+        Assert.Equal(mepType.Name, result.Items[0].EquipmentType);
     }
 
     [Fact]
-    public async Task FacilityService_SetStatus_ChangesStatusAndUpdatesAuditFields()
+    public async Task FacilityService_SetStatus_RejectsManualUnderMaintenanceTransition()
     {
         var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -848,13 +899,13 @@ public class PropertyAssetsTests
 
         var initialUpdatedAt = facility.UpdatedAt;
 
-        // Change status to UNDER_MAINTENANCE
+        // UNDER_MAINTENANCE is reserved for the maintenance workflow.
         var statusCommand = new SetFacilityStatusCommand(MasterDataStatus.UNDER_MAINTENANCE, Guid.NewGuid());
-        var updated = await service.SetFacilityStatusAsync(facility.Id, statusCommand);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.SetFacilityStatusAsync(facility.Id, statusCommand));
 
-        Assert.Equal(MasterDataStatus.UNDER_MAINTENANCE, updated.Status);
-        Assert.Equal(statusCommand.UpdatedBy, updated.UpdatedBy);
-        Assert.True(updated.UpdatedAt > initialUpdatedAt);
+        Assert.Contains("quy trình bảo trì", exception.Message);
+        Assert.Equal(MasterDataStatus.ACTIVE, facility.Status);
+        Assert.Equal(initialUpdatedAt, facility.UpdatedAt);
     }
 
     [Fact]
@@ -872,17 +923,22 @@ public class PropertyAssetsTests
         dbContext.Facilities.Add(facility);
         await dbContext.SaveChangesAsync();
 
+        var equipmentType = AddEquipmentType(dbContext, "FITNESS");
+        await dbContext.SaveChangesAsync();
+
         // Create equipment linked to the facility - should succeed
         var command = new CreateEquipmentCommand(
             "TB-MAYBOM-HIYORI-01",
             "Treadmill",
             FacilityId: facility.Id,
-            EquipmentType: "FITNESS");
+            EquipmentTypeId: equipmentType.Id);
 
         var result = await service.CreateEquipmentAsync(command);
         Assert.NotNull(result);
-        Assert.Equal("TB-MAYBOM-HIYORI-01", result.Code);
+        Assert.Equal("TB-TREADMILL-001", result.Code);
         Assert.Equal(facility.Id, result.FacilityId);
+        Assert.Equal(equipmentType.Id, result.EquipmentTypeId);
+        Assert.Equal(equipmentType.Name, result.EquipmentType);
     }
 
     [Fact]
@@ -1007,6 +1063,20 @@ public class PropertyAssetsTests
         Assert.Null(command.CreatedBy);
     }
 
+    private FacilityType AddFacilityType(PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext context, string name)
+    {
+        var type = new FacilityType(name, null, _now);
+        context.FacilityTypes.Add(type);
+        return type;
+    }
+
+    private EquipmentType AddEquipmentType(PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext context, string name)
+    {
+        var type = new EquipmentType(name, null, _now);
+        context.EquipmentTypes.Add(type);
+        return type;
+    }
+
     private static PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext>()
@@ -1014,6 +1084,14 @@ public class PropertyAssetsTests
             .Options;
         return new PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext(options);
     }
-    private static PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore CreateStore(PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext context) => new(context, new TestAssetReadAccess());
-    private sealed class TestAssetReadAccess : IAssetReadAccess { public Task<AssetReadScope> GetScopeAsync(CancellationToken ct) => Task.FromResult(AssetReadScope.Manager); }
+
+    private static PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.EfPropertyAssetsStore CreateStore(
+        PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.PropertyAssetsDbContext context) =>
+        new(context, new UnrestrictedAssetReadAccess());
+
+    private sealed class UnrestrictedAssetReadAccess : PropFlow.Modules.PropertyAssets.Application.IAssetReadAccess
+    {
+        public Task<PropFlow.Modules.PropertyAssets.Application.AssetReadScope> GetScopeAsync(CancellationToken ct) =>
+            Task.FromResult(PropFlow.Modules.PropertyAssets.Application.AssetReadScope.Manager);
+    }
 }

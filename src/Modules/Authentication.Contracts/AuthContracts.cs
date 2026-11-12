@@ -43,6 +43,8 @@ public sealed record VerifyChallengeRequest(Guid ChallengeId, [Required, Regular
 public sealed record ForgotPasswordRequest([Required, EmailAddress, StringLength(255)] string Email);
 public sealed record ResetPasswordRequest(Guid ChallengeId, [Required, StringLength(200)] string Proof, [Required, StringLength(128, MinimumLength = 12)] string NewPassword);
 public sealed record ChangePasswordRequest([Required, StringLength(128)] string CurrentPassword, [Required, StringLength(128, MinimumLength = 12)] string NewPassword);
+public sealed record ChangeEmailRequest([Required, EmailAddress, StringLength(255)] string NewEmail, [Required, StringLength(128)] string CurrentPassword);
+public sealed record VerifyEmailChangeRequest(Guid ChallengeId, [Required, EmailAddress, StringLength(255)] string NewEmail, [Required, RegularExpression(@"\d{6}")] string Code);
 public sealed record UpdateProfileRequest([Required, StringLength(150)] string DisplayName, [StringLength(20)] string? PhoneNumber);
 public sealed record ChallengeResponse(Guid ChallengeId, DateTimeOffset ExpiresAt, DateTimeOffset ResendAfter, string Message);
 public sealed record ResetProofResponse(Guid ChallengeId, string Proof, DateTimeOffset ExpiresAt);
@@ -62,4 +64,27 @@ public interface IInternalAccountDirectory
     Task<PagedInternalAccountRecords> SearchAsync(IReadOnlyCollection<Guid> userIds, string? search, string? status, int page, int pageSize, CancellationToken ct);
     Task<InternalAccountRecord> CreateAsync(CreateInternalAccount request, Guid actorUserId, CancellationToken ct);
     Task<InternalAccountRecord?> SetStatusAsync(Guid userId, string status, Guid actorUserId, CancellationToken ct);
+}
+
+public sealed record PrivilegedActionChallengeResult(
+    Guid ChallengeId,
+    DateTimeOffset ExpiresAt,
+    DateTimeOffset ResendAfter,
+    string MaskedEmail);
+
+public interface IPrivilegedActionOtp
+{
+    Task<PrivilegedActionChallengeResult> RequestAsync(
+        Guid userId,
+        string purpose,
+        string payloadHash,
+        CancellationToken ct);
+
+    Task VerifyAsync(
+        Guid userId,
+        Guid challengeId,
+        string purpose,
+        string payloadHash,
+        string code,
+        CancellationToken ct);
 }

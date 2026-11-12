@@ -58,9 +58,8 @@ public sealed class ResidentSelfRegistrationTests
 
         Assert.DoesNotContain("<ApiFeedback", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<p class=\"feedback\"", source, StringComparison.Ordinal);
-        Assert.Contains("<PropFlowToast", source, StringComparison.Ordinal);
-        Assert.Contains("DurationMs=\"5000\"", source, StringComparison.Ordinal);
-        Assert.Contains("OnDismiss=\"DismissToast\"", source, StringComparison.Ordinal);
+        Assert.Contains("Toasts.Notify(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<PropFlowToast", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -74,15 +73,16 @@ public sealed class ResidentSelfRegistrationTests
     }
 
     [Fact]
-    public void Desktop_registration_toast_stays_inside_its_transformed_panel_without_covering_the_form()
+    public void Features_share_the_root_toast_host_without_local_containers()
     {
-        var styles = File.ReadAllText(Source("Features", "Authentication", "Components", "AuthLayout.razor.css"));
-
-        Assert.Contains("@media(min-width:701px)", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-panel-left>.auth-register-form ::deep .pf-toast", styles, StringComparison.Ordinal);
-        Assert.Contains("top:10px", styles, StringComparison.Ordinal);
-        Assert.Contains("right:10px", styles, StringComparison.Ordinal);
-        Assert.Contains("width:calc(100% - 20px)", styles, StringComparison.Ordinal);
+        var root = Path.GetDirectoryName(Source("Routes.razor"))!;
+        Assert.Contains("ToastHost", File.ReadAllText(Path.Combine(root, "Routes.razor")), StringComparison.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "Features"), "*.razor", SearchOption.AllDirectories))
+        {
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain("<PropFlowToast", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("<ToastHost", source, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

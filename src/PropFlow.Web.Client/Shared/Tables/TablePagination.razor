@@ -1,0 +1,157 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<footer class="table-footer">
+    <div class="page-summary">@ChildContent</div>
+    <nav class="table-pagination" aria-label="@Label" @ref="navigation">
+        <button type="button" disabled="@(!CanGoPrevious)" title="Trang đầu" aria-label="Trang đầu" @onclick="() => MoveAsync(1)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m11 17-5-5 5-5m7 10-5-5 5-5" /></svg>
+        </button>
+        <button type="button" disabled="@(!CanGoPrevious)" title="Trang trước" aria-label="Trang trước" @onclick="() => MoveAsync(CurrentPage - 1)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <button type="button" class="page-number" disabled="@(!CanNavigate)" aria-current="@(TotalPages > 0 ? "page" : null)"
+                aria-label="@(TotalPages > 0 ? $"Trang {CurrentPage} trên {TotalPages}" : "Không có trang kết quả")"
+                title="Chuyển đến trang" aria-haspopup="dialog" popovertarget="@popoverId" @onclick="ResetJump">
+            @CurrentPage / @TotalPages
+        </button>
+        <button type="button" disabled="@(!CanGoNext)" title="Trang sau" aria-label="Trang sau" @onclick="() => MoveAsync(CurrentPage + 1)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+        <button type="button" disabled="@(!CanGoNext)" title="Trang cuối" aria-label="Trang cuối" @onclick="() => MoveAsync(TotalPages)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 17 5-5-5-5m7 10 5-5-5-5" /></svg>
+        </button>
+
+        <div id="@popoverId" class="page-jump" popover="auto" role="dialog" aria-labelledby="@($"{popoverId}-title")" @ref="popover">
+            <form @onsubmit="JumpAsync" @onsubmit:preventDefault>
+                <h2 id="@($"{popoverId}-title")">Chuyển đến trang</h2>
+                <input type="text" inputmode="numeric" autocomplete="off" autofocus
+                       placeholder="Nhập số trang" aria-label="Nhập số trang" @bind="pageInput" @bind:event="oninput"
+                       aria-invalid="@invalidInput" aria-describedby="@(invalidInput ? $"{popoverId}-error" : null)" />
+                @if (invalidInput)
+                {
+                    <p class="page-jump-error" id="@($"{popoverId}-error")" role="alert">Vui lòng nhập số nguyên.</p>
+                }
+                <div class="page-jump-actions">
+                    <button type="button" popovertarget="@popoverId" popovertargetaction="hide">Hủy</button>
+                    <button type="submit" class="page-jump-submit" disabled="@(!CanNavigate)">Đi đến trang</button>
+                </div>
+            </form>
+        </div>
+    </nav>
+</footer>
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int TotalPages { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string Label { get; set; } = "Phân trang";
+    [Parameter, EditorRequired] public EventCallback<int> PageChanged { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private readonly string popoverId = $"page-jump-{Guid.NewGuid():N}";
+    private ElementReference navigation, popover;
+    private IJSObjectReference? positioning;
+    private bool disposed, moving, invalidInput;
+    private string pageInput = string.Empty;
+    private (int Page, int TotalPages)? correction;
+    private int CurrentPage => TotalPages > 0 ? Math.Clamp(Page, 1, TotalPages) : 0;
+    private bool CanNavigate => !Busy && !moving && TotalPages > 1 && PageChanged.HasDelegate;
+    private bool CanGoPrevious => CanNavigate && CurrentPage > 1;
+    private bool CanGoNext => CanNavigate && CurrentPage < TotalPages;
+
+    protected override void OnParametersSet()
+    {
+        if (Page == CurrentPage || TotalPages == 0) correction = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Tables/TablePagination.razor.js?v=2");
+            if (disposed) return;
+
+            var handle = await module.InvokeAsync<IJSObjectReference>("connect", navigation, popover);
+            if (disposed) await DisconnectAsync(handle);
+            else positioning = handle;
+        }
+
+        if (disposed || Busy || moving || TotalPages <= 0 || Page == CurrentPage || !PageChanged.HasDelegate ||
+            correction == (Page, TotalPages)) return;
+
+        correction = (Page, TotalPages);
+        await ChangePageAsync(CurrentPage);
+        if (!disposed) StateHasChanged();
+    }
+
+    private void ResetJump()
+    {
+        pageInput = string.Empty;
+        invalidInput = false;
+    }
+
+    private async Task JumpAsync()
+    {
+        if (!CanNavigate) return;
+        if (!TryGetTargetPage(pageInput, TotalPages, out var target))
+        {
+            invalidInput = true;
+            return;
+        }
+
+        // Lock before awaiting JS so repeated Enter or another navigation cannot queue a request.
+        moving = true;
+        try
+        {
+            if (positioning is not null) await positioning.InvokeVoidAsync("close");
+            if (!disposed && !Busy && TotalPages > 1)
+            {
+                target = Math.Clamp(target, 1, TotalPages);
+                if (target != Page) await PageChanged.InvokeAsync(target);
+            }
+        }
+        finally { moving = false; }
+    }
+
+    private Task MoveAsync(int target) =>
+        !CanNavigate || target < 1 || target > TotalPages || target == Page
+            ? Task.CompletedTask
+            : ChangePageAsync(target);
+
+    private async Task ChangePageAsync(int target)
+    {
+        moving = true;
+        try { await PageChanged.InvokeAsync(target); }
+        finally { moving = false; }
+    }
+
+    private static bool TryGetTargetPage(string value, int totalPages, out int target)
+    {
+        var digits = value.AsSpan().Trim();
+        var negative = !digits.IsEmpty && digits[0] == '-';
+        if (!digits.IsEmpty && digits[0] is '+' or '-') digits = digits[1..];
+        target = 0;
+        if (digits.IsEmpty) return false;
+
+        foreach (var digit in digits)
+        {
+            if (digit is < '0' or > '9') return false;
+            target = (int)Math.Min((long)target * 10 + (digit - '0'), totalPages);
+        }
+
+        target = negative ? 1 : Math.Max(1, target);
+        return true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        if (positioning is not null) await DisconnectAsync(positioning);
+    }
+
+    private static async ValueTask DisconnectAsync(IJSObjectReference handle)
+    {
+        await using (handle) await handle.InvokeVoidAsync("disconnect");
+    }
+}

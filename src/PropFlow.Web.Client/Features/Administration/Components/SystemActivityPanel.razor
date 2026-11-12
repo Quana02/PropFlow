@@ -1,0 +1,188 @@
+@using PropFlow.Web.Client.Shared.Feedback
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Features.Administration.Services
+@using PropFlow.Web.Client.Shared.Forms
+@inject IAdministrationApiClient Api
+@implements IAsyncDisposable
+
+<section class="system-audit">
+    <header class="panel-heading"><span class="material-symbols-outlined">history</span><div><h1>Nhật ký hệ thống</h1><p>Thao tác và thay đổi dữ liệu trên các phân hệ · Chỉ đọc</p></div></header>
+    <div class="audit-toolbar">
+        <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters"
+                             OnReset="ResetDraft" Validate="ValidateDraft" OnApply="ApplyAsync">
+            <label>Phân hệ<PropFlowSelect Value="@module" ValueChanged="v => module = v" Options="ModuleOptions" Placeholder="Tất cả phân hệ" AriaLabel="Lọc theo phân hệ" /></label>
+            <label>Hành động<PropFlowSelect Value="@action" ValueChanged="v => action = v" Options="ActionOptions" Placeholder="Tất cả hành động" AriaLabel="Lọc theo hành động" /></label>
+            <label>Kết quả<PropFlowSelect Value="@outcome" ValueChanged="v => outcome = v" Options="OutcomeOptions" Placeholder="Tất cả kết quả" AriaLabel="Lọc theo kết quả" /></label>
+            <label>Người thực hiện<input @bind="actor" @bind:event="oninput" placeholder="Tên tài khoản, họ tên hoặc mã người dùng" maxlength="100" /></label>
+            <label>Từ ngày<input type="date" @bind="dateFrom" /></label>
+            <label>Đến ngày<input type="date" @bind="dateTo" /></label>
+            @if (filterError is not null) { <p class="filter-error" role="alert">@filterError</p> }
+        </PropFlowFilterPopover>
+        @if (ActiveFilterCount > 0) { <button type="button" class="secondary" @onclick="ResetAsync" disabled="@loading">Xóa bộ lọc</button> }
+        <button type="button" class="secondary" @onclick="LoadAsync" disabled="@loading"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Làm mới</button>
+        <span class="audit-count">@(data?.Total ?? 0) hoạt động</span>
+    </div>
+    <p class="audit-note">Ghi nhận từ khi tính năng được triển khai; giữ nguyên lịch sử quản trị tài khoản trước đó. Nội dung nhạy cảm được ẩn.</p>
+    @if (loading) { <p class="audit-empty" role="status">Đang tải nhật ký hệ thống…</p> }
+    else if (error is not null) { <div class="audit-empty" role="alert"><p>@error</p><button type="button" @onclick="LoadAsync">Thử lại</button></div> }
+    else if (data?.Items.Length is not > 0) { <p class="audit-empty">Không có hoạt động phù hợp với bộ lọc.</p> }
+    else
+    {
+        <div class="audit-table-wrap"><table><thead><tr><th>Thời gian</th><th>Phân hệ</th><th>Hành động</th><th>Người thực hiện</th><th>Đối tượng</th><th>Kết quả</th><th>Chi tiết</th></tr></thead><tbody>
+        @foreach (var item in data.Items)
+        {
+            <tr><td><time datetime="@item.Timestamp.ToString("O")">@LocalTime(item.Timestamp).ToString("dd/MM/yyyy")<small>@LocalTime(item.Timestamp).ToString("HH:mm:ss")</small></time></td>
+            <td>@ModuleLabel(item.Module)</td><td>@ActionLabel(item)</td><td>@ActorLabel(item)</td>
+            <td>@EntityLabel(item.EntityType)@if (item.TargetUsername is not null) { <small>@item.TargetUsername</small> }</td>
+            <td><span class="result @item.Outcome.ToLowerInvariant()">@OutcomeLabel(item.Outcome)</span></td>
+            <td><button type="button" class="detail-button" aria-label="Xem chi tiết @ActionLabel(item) lúc @LocalTime(item.Timestamp).ToString("HH:mm:ss")" @onclick="() => selected = item"><span class="material-symbols-outlined">visibility</span></button></td></tr>
+        }
+        </tbody></table></div>
+        <TablePagination Page="data.Page" TotalPages="@((int)Math.Ceiling(data.Total / (double)data.PageSize))" Busy="loading"
+            Label="Phân trang nhật ký hệ thống" PageChanged="ChangePageAsync">
+            <span>@data.Total hoạt động</span>
+        </TablePagination>
+    }
+</section>
+@if (selected is not null)
+{
+    <PropFlowConfirmationDialog Title="Chi tiết hoạt động" Tone="DialogTone.Info" Wide
+        Message="@($"{ActionLabel(selected)} · {ModuleLabel(selected.Module)}")" OnCancel="Close">
+        <ChildContent>
+            <div class="audit-dialog-content">
+                <dl><dt>Thời gian</dt><dd>@LocalTime(selected.Timestamp).ToString("dd/MM/yyyy · HH:mm:ss")</dd><dt>Người thực hiện</dt><dd>@ActorLabel(selected)</dd>
+                <dt>Đối tượng</dt><dd>@EntityLabel(selected.EntityType) @selected.TargetUsername</dd><dt>Kết quả</dt><dd>@OutcomeLabel(selected.Outcome) @if(selected.HttpStatus.HasValue){<small>HTTP @selected.HttpStatus</small>}</dd></dl>
+                @if (selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
+                { <div class="legacy-change">@(selected.Action == "internal_account_created" ? "Tài khoản nội bộ được tạo" : Transition(selected.OldRole ?? selected.OldStatus, selected.NewRole ?? selected.NewStatus))</div> }
+                @{ var businessChanges = selected.Changes?.Where(change => FieldLabel(change.Field) is not null).ToArray() ?? []; }
+                @if (businessChanges.Length > 0)
+                {
+                    <div class="audit-table-wrap"><table class="changes"><thead><tr><th>Trường thay đổi</th><th>Trước</th><th>Sau</th></tr></thead><tbody>
+                    @foreach (var change in businessChanges) { <tr><td>@FieldLabel(change.Field)</td><td>@FieldValue(change.Field, change.Before)</td><td>@FieldValue(change.Field, change.After)</td></tr> }
+                    </tbody></table></div>
+                }
+                else if (!selected.Action.StartsWith("internal_account_", StringComparison.Ordinal))
+                { <p class="audit-note">Bản ghi kết quả thao tác; không lưu nội dung yêu cầu hoặc thông tin xác thực.</p> }
+                <details><summary tabindex="0">Mã tham chiếu</summary><dl><dt>Đối tượng</dt><dd class="reference">@(selected.EntityId?.ToString() ?? selected.TargetAccountId?.ToString() ?? "Không có")</dd><dt>Người dùng</dt><dd class="reference">@(selected.ActorUserId?.ToString() ?? "Chưa xác định")</dd><dt>Liên kết thao tác</dt><dd class="reference">@(selected.CorrelationId ?? selected.Id.ToString())</dd></dl></details>
+            </div>
+        </ChildContent>
+    </PropFlowConfirmationDialog>
+}
+
+@code {
+    private PagedAdministrationActivities? data;
+    private AdministrationActivity? selected;
+    private bool loading;
+    private string? filterError;
+    private string? error;
+    private string module = "", action = "", outcome = "", actor = "";
+    private DateOnly? dateFrom, dateTo;
+    private int page = 1;
+    private SystemActivityFilter applied = new();
+    private int ActiveFilterCount => new[] { !string.IsNullOrWhiteSpace(applied.Module), !string.IsNullOrWhiteSpace(applied.Action), !string.IsNullOrWhiteSpace(applied.Outcome), !string.IsNullOrWhiteSpace(applied.Actor), applied.DateFrom.HasValue, applied.DateTo.HasValue }.Count(x => x);
+    private readonly CancellationTokenSource lifetime = new();
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        loading = true; error = null;
+        var result = await Api.GetSystemActivityAsync(applied, page, lifetime.Token);
+        if (lifetime.IsCancellationRequested) return;
+        loading = false;
+        if (result.IsSuccess) { data = result.Data; page = data?.Page ?? 1; }
+        else { data = null; error = result.Message ?? "Không thể tải nhật ký hệ thống. Vui lòng thử lại."; }
+    }
+    private bool ValidateDraft()
+    {
+        filterError = dateFrom > dateTo ? "Ngày bắt đầu không được sau ngày kết thúc." : null;
+        if (filterError is not null) StateHasChanged();
+        return filterError is null;
+    }
+    private async Task ApplyAsync()
+    {
+        var next = new SystemActivityFilter(EmptyToNull(module), EmptyToNull(action), EmptyToNull(outcome), EmptyToNull(actor.Trim()), dateFrom, dateTo);
+        if (next == applied) return;
+        applied = next;
+        page = 1;
+        await LoadAsync();
+    }
+    private static string? EmptyToNull(string value) => value.Length == 0 ? null : value;
+    private void OpenFilters() { module = applied.Module ?? ""; action = applied.Action ?? ""; outcome = applied.Outcome ?? ""; actor = applied.Actor ?? ""; dateFrom = applied.DateFrom; dateTo = applied.DateTo; filterError = null; }
+    private void ResetDraft() { module = action = outcome = actor = ""; dateFrom = dateTo = null; filterError = null; }
+    private Task ResetAsync() { module = action = outcome = actor = ""; dateFrom = dateTo = null; applied = new(); page = 1; return LoadAsync(); }
+    private Task ChangePageAsync(int target) { page = target; return LoadAsync(); }
+    private void Close() => selected = null;
+    private DateTimeOffset LocalTime(DateTimeOffset value) => data?.TimeZoneId is { } zone ? TimeZoneInfo.ConvertTime(value, TimeZoneInfo.FindSystemTimeZoneById(zone)) : value.ToUniversalTime();
+    public ValueTask DisposeAsync()
+    {
+        lifetime.Cancel();
+        lifetime.Dispose();
+        return ValueTask.CompletedTask;
+    }
+    private static string OutcomeLabel(string value) => value switch { "SUCCESS" => "Thành công", "DENIED" => "Bị từ chối", _ => "Thất bại" };
+    private static string ActorLabel(AdministrationActivity item) => item.ActorDisplayName ?? item.ActorUsername ?? (item.ActorUserId.HasValue ? "Không có thông tin tài khoản" : "Chưa xác định");
+    private static string Transition(string? before, string? after) =>
+        $"{AccountValue(before)} → {AccountValue(after)}";
+
+    private static string AccountValue(string? value) => value switch
+    {
+        "ADMIN" => "Quản trị viên",
+        "MANAGER" => "Quản lý",
+        "STAFF" => "Nhân viên",
+        "ACCOUNTANT" => "Kế toán",
+        "RESIDENT" => "Cư dân",
+        "ACTIVE" => "Đang hoạt động",
+        "INACTIVE" => "Ngừng hoạt động",
+        "PENDING" => "Đang chờ",
+        "LOCKED" => "Đã khóa",
+        null => "—",
+        _ => "Chưa xác định"
+    };
+
+    private static string ActionLabel(AdministrationActivity item) => item.Label ?? item.Action switch
+    {
+        "internal_account_profile_updated" => "Cập nhật hồ sơ tài khoản nội bộ",
+        "internal_account_created" => "Tạo tài khoản",
+        "internal_account_role_changed" => "Đổi vai trò",
+        "internal_account_status_changed" => "Đổi trạng thái tài khoản",
+        _ => "Thao tác hệ thống"
+    };
+    private static string ModuleLabel(string value) => ModuleOptions.FirstOrDefault(x => x.Value == value)?.Label ?? "Hệ thống";
+    private static string EntityLabel(string? value) => value switch {
+        "Resident" or "Residents" => "Hồ sơ cư dân", "ResidentApartment" => "Quan hệ cư trú", "ResidentProfileAttachment" => "Tệp hồ sơ cư dân",
+        "ApartmentUnit" or "ApartmentUnits" => "Căn hộ", "ApartmentUnitType" or "ApartmentUnitTypes" => "Loại căn hộ", "ApartmentOwnership" or "ApartmentOwnerships" => "Quyền sở hữu căn hộ",
+        "InternalAccount" => "Tài khoản nội bộ", "Auth" => "Tài khoản", "Building" or "Buildings" => "Tòa nhà",
+        "Facility" or "Facilities" => "Tiện ích", "Equipment" or "Equipments" => "Thiết bị", "ServiceRequest" or "ServiceRequests" => "Yêu cầu dịch vụ",
+        "Complaint" or "Complaints" => "Khiếu nại", "MaintenanceTask" or "Maintenance" => "Công việc bảo trì", "MaintenanceSchedule" => "Lịch bảo trì",
+        "Invoice" or "InvoiceItem" => "Hóa đơn", "Payment" => "Thanh toán", "FeeRateRule" => "Cấu hình phí", "Announcement" => "Thông báo", "SystemConfiguration" => "Cấu hình hệ thống", _ => "Dữ liệu phân hệ" };
+    private static string? FieldLabel(string value) => value switch {
+        "Status" => "Trạng thái", "FullName" => "Họ tên", "DisplayName" => "Tên hiển thị", "Name" => "Tên", "Email" => "Email", "PhoneNumber" => "Số điện thoại", "IdentityNumber" => "Số giấy tờ",
+        "HouseholdRole" => "Vai trò trong hộ", "ResidencyType" => "Hình thức cư trú", "RelationshipToHead" => "Quan hệ với chủ hộ", "StartDate" => "Ngày bắt đầu", "EndDate" => "Ngày kết thúc",
+        "IsActive" => "Đang hoạt động", "Area" => "Diện tích", "Bedrooms" => "Số phòng ngủ", "Bathrooms" => "Số phòng tắm", "UnitNumber" => "Số căn hộ", "FloorNumber" => "Tầng",
+        "ExpiresAt" => "Thời điểm hết hiệu lực", "PublishedAt" => "Thời điểm công bố",
+        "UsableAreaM2" => "Diện tích", "BedroomCount" => "Số phòng ngủ", "BathroomCount" => "Số phòng tắm",
+        "DefaultArea" or "DefaultUsableAreaM2" => "Diện tích mặc định", "DefaultBedrooms" or "DefaultBedroomCount" => "Phòng ngủ mặc định", "DefaultBathrooms" or "DefaultBathroomCount" => "Phòng tắm mặc định", "Priority" => "Mức ưu tiên", "PaymentMethod" => "Hình thức thanh toán", _ => null };
+    private string FieldValue(string field, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "—";
+        if (value is "[Đã ẩn nội dung]") return value;
+        return field switch
+        {
+            "IsActive" when bool.TryParse(value, out var active) => active ? "Có" : "Không",
+            "ExpiresAt" or "PublishedAt" when DateTimeOffset.TryParse(value, out var at) => LocalTime(at).ToString("dd/MM/yyyy HH:mm"),
+            "StartDate" or "EndDate" when DateOnly.TryParse(value, out var date) => date.ToString("dd/MM/yyyy"),
+            "Status" or "HouseholdRole" or "ResidencyType" or "RelationshipToHead" or "Priority" or "PaymentMethod" => value switch
+            {
+                "ACTIVE" => "Đang hoạt động", "INACTIVE" => "Ngừng hoạt động", "PENDING" => "Đang chờ",
+                "IN_PROGRESS" or "PROCESSING" => "Đang xử lý", "COMPLETED" => "Đã hoàn thành",
+                "PUBLISHED" => "Đã công bố", "DRAFT" => "Bản nháp", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy",
+                "OWNER" => "Chủ sở hữu", "TENANT" => "Người thuê", "HOUSEHOLD_HEAD" => "Chủ hộ",
+                "NORMAL" => "Bình thường", "URGENT" => "Khẩn cấp", "CASH" => "Tiền mặt", "BANK_TRANSFER" => "Chuyển khoản",
+                _ => "Không hiển thị chi tiết"
+            },
+            _ => value
+        };
+    }
+    private static readonly PropFlowSelectOption[] ModuleOptions = [new("", "Tất cả phân hệ"),new("Authentication","Tài khoản & bảo mật"),new("Administration","Quản trị"),new("Residents","Cư dân"),new("Apartments","Căn hộ"),new("PropertyAssets","Tòa nhà & tài sản"),new("ServiceRequests","Yêu cầu dịch vụ"),new("Complaints","Khiếu nại"),new("Maintenance","Bảo trì"),new("Billing","Phí & hóa đơn"),new("Payments","Thanh toán"),new("Communication","Thông báo"),new("AiClassification","AI phân loại"),new("AiRecommendation","AI đề xuất")];
+    private static readonly PropFlowSelectOption[] ActionOptions = [new("","Tất cả hành động"),new("created","Tạo dữ liệu"),new("updated","Cập nhật dữ liệu"),new("deleted","Xóa dữ liệu"),new("operation","Thao tác nghiệp vụ"),new("security_event","Tài khoản & bảo mật"),new("internal_account_created","Tạo tài khoản nội bộ"),new("internal_account_profile_updated","Cập nhật hồ sơ tài khoản nội bộ"),new("internal_account_role_changed","Đổi vai trò"),new("internal_account_status_changed","Đổi trạng thái tài khoản")];
+    private static readonly PropFlowSelectOption[] OutcomeOptions = [new("","Tất cả kết quả"),new("SUCCESS","Thành công"),new("FAILED","Thất bại"),new("DENIED","Bị từ chối")];
+}

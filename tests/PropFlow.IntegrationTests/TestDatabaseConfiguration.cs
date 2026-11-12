@@ -6,6 +6,16 @@ namespace PropFlow.IntegrationTests;
 internal static class TestDatabaseConfiguration
 {
     private const string ApiUserSecretsId = "adbac45b-651b-498f-a797-12585846625f";
+    private const string TestDatabase = "propflow_test";
+
+    public static string GetExpectedDatabaseName()
+    {
+        var configured = Environment.GetEnvironmentVariable("PROPFLOW_INTEGRATION_DATABASE");
+        if (!string.IsNullOrWhiteSpace(configured) && !string.Equals(configured.Trim(), TestDatabase, StringComparison.Ordinal))
+            throw new InvalidOperationException($"PROPFLOW_INTEGRATION_DATABASE phải là '{TestDatabase}'.");
+
+        return TestDatabase;
+    }
 
     public static string GetConnectionString()
     {
@@ -22,10 +32,10 @@ internal static class TestDatabaseConfiguration
             ?? throw new InvalidOperationException(
                 "Configure ConnectionStrings:PropFlowTestDatabase hoặc ConnectionStrings:PropFlowDatabase trong API User Secrets/environment.");
 
-        var builder = new NpgsqlConnectionStringBuilder(sourceConnection);
-        if (string.IsNullOrWhiteSpace(dedicatedTestConnection)) builder.Database = "propflow_test";
-        if (!string.Equals(builder.Database, "propflow_test", StringComparison.Ordinal))
-            throw new InvalidOperationException("Integration tests chỉ được phép kết nối database 'propflow_test'.");
+        var builder = new NpgsqlConnectionStringBuilder(sourceConnection)
+        {
+            Database = GetExpectedDatabaseName()
+        };
 
         return builder.ConnectionString;
     }

@@ -4,6 +4,8 @@ using PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos;
 using PropFlow.Modules.PropertyAssets.Application.Buildings.Services;
 using PropFlow.Modules.Apartments.Application;
 using PropFlow.Modules.PropertyAssets.Contracts;
+using Microsoft.EntityFrameworkCore;
+using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 
 namespace PropFlow.Api.Controllers;
 
@@ -79,12 +81,20 @@ public class CurrentBuildingController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateCurrent(
         [FromBody] UpdateCurrentBuildingCommand command,
+        [FromServices] PropertyAssetsDbContext db,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71241006)", cancellationToken);
         try
         {
             command = command with { UpdatedBy = CurrentUserId() };
+            var highestFloor = await _apartmentStatisticsReader.GetHighestApartmentFloorAsync(cancellationToken);
+            if (command.NumberOfFloors < highestFloor)
+                return BadRequest(Problem(400, "building_floors_below_apartments", "Số tầng không hợp lệ",
+                    $"Đã có căn hộ ở tầng {highestFloor}. Số tầng chung cư không được nhỏ hơn tầng này."));
             var result = await _buildingService.UpdateCurrentBuildingAsync(command, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

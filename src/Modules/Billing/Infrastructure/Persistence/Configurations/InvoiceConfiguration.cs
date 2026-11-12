@@ -24,6 +24,9 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         });
 
         builder.HasKey(invoice => invoice.Id);
+        builder.Property(invoice => invoice.Type).HasColumnName("invoice_type").HasConversion<string>().HasMaxLength(30);
+        builder.Property(invoice => invoice.SourceServiceRequestId).HasColumnName("source_service_request_id");
+        builder.HasIndex(invoice => invoice.SourceServiceRequestId).IsUnique().HasFilter("source_service_request_id IS NOT NULL");
         builder.Property(invoice => invoice.Id).HasColumnName("id");
 
         builder.Property(invoice => invoice.InvoiceNumber)
@@ -45,7 +48,8 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .HasColumnType("date")
             .IsRequired();
 
-        builder.HasIndex(invoice => new { invoice.ApartmentUnitId, invoice.BillingPeriodStart, invoice.BillingPeriodEnd }).IsUnique();
+        builder.HasIndex(invoice => new { invoice.ApartmentUnitId, invoice.BillingPeriodStart, invoice.BillingPeriodEnd, invoice.Type })
+            .IsUnique().HasFilter("invoice_type <> 'SERVICE_REQUEST'");
 
         builder.Property(invoice => invoice.IssueDate)
             .HasColumnName("issue_date")

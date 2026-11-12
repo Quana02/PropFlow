@@ -1,0 +1,99 @@
+@using System.Globalization
+@using PropFlow.Modules.Communication.Contracts
+
+<aside class="manager-inbox" aria-labelledby="manager-inbox-title">
+    <header class="inbox-heading">
+        <h2 id="manager-inbox-title">Hộp thư của bạn</h2>
+        @if (Conversations is { Total: > 0 } summary)
+        {
+            <span class="inbox-count" aria-label="@($"{summary.Total} hội thoại")">@summary.Total</span>
+        }
+    </header>
+    @if (Loading)
+    {
+        <p class="inbox-empty" role="status">Đang tải hội thoại…</p>
+    }
+    else if (Conversations is { Items.Count: > 0 } inbox)
+    {
+        <ul class="inbox-rows" role="list">
+            @foreach (var item in inbox.Items)
+            {
+                var isSelected = item.Id == SelectedId;
+                var timestamp = item.LastMessage?.CreatedAt ?? item.UpdatedAt;
+                <li @key="item.Id">
+                    <button type="button" class="inbox-row" aria-current="@(isSelected ? "true" : null)"
+                            disabled="@Busy" @onclick="() => OnSelect.InvokeAsync(item.Id)">
+                        <span class="inbox-avatar" aria-hidden="true">@Initials(item.ResidentName)</span>
+                        <span class="inbox-copy">
+                            <span class="inbox-row-heading">
+                                <strong>@item.ResidentName</strong>
+                                <time datetime="@timestamp.ToString("O")">@LocalTime(timestamp, inbox.TimeZoneId)</time>
+                            </span>
+                            <span class="inbox-preview">@Preview(item)</span>
+                            @if (item.LastMessage is not null)
+                            {
+                                <span class="inbox-status">@Status(item.Status)</span>
+                            }
+                        </span>
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <div class="inbox-empty">
+            <strong>Chưa có hội thoại</strong>
+            <p>Bật sẵn sàng nhận chat để tiếp nhận yêu cầu từ cư dân.</p>
+        </div>
+    }
+    @if (TotalPages > 1 || Page > 1)
+    {
+        <TablePagination Page="Page" TotalPages="TotalPages" Busy="@(Busy || Loading)" Label="Phân trang hội thoại"
+                         PageChanged="OnPageChanged">
+            <span>@Conversations?.Total hội thoại</span>
+        </TablePagination>
+    }
+</aside>
+
+@code {
+    [Parameter] public SupportConversationPage? Conversations { get; set; }
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public int Page { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public EventCallback<Guid> OnSelect { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+
+    private int TotalPages => (int)Math.Ceiling((Conversations?.Total ?? 0) / 12d);
+
+    private static string Initials(string name)
+    {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return words.Length == 0 ? "?" : string.Concat(words.TakeLast(2).Select(word => StringInfo.GetNextTextElement(word))).ToUpperInvariant();
+    }
+
+    private static string LocalTime(DateTimeOffset timestamp, string timeZoneId)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        var local = TimeZoneInfo.ConvertTime(timestamp, zone);
+        return local.Date == TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).Date
+            ? local.ToString("HH:mm", CultureInfo.InvariantCulture)
+            : local.ToString("dd/MM", CultureInfo.InvariantCulture);
+    }
+
+    private static string Preview(SupportConversationView item) => item.LastMessage switch
+    {
+        { Kind: "MANAGER" } message => $"Bạn: {message.Text}",
+        { } message => message.Text,
+        _ => Status(item.Status)
+    };
+
+    private static string Status(string status) => status switch
+    {
+        "WAITING" => "Đang chờ Manager",
+        "ACTIVE" => "Đang trao đổi",
+        "CLOSED" => "Đã kết thúc",
+        _ => status
+    };
+}

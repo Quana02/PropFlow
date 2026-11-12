@@ -9,6 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="../Billing.Contracts/PropFlow.Modules.Billing.Contracts.csproj" />
     <ProjectReference Include="../Payments.Contracts/PropFlow.Modules.Payments.Contracts.csproj" />
+    <ProjectReference Include="../PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

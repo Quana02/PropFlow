@@ -12,8 +12,11 @@ export function open(root, dotnet) {
         const below = window.innerHeight - rect.bottom - gap;
         const above = rect.top - gap;
         const placeAbove = below < 180 && above > below;
-        const available = Math.max(96, placeAbove ? above : below);
-        const top = placeAbove ? Math.max(8, rect.top - Math.min(menu.scrollHeight, available) - gap) : rect.bottom + gap;
+        const available = Math.max(0, (placeAbove ? above : below) - 8);
+        const maxHeight = Math.min(18 * parseFloat(getComputedStyle(document.documentElement).fontSize), available);
+        menu.style.maxHeight = `${maxHeight}px`;
+        const height = Math.min(menu.scrollHeight, maxHeight);
+        const top = placeAbove ? Math.max(8, rect.top - height - gap) : rect.bottom + gap;
         const width = Math.min(rect.width, window.innerWidth - 16);
         const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
         root.style.setProperty('--pf-select-top', `${top}px`);

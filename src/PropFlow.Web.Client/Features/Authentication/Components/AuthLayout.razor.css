@@ -15,7 +15,7 @@ aside p{color:#475569;line-height:1.8;font-size:.88rem}.boundary{border-left:2px
 .auth-content{padding:3rem;border-left:1px solid #e2e8f0;min-width:0;display:flex;flex-direction:column;justify-content:center}
 ::deep h2{font-size:1.75rem;font-weight:800;margin:0 0 1rem;outline-offset:.3rem}::deep p{font-size:.88rem;line-height:1.7}
 ::deep form{display:flex;flex-direction:column;gap:.8rem}::deep label{font-size:.82rem;font-weight:700;margin-top:.35rem}::deep input{width:100%;border:1px solid #cbd5e1;border-radius:.65rem;padding:.75rem .9rem;background:#fff;color:#0f172a}::deep input:focus{outline:2px solid #7dd3fc;outline-offset:2px}
-::deep button{background:#0284c7;color:white;padding:.8rem 1rem;border:0;border-radius:.7rem;font-weight:700;cursor:pointer;margin-top:.5rem}::deep button:disabled{opacity:.55;cursor:wait}::deep a{color:#0369a1}
+.auth-content ::deep button:not(.pf-select__option){background:#0284c7;color:white;padding:.8rem 1rem;border:0;border-radius:.7rem;font-weight:700;cursor:pointer;margin-top:.5rem}.auth-content ::deep button:disabled{opacity:.55;cursor:wait}.auth-content ::deep a{color:#0369a1}
 ::deep .auth-links{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:1.3rem;font-size:.83rem}::deep .validation-message,::deep .validation-errors{color:#b91c1c;font-size:.8rem}
 ::deep .feedback{padding:.8rem;border-radius:.6rem;background:#f0f9ff;border:1px solid #bae6fd;margin:1rem 0;font-size:.85rem;overflow-wrap:anywhere}::deep .feedback.error{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
 ::deep dl{display:grid;grid-template-columns:auto 1fr;gap:.6rem;font-size:.85rem}::deep dd{margin:0;overflow-wrap:anywhere}::deep .secondary{background:#e0f2fe;color:#075985}
@@ -29,7 +29,7 @@ aside p{color:#475569;line-height:1.8;font-size:.88rem}.boundary{border-left:2px
 .ambient{position:fixed;z-index:-1;transition:opacity .7s}.ambient-left{top:-12rem;left:-10rem}.ambient-right{right:-10rem;bottom:-12rem}
 .auth-header{height:50px;max-width:none;padding:0 max(24px,calc((100vw - 1280px)/2));background:#ffffffcf;border-bottom:1px solid #e2e8f0;backdrop-filter:blur(12px)}
 .header-actions{display:flex;align-items:center;gap:18px}
-.theme-toggle{margin:0;padding:7px 14px;border:1px solid #bae6fd;border-radius:999px;background:#ffffffdf;color:#0369a1;font-size:.68rem;font-weight:700;letter-spacing:.05em;cursor:pointer;box-shadow:0 2px 6px #0284c71a}
+
 .auth-main{position:relative;z-index:1;min-height:calc(100vh - 50px);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:70px 20px 20px}
 .auth-switch{position:absolute;top:15px;margin:0;background:#ffffffbd}.auth-switch a:first-child{background:transparent;color:#0369a1}.auth-switch a.selected,.auth-switch a:first-child.selected{background:#0284c7;color:#fff;box-shadow:0 3px 8px #0284c744}
 .auth-card{width:min(100%,950px);height:540px;min-height:0;max-width:none;margin:0;background:#ffffff80;border:1px solid #ffffffd9;box-shadow:0 20px 50px #0284c71a,0 4px 12px #0f172a0d;backdrop-filter:blur(18px)}
@@ -59,15 +59,15 @@ aside{background:transparent;justify-content:flex-start;padding-top:116px}.auth-
 ::deep .otp-inputs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:10px 0}::deep .otp-inputs input{text-align:center;height:50px;padding:0;font-size:1.2rem;font-weight:800;letter-spacing:0}::deep .otp-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}::deep .otp-heading span{font-size:.68rem;color:#64748b}::deep .otp-heading strong{color:#0369a1}::deep .otp-resend{margin-top:10px}
 ::deep .password-input-wrap{position:relative}::deep .password-input-wrap input{padding-right:44px}::deep .password-input-wrap button{position:absolute;right:4px;top:0;bottom:0;width:40px;margin:0;padding:0;background:transparent!important;color:#64748b!important;box-shadow:none!important;font-size:.75rem}::deep .password-strength{border:1px solid #dbeafe;border-radius:9px;padding:10px;background:#ffffff99;font-size:.7rem}::deep .strength-bars{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:8px 0}::deep .strength-bars i{height:5px;border-radius:999px;background:#cbd5e1}::deep .strength-bars i.active{background:#10b981}::deep .strength-rules{display:grid;grid-template-columns:1fr 1fr;gap:4px;color:#64748b}::deep .strength-rules .met{color:#047857}
 .auth-corner{position:absolute;width:16px;height:16px;border-color:#38bdf8aa;border-style:solid;pointer-events:none}.top-left{top:12px;left:12px;border-width:2px 0 0 2px}.top-right{top:12px;right:12px;border-width:2px 2px 0 0}.bottom-left{bottom:12px;left:12px;border-width:0 0 2px 2px}.bottom-right{bottom:12px;right:12px;border-width:0 2px 2px 0}
-::deep h2{font-size:1.65rem;letter-spacing:-.025em}::deep form{gap:.7rem}::deep label{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}::deep input{background:#ffffffb3;border-radius:.55rem;padding:.7rem .8rem}::deep button:not(.secondary){border-radius:.55rem;text-transform:uppercase;font-size:.74rem;letter-spacing:.04em;box-shadow:0 5px 12px #0284c72b}::deep .auth-links{border-top:1px solid #e2e8f0;padding-top:1.1rem}
+::deep h2{font-size:1.65rem;letter-spacing:-.025em}::deep form{gap:.7rem}::deep label{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em}::deep input{background:#ffffffb3;border-radius:.55rem;padding:.7rem .8rem}.auth-content ::deep button:not(.secondary):not(.pf-select__option){border-radius:.55rem;text-transform:uppercase;font-size:.74rem;letter-spacing:.04em;box-shadow:0 5px 12px #0284c72b}::deep .auth-links{border-top:1px solid #e2e8f0;padding-top:1.1rem}
 ::deep .auth-form-eyebrow{font-size:.68rem;font-weight:800;letter-spacing:.07em;color:#0369a1}::deep .auth-form-description{margin:-.4rem 0 .8rem;color:#64748b}::deep .auth-password-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:.7rem}::deep .auth-password-heading a{font-size:.68rem;font-weight:800;text-decoration:none}::deep .auth-links span{color:#64748b}
 .auth-forgot-form{padding-top:105px}.auth-forgot-form ::deep .auth-form-description{border-left:2px solid #38bdf8;padding-left:12px;margin:0 0 20px}.auth-forgot-form ::deep form{gap:14px}.auth-forgot-form ::deep form button{margin-top:15px}.auth-forgot-form ::deep .auth-back-link{justify-content:center}
-html.dark .auth-shell{background:#06090e;color:#f8fafc}html.dark .auth-header{background:#0b111ad9;border-color:#00f2ff33}html.dark .auth-card{background:#0b111a99;border-color:#00f2ff55;box-shadow:0 20px 60px #000a,0 0 30px #00f2ff22}html.dark .auth-content{border-color:#00f2ff33}html.dark .auth-switch{background:#0f172acc;border-color:#334155}html.dark .auth-switch a{color:#94a3b8}html.dark .auth-switch a.selected,html.dark .auth-switch a:first-child.selected{background:#00f2ff;color:#041e2a}html.dark .brand,html.dark h1 span{color:#00f2ff}html.dark .brand small,html.dark .home-link,html.dark aside p{color:#cbd5e1}html.dark h1{color:#fff}html.dark .auth-badge{background:#00f2ff1a;border-color:#00f2ff66;color:#00f2ff}html.dark .auth-benefits div{background:#0f172a99;border-color:#00f2ff33}html.dark .auth-benefits strong{color:#00f2ff}html.dark .auth-benefits span{color:#cbd5e1}html.dark .theme-toggle{background:#00f2ff1a;color:#00f2ff;border-color:#00f2ff66}html.dark .auth-content ::deep h2,html.dark .auth-content ::deep label{color:#fff}html.dark .auth-content ::deep input{background:#0f172acc;color:#fff;border-color:#475569}html.dark .auth-content ::deep button:not(.secondary){background:#00f2ff;color:#041e2a}html.dark .auth-content ::deep a{color:#00f2ff}
+html.dark .auth-shell{background:#06090e;color:#f8fafc}html.dark .auth-header{background:#0b111ad9;border-color:#00f2ff33}html.dark .auth-card{background:#0b111a99;border-color:#00f2ff55;box-shadow:0 20px 60px #000a,0 0 30px #00f2ff22}html.dark .auth-content{border-color:#00f2ff33}html.dark .auth-switch{background:#0f172acc;border-color:#334155}html.dark .auth-switch a{color:#94a3b8}html.dark .auth-switch a.selected,html.dark .auth-switch a:first-child.selected{background:#00f2ff;color:#041e2a}html.dark .brand,html.dark h1 span{color:#00f2ff}html.dark .brand small,html.dark .home-link,html.dark aside p{color:#cbd5e1}html.dark h1{color:#fff}html.dark .auth-badge{background:#00f2ff1a;border-color:#00f2ff66;color:#00f2ff}html.dark .auth-benefits div{background:#0f172a99;border-color:#00f2ff33}html.dark .auth-benefits strong{color:#00f2ff}html.dark .auth-benefits span{color:#cbd5e1}html.dark .auth-content ::deep h2,html.dark .auth-content ::deep label{color:#fff}html.dark .auth-content ::deep input{background:#0f172acc;color:#fff;border-color:#475569}html.dark .auth-content ::deep button:not(.secondary):not(.pf-select__option){background:#00f2ff;color:#041e2a}html.dark .auth-content ::deep a{color:#00f2ff}
 html.dark .auth-content{background:#0b111acc}
 html.dark .auth-content ::deep .auth-form-description,html.dark .auth-content ::deep p,html.dark .auth-content ::deep .auth-links span{color:#cbd5e1}
 html.dark .auth-content ::deep .auth-form-eyebrow{color:#67e8f9}
 html.dark .auth-content ::deep input::placeholder{color:#94a3b8}
-@media(max-width:700px){.auth-header{padding:0 16px}.auth-main{justify-content:flex-start;min-height:calc(100vh - 64px);padding:65px 16px 24px}.auth-switch{top:12px}.auth-card{height:auto;min-height:0}aside{padding-top:1rem}.auth-content{background:#ffffff75;padding-top:1.5rem}.auth-benefits{display:none}.theme-toggle{font-size:.6rem;padding:6px 9px}.home-link{font-size:.65rem}.header-actions{gap:8px}.register-mode .auth-card>aside,.register-mode .auth-card>.auth-content{animation:none}.register-mode .auth-card>aside{text-align:left;align-items:flex-start;padding-top:1rem}.register-mode .boundary{border-right:0;border-left:2px solid #38bdf8;padding-right:0;padding-left:1rem}.register-mode .auth-card>.auth-content{padding:1.5rem}.auth-register-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.auth-header{padding:0 16px}.auth-main{justify-content:flex-start;min-height:calc(100vh - 64px);padding:65px 16px 24px}.auth-switch{top:12px}.auth-card{height:auto;min-height:0}aside{padding-top:1rem}.auth-content{background:#ffffff75;padding-top:1.5rem}.auth-benefits{display:none}.home-link{font-size:.65rem}.header-actions{gap:8px}.register-mode .auth-card>aside,.register-mode .auth-card>.auth-content{animation:none}.register-mode .auth-card>aside{text-align:left;align-items:flex-start;padding-top:1rem}.register-mode .boundary{border-right:0;border-left:2px solid #38bdf8;padding-right:0;padding-left:1rem}.register-mode .auth-card>.auth-content{padding:1.5rem}.auth-register-grid{grid-template-columns:1fr}}
 
 /* Keep the two physical panels mounted while their contents change, as in the Stitch swap. */
 .auth-panel{position:relative;min-width:0;min-height:0;z-index:1;transition:transform .8s cubic-bezier(.45,0,.2,1);will-change:transform}
@@ -116,6 +116,14 @@ html.dark .auth-content ::deep .auth-links{border-color:#334155}
 .switch-to-register .auth-panel>*,.switch-to-login .auth-panel>*{animation:none}
 .auth-panel>.auth-view{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .8s cubic-bezier(.45,0,.2,1),transform .8s cubic-bezier(.45,0,.2,1)}
 .auth-panel>.auth-login-welcome,.switch-route .auth-panel>.auth-login-form,.auth-panel>.auth-other{opacity:1;pointer-events:auto;transform:translateX(0)}
+.account-route .auth-card { height: auto; }
+.account-route .auth-panel > .auth-login-welcome,
+.account-route .auth-panel > .auth-other { position: relative; inset: auto; height: auto; }
+.account-route .auth-panel > .auth-other { box-sizing: border-box; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+    .account-route .auth-main { padding: 24px 12px; }
+    .account-route .auth-panel > .auth-other { padding: 16px; }
+}
 .auth-register-form{transform:translateX(-32px)}
 .auth-register-welcome{transform:translateX(32px)}
 .register-mode .auth-panel>.auth-login-welcome{opacity:0;pointer-events:none;transform:translateX(-32px)}
@@ -140,15 +148,28 @@ html.dark .auth-content ::deep .auth-links{border-color:#334155}
     .auth-panel>.auth-content{background:transparent;border-left:0}
     .auth-panel-right>.auth-login-form{justify-content:center;padding-top:0;padding-bottom:0}
     .auth-login-inner{width:100%;flex:none}
-    .auth-panel-left>.auth-register-form ::deep .pf-toast{top:10px;right:10px;width:calc(100% - 20px);min-height:40px;padding:.55rem .7rem;font-size:.72rem}
+
     html.dark .auth-panel>.auth-content{background:transparent}
     html.dark .auth-card::before{background:#00f2ff33}
 }
 
 /* Match the registration select to the compact text fields in every state. */
+::deep .auth-register-grid .pf-select{--admin-surface:#fff;--admin-text:#0f172a;--admin-muted:#64748b;--admin-line:#cbd5e1;--admin-accent:#0284c7}
+html.dark .auth-content ::deep .auth-register-grid .pf-select{--admin-surface:#0f172a;--admin-text:#f8fafc;--admin-muted:#94a3b8;--admin-line:#475569;--admin-accent:#22d3ee}
 ::deep .auth-register-grid .pf-select__trigger{box-sizing:border-box;height:32px;min-height:32px;margin:0;padding:.25rem .55rem;border-radius:.55rem;background:#ffffffb3;color:#0f172a;font-size:.73rem;font-weight:400;text-transform:none;letter-spacing:normal;box-shadow:none}
 ::deep .auth-register-grid .pf-select__value.is-placeholder{color:#94a3b8}
 ::deep .auth-register-grid .pf-select.modified.invalid .pf-select__trigger{border-color:#e11d48;background:#ffffffb3;box-shadow:none}
 html.dark .auth-content ::deep .auth-register-grid .pf-select__trigger{background:#0f172acc!important;color:#fff!important;border-color:#475569;box-shadow:none!important}
 html.dark .auth-content ::deep .auth-register-grid .pf-select__value.is-placeholder{color:#94a3b8}
 html.dark .auth-content ::deep .auth-register-grid .pf-select.modified.invalid .pf-select__trigger{background:#0f172acc!important;border-color:#ef4444!important;color:#fff!important;box-shadow:none!important}
+
+/* On Login the visible form and welcome panel set the card's height. */
+.login-mode .auth-card{height:auto;overflow:visible}
+@media(min-width:701px){
+    .login-mode .auth-panel>.auth-login-welcome,.login-mode .auth-panel>.auth-login-form{position:relative;inset:auto;height:100%;box-sizing:border-box}
+    .login-mode .auth-panel>.auth-login-welcome{padding:clamp(1.5rem,4vw,3rem);justify-content:center}
+    .login-mode .auth-panel-right>.auth-login-form{padding:clamp(1.5rem,4vw,3rem)}
+    .login-mode .auth-panel>.auth-register-form,.login-mode .auth-panel>.auth-register-welcome,.login-mode .auth-panel>.auth-forgot-form{visibility:hidden}
+}
+
+html.dark .auth-content ::deep .feedback{background:#0c2638;border-color:#155e75;color:#e0f2fe}

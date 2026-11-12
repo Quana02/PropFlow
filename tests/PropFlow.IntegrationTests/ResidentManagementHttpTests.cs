@@ -753,10 +753,10 @@ public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : 
     {
         var permissions = role switch
         {
-            "MANAGER" => new[] { SystemPermissionCodes.ManageOperations },
+            "MANAGER" => new[] { SystemPermissionCodes.ManageOperations, SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange },
             "STAFF" => new[] { SystemPermissionCodes.PerformAssignedOperations },
             "ACCOUNTANT" => new[] { SystemPermissionCodes.ManageFinance },
-            "ADMIN" => new[] { SystemPermissionCodes.ManageInternalAccounts, SystemPermissionCodes.ViewAdministrationActivity, SystemPermissionCodes.ViewSystemOverview },
+            "ADMIN" => new[] { SystemPermissionCodes.ManageInternalAccounts, SystemPermissionCodes.ViewAdministrationActivity, SystemPermissionCodes.ViewSystemOverview, SystemPermissionCodes.ManagePaymentDestination },
             "RESIDENT" => new[] { SystemPermissionCodes.UseResidentServices },
             _ => Array.Empty<string>()
         };

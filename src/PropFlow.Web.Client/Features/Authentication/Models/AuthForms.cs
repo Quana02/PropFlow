@@ -73,3 +73,10 @@ public class ProfileForm
     [StringLength(20, ErrorMessage = "Số điện thoại tối đa 20 ký tự.")]
     public string? PhoneNumber { get; set; }
 }
+public class ChangeEmailForm
+{
+    [Required(ErrorMessage = "Nhập email mới."), EmailAddress(ErrorMessage = "Email không hợp lệ."), StringLength(255, ErrorMessage = "Email tối đa 255 ký tự.")]
+    public string NewEmail { get; set; } = "";
+    [Required(ErrorMessage = "Nhập mật khẩu hiện tại."), StringLength(128, ErrorMessage = "Mật khẩu tối đa 128 ký tự.")]
+    public string CurrentPassword { get; set; } = "";
+}

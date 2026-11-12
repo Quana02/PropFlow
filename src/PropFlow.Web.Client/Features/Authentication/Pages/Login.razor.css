@@ -1,0 +1,20 @@
+.login-field-error { margin-top: -.45rem; }
+.login-field-error:empty { display: none; }
+.session-revocation {
+    margin-top: 1rem;
+    padding: .75rem;
+    border: 1px solid #bae6fd;
+    border-radius: .65rem;
+    background: #f0f9ff;
+    color: #173952;
+    overflow-wrap: anywhere;
+}
+.session-revocation-copy { display: flex; align-items: flex-start; gap: .55rem; }
+.session-revocation-copy > span { flex: none; color: #0369a1; font-size: 1.15rem; }
+.session-revocation h3 { margin: 0 0 .2rem; font-size: .85rem; font-weight: 750; }
+.session-revocation p { margin: 0; font-size: .8rem; line-height: 1.5; }
+.session-revocation button.secondary { border: 1px solid #7dd3fc; background: transparent; color: #075985; font-size: .78rem; }
+.session-revocation button.secondary:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
+html.dark .session-revocation { border-color: #155e75; background: #0c2638; color: #e0f2fe; }
+html.dark .session-revocation-copy > span, html.dark .session-revocation button.secondary { color: #7dd3fc; }
+html.dark .session-revocation button.secondary { border-color: #39758f; }

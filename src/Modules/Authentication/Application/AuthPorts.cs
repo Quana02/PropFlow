@@ -2,13 +2,19 @@ using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Modules.Authentication.Domain.Users;
 using PropFlow.Modules.Authentication.Domain.Tokens;
 using PropFlow.Modules.Authentication.Domain.ResidentVerifications;
+using PropFlow.Modules.Authentication.Domain.PrivilegedActions;
 
 namespace PropFlow.Modules.Authentication.Application;
+
+public sealed record ResidentAccountSummary(Guid Id, string Username, string? Email, AccountStatus Status,
+    bool EmailVerified, DateTimeOffset? LockoutUntil);
 
 public interface IAuthStore
 {
     Task<T> SerializedAsync<T>(string key, Func<Task<T>> action, CancellationToken ct);
     Task<UserAccount?> UserAsync(Guid id, CancellationToken ct);
+    Task<UserAccount?> UserForUpdateAsync(Guid id, CancellationToken ct);
+    Task<List<ResidentAccountSummary>> ReadResidentAccountSummariesAsync(Guid[] ids, CancellationToken ct);
     Task<UserAccount?> UsernameAsync(string username, CancellationToken ct);
     Task<UserAccount?> EmailAsync(string email, CancellationToken ct);
     Task<bool> PhoneInUseAsync(string phone, Guid? except, CancellationToken ct);
@@ -21,10 +27,13 @@ public interface IAuthStore
     Task<RefreshToken?> RefreshAsync(string hash, CancellationToken ct);
     Task<RefreshToken?> RefreshByIdAsync(Guid id, CancellationToken ct);
     Task<List<RefreshToken>> SessionsAsync(Guid userId, CancellationToken ct);
+    Task<PrivilegedActionChallenge?> PrivilegedChallengeAsync(Guid id, CancellationToken ct);
+    Task<List<PrivilegedActionChallenge>> PrivilegedChallengesAsync(Guid userId, string purpose, CancellationToken ct);
     void Add(UserAccount value);
     void Add(ResidentVerification value);
     void Add(PasswordResetToken value);
     void Add(RefreshToken value);
+    void Add(PrivilegedActionChallenge value);
     Task SaveAsync(CancellationToken ct);
 }
 
@@ -44,7 +53,12 @@ public interface IAuthSecrets
     bool MatchesBoundOtp(string code, string hash, string binding);
     SessionResponse Issue(AccountResponse user, DateTimeOffset now);
 }
-public interface IAuthEmail { Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct); }
+public interface IAuthEmail
+{
+    Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct);
+    Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct);
+    Task SendEmailChangeCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct);
+}
 public sealed class AuthFailure(int status, string code, string message) : Exception(message)
 {
     public int Status { get; } = status;

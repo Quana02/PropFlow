@@ -13,8 +13,17 @@ public class PropertyAssetsDbContext : DbContext
     }
 
     public DbSet<Building> Buildings => Set<Building>();
+    public DbSet<PropFlow.Shared.Messaging.OutboxEvent> ResidentEvents => Set<PropFlow.Shared.Messaging.OutboxEvent>();
+    public override int SaveChanges(bool acceptAllChangesOnSuccess) {
+        AssetStatusEvents.Capture(this); return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default) {
+        AssetStatusEvents.Capture(this); return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
     public DbSet<Facility> Facilities => Set<Facility>();
+    public DbSet<FacilityType> FacilityTypes => Set<FacilityType>();
     public DbSet<EquipmentEntity> Equipment => Set<EquipmentEntity>();
+    public DbSet<PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType> EquipmentTypes => Set<PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

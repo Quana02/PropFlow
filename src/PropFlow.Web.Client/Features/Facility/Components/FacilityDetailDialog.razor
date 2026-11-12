@@ -97,7 +97,8 @@
                             <p class="text-sm text-rose-700">@EquipmentLoadError</p>
                         </div>
                     }
-                    else if (EquipmentPagedResult?.Items?.Count == 0)
+                    else if (EquipmentPagedResult?.Items?.Count == 0 &&
+                             (EquipmentPagedResult.TotalCount == 0 || EquipmentPagedResult.PageIndex <= EquipmentPagedResult.TotalPages))
                     {
                         <div class="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
                             <span class="material-symbols-outlined text-4xl text-slate-300">devices_other</span>
@@ -161,18 +162,13 @@
                                     </div>
                                 }
                             </div>
-                            @if (EquipmentPagedResult != null && EquipmentPagedResult.TotalPages > 1)
+                            @if (EquipmentPagedResult is not null &&
+                                 (EquipmentPagedResult.TotalPages > 1 || EquipmentPagedResult.PageIndex > EquipmentPagedResult.TotalPages))
                             {
-                                <div class="px-4 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
-                                    <span class="text-xs text-slate-500">Trang @(EquipmentPagedResult?.PageIndex ?? 1) / @(EquipmentPagedResult?.TotalPages ?? 1)</span>
-                                    <div class="flex items-center gap-2">
-                                        @if (EquipmentPagedResult != null)
-                                        {
-                                            <button @onclick="() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex - 1)" disabled="!EquipmentPagedResult.HasPreviousPage" class="px-3 py-1 rounded-lg text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Trước</button>
-                                            <button @onclick="() => ChangeEquipmentPage(EquipmentPagedResult.PageIndex + 1)" disabled="!EquipmentPagedResult.HasNextPage" class="px-3 py-1 rounded-lg text-xs font-medium bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Sau</button>
-                                        }
-                                    </div>
-                                </div>
+                                <TablePagination Page="EquipmentPagedResult.PageIndex" TotalPages="EquipmentPagedResult.TotalPages" Busy="IsLoadingEquipment" Label="Phân trang thiết bị liên quan"
+                                    PageChanged="ChangeEquipmentPage">
+                                    <span>@EquipmentPagedResult.TotalCount thiết bị</span>
+                                </TablePagination>
                             }
                         </div>
                     }
@@ -180,7 +176,7 @@
             </div>
 
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
+                <div class="text-[11px] text-slate-400">Dữ liệu được cập nhật định kỳ khi đang mở</div>
             </div>
         </div>
     </div>
@@ -196,12 +192,19 @@
     private PagedResult<EquipmentModel>? EquipmentPagedResult { get; set; }
     private int EquipmentPageIndex { get; set; } = 1;
     private const int EquipmentPageSize = 10;
+    private FacilityModel? LoadedFacility;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (IsOpen && Facility != null)
+        if (!IsOpen || Facility is null)
         {
-            EquipmentPageIndex = 1; // Reset to first page when opening
+            LoadedFacility = null;
+            return;
+        }
+        if (!ReferenceEquals(Facility, LoadedFacility))
+        {
+            if (LoadedFacility?.Id != Facility.Id) EquipmentPageIndex = 1;
+            LoadedFacility = Facility;
             await LoadEquipmentForFacility();
         }
     }
@@ -225,6 +228,12 @@
             if (result.IsSuccess && result.Data != null)
             {
                 EquipmentPagedResult = result.Data;
+                var lastPage = Math.Max(1, result.Data.TotalPages);
+                if (EquipmentPageIndex > lastPage)
+                {
+                    EquipmentPageIndex = lastPage;
+                    await LoadEquipmentForFacility();
+                }
             }
             else
             {

@@ -24,7 +24,7 @@ public sealed class ResidentRelationshipMutationUxTests
         Assert.Contains("ConfirmEndResidency", source, StringComparison.Ordinal);
         Assert.Contains("ConfirmAddOwnership", source, StringComparison.Ordinal);
         Assert.Contains("ConfirmEndOwnership", source, StringComparison.Ordinal);
-        Assert.Contains("InformationOnly=\"true\"", source, StringComparison.Ordinal);
+        Assert.Contains("Tone=\"DialogTone.Info\"", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -42,7 +42,8 @@ public sealed class ResidentRelationshipMutationUxTests
 
         Assert.DoesNotContain("resident-notice @(actionError?\"error\":\"success\")", source, StringComparison.Ordinal);
         Assert.Contains("ShowToast(\"Đã cập nhật trạng thái cư dân.\")", source, StringComparison.Ordinal);
-        Assert.Contains("DurationMs=\"@toastDuration\"", source, StringComparison.Ordinal);
+        Assert.Contains("Toasts.Notify(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<PropFlowToast", source, StringComparison.Ordinal);
     }
 
     private static string Source(params string[] segments)

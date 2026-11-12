@@ -1,0 +1,257 @@
+@using System.ComponentModel.DataAnnotations
+@using PropFlow.Web.Client.Features.Administration.Models
+@using PropFlow.Web.Client.Features.Administration.Services
+@using PropFlow.Web.Client.Services.Api
+@using PropFlow.Web.Client.Shared.Feedback
+@inject IAdministrationApiClient Api
+@inject ToastService Toasts
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="profile-overlay" popover="manual">
+    <section class="profile-dialog" @ref="dialog" role="dialog" aria-modal="true" aria-labelledby="admin-profile-title" tabindex="-1" @onkeydown="HandleKeyDown">
+        <header>
+            <div>
+                <h2 id="admin-profile-title">Chi tiết tài khoản</h2>
+                <p>Hồ sơ tài khoản Ban quản lý</p>
+            </div>
+            <button class="secondary close-button" type="button" data-autofocus disabled="@saving" aria-label="Đóng chi tiết tài khoản" @onclick="CloseAsync">×</button>
+        </header>
+        <div class="profile-body">
+            @if (loading)
+            {
+                <p class="profile-state" role="status">Đang tải thông tin tài khoản…</p>
+            }
+            else if (account is null)
+            {
+                <div class="profile-state" role="alert">
+                    <p>Chưa tải được thông tin tài khoản.</p>
+                    <button class="secondary" type="button" @onclick="LoadAsync">Thử lại</button>
+                </div>
+            }
+            else
+            {
+                <div class="profile-overview">
+                    <span class="avatar" aria-hidden="true">@Initial(account.DisplayName)</span>
+                    <div>
+                        <strong>@account.DisplayName</strong>
+                        <p>@account.Username</p>
+                        <div class="profile-badges">
+                            <span class="badge">@account.Role</span>
+                            <span class="badge @InternalAccountStatus.Tone(account.Status)">@InternalAccountStatus.Label(account.Status)</span>
+                            <span class="badge">@(account.EmailVerified ? "Email đã xác minh" : "Email chưa xác minh")</span>
+                        </div>
+                    </div>
+                </div>
+                <section class="profile-section" aria-labelledby="admin-profile-sign-in">
+                    <h3 id="admin-profile-sign-in">Thông tin tài khoản</h3>
+                    <dl>
+                        <div><dt>Tên đăng nhập</dt><dd>@account.Username</dd></div>
+                        <div><dt>Email đăng nhập</dt><dd>@(account.Email ?? "Chưa cập nhật")</dd></div>
+                        <div><dt>Vai trò</dt><dd>@account.Role</dd></div>
+                        <div><dt>Trạng thái</dt><dd>@InternalAccountStatus.Label(account.Status)</dd></div>
+                        <div><dt>Xác minh email</dt><dd>@(account.EmailVerified ? "Đã xác minh" : "Chưa xác minh")</dd></div>
+                    </dl>
+                </section>
+                <section class="profile-section" aria-labelledby="admin-profile-contact">
+                    <div class="contact-heading">
+                        <h3 id="admin-profile-contact">Thông tin liên hệ</h3>
+                        @if (editContext is null)
+                        {
+                            <button type="button" class="secondary" @ref="editButton" @onclick="StartEdit">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span> Chỉnh sửa thông tin
+                            </button>
+                        }
+                    </div>
+                    @if (editContext is null)
+                    {
+                        <dl>
+                            <div><dt>Tên hiển thị</dt><dd>@account.DisplayName</dd></div>
+                            <div><dt>Số điện thoại</dt><dd>@(account.PhoneNumber ?? "Chưa cập nhật")</dd></div>
+                        </dl>
+                    }
+                    else
+                    {
+                        <EditForm id="admin-contact-form" EditContext="editContext" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <fieldset class="edit-fields" disabled="@saving">
+                                <div>
+                                    <label for="admin-display-name">Tên hiển thị</label>
+                                    <input id="admin-display-name" maxlength="150" aria-required="true" aria-describedby="admin-display-name-error"
+                                           class="@editContext.FieldCssClass(() => form.DisplayName)" @bind="form.DisplayName" @bind:event="oninput" @bind:after="NameEdited" @ref="nameInput" />
+                                    <div id="admin-display-name-error"><ValidationMessage For="() => form.DisplayName" /></div>
+                                </div>
+                                <div>
+                                    <label for="admin-phone-number">Số điện thoại</label>
+                                    <input id="admin-phone-number" type="tel" maxlength="20" aria-describedby="admin-phone-number-error"
+                                           class="@editContext.FieldCssClass(() => form.PhoneNumber)" @bind="form.PhoneNumber" @bind:event="oninput" @bind:after="PhoneEdited" />
+                                    <div id="admin-phone-number-error"><ValidationMessage For="() => form.PhoneNumber" /></div>
+                                </div>
+                            </fieldset>
+                        </EditForm>
+                    }
+                </section>
+            }
+        </div>
+        <footer>
+            @if (editContext is not null)
+            {
+                <button class="secondary" type="button" disabled="@saving" @onclick="ReturnToOverview">Hủy chỉnh sửa</button>
+                <button class="primary" type="submit" form="admin-contact-form" disabled="@(!CanSave)">@(saving ? "Đang lưu…" : "Lưu thay đổi")</button>
+            }
+            else
+            {
+                <button class="secondary" type="button" @onclick="CloseAsync">Đóng</button>
+            }
+        </footer>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid AccountId { get; set; }
+    [Parameter] public EventCallback<InternalAccountProfile> OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private readonly ToastLifetime lifetime = new();
+    private readonly CancellationTokenSource loadLifetime = new();
+    private InternalAccountProfile? account;
+    private ProfileForm form = new();
+    private EditContext? editContext;
+    private ApiValidationMessages? fieldErrors;
+    private ElementReference dialog, nameInput, editButton;
+    private IJSObjectReference? module;
+    private bool loading, saving, disposed, focusEditor, focusEditButton;
+
+    private static string? NormalizePhone(string? phone) => string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+
+    private bool CanSave => account is not null && editContext is not null && !saving &&
+        !string.IsNullOrWhiteSpace(form.DisplayName) && form.DisplayName.Length <= 150 &&
+        form.PhoneNumber?.Length is not > 20 &&
+        !editContext.GetValidationMessages().Any() &&
+        (form.DisplayName.Trim() != account.DisplayName || NormalizePhone(form.PhoneNumber) != account.PhoneNumber);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js");
+            if (disposed) { await imported.DisposeAsync(); return; }
+            module = imported;
+            await module.InvokeVoidAsync("open", dialog);
+        }
+        if (focusEditor && !disposed)
+        {
+            focusEditor = false;
+            await nameInput.FocusAsync();
+        }
+        if (focusEditButton && !disposed)
+        {
+            focusEditButton = false;
+            await editButton.FocusAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (loading || disposed) return;
+        var feedback = Toasts.BeginOperation(lifetime);
+        loading = true;
+        var ct = loadLifetime.Token;
+        ApiResult<InternalAccountProfile> result;
+        try { result = await Api.GetProfileAsync(AccountId, ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+        if (disposed) return;
+        loading = false;
+        if (result.IsSuccess && result.Data is not null) account = result.Data;
+        else feedback.Publish(() => Toasts.Error(result.Message ?? "Không thể tải thông tin tài khoản."));
+    }
+
+    private void StartEdit()
+    {
+        if (account is null) return;
+        form = new() { DisplayName = account.DisplayName, PhoneNumber = account.PhoneNumber };
+        editContext = new(form);
+        fieldErrors = new(editContext, ("DisplayName", nameof(form.DisplayName)), ("PhoneNumber", nameof(form.PhoneNumber)));
+        focusEditor = true;
+    }
+
+    private void NameEdited() => editContext?.NotifyFieldChanged(FieldIdentifier.Create(() => form.DisplayName));
+    private void PhoneEdited() => editContext?.NotifyFieldChanged(FieldIdentifier.Create(() => form.PhoneNumber));
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave || disposed) return;
+        var feedback = Toasts.BeginOperation(lifetime);
+        saving = true;
+        fieldErrors?.Clear();
+        var result = await Api.UpdateProfileAsync(AccountId, new(form.DisplayName.Trim(), NormalizePhone(form.PhoneNumber)));
+        if (disposed) return;
+        saving = false;
+        if (!feedback.IsCurrent) return;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            account = result.Data;
+            ReturnToOverview();
+            await OnSaved.InvokeAsync(account);
+            feedback.Publish(() => Toasts.Success("Đã cập nhật thông tin tài khoản."));
+        }
+        else
+        {
+            if (result.Code == "phone_conflict" || result.Code == "invalid_profile")
+            {
+                var field = result.Code == "phone_conflict" ? nameof(form.PhoneNumber) : nameof(form.DisplayName);
+                fieldErrors?.Apply(result with { ValidationErrors = new Dictionary<string, string[]> { [field] = [result.Message ?? "Thông tin không hợp lệ."] } });
+            }
+            else fieldErrors?.Apply(result);
+            if (editContext?.GetValidationMessages().Any() != true)
+                feedback.Publish(() => Toasts.Error(result.Message ?? "Không thể cập nhật hồ sơ. Vui lòng thử lại."));
+        }
+    }
+
+    private void EndEdit()
+    {
+        fieldErrors?.Dispose();
+        fieldErrors = null;
+        editContext = null;
+    }
+
+    private void ReturnToOverview()
+    {
+        EndEdit();
+        focusEditButton = true;
+    }
+
+    private Task HandleKeyDown(KeyboardEventArgs args) => args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task CloseAsync()
+    {
+        if (saving || disposed) return;
+        lifetime.Invalidate();
+        if (module is not null) await module.InvokeVoidAsync("close", dialog);
+        await OnClose.InvokeAsync();
+    }
+
+    private static string Initial(string value) => System.Globalization.StringInfo.GetNextTextElement(value.Trim()).ToUpperInvariant();
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        lifetime.Dispose();
+        loadLifetime.Cancel();
+        loadLifetime.Dispose();
+        EndEdit();
+        if (module is null) return;
+        await module.InvokeVoidAsync("close", dialog);
+        await module.DisposeAsync();
+    }
+
+    private sealed class ProfileForm
+    {
+        [Required(ErrorMessage = "Tên hiển thị không được để trống."), StringLength(150, ErrorMessage = "Tên hiển thị tối đa 150 ký tự.")]
+        public string DisplayName { get; set; } = "";
+        [StringLength(20, ErrorMessage = "Số điện thoại tối đa 20 ký tự.")]
+        public string? PhoneNumber { get; set; }
+    }
+}

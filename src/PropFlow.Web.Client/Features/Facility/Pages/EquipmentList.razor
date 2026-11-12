@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/equipment"
 @layout PropFlow.Web.Client.Layout.MainLayout
 @attribute [Authorize(Roles = "MANAGER,STAFF", Policy = AssetPermissions.ViewPolicy)]
@@ -5,6 +6,8 @@
 @using PropFlow.Web.Client.Features.Facility.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using PropFlow.Web.Client.Features.Maintenance.Services
 @using System.ComponentModel.DataAnnotations
 @inject IEquipmentApiClient EquipmentApiClient
 @inject IFacilityApiClient FacilityApiClient
@@ -12,16 +15,16 @@
 @inject NavigationManager Navigation
 @inject IAuthorizationService AuthorizationService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject MaintenanceHubConnectionFactory MaintenanceHubConnectionFactory
 @using PropFlow.Web.Client.Shared.Forms
 @using PropFlow.Web.Client.Shared.Feedback
-@implements IDisposable
+@implements IAsyncDisposable
 
 <PageTitle>Quản Lý Thiết Bị - PropFlow</PageTitle>
 @if (!IsManager)
 {
     <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
 }
-
 
 <div class="fe04-page font-sans text-slate-800 antialiased">
 
@@ -34,7 +37,7 @@
             <div>
                 <div class="flex flex-wrap items-center gap-2.5">
                     <h1 class="text-2xl font-black text-slate-900 tracking-tight">Quản Lý Hồ Sơ và Trạng Thái Thiết Bị</h1>
-                    
+
                 </div>
                 <p class="text-xs text-slate-500 mt-1 max-w-2xl">
                     Theo dõi danh mục máy móc kỹ thuật, phân cấp vị trí theo Cơ sở vật chất cụ thể và cập nhật trạng thái vận hành tức thì.
@@ -81,9 +84,9 @@
                 <span class="text-3xl font-bold font-display text-emerald-600">
                     @(EquipmentSummary?.Active ?? 0)
                 </span>
-                
+
             </div>
-            
+
         </div>
 
         <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-sm transition-all group">
@@ -97,9 +100,9 @@
                 <span class="text-3xl font-bold font-display text-amber-600">
                     @(EquipmentSummary?.UnderMaintenance ?? 0)
                 </span>
-                
+
             </div>
-            
+
         </div>
 
         <div class="fe04-metric-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-sm transition-all group">
@@ -113,23 +116,14 @@
                 <span class="text-3xl font-bold font-display text-rose-600">
                     @((EquipmentSummary?.Inactive ?? 0) + (EquipmentSummary?.OutOfService ?? 0))
                 </span>
-               
+
             </div>
-            
+
         </div>
     </div>
 
     <!-- ===== ALERT NOTIFICATIONS ===== -->
-    @if (!string.IsNullOrEmpty(SuccessMessage))
-    {
-        <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium shadow-sm">
-            <span class="material-symbols-outlined text-emerald-500 text-[20px]">check_circle</span>
-            <span>@SuccessMessage</span>
-            <button class="ml-auto text-emerald-500 hover:text-emerald-700 transition-stitch" @onclick="() => SuccessMessage = null">
-                <span class="material-symbols-outlined text-[18px]">close</span>
-            </button>
-        </div>
-    }
+
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
         <div class="flex items-center gap-3 px-4 py-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium shadow-sm">
@@ -153,30 +147,20 @@
                        @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
             </div>
 
-            <!-- Lọc theo Cơ sở vật chất -->
-            <div class="w-full sm:w-48 relative">
-                <PropFlowSelect Options="FacilityOptions" @bind-Value="FilterFacilityIdString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" />
-            </div>
-
-            <!-- Lọc theo Trạng thái -->
-            <div class="w-full sm:w-48 relative">
-                <PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo trạng thái" />
-            </div>
-
-            <!-- Lọc theo Loại thiết bị -->
-            <div class="w-full sm:w-48 relative">
-                <PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="Filter.EquipmentType" @bind-Value:after="ApplyFilter" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" />
-            </div>
-
-            
+            <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
+                                 OnReset="ResetDraft" OnApply="ApplyDraft">
+                <label>Cơ sở vật chất<PropFlowSelect Options="FacilityOptions" @bind-Value="FilterFacilityIdString" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" /></label>
+                <label>Trạng thái<PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" Variant="Filter" AriaLabel="Lọc theo trạng thái" /></label>
+                <label>Loại thiết bị<PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="EquipmentTypeFilterString" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" /></label>
+            </PropFlowFilterPopover>
         </div>
 
         <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500">
             <span>Hiển thị <b class="text-slate-900">@(PagedResult.Items?.Count ?? 0)</b> trên <b>@PagedResult.TotalCount</b> thiết bị</span>
             <button type="button"
                     class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs"
-                    title="Đặt lại bộ lọc"
-                    @onclick="ResetFilter">
+                    title="Tải lại" aria-label="Tải lại"
+                    @onclick="LoadData" disabled="@IsLoading">
                 <span class="material-symbols-outlined text-base">refresh</span>
             </button>
         </div>
@@ -191,7 +175,8 @@
                 <p class="text-sm text-slate-500 font-medium">Đang tải danh sách thiết bị...</p>
             </div>
         }
-        else if (PagedResult.Items == null || !PagedResult.Items.Any())
+        else if (PagedResult.Items is null || (!PagedResult.Items.Any() &&
+                 (PagedResult.TotalCount == 0 || PagedResult.PageIndex <= PagedResult.TotalPages)))
         {
             <div class="fe04-empty flex flex-col items-center justify-center py-20 gap-4 text-center px-4">
                 <span class="material-symbols-outlined text-[64px] text-slate-300">precision_manufacturing</span>
@@ -239,7 +224,7 @@
                                 </td>
                                 <td class="py-4 px-4">
                                     <span class="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60">
-                                        @(string.IsNullOrEmpty(item.EquipmentType) ? "-" : item.EquipmentType)
+                                        @EquipmentTypeText.Display(item.EquipmentType)
                                     </span>
                                 </td>
                                 <td class="py-4 px-4">
@@ -335,15 +320,6 @@
                                                             </div>
                                                         </button>
                                                         <button type="button"
-                                                                class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-amber-50 text-slate-700 hover:text-amber-800 transition-colors"
-                                                                @onclick="() => ChangeStatus(item, EquipmentStatus.UNDER_MAINTENANCE)">
-                                                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                                                            <div class="text-left">
-                                                                <div class="font-bold">Đang bảo trì</div>
-                                                                
-                                                            </div>
-                                                        </button>
-                                                        <button type="button"
                                                                 class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-rose-50 text-slate-700 hover:text-rose-800 transition-colors"
                                                                 @onclick="() => ChangeStatus(item, EquipmentStatus.INACTIVE)">
                                                             <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
@@ -374,50 +350,15 @@
                 </table>
             </div>
 
-            <!-- PAGINATION -->
-            <div class="p-4 sm:px-6 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-600">
-                <div>
-                    Bản ghi <strong class="text-slate-800">@(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)</strong> -
-                    <strong class="text-slate-800">@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount))</strong>
-                    trong tổng số <strong class="text-slate-800">@PagedResult.TotalCount</strong>
-                </div>
-                <div class="flex items-center gap-1.5 self-center sm:self-auto">
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(1)">
-                        <span class="material-symbols-outlined text-[18px]">first_page</span>
-                    </button>
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasPreviousPage)" @onclick="() => ChangePage(PagedResult.PageIndex - 1)">
-                        <span class="material-symbols-outlined text-[18px]">chevron_left</span>
-                    </button>
-                    @for (int i = 1; i <= PagedResult.TotalPages; i++)
-                    {
-                        var pageNum = i;
-                        @if (pageNum == PagedResult.PageIndex)
-                        {
-                            <button class="w-8 h-8 rounded-lg bg-sky-600 text-white font-bold text-xs shadow-sm flex items-center justify-center">@pageNum</button>
-                        }
-                        else
-                        {
-                            <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-xs transition-stitch flex items-center justify-center"
-                                    @onclick="() => ChangePage(pageNum)">@pageNum</button>
-                        }
+            <TablePagination Page="PagedResult.PageIndex" TotalPages="PagedResult.TotalPages" Busy="IsLoading" Label="Phân trang thiết bị"
+                PageChanged="ChangePage">
+                <span>Bản ghi @(((PagedResult.PageIndex - 1) * PagedResult.PageSize) + 1)–@(Math.Min(PagedResult.PageIndex * PagedResult.PageSize, PagedResult.TotalCount)) / @PagedResult.TotalCount</span>
+            </TablePagination>
                     }
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.PageIndex + 1)">
-                        <span class="material-symbols-outlined text-[18px]">chevron_right</span>
-                    </button>
-                    <button class="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-stitch disabled:opacity-40"
-                            disabled="@(!PagedResult.HasNextPage)" @onclick="() => ChangePage(PagedResult.TotalPages)">
-                        <span class="material-symbols-outlined text-[18px]">last_page</span>
-                    </button>
-                </div>
-            </div>
-        }
     </div>
 
     <!-- ===== STATUS GUIDELINES SECTION ===== -->
-    <section class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 mt-6">
+    <section class="fe04-equipment-legend bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 mt-6">
         <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
             <span class="material-symbols-outlined text-base text-sky-600">verified_user</span>
             <span>Quy chuẩn nhãn trạng thái vận hành thiết bị:</span>
@@ -469,7 +410,7 @@
                     </div>
                     <div>
                         <h3 class="text-lg font-bold font-display text-slate-900">Chi Tiết Thiết Bị</h3>
-                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">Mã: @SelectedEquipmentToEdit.Code</p>
+                        <p class="text-xs text-sky-600 font-mono font-bold mt-0.5">@SelectedEquipmentToEdit.Name · Mã: @SelectedEquipmentToEdit.Code</p>
                     </div>
                 </div>
                 <button @onclick="() => IsDetailOpen = false" class="text-slate-400 hover:text-slate-700 p-2 rounded-xl transition-all">
@@ -516,7 +457,7 @@
                     <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                         <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Phân Loại Kỹ Thuật</dt>
                         <dd class="mt-1.5 text-sm font-semibold text-slate-800">
-                            @(string.IsNullOrEmpty(SelectedEquipmentToEdit.EquipmentType) ? "-" : SelectedEquipmentToEdit.EquipmentType)
+                            @EquipmentTypeText.Display(SelectedEquipmentToEdit.EquipmentType)
                         </dd>
                     </div>
 
@@ -593,7 +534,7 @@
 
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                 <div class="text-[11px] text-slate-400">Dữ liệu hồ sơ gốc đồng bộ thời gian thực</div>
-                
+
             </div>
         </div>
     </div>
@@ -602,7 +543,11 @@
 @if (IsManager && IsFormOpen)
 {
     <div class="fe04-modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-        <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden">
+        <div class="fe04-modal fe04-modal--equipment relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden"
+             role="dialog"
+             aria-modal="@(!IsEquipmentTypeDialogOpen)"
+             aria-hidden="@(IsEquipmentTypeDialogOpen ? "true" : null)"
+             inert="@(IsEquipmentTypeDialogOpen ? "inert" : null)">
             <div class="px-6 py-4.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
@@ -615,7 +560,7 @@
                         <p class="text-xs text-slate-500">Khai báo hồ sơ kỹ thuật, phân cấp nơi đặt và tình trạng thiết bị</p>
                     </div>
                 </div>
-                
+
             </div>
 
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
@@ -624,17 +569,6 @@
                     <p class="text-rose-700 bg-rose-50 border border-rose-200 p-3 rounded-xl text-sm" role="alert">@ErrorMessage</p>
                 }
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                            MÃ THIẾT BỊ <span class="text-rose-500">*</span>
-                        </label>
-                        <input @bind="FormModel.Code" type="text" placeholder="VD: TB-MAYBOM-HIYORI-01"
-                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-mono focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 outline-none transition-all uppercase"
-                               disabled="@(SelectedEquipmentToEdit != null)" />
-                        <p class="text-[11px] text-slate-400">Quy ước: TB-[LOẠI]-[TÊN THIẾT BỊ]-[STT]</p>
-                        @if (!string.IsNullOrWhiteSpace(EquipmentCodeError)) { <p class="text-xs text-rose-600" role="alert">@EquipmentCodeError</p> }
-                    </div>
-
                     <div class="space-y-1.5">
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
                             Tên Thiết Bị <span class="text-rose-500">*</span>
@@ -647,8 +581,14 @@
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-700">
                             Phân Loại Thiết Bị <span class="text-rose-500">*</span>
                         </label>
-                        <div class="relative">
-                            <PropFlowSelect Options="EquipmentTypeCreateOptions" @bind-Value="FormModel.EquipmentType"  />
+                        <div class="flex gap-2">
+                            <div class="relative flex-1 fe04-light-select">
+                                <PropFlowSelect Options="EquipmentTypeCreateOptions" @bind-Value="EquipmentTypeFormString" AriaLabel="Chọn loại thiết bị" />
+                            </div>
+                            @if (IsManager)
+                            {
+                                <button type="button" class="px-3 rounded-xl border border-sky-300 text-sky-700 text-xs font-bold" @ref="EquipmentTypeTrigger" @onclick="OpenEquipmentTypeDialog">+ Thêm loại</button>
+                            }
                         </div>
                     </div>
 
@@ -748,7 +688,7 @@
             </div>
 
             <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3 p-6">
-                <button @onclick="CloseDialog"
+                <button @onclick="CancelEditFeedbackCloseDialog"
                         class="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 text-xs sm:text-sm font-medium transition-all">
                     Hủy Bỏ
                 </button>
@@ -764,37 +704,44 @@
 
 @if (IsSaveConfirmationOpen)
 {
-    <PropFlowConfirmationDialog Title="Xác nhận thao tác" Message="@(SelectedEquipmentToEdit is null ? "Bạn có muốn tạo thiết bị này không?" : "Bạn có muốn cập nhật thiết bị này không?")" ConfirmText="Có" CancelText="Không" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveEquipment" OnCancel="CloseSaveConfirmation" />
+    <PropFlowConfirmationDialog Title="@(SelectedEquipmentToEdit is null ? "Thêm thiết bị?" : "Cập nhật thiết bị?")" Message="Thông tin đã nhập sẽ được lưu vào danh mục thiết bị của chung cư." ConfirmText="Lưu thiết bị" Busy="@IsSaving" BusyText="Đang lưu…" OnConfirm="ConfirmSaveEquipment" OnCancel="CloseSaveConfirmation" />
+}
+
+@if (IsManager && IsEquipmentTypeDialogOpen)
+{
+    <div class="fe04-nested-modal-backdrop fixed inset-0 flex items-center justify-center p-4" @onclick="CloseEquipmentTypeDialog">
+        <section class="fe04-nested-modal w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="equipment-type-dialog-title"
+                 @onclick:stopPropagation="true"
+                 @onkeydown="HandleEquipmentTypeDialogKeyDown"
+                 @onkeydown:stopPropagation="true">
+            <h3 id="equipment-type-dialog-title" class="text-lg font-bold">Thêm loại thiết bị</h3>
+            <label class="mt-4 block text-sm font-medium" for="equipment-type-name">Tên loại</label>
+            <input id="equipment-type-name" @ref="EquipmentTypeNameInput" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" @bind="NewEquipmentType.Name" @onkeydown="HandleEquipmentTypeNameKeyDown" />
+            @if (!string.IsNullOrWhiteSpace(EquipmentTypeDialogError)) { <p class="mt-2 text-sm text-rose-700" role="alert">@EquipmentTypeDialogError</p> }
+            <div class="mt-5 flex justify-end gap-2"><button type="button" class="px-4 py-2" @onclick="CloseEquipmentTypeDialog">Hủy</button><button type="button" @ref="EquipmentTypeSaveButton" disabled="@IsCreatingEquipmentType" class="rounded-xl bg-sky-600 px-4 py-2 text-white" @onclick="CreateEquipmentType" @onkeydown="HandleEquipmentTypeSaveKeyDown">@(IsCreatingEquipmentType ? "Đang lưu..." : "Lưu")</button></div>
+        </section>
+    </div>
 }
 
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime editFeedback = new();
+    private void CancelEditFeedbackCloseDialog() { CloseDialog(); if (!IsFormOpen) editFeedback.Invalidate(); }
+
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+
     private static readonly IReadOnlyList<PropFlowSelectOption> StatusOptions = [
         new("", "Tất cả trạng thái"),
-        new("ACTIVE", "● Đang hoạt động"),
-        new("UNDER_MAINTENANCE", "● Đang bảo trì"),
-        new("INACTIVE", "● Ngừng hoạt động"),
-        new("OUT_OF_SERVICE", "● Ngừng phục vụ")
+        new("ACTIVE", "Đang hoạt động"),
+        new("UNDER_MAINTENANCE", "Đang bảo trì"),
+        new("INACTIVE", "Ngừng hoạt động"),
+        new("OUT_OF_SERVICE", "Ngừng phục vụ")
     ];
 
-    private static readonly IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions = [
-        new("", "Tất cả loại thiết bị"),
-        new("Máy lạnh", "Máy lạnh"),
-        new("Máy phát điện", "Máy phát điện"),
-        new("Thang máy", "Thang máy"),
-        new("Bơm nước", "Bơm nước"),
-        new("Hệ thống điện", "Hệ thống điện"),
-        new("Khác", "Khác")
-    ];
-
-    private static readonly IReadOnlyList<PropFlowSelectOption> EquipmentTypeCreateOptions = [
-        new("", "Chọn phân loại"),
-        new("Máy lạnh", "Máy lạnh"),
-        new("Máy phát điện", "Máy phát điện"),
-        new("Thang máy", "Thang máy"),
-        new("Bơm nước", "Bơm nước"),
-        new("Hệ thống điện", "Hệ thống điện"),
-        new("Khác", "Khác")
-    ];
+    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeFilterOptions => [new("", "Tất cả loại thiết bị"), .. EquipmentTypes.OrderBy(x => EquipmentTypeText.Display(x.Name)).Select(x => new PropFlowSelectOption(x.Id.ToString(), EquipmentTypeText.Display(x.Name)))];
+    private IReadOnlyList<PropFlowSelectOption> EquipmentTypeCreateOptions => [new("", "Chọn phân loại"), .. EquipmentTypes.Where(x => x.IsActive).OrderBy(x => EquipmentTypeText.Display(x.Name)).Select(x => new PropFlowSelectOption(x.Id.ToString(), EquipmentTypeText.Display(x.Name)))];
 
     private IReadOnlyList<PropFlowSelectOption> FacilityOptions =>
         new[] { new PropFlowSelectOption("", "Tất cả CSVT"), new PropFlowSelectOption("building-level", "Thiết bị cấp chung cư") }
@@ -814,8 +761,7 @@
     private bool IsDetailOpen { get; set; }
     private bool IsSaving { get; set; }
     private bool IsSaveConfirmationOpen { get; set; }
-    private string? EquipmentCodeError { get; set; }
-    private string? SuccessMessage { get; set; }
+
     private string? ErrorMessage { get; set; }
     private EquipmentModel? SelectedEquipmentToEdit { get; set; }
     private CreateEquipmentModel FormModel { get; set; } = new();
@@ -824,6 +770,16 @@
     private List<FacilityModel> FacilityList { get; set; } = new();
 
     private bool IsManager { get; set; }
+    private IReadOnlyList<EquipmentTypeModel> EquipmentTypes { get; set; } = [];
+    private bool IsEquipmentTypeDialogOpen { get; set; }
+    private bool IsCreatingEquipmentType { get; set; }
+    private string? EquipmentTypeDialogError { get; set; }
+    private CreateEquipmentTypeModel NewEquipmentType { get; set; } = new();
+    private ElementReference EquipmentTypeTrigger;
+    private ElementReference EquipmentTypeNameInput;
+    private ElementReference EquipmentTypeSaveButton;
+    private bool FocusEquipmentTypeNameInput;
+    private bool RestoreEquipmentTypeTriggerFocus;
     [SupplyParameterFromQuery(Name = "equipmentId")] public Guid? EquipmentId { get; set; }
     private Guid? LoadedEquipmentId;
 
@@ -836,23 +792,24 @@
         }
     }
     private readonly CancellationTokenSource StatusRefreshCancellation = new();
+    private HubConnection? AssetStatusHub;
 
     private string StatusFilterString
     {
-        get => Filter.Status?.ToString() ?? "";
+        get => draftFilter.Status?.ToString() ?? "";
         set
         {
-            Filter.Status = Enum.TryParse<EquipmentStatus>(value, out var s) ? s : null;
+            draftFilter.Status = Enum.TryParse<EquipmentStatus>(value, out var s) ? s : null;
         }
     }
 
     private string FilterFacilityIdString
     {
-        get => Filter.BuildingLevelOnly ? "building-level" : Filter.FacilityId?.ToString() ?? "";
+        get => draftFilter.BuildingLevelOnly ? "building-level" : draftFilter.FacilityId?.ToString() ?? "";
         set
         {
-            Filter.BuildingLevelOnly = value == "building-level";
-            Filter.FacilityId = Guid.TryParse(value, out var g) ? g : null;
+            draftFilter.BuildingLevelOnly = value == "building-level";
+            draftFilter.FacilityId = Guid.TryParse(value, out var g) ? g : null;
         }
     }
 
@@ -862,57 +819,110 @@
         set => FormModel.FacilityId = Guid.TryParse(value, out var g) ? g : null;
     }
 
+    private string EquipmentTypeFilterString
+    {
+        get => draftFilter.EquipmentTypeId?.ToString() ?? "";
+        set => draftFilter.EquipmentTypeId = Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private string EquipmentTypeFormString
+    {
+        get => FormModel.EquipmentTypeId?.ToString() ?? "";
+        set => FormModel.EquipmentTypeId = Guid.TryParse(value, out var id) ? id : null;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
         IsManager = AssetPermissions.CanManage(user);
 
-        await LoadFacilitiesAsync();
-        await Task.WhenAll(LoadData(), LoadSummaryAsync());
-        _ = RefreshStatusAsync(StatusRefreshCancellation.Token);
+        await Task.WhenAll(LoadFacilitiesAsync(), LoadEquipmentTypesAsync(), LoadData(), LoadSummaryAsync());
+        _ = ConnectAssetStatusHubAsync();
     }
 
-    private async Task RefreshStatusAsync(CancellationToken ct)
+    private async Task ConnectAssetStatusHubAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        HubConnection? hub = null;
         try
         {
-            while (await timer.WaitForNextTickAsync(ct))
+            hub = MaintenanceHubConnectionFactory.Create();
+            hub.On("AssetStatusChanged", () => RefreshAssetStatusForRealtimeAsync());
+            hub.Reconnected += _ => InvokeAsync(async () =>
             {
-                if (IsFormOpen || IsDetailOpen || IsSaving) continue;
-                await InvokeAsync(async () =>
-                {
-                    await Task.WhenAll(LoadData(), LoadSummaryAsync());
-                    StateHasChanged();
-                });
-            }
+                await hub.InvokeAsync("JoinAssetStatus", StatusRefreshCancellation.Token);
+                await RefreshAssetStatusForRealtimeAsync();
+            });
+            await hub.StartAsync(StatusRefreshCancellation.Token);
+            await hub.InvokeAsync("JoinAssetStatus", StatusRefreshCancellation.Token);
+            AssetStatusHub = hub;
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (StatusRefreshCancellation.IsCancellationRequested) { }
+        catch
+        {
+            // A realtime outage must not block the FE-04 page.
+            if (AssetStatusHub is null && hub is not null) await hub.DisposeAsync();
+        }
     }
 
-    public void Dispose() => StatusRefreshCancellation.Cancel();
+    private Task RefreshAssetStatusForRealtimeAsync() => InvokeAsync(async () =>
+    {
+        if (StatusRefreshCancellation.IsCancellationRequested || IsFormOpen || IsSaving || IsLoading) return;
+        if (IsDetailOpen)
+            await RefreshDetailAsync(StatusRefreshCancellation.Token);
+        else
+            await Task.WhenAll(LoadData(), LoadSummaryAsync(), LoadFacilitiesAsync());
+        if (!StatusRefreshCancellation.IsCancellationRequested) StateHasChanged();
+    });
 
+    public async ValueTask DisposeAsync()
+    { toastLifetime.Dispose();
+        StatusRefreshCancellation.Cancel();
+        if (AssetStatusHub is not null) await AssetStatusHub.DisposeAsync();
+        StatusRefreshCancellation.Dispose();
+    }
+
+    private async Task RefreshDetailAsync(CancellationToken ct)
+    {
+        if (SelectedEquipmentToEdit is null) return;
+        var id = SelectedEquipmentToEdit.Id;
+        var result = await EquipmentApiClient.GetEquipmentByIdAsync(id, ct);
+        // A response for a closed/replaced dialog must not reopen it or overwrite an edit.
+        if (ct.IsCancellationRequested || !IsDetailOpen || IsFormOpen || SelectedEquipmentToEdit?.Id != id) return;
+        if (result.IsSuccess && result.Data is not null)
+        {
+            SelectedEquipmentToEdit = result.Data;
+        }
+        else
+        {
+            IsDetailOpen = false;
+            SelectedEquipmentToEdit = null;
+            // Refresh the underlying list too, so revoked assignments disappear there.
+            await Task.WhenAll(LoadData(), LoadSummaryAsync());
+            ErrorMessage = result.Message ?? "Không thể tải chi tiết tài sản.";
+        }
+    }
+
+    private int listVersion;
     private async Task LoadData()
     {
+        var version = ++listVersion;
         IsLoading = true;
         ErrorMessage = null;
         PagedResult = new();
         try
         {
             var result = await EquipmentApiClient.GetEquipmentsAsync(Filter);
+            if (version != listVersion) return;
             if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
             else ErrorMessage = result.Message ?? "Không thể tải thiết bị.";
         }
-        finally { IsLoading = false; }
+        finally { if (version == listVersion) IsLoading = false; }
     }
 
     private async Task LoadSummaryAsync()
     {
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
-        if (result.IsSuccess && result.Data is not null)
-        {
-            EquipmentSummary = result.Data.Equipment;
-        }
+        EquipmentSummary = result.IsSuccess ? result.Data?.Equipment : null;
     }
 
     private async Task LoadFacilitiesAsync()
@@ -925,6 +935,7 @@
             var result = await FacilityApiClient.GetFacilitiesAsync(new FacilityFilterModel { PageIndex = pageIndex, PageSize = pageSize });
             if (!result.IsSuccess || result.Data is null)
             {
+                FacilityList = [];
                 ErrorMessage = result.Message ?? "Không thể tải danh sách cơ sở vật chất.";
                 return;
             }
@@ -937,20 +948,37 @@
         FacilityList = facilities;
     }
 
+    private async Task LoadEquipmentTypesAsync()
+    {
+        var result = await EquipmentApiClient.GetEquipmentTypesAsync(activeOnly: false);
+        if (result.IsSuccess && result.Data is not null) EquipmentTypes = result.Data;
+        else ErrorMessage ??= result.Message ?? "Không thể tải loại thiết bị.";
+    }
+
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
     {
         if (e.Key == "Enter") await ApplyFilter();
     }
 
+    private EquipmentFilterModel draftFilter = new();
+    private int ActiveFilterCount => new[] { Filter.FacilityId is not null || Filter.BuildingLevelOnly, Filter.Status is not null, Filter.EquipmentTypeId is not null }.Count(active => active);
+    private void OpenFilters() => draftFilter = new() { FacilityId = Filter.FacilityId, BuildingLevelOnly = Filter.BuildingLevelOnly, Status = Filter.Status, EquipmentTypeId = Filter.EquipmentTypeId };
+    private void ResetDraft() => draftFilter = new();
+    private async Task ApplyDraft()
+    {
+        if ((Filter.FacilityId, Filter.BuildingLevelOnly, Filter.Status, Filter.EquipmentTypeId) == (draftFilter.FacilityId, draftFilter.BuildingLevelOnly, draftFilter.Status, draftFilter.EquipmentTypeId)) return;
+        (Filter.FacilityId, Filter.BuildingLevelOnly, Filter.Status, Filter.EquipmentTypeId) = (draftFilter.FacilityId, draftFilter.BuildingLevelOnly, draftFilter.Status, draftFilter.EquipmentTypeId);
+        await ApplyFilter();
+    }
+
     private async Task ApplyFilter() { Filter.PageIndex = 1; await LoadData(); }
-    private async Task ResetFilter() { Filter = new(); await LoadData(); }
     private async Task ChangePage(int p) { if (p >= 1 && p <= PagedResult.TotalPages) { Filter.PageIndex = p; await LoadData(); } }
 
     private void OpenCreateDialog()
     {
         if (!IsManager) return;
         ErrorMessage = null;
-        SuccessMessage = null;
+
         SelectedEquipmentToEdit = null;
         FormModel = new CreateEquipmentModel();
         IsFormOpen = true;
@@ -974,14 +1002,13 @@
     {
         if (!IsManager) return;
         ErrorMessage = null;
-        SuccessMessage = null;
+
         SelectedEquipmentToEdit = item;
         FormModel = new CreateEquipmentModel
         {
-            Code = item.Code,
             Name = item.Name,
             FacilityId = item.FacilityId,
-            EquipmentType = item.EquipmentType,
+            EquipmentTypeId = item.EquipmentTypeId,
             Manufacturer = item.Manufacturer,
             Model = item.Model,
             SerialNumber = item.SerialNumber,
@@ -999,14 +1026,13 @@
     {
         if (!IsManager) return;
         ErrorMessage = null;
-        EquipmentCodeError = null;
         var validationModel = SelectedEquipmentToEdit == null
             ? (object)FormModel
             : new UpdateEquipmentModel
             {
                 Name = FormModel.Name,
                 FacilityId = FormModel.FacilityId,
-                EquipmentType = FormModel.EquipmentType,
+                EquipmentTypeId = FormModel.EquipmentTypeId,
                 Manufacturer = FormModel.Manufacturer,
                 Model = FormModel.Model,
                 SerialNumber = FormModel.SerialNumber,
@@ -1017,10 +1043,7 @@
             };
         if (!TryValidate(validationModel, out var validationMessage))
         {
-            if (SelectedEquipmentToEdit is null && validationMessage?.Contains("Mã thiết bị", StringComparison.Ordinal) == true)
-                EquipmentCodeError = validationMessage;
-            else
-                ErrorMessage = validationMessage;
+            ErrorMessage = validationMessage;
             return;
         }
         IsSaveConfirmationOpen = true;
@@ -1033,6 +1056,8 @@
 
     private async Task ConfirmSaveEquipment()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime, editFeedback);
+
         if (!IsManager || !IsSaveConfirmationOpen) return;
         IsSaving = true;
         ErrorMessage = null;
@@ -1041,8 +1066,8 @@
             if (SelectedEquipmentToEdit == null)
             {
                 var createResult = await EquipmentApiClient.CreateEquipmentAsync(FormModel);
-                if (!createResult.IsSuccess) { ErrorMessage = createResult.Message; return; }
-                SuccessMessage = $"Đã thêm mới thiết bị '{FormModel.Name}' thành công!";
+                if (!createResult.IsSuccess) { if (createResult.ValidationErrors?.Count > 0) ErrorMessage = createResult.Message; else operationFeedback.Publish(() => Toasts.Error(createResult.Message)); return; }
+                operationFeedback.Publish(() => Toasts.Success($"Đã thêm mới thiết bị '{FormModel.Name}' với mã {createResult.Data?.Code} thành công!"));
             }
             else
             {
@@ -1050,7 +1075,7 @@
                 {
                     Name = FormModel.Name,
                     FacilityId = FormModel.FacilityId,
-                    EquipmentType = FormModel.EquipmentType,
+                    EquipmentTypeId = FormModel.EquipmentTypeId,
                     Manufacturer = FormModel.Manufacturer,
                     Model = FormModel.Model,
                     SerialNumber = FormModel.SerialNumber,
@@ -1060,14 +1085,92 @@
                     Description = FormModel.Description
                 };
                 var updateResult = await EquipmentApiClient.UpdateEquipmentAsync(SelectedEquipmentToEdit.Id, updateModel);
-                if (!updateResult.IsSuccess) { ErrorMessage = updateResult.Message; return; }
-                SuccessMessage = $"Đã cập nhật '{FormModel.Name}' thành công!";
+                if (!updateResult.IsSuccess) { if (updateResult.ValidationErrors?.Count > 0) ErrorMessage = updateResult.Message; else operationFeedback.Publish(() => Toasts.Error(updateResult.Message)); return; }
+                operationFeedback.Publish(() => Toasts.Success($"Đã cập nhật '{FormModel.Name}' thành công!"));
             }
             IsSaveConfirmationOpen = false;
             CloseDialog();
             await Task.WhenAll(LoadData(), LoadSummaryAsync());
         }
         finally { IsSaving = false; }
+    }
+
+    private void OpenEquipmentTypeDialog()
+    {
+        if (!IsManager) return;
+        NewEquipmentType = new();
+        EquipmentTypeDialogError = null;
+        FocusEquipmentTypeNameInput = true;
+        IsEquipmentTypeDialogOpen = true;
+    }
+
+    private void CloseEquipmentTypeDialog()
+    {
+        if (IsCreatingEquipmentType) return;
+        IsEquipmentTypeDialogOpen = false;
+        RestoreEquipmentTypeTriggerFocus = true;
+    }
+
+    private Task HandleEquipmentTypeDialogKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CloseEquipmentTypeDialog();
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleEquipmentTypeNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Tab" && e.ShiftKey) await EquipmentTypeSaveButton.FocusAsync();
+    }
+
+    private async Task HandleEquipmentTypeSaveKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Tab" && !e.ShiftKey) await EquipmentTypeNameInput.FocusAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (FocusEquipmentTypeNameInput && IsEquipmentTypeDialogOpen)
+        {
+            FocusEquipmentTypeNameInput = false;
+            await EquipmentTypeNameInput.FocusAsync();
+        }
+
+        if (RestoreEquipmentTypeTriggerFocus && !IsEquipmentTypeDialogOpen)
+        {
+            RestoreEquipmentTypeTriggerFocus = false;
+            await EquipmentTypeTrigger.FocusAsync();
+        }
+    }
+
+    private async Task CreateEquipmentType()
+    {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
+        if (!IsManager) return;
+        if (!TryValidate(NewEquipmentType, out var validationMessage))
+        {
+            EquipmentTypeDialogError = validationMessage;
+            return;
+        }
+
+        IsCreatingEquipmentType = true;
+        EquipmentTypeDialogError = null;
+        try
+        {
+            var result = await EquipmentApiClient.CreateEquipmentTypeAsync(NewEquipmentType);
+            if (!result.IsSuccess || result.Data is null)
+            {
+                if (result.ValidationErrors?.Count > 0) EquipmentTypeDialogError = result.Message ?? "Không thể tạo loại thiết bị."; else operationFeedback.Publish(() => Toasts.Error(result.Message ?? "Không thể tạo loại thiết bị."));
+                return;
+            }
+
+            EquipmentTypes = EquipmentTypes.Append(result.Data).OrderBy(x => x.Name).ToArray();
+            FormModel.EquipmentTypeId = result.Data.Id;
+            IsEquipmentTypeDialogOpen = false;
+            RestoreEquipmentTypeTriggerFocus = true;
+            operationFeedback.Publish(() => Toasts.Success("Đã tạo loại thiết bị."));
+        }
+        finally { IsCreatingEquipmentType = false; }
     }
 
     private static bool TryValidate(object model, out string? message)
@@ -1085,12 +1188,14 @@
 
     private async Task ChangeStatus(EquipmentModel item, EquipmentStatus newStatus)
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (!IsManager) return;
         OpenStatusDropdownId = null;
-        ErrorMessage = null; SuccessMessage = null;
+        ErrorMessage = null;
         var result = await EquipmentApiClient.SetEquipmentStatusAsync(item.Id, newStatus);
-        if (!result.IsSuccess) { ErrorMessage = result.Message; return; }
+        if (!result.IsSuccess) { if (result.ValidationErrors?.Count > 0) ErrorMessage = result.Message; else operationFeedback.Publish(() => Toasts.Error(result.Message)); return; }
         await Task.WhenAll(LoadData(), LoadSummaryAsync());
-        if (ErrorMessage == null) SuccessMessage = $"Đã đổi trạng thái thành công '{item.Name}'.";
+        if (ErrorMessage == null) operationFeedback.Publish(() => Toasts.Success($"Đã đổi trạng thái thành công '{item.Name}'."));
     }
 }

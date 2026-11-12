@@ -4,5 +4,6 @@ public sealed record AccountAccess(string Role, string[] Permissions);
 public interface IAccountAccess
 {
     Task<AccountAccess?> GetAsync(Guid userId, CancellationToken ct);
+    Task<Guid[]> GetResidentUserIdsAsync(Guid[] userIds, CancellationToken ct);
     Task GrantResidentAsync(Guid userId, DateTimeOffset now, CancellationToken ct);
 }

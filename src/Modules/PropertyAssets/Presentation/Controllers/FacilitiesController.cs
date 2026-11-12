@@ -30,6 +30,30 @@ public class FacilitiesController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("/api/v1/facility-types")]
+    [Authorize(Policy = PropertyAssetsAuthorizationPolicies.View)]
+    public async Task<ActionResult<IReadOnlyList<FacilityTypeDto>>> GetFacilityTypes([FromQuery] bool activeOnly = false, CancellationToken cancellationToken = default) =>
+        Ok(await _facilityService.GetFacilityTypesAsync(activeOnly, cancellationToken));
+
+    [HttpPost("/api/v1/facility-types")]
+    [Authorize(Policy = PropertyAssetsAuthorizationPolicies.Manage)]
+    public async Task<ActionResult<FacilityTypeDto>> CreateFacilityType([FromBody] CreateFacilityTypeCommand command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _facilityService.CreateFacilityTypeAsync(command with { CreatedBy = CurrentUserId() }, cancellationToken);
+            return StatusCode(StatusCodes.Status201Created, result);
+        }
+        catch (FacilityTypeNameConflictException)
+        {
+            return Conflict(Problem(StatusCodes.Status409Conflict, "facility_type_name_conflict", "Xung đột dữ liệu", "Loại cơ sở vật chất này đã tồn tại."));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(Problem(StatusCodes.Status400BadRequest, "invalid_facility_type_data", "Dữ liệu không hợp lệ", ex.Message));
+        }
+    }
+
     /// <summary>
     /// Lấy chi tiết tiện ích - FE-04.3
     /// </summary>
@@ -111,6 +135,10 @@ public class FacilitiesController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(Problem(StatusCodes.Status404NotFound, "facility_not_found", "Không tìm thấy dữ liệu", ex.Message));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(Problem(StatusCodes.Status409Conflict, "invalid_facility_status_transition", "Không thể đổi trạng thái", ex.Message));
         }
     }
 

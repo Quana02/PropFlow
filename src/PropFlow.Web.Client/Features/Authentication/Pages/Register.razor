@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/register"
 @layout PropFlow.Web.Client.Features.Authentication.Components.AuthLayout
 @inject AuthenticationService Auth
@@ -7,11 +9,8 @@
 
 <span class="auth-form-eyebrow">ĐĂNG KÝ TÀI KHOẢN CƯ DÂN</span>
 <h2>Khởi Tạo Tài Khoản</h2>
-<p>Đối chiếu chính xác thông tin trong hồ sơ cư dân để đăng ký.</p>
-@if (!string.IsNullOrWhiteSpace(toastMessage))
-{
-    <PropFlowToast @key="toastVersion" Message="@toastMessage" Severity="@toastSeverity" DurationMs="5000" OnDismiss="DismissToast" />
-}
+<p>Đối chiếu chính xác thông tin trong hồ sơ cư dân để đăng ký. Chỉ chủ sở hữu căn hộ hoặc chủ hộ đang thuê căn hộ chưa có chủ sở hữu được đăng ký. Chủ hộ thuê căn hộ có chủ sở hữu khác và thành viên hộ không sở hữu căn hộ không được tự đăng ký.</p>
+
 <EditForm Model="form" OnValidSubmit="Submit" OnInvalidSubmit="HandleInvalidSubmit"><DataAnnotationsValidator />
     <div class="auth-register-grid">
         <div><label for="reg-name">Họ tên hiển thị</label><div class="auth-field"><span class="material-symbols-outlined auth-field-icon" aria-hidden="true">person</span><InputText id="reg-name" @bind-Value="form.DisplayName" autocomplete="name" placeholder="Họ và tên của bạn" /></div><ValidationMessage For="()=>form.DisplayName" /></div>
@@ -27,14 +26,14 @@
 </EditForm>
 <nav class="auth-links auth-links-register"><a href="/login">← Đã có tài khoản? Đăng nhập</a><a class="auth-resume" href="/registration/resume">Tiếp tục xác minh tài khoản đã đăng ký</a></nav>
 @code {
+    private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
+    public void Dispose() => toastLifetime.Dispose();
+
     private static readonly IReadOnlyList<PropFlowSelectOption> IdentityTypeOptions=[new("CCCD","CCCD"),new("CMND","CMND")];
     private readonly RegistrationForm form = new();
     private bool busy;
     private bool showPassword;
     private bool showConfirmation;
-    private string? toastMessage;
-    private string toastSeverity = "info";
-    private int toastVersion;
 
     private Task SetIdentityType(string value){form.IdentityType=value;return Task.CompletedTask;}
 
@@ -43,13 +42,15 @@
 
     private async Task Submit()
     {
+        var operationFeedback = Toasts.BeginOperation(toastLifetime);
+
         if (busy) return;
 
-        DismissToast();
         busy = true;
         try
         {
             var response = await Auth.RegisterAsync(new(form.Username, form.DisplayName, form.Email, form.Password, form.PhoneNumber, form.IdentityType, form.IdentityNumber));
+            if (!operationFeedback.IsCurrent) return;
             if (response.IsSuccess && response.Data is not null)
             {
                 State.Clear();
@@ -60,11 +61,11 @@
                     return;
                 }
 
-                ShowToast(response.Data.Message, "warning");
+                operationFeedback.Publish(() => ShowToast(response.Data.Message, "warning"));
                 return;
             }
 
-            ShowToast(GetErrorMessage(response), "error");
+            operationFeedback.Publish(() => ShowToast(GetErrorMessage(response), "error"));
         }
         finally
         {
@@ -73,14 +74,7 @@
         }
     }
 
-    private void ShowToast(string message, string severity)
-    {
-        toastMessage = message;
-        toastSeverity = severity;
-        toastVersion++;
-    }
-
-    private void DismissToast() => toastMessage = null;
+    private void ShowToast(string message, string severity) => Toasts.Notify(message, severity);
 
     private static string GetErrorMessage(ApiResult response)
     {

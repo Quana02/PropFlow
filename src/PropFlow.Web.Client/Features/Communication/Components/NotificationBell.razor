@@ -1,0 +1,195 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging
+@using PropFlow.Web.Client.Features.Finance.Services
+@using PropFlow.Web.Client.Features.Resident.Portal.Services
+@using PropFlow.Web.Client.Features.ServiceRequests.Services
+@inject ResidentFinanceNoticeState Notices
+@inject ResidentNotificationConnectionFactory ConnectionFactory
+@inject NavigationManager Navigation
+@inject ILogger<NotificationBell> Logger
+@implements IAsyncDisposable
+
+<div class="notification-bell" @onkeydown="HandleKey">
+    <button type="button" class="notification-trigger" aria-label="@BellLabel" aria-expanded="@open"
+            aria-controls="@(open ? panelId : null)" @ref="trigger" @onclick="ToggleAsync">
+        <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+        @if (Notices.UnreadCount > 0)
+        {
+            <span class="notification-badge" aria-hidden="true">@(Notices.UnreadCount > 99 ? "99+" : Notices.UnreadCount.ToString())</span>
+        }
+    </button>
+    @if (open)
+    {
+        var visibleItems = unreadOnly ? Notices.Items.Where(item => !item.IsRead).ToArray() : Notices.Items;
+        <section class="notification-panel" id="@panelId" aria-labelledby="@($"{panelId}-title")">
+            <header class="notification-header">
+                <div class="notification-heading">
+                    <h2 id="@($"{panelId}-title")">Thông báo</h2>
+                    <button type="button" class="notification-close" aria-label="Đóng thông báo" title="Đóng" @onclick="CloseAsync">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="notification-tools">
+                    <div class="notification-filters" role="group" aria-label="Lọc thông báo">
+                        <button type="button" aria-pressed="@(!unreadOnly)" @onclick="() => unreadOnly = false">Tất cả</button>
+                        <button type="button" aria-pressed="@unreadOnly" @onclick="() => unreadOnly = true">Chưa đọc</button>
+                    </div>
+                    <button type="button" class="notification-read-all" disabled="@(writing || Notices.UnreadCount == 0)" @onclick="ReadAllAsync">
+                        <span class="material-symbols-outlined" aria-hidden="true">done_all</span>
+                        Đánh dấu tất cả đã đọc
+                    </button>
+                </div>
+            </header>
+            <div class="notification-feed">
+                @if (Notices.Error is { } error)
+                {
+                    <div class="notification-error" role="alert">
+                        <p>@error</p>
+                        <button type="button" class="notification-read-all" disabled="@Notices.Loading" @onclick="Notices.ReloadAsync">Thử lại</button>
+                    </div>
+                }
+                @if (visibleItems.Length > 0)
+                {
+                    <ul class="notification-list">
+                        @foreach (var item in visibleItems)
+                        {
+                            var (source, icon) = Source(item.SourceType);
+                            <li @key="item.Id">
+                                <button type="button" class="notification-item @(item.IsRead ? null : "unread")"
+                                        disabled="@writing" @onclick="() => OpenAsync(item)">
+                                    <span class="notification-source-icon material-symbols-outlined" aria-hidden="true">@icon</span>
+                                    <span class="notification-copy">
+                                        <strong>@item.Title</strong>
+                                        <span>@item.Message</span>
+                                        <small>@source · <time datetime="@item.CreatedAt.ToString("O")">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</time></small>
+                                    </span>
+                                    @if (!item.IsRead) { <span class="unread-dot" role="img" aria-label="Chưa đọc"></span> }
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+                else if (Notices.Loading)
+                {
+                    <p class="notification-state" role="status">Đang tải thông báo…</p>
+                }
+                else if (Notices.Error is null)
+                {
+                    <div class="notification-state">
+                        <span class="notification-source-icon material-symbols-outlined" aria-hidden="true">@(unreadOnly ? "done_all" : "notifications_none")</span>
+                        <p>@(unreadOnly ? "Không có thông báo chưa đọc trong danh sách này" : "Bạn chưa có thông báo")</p>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Connect { get; set; } = true;
+
+    private readonly CancellationTokenSource cancellation = new();
+    private RealtimeReconciliationPulse? reconciliation;
+    private HubConnection? connection;
+    private Task? connectionStart;
+    private readonly string panelId = $"notification-panel-{Guid.NewGuid():N}";
+    private ElementReference trigger;
+    private bool open, writing, unreadOnly;
+    private string BellLabel => Notices.UnreadCount == 0 ? "Thông báo" : $"Thông báo, {Notices.UnreadCount} chưa đọc";
+
+    protected override void OnInitialized()
+    {
+        Notices.Changed += Refresh;
+        if (!Connect) return;
+        Notices.Reset();
+        reconciliation = new(() => InvokeAsync(Notices.ReloadAsync));
+        reconciliation.Start();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Connect) connectionStart = Task.WhenAll(StartAsync(), Notices.ReloadAsync());
+        return Task.CompletedTask;
+    }
+
+    private async Task StartAsync()
+    {
+        try
+        {
+            connection = ConnectionFactory.Create();
+            connection.On<ResidentNotice>("FinanceNotificationCreated", notice => InvokeAsync(async () =>
+            {
+                Notices.Receive(notice);
+                await Notices.ReloadAsync();
+            }));
+            connection.Reconnected += _ => InvokeAsync(Notices.ReloadAsync);
+            await ConnectionFactory.StartAsync(connection, cancellation.Token);
+            await Notices.ReloadAsync();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            Logger.LogWarning("Notification realtime startup failed ({ErrorType}).", exception.GetType().Name);
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        open = !open;
+        if (open) await Notices.ReloadAsync();
+    }
+
+    private Task HandleKey(KeyboardEventArgs args) => open && args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task CloseAsync()
+    {
+        open = false;
+        await trigger.FocusAsync(preventScroll: true);
+    }
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task OpenAsync(ResidentNotice item)
+    {
+        if (writing) return;
+        writing = true;
+        try
+        {
+            if (!item.IsRead && !await Notices.ReadAsync(item.Id)) return;
+            if (item.ActionPath is { } path && path.StartsWith("/", StringComparison.Ordinal) &&
+                !path.StartsWith("//", StringComparison.Ordinal) && !path.Contains('\\'))
+            {
+                open = false;
+                Navigation.NavigateTo(path);
+            }
+        }
+        finally { writing = false; }
+    }
+
+    private async Task ReadAllAsync()
+    {
+        if (writing) return;
+        writing = true;
+        try { await Notices.ReadAllAsync(); }
+        finally { writing = false; }
+    }
+
+    private static (string Label, string Icon) Source(string? value) => value switch
+    {
+        "SERVICE_REQUEST" => ("Yêu cầu dịch vụ", "assignment"),
+        "MAINTENANCE" or "ASSET_STATUS" => ("Vận hành tòa nhà", "build"),
+        "COMPLAINT" => ("Phản ánh", "forum"),
+        "INVOICE" or "PAYMENT" => ("Tài chính", "receipt_long"),
+        _ => ("PropFlow", "notifications")
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        Notices.Changed -= Refresh;
+        await cancellation.CancelAsync();
+        if (reconciliation is not null) await reconciliation.DisposeAsync();
+        if (connectionStart is not null) await connectionStart;
+        if (connection is not null) await connection.DisposeAsync();
+        if (Connect) Notices.Reset();
+        cancellation.Dispose();
+    }
+}

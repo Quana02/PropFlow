@@ -1,0 +1,6 @@
+label { display: grid; gap: 8px; min-width: 0; }
+input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+input[aria-invalid="true"] { border-color: #c53030; }
+input:focus-visible { outline: 2px solid #0089bc; outline-offset: 2px; }
+small { font-size: 12px; line-height: 1.4; color: #64748b; }
+.field-error { color: #b91c1c; }

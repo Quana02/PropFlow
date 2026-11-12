@@ -25,6 +25,7 @@ public sealed class ResidentOnboarding(
                 && r.IdentityType != null && r.IdentityType.Trim().ToUpper() == identityType
                 && r.IdentityNumber != null && r.IdentityNumber == normalizedIdentityNumber)
             .Select(r => new { r.Id, r.UserId, r.Status, r.Email, r.PhoneNumber, r.IdentityType, r.IdentityNumber })
+            .OrderBy(r => r.Id)
             .Take(2).ToListAsync(ct);
         if (matches.Count != 1 || matches[0].UserId != null || matches[0].Status != ResidentStatus.ACTIVE) return null;
         var match = matches[0];
@@ -52,19 +53,7 @@ public sealed class ResidentOnboarding(
         DateOnly today,
         CancellationToken ct)
     {
-        var apartment = await db.ResidentApartments.Where(r => r.ResidentId == id && r.Status == ResidencyStatus.ACTIVE
-            && r.StartDate <= today && (r.EndDate == null || r.EndDate >= today))
-            .OrderByDescending(r => r.HouseholdRole == HouseholdRole.HOUSEHOLD_HEAD).ThenBy(r => r.Id).Select(r => (Guid?)r.ApartmentUnitId).FirstOrDefaultAsync(ct);
-        if (apartment is null)
-        {
-            apartment = (await apartmentRelationships.GetOwnershipsAsync([id], ct))
-                .Where(ownership => ownership.StartDate <= today && ownership.EndDate is null)
-                .OrderByDescending(ownership => ownership.StartDate)
-                .ThenBy(ownership => ownership.UnitNumber, StringComparer.Ordinal)
-                .ThenBy(ownership => ownership.Id)
-                .Select(ownership => (Guid?)ownership.ApartmentUnitId)
-                .FirstOrDefault();
-        }
+        var apartment = await new ResidentAccountEligibility(db, apartmentRelationships).EligibleApartmentAsync(id, today, ct);
 
         return apartment is null ? null : new RegistrationResidentCandidate(
             id,

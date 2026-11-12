@@ -15,14 +15,14 @@ Tài liệu này ánh xạ schema hiện hành trong `docs/database/PropFlow.dbm
 
 | Schema | Các bảng | Module sở hữu |
 |---|---|---|
-| `auth` | `users`, `refresh_tokens`, `password_reset_tokens`, `resident_verifications` | Authentication |
+| `auth` | `users`, `refresh_tokens`, `password_reset_tokens`, `resident_verifications`, `privileged_action_challenges` | Authentication |
 | `administration` | `roles`, `permissions`, `role_permissions`, `user_role_assignments`, `user_access_history`, `system_configurations`, `audit_logs` | Administration |
 | `residents` | `residents`, `resident_apartments` (residency type, household role, household-head residency và relationship-to-head) | Residents / FE-02 |
-| `property_assets` | `buildings`, `facilities`, `equipment` | PropertyAssets |
+| `property_assets` | `buildings`, `facility_types`, `facilities`, `equipment` | PropertyAssets |
 | `apartments` | `apartment_unit_types`, `apartment_units`, `apartment_ownerships` | Apartments / FE-03 |
 | `service_requests` | `service_request_categories`, `service_requests`, `service_request_assignments`, `service_request_activities` | ServiceRequests |
 | `complaints` | `complaints`, `complaint_followups`, `complaint_activities` | Complaints |
-| `maintenance` | `maintenance_schedules`, `maintenance_tasks`, `maintenance_assignments`, `maintenance_task_activities`, `maintenance_results` | Maintenance |
+| `maintenance` | `maintenance_schedules`, `maintenance_tasks`, `maintenance_assignments`, `maintenance_task_activities`, `maintenance_results`, `maintenance_result_attachments` | Maintenance |
 | `billing` | `fee_types`, `fee_rate_rules`, `invoices`, `invoice_items`, `invoice_status_history` | Billing |
 | `payments` | `payments`, `payment_status_history` | Payments |
 | `shared` | `idempotency_records`, `outbox_messages` | Shared technical persistence |
@@ -30,7 +30,7 @@ Tài liệu này ánh xạ schema hiện hành trong `docs/database/PropFlow.dbm
 | `ai_recommendation` | `ai_request_recommendations`, `ai_recommendation_reviews` | AiRecommendation |
 | `communication` | `notifications`, `announcements`, `announcement_versions`, `announcement_audiences` | Communication |
 
-Tổng cộng: **46 bảng** trong **14 PostgreSQL schema**. Reporting và AiChatbot hiện không có source-of-truth table riêng trong DBML.
+Reporting và AiChatbot hiện không có source-of-truth table riêng trong DBML.
 
 ## 3. Cấu trúc building scope đã loại bỏ
 
@@ -77,6 +77,8 @@ Consumer module
 11. FE-01 sở hữu account/registration. Authentication chỉ gọi Residents public Contracts; Residents có thể compose current ownership qua Apartments public Contracts. Không module nào truy cập DbContext của module khác.
 
 ## 6. Migration policy
+
+FE-03 bổ sung `default_usable_area_m2 numeric(10,2)`, `default_bedroom_count int`, `default_bathroom_count int` vào `apartments.apartment_unit_types`. Cả ba nullable để giữ nguyên loại cũ chưa có thông số; không backfill số liệu suy đoán. Diện tích khi có dùng giới hạn FE-03 hiện hành >= 25 m²; số phòng >= 0. Manager quản lý loại qua endpoint hiện có. Frontend sao chép defaults khi chọn loại cho căn hộ mới, cho phép sửa thủ công; `apartment_units` tiếp tục lưu thông số thực tế và giữ FK đến loại. Sửa loại không cập nhật các căn hộ đã lưu.
 
 - Giữ historical migrations để EF Core nâng cấp database theo chuỗi; `building_id` trong migration cũ chỉ phản ánh lịch sử schema, không phải khả năng chọn nhiều chung cư của live model.
 - Model snapshot và migration đích phải khớp `PropFlow.dbml` hiện hành.

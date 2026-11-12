@@ -1,0 +1,125 @@
+@using PropFlow.Web.Client.Features.Maintenance.Models
+@using PropFlow.Web.Client.Features.Maintenance.Services
+@inject IMaintenanceApiClient MaintenanceApiClient
+@inject NavigationManager Navigation
+
+<section class="maintenance-overview-card" aria-labelledby="maintenance-overview-heading">
+    <header class="maintenance-overview-header">
+        <span class="maintenance-overview-icon material-symbols-outlined" aria-hidden="true">calendar_month</span>
+        <div>
+            <h2 id="maintenance-overview-heading">Lịch Bảo Trì Định Kỳ</h2>
+            <p>Theo dõi kế hoạch kỹ thuật</p>
+        </div>
+        <a href="/maintenance" class="maintenance-overview-link">Lịch trình <span aria-hidden="true">→</span></a>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="maintenance-overview-state" role="status"><span class="maintenance-overview-spinner" aria-hidden="true"></span>Đang tải dữ liệu bảo trì</div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="maintenance-overview-state is-error" role="alert">
+            <span>@_error</span>
+            <button type="button" @onclick="LoadAsync">Thử lại</button>
+        </div>
+    }
+    else if (_overview is not null)
+    {
+        <div class="maintenance-statistics">
+            <div>
+                <span>Sắp diễn ra</span>
+                <strong>@_overview.UpcomingScheduleCount</strong>
+                <small>đợt / tháng</small>
+            </div>
+            <div>
+                <span>Hoàn thành</span>
+                <strong class="is-completed">@_overview.CompletedTaskCount</strong>
+                <small>công việc / tháng</small>
+            </div>
+        </div>
+
+        @if (_overview.NextSchedule is { } nextSchedule)
+        {
+            <article class="maintenance-next-schedule">
+                <header><span>Kỳ bảo trì kế tiếp</span><time datetime="@nextSchedule.PlannedStartAt.ToString("O")">@FormatDate(nextSchedule.PlannedStartAt)</time></header>
+                <a href="/maintenance" title="Mở lịch bảo trì">@nextSchedule.Title</a>
+            </article>
+        }
+        else
+        {
+            <div class="maintenance-empty-next">Chưa có lịch bảo trì sắp tới.</div>
+        }
+
+        <section class="maintenance-items" aria-labelledby="maintenance-items-heading">
+            <h3 id="maintenance-items-heading">Hạng mục gần đây &amp; sắp tới</h3>
+            @if (_overview.RecentAndUpcomingItems.Count == 0)
+            {
+                <p class="maintenance-empty-items">Chưa có hạng mục bảo trì để hiển thị.</p>
+            }
+            else
+            {
+                @foreach (var item in _overview.RecentAndUpcomingItems)
+                {
+                    <a class="maintenance-item" href="/maintenance">
+                        <div>
+                            <strong>@item.Title</strong>
+                            <time datetime="@item.OccurredAt.ToString("O")">@(item.Type == MaintenanceOverviewItemType.SCHEDULE ? "Dự kiến " : "Hoàn thành ")@FormatDate(item.OccurredAt)</time>
+                        </div>
+                        <span class="maintenance-badge @BadgeClass(item)">@BadgeLabel(item)</span>
+                    </a>
+                }
+            }
+        </section>
+
+        <footer class="maintenance-overview-footer"><span aria-hidden="true"></span>Dữ liệu từ lịch và công việc bảo trì</footer>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string TimeZoneId { get; set; } = "Asia/Ho_Chi_Minh";
+
+    private MaintenanceOverviewModel? _overview;
+    private bool _isLoading = true;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _error = null;
+        try
+        {
+            var result = await MaintenanceApiClient.OverviewAsync();
+            if (result.IsSuccess && result.Data is not null) _overview = result.Data;
+            else _error = result.Message ?? "Không thể tải dữ liệu bảo trì.";
+        }
+        catch
+        {
+            _error = "Không thể kết nối để tải dữ liệu bảo trì.";
+        }
+        finally { _isLoading = false; }
+    }
+
+    private string FormatDate(DateTimeOffset instant)
+    {
+        try { return TimeZoneInfo.ConvertTimeBySystemTimeZoneId(instant, TimeZoneId).ToString("dd/MM/yyyy"); }
+        catch (TimeZoneNotFoundException) { return instant.ToLocalTime().ToString("dd/MM/yyyy"); }
+        catch (InvalidTimeZoneException) { return instant.ToLocalTime().ToString("dd/MM/yyyy"); }
+    }
+
+    private static string BadgeLabel(MaintenanceOverviewItemModel item) => item.Type switch
+    {
+        MaintenanceOverviewItemType.SCHEDULE => "Định kỳ",
+        _ when string.Equals(item.PriorityCode, "HIGH", StringComparison.OrdinalIgnoreCase) => "Ưu tiên cao",
+        _ => "Đã xong"
+    };
+
+    private static string BadgeClass(MaintenanceOverviewItemModel item) => item.Type switch
+    {
+        MaintenanceOverviewItemType.SCHEDULE => "is-schedule",
+        _ when string.Equals(item.PriorityCode, "HIGH", StringComparison.OrdinalIgnoreCase) => "is-high-priority",
+        _ => "is-completed"
+    };
+}

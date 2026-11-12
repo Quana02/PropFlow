@@ -71,8 +71,27 @@ public sealed partial class AuthUseCases
     private async Task DeliverAsync(OutgoingChallenge result, bool recovery, CancellationToken ct)
     {
         if (result.Address != null && result.Code != null)
-            await email.SendCodeAsync(result.Address, result.Code, recovery, policy.OtpMinutes, ct);
+        {
+            try
+            {
+                await email.SendCodeAsync(result.Address, result.Code, recovery, policy.OtpMinutes, ct);
+            }
+            catch when (!recovery)
+            {
+                // Delivery happens after commit. Release this attempt even if the request was cancelled.
+                await CancelRegistrationAsync(result.Response.ChallengeId);
+                throw;
+            }
+        }
     }
+
+    private Task<bool> CancelRegistrationAsync(Guid challengeId) => store.SerializedAsync("registration", async () =>
+    {
+        var challenge = await store.VerificationAsync(challengeId, CancellationToken.None);
+        if (challenge is { Status: VerificationStatus.PENDING, RegistrationUsername: not null })
+            challenge.Cancel(Now);
+        return true;
+    }, CancellationToken.None);
     private OutgoingChallenge CreateRegistrationChallenge(
         string username,
         string displayName,
@@ -95,39 +114,49 @@ public sealed partial class AuthUseCases
     {
         var candidate = await store.VerificationAsync(request.ChallengeId, ct);
         if (candidate == null) throw InvalidChallenge();
-        var success = await store.SerializedAsync("registration", async () =>
+        bool success;
+        try
         {
-            var challenge = (await store.VerificationAsync(request.ChallengeId, ct))!;
-            if (challenge.Status != VerificationStatus.PENDING || challenge.RegistrationUsername == null
-                || challenge.RegistrationDisplayName == null || challenge.RegistrationEmail == null
-                || challenge.RegistrationPasswordHash == null) return false;
-            if (challenge.IsExpiredAt(Now)) { challenge.Expire(Now); return false; }
-            if (challenge.AttemptCount >= policy.OtpAttempts) return false;
-            var eligible = await residents.RevalidateRegistrationCandidateAsync(challenge.ResidentId, Today, ct);
-            if (eligible is null || !secrets.IsOtpBoundTo(challenge.VerificationCodeHash, CandidateBinding(eligible)))
-                throw new AuthFailure(409, "eligibility_changed", RegistrationMismatch);
-            if (!secrets.MatchesBoundOtp(request.Code, challenge.VerificationCodeHash, CandidateBinding(eligible)))
+            success = await store.SerializedAsync("registration", async () =>
             {
-                challenge.RecordFailedAttempt(Now);
-                if (challenge.AttemptCount >= policy.OtpAttempts) challenge.Cancel(Now);
-                return false;
-            }
-            if (await store.UsernameAsync(challenge.RegistrationUsername, ct) != null)
-                throw new AuthFailure(409, "username_conflict", "Tên đăng nhập đã được sử dụng.");
-            if (await store.EmailAsync(challenge.RegistrationEmail, ct) != null)
-                throw new AuthFailure(409, "email_conflict", "Email đã được sử dụng.");
-            var user = new UserAccount(challenge.RegistrationUsername, challenge.RegistrationPasswordHash,
-                challenge.RegistrationDisplayName, Now, challenge.RegistrationEmail);
-            store.Add(user);
-            await store.SaveAsync(ct);
-            if (!await residents.LinkEligibleAsync(eligible, user.Id, Today, Now, ct))
-                throw new AuthFailure(409, "eligibility_changed", RegistrationMismatch);
-            await access.GrantResidentAsync(user.Id, Now, ct);
-            challenge.CompleteRegistration(user.Id, Now);
-            user.MarkEmailVerified(Now);
-            user.Activate(null, Now);
-            return true;
-        }, ct);
+                var challenge = (await store.VerificationAsync(request.ChallengeId, ct))!;
+                if (challenge.Status != VerificationStatus.PENDING || challenge.RegistrationUsername == null
+                    || challenge.RegistrationDisplayName == null || challenge.RegistrationEmail == null
+                    || challenge.RegistrationPasswordHash == null) return false;
+                if (challenge.IsExpiredAt(Now)) { challenge.Expire(Now); return false; }
+                if (challenge.AttemptCount >= policy.OtpAttempts) return false;
+                var eligible = await residents.RevalidateRegistrationCandidateAsync(challenge.ResidentId, Today, ct);
+                if (eligible is null || !secrets.IsOtpBoundTo(challenge.VerificationCodeHash, CandidateBinding(eligible)))
+                    throw new AuthFailure(409, "eligibility_changed", RegistrationMismatch);
+                if (!secrets.MatchesBoundOtp(request.Code, challenge.VerificationCodeHash, CandidateBinding(eligible)))
+                {
+                    challenge.RecordFailedAttempt(Now);
+                    if (challenge.AttemptCount >= policy.OtpAttempts) challenge.Cancel(Now);
+                    return false;
+                }
+                if (await store.UsernameAsync(challenge.RegistrationUsername, ct) != null)
+                    throw new AuthFailure(409, "username_conflict", "Tên đăng nhập đã được sử dụng.");
+                if (await store.EmailAsync(challenge.RegistrationEmail, ct) != null)
+                    throw new AuthFailure(409, "email_conflict", "Email đã được sử dụng.");
+                var user = new UserAccount(challenge.RegistrationUsername, challenge.RegistrationPasswordHash,
+                    challenge.RegistrationDisplayName, Now, challenge.RegistrationEmail);
+                store.Add(user);
+                await store.SaveAsync(ct);
+                if (!await residents.LinkEligibleAsync(eligible, user.Id, Today, Now, ct))
+                    throw new AuthFailure(409, "eligibility_changed", RegistrationMismatch);
+                await access.GrantResidentAsync(user.Id, Now, ct);
+                challenge.CompleteRegistration(user.Id, Now);
+                user.MarkEmailVerified(Now);
+                user.Activate(null, Now);
+                return true;
+            }, ct);
+        }
+        catch (AuthFailure failure) when (failure.Code == "eligibility_changed")
+        {
+            // The account transaction rolled back; persist cancellation separately so retry can use the email.
+            await CancelRegistrationAsync(request.ChallengeId);
+            throw;
+        }
         if (!success) throw InvalidChallenge();
     }
 }

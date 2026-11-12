@@ -11,9 +11,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.27" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.27" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.32" />
     <ProjectReference Include="../Modules/Authentication.Contracts/PropFlow.Modules.Authentication.Contracts.csproj" />
     <ProjectReference Include="../Modules/ServiceRequests.Contracts/PropFlow.Modules.ServiceRequests.Contracts.csproj" />
+    <ProjectReference Include="../Modules/Payments.Contracts/PropFlow.Modules.Payments.Contracts.csproj" />
+    <ProjectReference Include="../Modules/AiChatbot.Contracts/PropFlow.Modules.AiChatbot.Contracts.csproj" />
+    <ProjectReference Include="../Modules/Communication.Contracts/PropFlow.Modules.Communication.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
