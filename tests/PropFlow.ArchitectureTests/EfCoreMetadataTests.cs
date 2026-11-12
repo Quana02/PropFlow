@@ -18,7 +18,6 @@ using PropFlow.Modules.Billing.Domain.Invoices;
 using PropFlow.Modules.Billing.Domain.InvoiceStatusHistories;
 using PropFlow.Modules.Billing.Infrastructure.Persistence;
 using PropFlow.Modules.Communication.Domain.Announcements;
-using PropFlow.Modules.Communication.Domain.EmergencyCalls;
 using PropFlow.Modules.Communication.Domain.Notifications;
 using PropFlow.Modules.Communication.Infrastructure.Persistence;
 using PropFlow.Modules.Payments.Domain.Payments;
@@ -972,23 +971,7 @@ public class EfCoreMetadataTests
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
 
         Assert.Equal("communication", model.GetDefaultSchema());
-        Assert.Equal(11, model.GetEntityTypes().Count());
-        var emergencyEntity = model.FindEntityType(typeof(EmergencyCall));
-        Assert.NotNull(emergencyEntity);
-        Assert.Equal("emergency_calls", emergencyEntity.GetTableName());
-        Assert.Equal("communication", emergencyEntity.GetSchema());
-        Assert.Empty(emergencyEntity.GetForeignKeys());
-        Assert.Contains(emergencyEntity.GetIndexes(), index => index.IsUnique
-            && index.Properties.Select(property => property.Name).SequenceEqual([nameof(EmergencyCall.ResidentUserId)])
-            && index.GetFilter() == "\"Status\" <> 'ENDED'");
-        Assert.Contains(emergencyEntity.GetIndexes(), index => index.IsUnique
-            && index.Properties.Select(property => property.Name).SequenceEqual([nameof(EmergencyCall.ManagerUserId)])
-            && index.GetFilter() == "\"Status\" IN ('CONNECTING','CONNECTED')");
-        var emergencyConnectionEntity = model.FindEntityType(typeof(EmergencyConnection));
-        Assert.NotNull(emergencyConnectionEntity);
-        Assert.Equal("emergency_connections", emergencyConnectionEntity.GetTableName());
-        Assert.Equal("communication", emergencyConnectionEntity.GetSchema());
-        Assert.Empty(emergencyConnectionEntity.GetForeignKeys());
+        Assert.Equal(9, model.GetEntityTypes().Count());
         var emailEntity = model.FindEntityType(typeof(FinanceEmail));
         Assert.NotNull(emailEntity);
         Assert.Equal("finance_emails", emailEntity.GetTableName());

@@ -67,32 +67,32 @@ public sealed class SubmitServiceRequestHandler(
         if (userId == Guid.Empty)
             return Invalid("invalid_user", "Phiên đăng nhập không hợp lệ.");
 
-        var categoryCode = NormalizeOptional(command.CategoryCode);
-        var areaCode = NormalizeOptional(command.ServiceAreaCode);
-        var priorityCode = NormalizeOptional(command.PriorityCode);
+        var categoryCode = command.CategoryCode?.Trim().ToUpperInvariant() ?? string.Empty;
+        var areaCode = command.ServiceAreaCode?.Trim().ToUpperInvariant() ?? string.Empty;
+        var priorityCode = command.PriorityCode?.Trim().ToUpperInvariant() ?? string.Empty;
         var preferredTimeCode = string.IsNullOrWhiteSpace(command.PreferredTimeCode)
             ? null
             : command.PreferredTimeCode.Trim().ToUpperInvariant();
 
-        if (areaCode is not null && !ServiceAreaCodes.Contains(areaCode) && !ServiceRequestAreaCodes.IsCommonArea(areaCode))
+        if (string.IsNullOrWhiteSpace(categoryCode))
+            return Invalid("invalid_category", "Loại dịch vụ không hợp lệ.");
+        if (!ServiceAreaCodes.Contains(areaCode) && !ServiceRequestAreaCodes.IsCommonArea(areaCode))
             return Invalid("invalid_service_area", "Khu vực hỗ trợ không hợp lệ.");
         if (command.FacilityId is { } facilityId &&
             (areaCode != ServiceRequestAreaCodes.CommonArea || assets is null ||
              await assets.GetFacilityAsync(facilityId, ct) is not { Status: "ACTIVE" }))
             return Invalid("invalid_facility", "Tiện ích đã chọn không còn khả dụng. Vui lòng chọn lại.");
-        if (priorityCode is not (null or "NORMAL" or "URGENT"))
+        if (priorityCode is not ("NORMAL" or "URGENT"))
             return Invalid("invalid_priority", "Mức độ ưu tiên không hợp lệ.");
         if (preferredTimeCode is not null && !PreferredTimeCodes.Contains(preferredTimeCode))
             return Invalid("invalid_preferred_time", "Khung giờ mong muốn không hợp lệ.");
 
+        var title = command.Title?.Trim() ?? string.Empty;
         var description = command.Description?.Trim() ?? string.Empty;
+        if (title.Length is < 1 or > 200)
+            return Invalid("invalid_title", "Tiêu đề phải có từ 1 đến 200 ký tự.");
         if (description.Length is < 10 or > 3500)
             return Invalid("invalid_description", "Mô tả phải có từ 10 đến 3500 ký tự.");
-        var title = string.IsNullOrWhiteSpace(command.Title)
-            ? CreateTitle(description)
-            : command.Title.Trim();
-        if (title.Length > 200)
-            return Invalid("invalid_title", "Tiêu đề không được vượt quá 200 ký tự.");
 
         var now = clock.GetUtcNow();
         var today = await CurrentBuildingDateAsync(now, ct);
@@ -108,8 +108,8 @@ public sealed class SubmitServiceRequestHandler(
                 Message: "Tài khoản chưa được liên kết với căn hộ đang cư trú.");
         }
 
-        var categoryId = categoryCode is null ? null : await store.FindActiveCategoryIdAsync(categoryCode, ct);
-        if (categoryCode is not null && !categoryId.HasValue)
+        var categoryId = await store.FindActiveCategoryIdAsync(categoryCode, ct);
+        if (!categoryId.HasValue)
         {
             return new(
                 SubmitServiceRequestOutcome.CategoryUnavailable,
@@ -164,16 +164,4 @@ public sealed class SubmitServiceRequestHandler(
 
     private static SubmitServiceRequestResult Invalid(string code, string message) =>
         new(SubmitServiceRequestOutcome.InvalidInput, ErrorCode: code, Message: message);
-
-    private static string? NormalizeOptional(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
-
-    private static string CreateTitle(string description)
-    {
-        var summary = string.Join(" ", description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        if (summary.Length <= 120) return summary;
-        var end = summary.LastIndexOf(' ', 119, 120);
-        if (end <= 0) end = char.IsHighSurrogate(summary[118]) ? 118 : 119;
-        return summary[..end] + "…";
-    }
 }

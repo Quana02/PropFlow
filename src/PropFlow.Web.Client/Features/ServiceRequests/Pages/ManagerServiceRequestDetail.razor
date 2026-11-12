@@ -37,17 +37,42 @@
     @if (detail?.AdditionalCostConsent is { } consent) { <section class="cost-consent-summary" role="status"><strong>Chi phí phát sinh: @Money(consent.Amount)</strong><p>@consent.Note</p><p>@(consent.Status == "PENDING" ? "Đang chờ cư dân xác nhận. Staff chưa được tiếp tục và Manager chưa được nghiệm thu." : consent.Status == "ACCEPTED" ? "Cư dân đã đồng ý chi phí phát sinh." : "Cư dân từ chối chi phí; yêu cầu đã được tự động từ chối.")</p></section> }
     <section class="signal-strip" aria-label="Tóm tắt xử lý">
         <article><span class="signal-icon sky"><span class="material-symbols-outlined">schedule</span></span><div><small>Thời gian từ khi gửi</small><strong>@ElapsedLabel()</strong></div></article>
+        <article><span class="signal-icon amber"><span class="material-symbols-outlined">priority_high</span></span><div><small>Mức ưu tiên</small><strong>@PriorityLabel(detail?.PriorityCode)</strong></div></article>
         <article><span class="signal-icon emerald"><span class="material-symbols-outlined">engineering</span></span><div><small>Nhân sự phụ trách</small><strong>@AssignedStaffName()</strong></div></article>
         <article><span class="signal-icon violet"><span class="material-symbols-outlined">build_circle</span></span><div><small>Liên kết bảo trì</small><strong>@(detail?.AiInsight?.MaintenanceRecommended == true ? "AI đề xuất bảo trì" : "Chưa có đề xuất")</strong></div></article>
     </section>
 
     <div class="request-workspace">
         <div class="request-main-column">
-            @if (detail is { } loadedRequest && loadedRequest.Id == Id)
-            {
-                <PropFlow.Web.Client.Features.ServiceRequests.Components.ManagerRequestOverview @key="loadedRequest.Id"
-                    Request="loadedRequest" RequestChanged="OnParametersSetAsync" />
-            }
+            <section class="glass-card request-overview" aria-labelledby="request-information-title">
+                <header class="card-header">
+                    <div class="card-heading">
+                        <span class="card-icon"><span class="material-symbols-outlined">assignment</span></span>
+                        <div><h2 id="request-information-title">Thông tin yêu cầu</h2><p>Dữ liệu cư dân cung cấp tại thời điểm gửi phiếu</p></div>
+                    </div>
+                    <span class="classification-chip">@(detail?.CategoryCode ?? "CHƯA PHÂN LOẠI")</span>
+                </header>
+
+                <div class="request-title-block">
+                    <small>Tiêu đề yêu cầu</small>
+                    <strong>@(detail?.Title ?? "Đang tải dữ liệu yêu cầu…")</strong>
+                    <span><span class="material-symbols-outlined">location_on</span>@LocationLabel()</span>
+                </div>
+
+                <dl class="fact-grid">
+                    <div><dt>Hạng mục dịch vụ</dt><dd>@(detail?.CategoryName ?? "Chưa phân loại")</dd></div>
+                    <div><dt>Cư dân gửi yêu cầu</dt><dd>@(detail?.ResidentName ?? "Chưa xác định")</dd></div>
+                    <div><dt>Thời gian tiếp nhận</dt><dd>@SubmittedLabel()</dd></div>
+                    <div><dt>Khung giờ thuận tiện</dt><dd>@PreferredTimeLabel()</dd></div>
+                    <div><dt>Thiết bị liên quan</dt><dd>@(detail?.Equipment?.Name ?? "Không có")</dd></div>
+                    <div><dt>Kênh tiếp nhận</dt><dd>Resident Portal</dd></div>
+                </dl>
+
+                <div class="description-block">
+                    <div><span class="material-symbols-outlined">subject</span><strong>Mô tả hiện trạng</strong></div>
+                    <p>@(detail?.Description ?? "Đang tải mô tả…")</p>
+                </div>
+            </section>
 
             <section class="glass-card resident-card" aria-labelledby="resident-context-title">
                 <header class="card-header">
@@ -505,6 +530,8 @@
     private static string ResultText(PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem activity) =>
         activity.WorkResult ?? activity.Detail ?? StatusTransition(activity.FromStatus, activity.ToStatus);
     private string LocationLabel() => detail?.ApartmentUnitNumber is null ? "Chưa gắn căn hộ" : $"{detail.ApartmentUnitNumber} · Tầng {detail.FloorNumber}";
+    private string SubmittedLabel() => detail is null ? "Đang tải…" : detail.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
+    private string PreferredTimeLabel() => detail?.PreferredDate is null ? (detail?.PreferredTimeCode ?? "Không yêu cầu") : $"{detail.PreferredDate:dd/MM/yyyy} · {detail.PreferredTimeCode ?? "Linh hoạt"}";
     private string ElapsedLabel()
     {
         if (detail is null) return "Đang tải…";

@@ -7,12 +7,6 @@ public interface IManagerServiceRequestApiClient
 {
     Task<ApiResult<ManagerServiceRequestListResponse>> ListAsync(ManagerServiceRequestListQuery query, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> GetAsync(Guid id, CancellationToken ct = default);
-    Task<ApiResult<ManagerServiceRequestClassificationView>> ClassificationAsync(Guid id, CancellationToken ct = default);
-    Task<ApiResult<ManagerServiceRequestClassificationView>> AnalyzeClassificationAsync(Guid id, CancellationToken ct = default);
-    Task<ApiResult<ManagerServiceRequestClassificationView>> ReviewClassificationAsync(Guid id, ReviewManagerServiceRequestClassification request, CancellationToken ct = default);
-    Task<ApiResult<ManagerServiceRequestRecommendationView>> RecommendationAsync(Guid id, CancellationToken ct = default);
-    Task<ApiResult<ManagerServiceRequestRecommendationView>> AnalyzeRecommendationAsync(Guid id, CancellationToken ct = default);
-    Task<ApiResult<ManagerServiceRequestRecommendationView>> ReviewRecommendationAsync(Guid id, ReviewManagerServiceRequestRecommendation request, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> ReviewAsync(Guid id, ReviewManagerServiceRequestRequest request, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<ServiceRequestMaintenanceReference>>> SearchLinkCandidatesAsync(string? search, int limit = 20, CancellationToken ct = default);
     Task<ApiResult<ManagerPropertyContextOptionsResponse>> PropertyContextOptionsAsync(Guid id, CancellationToken ct = default);
@@ -40,24 +34,6 @@ public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) :
 
     public Task<ApiResult<ManagerServiceRequestDetailResponse>> GetAsync(Guid id, CancellationToken ct = default) =>
         api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Get, $"api/v1/manager/service-requests/{id}", ct: ct);
-
-    public Task<ApiResult<ManagerServiceRequestClassificationView>> ClassificationAsync(Guid id, CancellationToken ct = default) =>
-        api.SendAsync<ManagerServiceRequestClassificationView>(HttpMethod.Get, $"api/v1/manager/service-requests/{id}/classification", ct: ct);
-
-    public Task<ApiResult<ManagerServiceRequestClassificationView>> AnalyzeClassificationAsync(Guid id, CancellationToken ct = default) =>
-        api.SendAsync<ManagerServiceRequestClassificationView>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/classification", ct: ct);
-
-    public Task<ApiResult<ManagerServiceRequestClassificationView>> ReviewClassificationAsync(Guid id, ReviewManagerServiceRequestClassification request, CancellationToken ct = default) =>
-        api.SendAsync<ManagerServiceRequestClassificationView>(HttpMethod.Put, $"api/v1/manager/service-requests/{id}/classification/review", request, ct: ct);
-
-    public Task<ApiResult<ManagerServiceRequestRecommendationView>> RecommendationAsync(Guid id, CancellationToken ct = default) =>
-        api.SendAsync<ManagerServiceRequestRecommendationView>(HttpMethod.Get, $"api/v1/manager/service-requests/{id}/recommendation", ct: ct);
-
-    public Task<ApiResult<ManagerServiceRequestRecommendationView>> AnalyzeRecommendationAsync(Guid id, CancellationToken ct = default) =>
-        api.SendAsync<ManagerServiceRequestRecommendationView>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/recommendation", ct: ct);
-
-    public Task<ApiResult<ManagerServiceRequestRecommendationView>> ReviewRecommendationAsync(Guid id, ReviewManagerServiceRequestRecommendation request, CancellationToken ct = default) =>
-        api.SendAsync<ManagerServiceRequestRecommendationView>(HttpMethod.Put, $"api/v1/manager/service-requests/{id}/recommendation/review", request, ct: ct);
 
     public Task<ApiResult<ManagerServiceRequestDetailResponse>> ReviewAsync(Guid id, ReviewManagerServiceRequestRequest request, CancellationToken ct = default) =>
         api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Post, $"api/v1/manager/service-requests/{id}/review", request, ct: ct);

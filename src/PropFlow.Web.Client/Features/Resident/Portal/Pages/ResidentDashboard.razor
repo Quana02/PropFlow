@@ -1,5 +1,4 @@
 @page "/resident"
-@inject PropFlow.Web.Client.Features.Communication.EmergencyCalls.EmergencyCallClient EmergencyCalls
 @attribute [Authorize(Roles = "RESIDENT")]
 @layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
 @inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
@@ -92,9 +91,8 @@
 
             <article class="resident-dashboard-card glass-panel" data-purpose="services-catalog-card">
                 <div>
-                    <header class="card-heading"><span><h2>Dịch vụ cư dân</h2><small>Gửi yêu cầu, thanh toán và liên hệ</small></span><em class="badge badge-neutral">@(ServiceCatalog.Count + 1) mục</em></header>
+                    <header class="card-heading"><span><h2>Danh mục dịch vụ căn hộ</h2><small>Tiện ích cư dân 1 chạm</small></span><em class="badge badge-neutral">8 Dịch vụ</em></header>
                     <div class="resident-service-grid">
-                        <button class="service-btn emergency-service-button" type="button" @onclick="EmergencyCalls.StartAsync" disabled="@EmergencyCalls.Busy"><span class="service-icon rose material-symbols-outlined" aria-hidden="true">emergency</span><strong>Khẩn cấp</strong><small>Gọi thoại với BQL</small></button>
                         @foreach (var service in ServiceCatalog)
                         {
                             <button class="service-btn glass-inner" type="button" @onclick="() => OpenSearchResult(service)"><span class="service-icon @service.Accent">@service.Icon</span><strong>@service.ShortTitle</strong></button>
@@ -204,7 +202,12 @@
 
     private static readonly IReadOnlyList<ResidentServiceSearchItem> ServiceCatalog =
     [
-        new("OTHER", "Yêu cầu dịch vụ", "Yêu cầu dịch vụ", "Mô tả nhu cầu để Ban quản lý tiếp nhận và điều phối", "📋", "sky", ["sửa chữa", "hỏng", "điện", "nước", "vệ sinh", "dịch vụ", "yêu cầu", "thi công", "chuyển đồ"]),
+        new("REPAIR", "Sửa chữa kỹ thuật", "Sửa chữa", "Điện, nước và thiết bị trong căn hộ", "🔧", "sky", ["hỏng", "điện", "nước", "vòi", "ống", "kỹ thuật"]),
+        new("CLEANING", "Vệ sinh định kỳ", "Vệ sinh", "Vệ sinh căn hộ và khu vực sinh hoạt", "🧹", "green", ["dọn dẹp", "lau dọn", "làm sạch"]),
+        new("VISITOR", "Khách thăm căn hộ", "Khách thăm", "Đăng ký khách ra vào tòa nhà", "🛡️", "indigo", ["khách", "ra vào", "bảo vệ", "an ninh"]),
+        new("VEHICLE", "Đăng ký thẻ xe", "Đăng ký xe", "Đăng ký phương tiện và thẻ gửi xe", "🚗", "amber", ["xe", "ô tô", "xe máy", "bãi xe", "thẻ xe"]),
+        new("MOVING", "Chuyển đồ / Chuyển nhà", "Chuyển đồ", "Đăng ký vận chuyển đồ qua tòa nhà", "📦", "purple", ["chuyển nhà", "vận chuyển", "thang hàng"]),
+        new("CONSTRUCTION", "Đăng ký thi công nội thất", "Thi công", "Đăng ký sửa chữa và thi công căn hộ", "🔨", "rose", ["nội thất", "cải tạo", "khoan", "xây dựng"]),
         new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "💳", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
         new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"])
     ];
