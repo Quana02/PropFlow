@@ -103,26 +103,29 @@
         <div class="smt-filterbar">
             <div class="smt-search-wrap">
                 <svg class="smt-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                <input type="text" class="smt-search" @bind="Filter.SearchKeyword" @bind:event="oninput" placeholder="Tìm kiếm theo mã hoặc tiêu đề công việc..." />
+                <input type="text" class="smt-search" @bind="taskSearch" @bind:event="oninput" @onkeydown="TaskSearchKey" placeholder="Tìm kiếm theo mã hoặc tiêu đề công việc..." />
             </div>
-            <PropFlowSelect Options="MyTaskStatusOptions" @bind-Value="FilterStatus" Variant="Filter" AriaLabel="Trạng thái công việc" />
-            <input class="smt-select" @bind="Filter.PriorityCode" placeholder="Tất cả ưu tiên" />
-            <button type="button" class="smt-filter-btn" @onclick="Load">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-                Lọc
-            </button>
+            <PropFlowFilterPopover ActiveCount="@TaskFilterCount" Disabled="@Loading" OnOpen="OpenTaskFilters"
+                                 OnReset="ResetTaskDraft" OnApply="ApplyTaskDraft">
+                <label>Trạng thái<PropFlowSelect Options="MyTaskStatusOptions" @bind-Value="FilterStatus" Variant="Filter" AriaLabel="Trạng thái công việc" /></label>
+                <label>Mức ưu tiên<input @bind="taskDraft.PriorityCode" placeholder="Tất cả ưu tiên" /></label>
+            </PropFlowFilterPopover>
+            <button type="button" class="smt-filter-btn" @onclick="SearchTasks" disabled="@Loading">Tìm kiếm</button>
         </div>
         }
 
         @if (HistoryMode)
         {
             <div class="smt-filterbar smt-history-filterbar">
-                <div class="smt-search-wrap"><input class="smt-search" @bind="HistoryFilter.SearchKeyword" placeholder="Tìm theo mã hoặc tên công việc..." /></div>
-                <PropFlowSelect Options="HistoryStatusOptions" @bind-Value="HistoryStatus" Variant="Filter" AriaLabel="Trạng thái lịch sử" />
-                <PropFlowSelect Options="HistoryFacilityOptions" @bind-Value="HistoryFacilityId" Variant="Filter" AriaLabel="Cơ sở vật chất lịch sử" Searchable="true" />
-                <PropFlowSelect Options="HistoryEquipmentOptions" @bind-Value="HistoryEquipmentId" Variant="Filter" AriaLabel="Thiết bị lịch sử" Searchable="true" />
-                <PropFlowSelect Options="HistorySortOptions" @bind-Value="HistorySort" Variant="Filter" AriaLabel="Sắp xếp lịch sử" />
-                <button type="button" class="smt-filter-btn" @onclick="ApplyHistoryFilters">Lọc</button>
+                <div class="smt-search-wrap"><input class="smt-search" @bind="historySearch" @bind:event="oninput" @onkeydown="HistorySearchKey" placeholder="Tìm theo mã hoặc tên công việc..." /></div>
+                <PropFlowSelect Options="HistorySortOptions" @bind-Value="HistorySort" @bind-Value:after="ApplyHistoryFilters" Variant="Filter" AriaLabel="Sắp xếp lịch sử" />
+                <PropFlowFilterPopover ActiveCount="@HistoryFilterCount" Disabled="@HistoryLoading" OnOpen="OpenHistoryFilters"
+                                     OnReset="ResetHistoryDraft" OnApply="ApplyHistoryDraft">
+                    <label>Trạng thái<PropFlowSelect Options="HistoryStatusOptions" @bind-Value="HistoryStatus" Variant="Filter" AriaLabel="Trạng thái lịch sử" /></label>
+                    <label>Cơ sở vật chất<PropFlowSelect Options="HistoryFacilityOptions" @bind-Value="HistoryFacilityId" Variant="Filter" AriaLabel="Cơ sở vật chất lịch sử" Searchable="true" /></label>
+                    <label>Thiết bị<PropFlowSelect Options="HistoryEquipmentOptions" @bind-Value="HistoryEquipmentId" Variant="Filter" AriaLabel="Thiết bị lịch sử" Searchable="true" /></label>
+                </PropFlowFilterPopover>
+                <button type="button" class="smt-filter-btn" @onclick="SearchHistory" disabled="@HistoryLoading">Tìm kiếm</button>
             </div>
         }
 
@@ -503,26 +506,26 @@
 
     private string FilterStatus
     {
-        get => Filter.Status?.ToString() ?? string.Empty;
-        set => Filter.Status = Enum.TryParse<MaintenanceTaskStatus>(value, out var status) ? status : null;
+        get => taskDraft.Status?.ToString() ?? string.Empty;
+        set => taskDraft.Status = Enum.TryParse<MaintenanceTaskStatus>(value, out var status) ? status : null;
     }
 
     private string HistoryStatus
     {
-        get => HistoryFilter.Status?.ToString() ?? string.Empty;
-        set => HistoryFilter.Status = Enum.TryParse<MaintenanceTaskStatus>(value, out var status) ? status : null;
+        get => historyDraft.Status?.ToString() ?? string.Empty;
+        set => historyDraft.Status = Enum.TryParse<MaintenanceTaskStatus>(value, out var status) ? status : null;
     }
 
     private string HistoryFacilityId
     {
-        get => HistoryFilter.FacilityId?.ToString() ?? string.Empty;
-        set => HistoryFilter.FacilityId = Guid.TryParse(value, out var id) ? id : null;
+        get => historyDraft.FacilityId?.ToString() ?? string.Empty;
+        set => historyDraft.FacilityId = Guid.TryParse(value, out var id) ? id : null;
     }
 
     private string HistoryEquipmentId
     {
-        get => HistoryFilter.EquipmentId?.ToString() ?? string.Empty;
-        set => HistoryFilter.EquipmentId = Guid.TryParse(value, out var id) ? id : null;
+        get => historyDraft.EquipmentId?.ToString() ?? string.Empty;
+        set => historyDraft.EquipmentId = Guid.TryParse(value, out var id) ? id : null;
     }
 
     private string HistorySort
@@ -617,11 +620,60 @@
         Done = d.Result.Data?.TotalCount ?? 0;
     }
 
+    private MyMaintenanceTaskFilterModel taskDraft = new();
+    private MaintenanceHistoryFilterModel historyDraft = new();
+    private string? taskSearch, historySearch;
+    private int taskListVersion, historyListVersion;
+    private int TaskFilterCount => (Filter.Status is null ? 0 : 1) + (string.IsNullOrWhiteSpace(Filter.PriorityCode) ? 0 : 1);
+    private int HistoryFilterCount => new[] { HistoryFilter.Status.HasValue, HistoryFilter.FacilityId.HasValue, HistoryFilter.EquipmentId.HasValue }.Count(active => active);
+
+    private void OpenTaskFilters() => taskDraft = new() { Status = Filter.Status, PriorityCode = Filter.PriorityCode };
+    private void ResetTaskDraft() => taskDraft = new();
+    private async Task ApplyTaskDraft()
+    {
+        var next = (taskDraft.Status, Normalize(taskDraft.PriorityCode));
+        if ((Filter.Status, Filter.PriorityCode) == next) return;
+        (Filter.Status, Filter.PriorityCode) = next;
+        Filter.PageIndex = 1;
+        await Load();
+    }
+
+    private void OpenHistoryFilters() => historyDraft = new() { Status = HistoryFilter.Status, FacilityId = HistoryFilter.FacilityId, EquipmentId = HistoryFilter.EquipmentId };
+    private void ResetHistoryDraft() => historyDraft = new();
+    private async Task ApplyHistoryDraft()
+    {
+        var next = (historyDraft.Status, historyDraft.FacilityId, historyDraft.EquipmentId);
+        if ((HistoryFilter.Status, HistoryFilter.FacilityId, HistoryFilter.EquipmentId) == next) return;
+        (HistoryFilter.Status, HistoryFilter.FacilityId, HistoryFilter.EquipmentId) = next;
+        await ApplyHistoryFilters();
+    }
+
+    private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private Task TaskSearchKey(KeyboardEventArgs e) => e.Key == "Enter" ? SearchTasks() : Task.CompletedTask;
+    private Task HistorySearchKey(KeyboardEventArgs e) => e.Key == "Enter" ? SearchHistory() : Task.CompletedTask;
+    private async Task SearchTasks()
+    {
+        var next = Normalize(taskSearch);
+        if (Loading || next == Filter.SearchKeyword) return;
+        Filter.SearchKeyword = next;
+        Filter.PageIndex = 1;
+        await Load();
+    }
+    private async Task SearchHistory()
+    {
+        var next = Normalize(historySearch);
+        if (HistoryLoading || next == HistoryFilter.SearchKeyword) return;
+        HistoryFilter.SearchKeyword = next;
+        await ApplyHistoryFilters();
+    }
+
     async Task Load()
     {
+        var version = ++taskListVersion;
         Loading = true;
         Filter.CompletedOnly = Completed;
         var r = await Api.MyTasksAsync(Filter);
+        if (version != taskListVersion) return;
         Loading = false;
         if (r.Data is not null) Tasks = r.Data;
         else Error = r.Message ?? "Không thể tải công việc.";
@@ -633,8 +685,11 @@
     async Task ChangeHistoryPage(int page) { HistoryFilter.PageIndex = Math.Clamp(page, 1, HistoryTotalPages); await LoadHistory(); }
     async Task LoadHistory()
     {
+        var version = ++historyListVersion;
         HistoryLoading = true; HistoryFilter.PageIndex = Math.Max(1, HistoryFilter.PageIndex);
-        var response = await Api.MyHistoryAsync(HistoryFilter); HistoryLoading = false;
+        var response = await Api.MyHistoryAsync(HistoryFilter);
+        if (version != historyListVersion) return;
+        HistoryLoading = false;
         if (response.Data is not null) History = response.Data; else Error = response.Message ?? "Không thể tải lịch sử bảo trì.";
     }
     int HistoryTotalPages => Math.Max(1, (int)Math.Ceiling(History.Page.TotalCount / (double)History.Page.PageSize));

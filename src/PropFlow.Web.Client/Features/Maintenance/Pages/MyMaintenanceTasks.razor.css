@@ -272,12 +272,16 @@
 /* Filter bar */
 .smt-filterbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: .55rem;
     align-items: center;
     padding: .6rem 1.2rem;
     border-bottom: 1px solid rgba(2,132,199,.1);
     background: rgba(0,0,0,.018);
+}
+
+.smt-history-filterbar {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
 }
 
 .smt-search-wrap {

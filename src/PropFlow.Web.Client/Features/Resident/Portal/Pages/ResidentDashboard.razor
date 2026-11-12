@@ -115,10 +115,15 @@
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg>
                     <input type="search" placeholder="Tìm theo mã đơn hoặc tiêu đề..." @bind="_requestSearch" @bind:event="oninput" @onkeydown="HandleRequestFilterKeyDown" />
                 </label>
-                <label class="request-filter-date"><span>Từ ngày</span><input type="date" @bind="_requestFromDate" /></label>
-                <label class="request-filter-date"><span>Đến ngày</span><input type="date" @bind="_requestToDate" /></label>
-                <button class="request-filter-apply" type="button" disabled="@_loadingRequests" @onclick="ApplyRequestFiltersAsync">Lọc</button>
-                @if (HasRequestQuery)
+                <PropFlowFilterPopover ActiveCount="@(_requestFromDate.HasValue || _requestToDate.HasValue ? 1 : 0)"
+                                     Disabled="@_loadingRequests" OnOpen="OpenRequestFilters" OnReset="ResetRequestDraft"
+                                     Validate="ValidateRequestDraft" OnApply="ApplyRequestDraftAsync">
+                    <label>Từ ngày<input type="date" @bind="_draftRequestFromDate" /></label>
+                    <label>Đến ngày<input type="date" @bind="_draftRequestToDate" /></label>
+                    @if (_requestFilterError is not null) { <p role="alert">@_requestFilterError</p> }
+                </PropFlowFilterPopover>
+                <button class="request-filter-apply" type="button" disabled="@_loadingRequests" @onclick="ApplyRequestSearchAsync">Tìm kiếm</button>
+                @if (HasRequestQuery || !string.IsNullOrWhiteSpace(_requestSearch))
                 {
                     <button class="request-filter-clear" type="button" disabled="@_loadingRequests" @onclick="ClearRequestFiltersAsync">Xóa lọc</button>
                 }
@@ -193,7 +198,8 @@
     private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _requestRefresh;
     private bool _disposed;
     private RequestFilter _requestFilter = RequestFilter.All;
-    private string? _requestSearch;
+    private string? _requestSearch, _appliedRequestSearch, _requestFilterError;
+    private DateOnly? _draftRequestFromDate, _draftRequestToDate;
     private DateOnly? _requestFromDate;
     private DateOnly? _requestToDate;
     private string? _catalogSearch;
@@ -238,7 +244,7 @@
             _loadingRequests = true;
             _requestError = null;
             var result = await ServiceRequests.ListAsync(new ResidentServiceRequestListQuery(
-                _requestSearch,
+                _appliedRequestSearch,
                 FromDate: _requestFromDate,
                 ToDate: _requestToDate));
             if (result.IsSuccess)
@@ -263,30 +269,51 @@
 
     private async Task HandleRequestCreatedAsync(ResidentServiceRequestCreatedResponse _) => await LoadRequestsAsync();
 
-    private async Task ApplyRequestFiltersAsync()
+    private void OpenRequestFilters()
     {
-        if (_requestFromDate.HasValue && _requestToDate.HasValue && _requestFromDate > _requestToDate)
-        {
-            _requestError = "Ngày bắt đầu không được sau ngày kết thúc.";
-            return;
-        }
-
+        (_draftRequestFromDate, _draftRequestToDate) = (_requestFromDate, _requestToDate);
+        _requestFilterError = null;
+    }
+    private void ResetRequestDraft()
+    {
+        _draftRequestFromDate = _draftRequestToDate = null;
+        _requestFilterError = null;
+    }
+    private bool ValidateRequestDraft()
+    {
+        _requestFilterError = _draftRequestFromDate > _draftRequestToDate ? "Ngày bắt đầu không được sau ngày kết thúc." : null;
+        if (_requestFilterError is not null) StateHasChanged();
+        return _requestFilterError is null;
+    }
+    private async Task ApplyRequestDraftAsync()
+    {
+        var next = (_draftRequestFromDate, _draftRequestToDate);
+        if ((_requestFromDate, _requestToDate) == next) return;
+        (_requestFromDate, _requestToDate) = next;
+        await LoadRequestsAsync();
+    }
+    private async Task ApplyRequestSearchAsync()
+    {
+        var next = string.IsNullOrWhiteSpace(_requestSearch) ? null : _requestSearch.Trim();
+        if (next == _appliedRequestSearch) return;
+        _appliedRequestSearch = next;
         await LoadRequestsAsync();
     }
 
     private async Task ClearRequestFiltersAsync()
     {
-        _requestSearch = null;
+        var reload = HasRequestQuery;
+        _requestSearch = _appliedRequestSearch = null;
         _requestFromDate = null;
         _requestToDate = null;
         _requestFilter = RequestFilter.All;
-        await LoadRequestsAsync();
+        if (reload) await LoadRequestsAsync();
     }
 
     private async Task HandleRequestFilterKeyDown(KeyboardEventArgs args)
     {
         if (args.Key == "Enter" && !_loadingRequests)
-            await ApplyRequestFiltersAsync();
+            await ApplyRequestSearchAsync();
     }
 
     private void OpenService(string categoryCode, string title)
@@ -391,7 +418,7 @@
         _ => "Chưa có yêu cầu để theo dõi."
     };
     private bool HasRequestQuery =>
-        !string.IsNullOrWhiteSpace(_requestSearch) || _requestFromDate.HasValue || _requestToDate.HasValue;
+        !string.IsNullOrWhiteSpace(_appliedRequestSearch) || _requestFromDate.HasValue || _requestToDate.HasValue;
 
     private void SelectRequestFilter(RequestFilter filter) => _requestFilter = filter;
     private string RequestFilterClass(RequestFilter filter) => _requestFilter == filter ? "active" : string.Empty;
