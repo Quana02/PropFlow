@@ -85,7 +85,8 @@ public sealed class StaffServiceRequestHandler(
     IApartmentResidentRelationshipSource apartments,
     IMaintenanceAssetSource assets,
     TimeProvider clock,
-    IServiceRequestRealtimeNotifier? realtime = null)
+    IServiceRequestRealtimeNotifier? realtime = null,
+    IAssignedServiceRequestRecommendationSource? recommendations = null)
 {
     public async Task<StaffServiceRequestResult<StaffServiceRequestListResponse>> ListAsync(
         Guid staffUserId, StaffServiceRequestListQuery query, CancellationToken ct)
@@ -233,12 +234,13 @@ public sealed class StaffServiceRequestHandler(
         var evidence = (await store.EvidenceAsync(staffUserId, item.Id, ct)).Select(x => new StaffServiceRequestEvidenceItem(
             x.Id, x.ActivityId, x.FileName, x.ContentType, x.SizeBytes, x.UploadedAt,
             $"/api/v1/staff/service-requests/{item.Id}/evidence/{x.Id}")).ToArray();
+        var approvedRecommendation = recommendations is null ? null : await recommendations.GetApprovedAsync(item.Id, item.PriorityCode, ct);
         return new(StaffServiceRequestOutcome.Success, new StaffServiceRequestDetailResponse(
             item.Id, item.RequestNumber, item.Title, item.Description, item.CategoryName,
             apartment?.UnitNumber, apartment?.FloorNumber, facility?.Name, equipment?.Name,
             item.Status, item.PriorityCode, item.ServiceAreaCode, item.PreferredDate, item.PreferredTimeCode,
             item.AssignedAt, item.StartedAt, item.UpdatedAt, activities, evidence,
-            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote, item.AdditionalCostConsent));
+            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote, item.AdditionalCostConsent, approvedRecommendation));
     }
 
     private async Task<Dictionary<Guid, MaintenanceAssetReference>> AssetMapAsync(IEnumerable<StaffServiceRequestCore> items, CancellationToken ct)

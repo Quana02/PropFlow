@@ -7,7 +7,7 @@ using PropFlow.Modules.Residents.Contracts;
 namespace PropFlow.Api.Composition;
 
 public sealed class SupportChatActors(IAccountAccess access, IInternalAccountDirectory accounts, IResidentResidenceSource residences,
-    ICurrentBuildingTimeZone timezone, TimeProvider clock) : ISupportChatActors
+    ICurrentBuildingTimeZone timezone, TimeProvider clock, PropFlow.Modules.Apartments.Contracts.IApartmentResidentRelationshipSource apartments) : ISupportChatActors
 {
     public async Task<SupportActor?> FindAsync(Guid id, CancellationToken ct)
     {
@@ -21,6 +21,9 @@ public sealed class SupportChatActors(IAccountAccess access, IInternalAccountDir
         if (grants.Role == "MANAGER") return new(id, "MANAGER", account.DisplayName, TimeZoneId: zone);
         var date = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById(zone)).DateTime);
         var resident = await residences.FindActiveAsync(id, date, ct);
-        return resident is null ? null : new(id, "RESIDENT", account.DisplayName, resident.ResidentId, zone);
+        if (resident is null) return null;
+        var apartment = (await apartments.GetApartmentsAsync([resident.ApartmentUnitId], ct)).SingleOrDefault();
+        return new(id, "RESIDENT", account.DisplayName, resident.ResidentId, zone,
+            apartment is null ? null : $"{apartment.UnitNumber} · Tầng {apartment.FloorNumber}");
     }
 }
