@@ -1358,9 +1358,13 @@
     private void SaveTask()
     {
         if (TaskSourceSchedule is null && !ValidateManualTask()) return;
-        RequestConfirmation(TaskSourceSchedule is null
-            ? "Bạn có muốn tạo công việc bảo trì này không?"
-            : "Sau khi tạo công việc, tại Cập nhật lịch bảo trì chỉ có thể cập nhật Thời điểm bắt đầu và Thời điểm kết thúc; các thông tin khác không thể chỉnh sửa. Bạn có muốn tạo công việc từ lịch bảo trì này không?", ConfirmSaveTask);
+        RequestConfirmation(
+            TaskSourceSchedule is null ? "Tạo công việc bảo trì?" : "Tạo công việc từ lịch bảo trì?",
+            TaskSourceSchedule is null
+                ? "Công việc sẽ được thêm vào danh sách bảo trì."
+                : "Sau khi tạo công việc, bạn chỉ có thể đổi thời điểm bắt đầu và thời điểm kết thúc trong mục Cập nhật lịch bảo trì.",
+            "Tạo công việc",
+            ConfirmSaveTask);
     }
     private bool ValidateManualTask()
     {

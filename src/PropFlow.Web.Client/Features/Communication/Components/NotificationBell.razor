@@ -10,7 +10,8 @@
 @implements IAsyncDisposable
 
 <div class="notification-bell" @onkeydown="HandleKey">
-    <button type="button" class="notification-trigger" aria-label="@BellLabel" aria-expanded="@open" @onclick="ToggleAsync">
+    <button type="button" class="notification-trigger" aria-label="@BellLabel" aria-expanded="@open"
+            aria-controls="@(open ? panelId : null)" @ref="trigger" @onclick="ToggleAsync">
         <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
         @if (Notices.UnreadCount > 0)
         {
@@ -19,20 +20,67 @@
     </button>
     @if (open)
     {
-        <section class="notification-panel" aria-label="Thông báo của bạn">
-            <header><strong>Thông báo</strong><button type="button" disabled="@(writing || Notices.UnreadCount == 0)" @onclick="ReadAllAsync">Đánh dấu tất cả đã đọc</button></header>
-            @if (Notices.Loading) { <p role="status">Đang tải thông báo…</p> }
-            @if (Notices.Error is { } error) { <p role="alert">@error <button type="button" @onclick="Notices.ReloadAsync">Thử lại</button></p> }
-            @if (!Notices.Loading && Notices.Error is null && Notices.Items.Length == 0) { <p>Bạn chưa có thông báo.</p> }
-            @foreach (var item in Notices.Items)
-            {
-                <button @key="item.Id" type="button" class="notification-item @(item.IsRead ? null : "unread")"
-                    disabled="@writing" @onclick="() => OpenAsync(item)">
-                    <span class="notification-copy"><strong>@item.Title</strong><span>@item.Message</span>
-                        <small>@Source(item.SourceType) · <time datetime="@item.CreatedAt.ToString("O")">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</time></small></span>
-                    @if (!item.IsRead) { <span class="unread-dot" aria-label="Chưa đọc"></span> }
-                </button>
-            }
+        var visibleItems = unreadOnly ? Notices.Items.Where(item => !item.IsRead).ToArray() : Notices.Items;
+        <section class="notification-panel" id="@panelId" aria-labelledby="@($"{panelId}-title")">
+            <header class="notification-header">
+                <div class="notification-heading">
+                    <h2 id="@($"{panelId}-title")">Thông báo</h2>
+                    <button type="button" class="notification-close" aria-label="Đóng thông báo" title="Đóng" @onclick="CloseAsync">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <div class="notification-tools">
+                    <div class="notification-filters" role="group" aria-label="Lọc thông báo">
+                        <button type="button" aria-pressed="@(!unreadOnly)" @onclick="() => unreadOnly = false">Tất cả</button>
+                        <button type="button" aria-pressed="@unreadOnly" @onclick="() => unreadOnly = true">Chưa đọc</button>
+                    </div>
+                    <button type="button" class="notification-read-all" disabled="@(writing || Notices.UnreadCount == 0)" @onclick="ReadAllAsync">
+                        <span class="material-symbols-outlined" aria-hidden="true">done_all</span>
+                        Đánh dấu tất cả đã đọc
+                    </button>
+                </div>
+            </header>
+            <div class="notification-feed">
+                @if (Notices.Error is { } error)
+                {
+                    <div class="notification-error" role="alert">
+                        <p>@error</p>
+                        <button type="button" class="notification-read-all" disabled="@Notices.Loading" @onclick="Notices.ReloadAsync">Thử lại</button>
+                    </div>
+                }
+                @if (visibleItems.Length > 0)
+                {
+                    <ul class="notification-list">
+                        @foreach (var item in visibleItems)
+                        {
+                            var (source, icon) = Source(item.SourceType);
+                            <li @key="item.Id">
+                                <button type="button" class="notification-item @(item.IsRead ? null : "unread")"
+                                        disabled="@writing" @onclick="() => OpenAsync(item)">
+                                    <span class="notification-source-icon material-symbols-outlined" aria-hidden="true">@icon</span>
+                                    <span class="notification-copy">
+                                        <strong>@item.Title</strong>
+                                        <span>@item.Message</span>
+                                        <small>@source · <time datetime="@item.CreatedAt.ToString("O")">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</time></small>
+                                    </span>
+                                    @if (!item.IsRead) { <span class="unread-dot" role="img" aria-label="Chưa đọc"></span> }
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+                else if (Notices.Loading)
+                {
+                    <p class="notification-state" role="status">Đang tải thông báo…</p>
+                }
+                else if (Notices.Error is null)
+                {
+                    <div class="notification-state">
+                        <span class="notification-source-icon material-symbols-outlined" aria-hidden="true">@(unreadOnly ? "done_all" : "notifications_none")</span>
+                        <p>@(unreadOnly ? "Không có thông báo chưa đọc trong danh sách này" : "Bạn chưa có thông báo")</p>
+                    </div>
+                }
+            </div>
         </section>
     }
 </div>
@@ -44,7 +92,9 @@
     private RealtimeReconciliationPulse? reconciliation;
     private HubConnection? connection;
     private Task? connectionStart;
-    private bool open, writing;
+    private readonly string panelId = $"notification-panel-{Guid.NewGuid():N}";
+    private ElementReference trigger;
+    private bool open, writing, unreadOnly;
     private string BellLabel => Notices.UnreadCount == 0 ? "Thông báo" : $"Thông báo, {Notices.UnreadCount} chưa đọc";
 
     protected override void OnInitialized()
@@ -89,7 +139,13 @@
         if (open) await Notices.ReloadAsync();
     }
 
-    private void HandleKey(KeyboardEventArgs args) { if (args.Key == "Escape") open = false; }
+    private Task HandleKey(KeyboardEventArgs args) => open && args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task CloseAsync()
+    {
+        open = false;
+        await trigger.FocusAsync(preventScroll: true);
+    }
     private void Refresh() => _ = InvokeAsync(StateHasChanged);
 
     private async Task OpenAsync(ResidentNotice item)
@@ -117,13 +173,13 @@
         finally { writing = false; }
     }
 
-    private static string Source(string? value) => value switch
+    private static (string Label, string Icon) Source(string? value) => value switch
     {
-        "SERVICE_REQUEST" => "Yêu cầu dịch vụ",
-        "MAINTENANCE" or "ASSET_STATUS" => "Vận hành tòa nhà",
-        "COMPLAINT" => "Phản ánh",
-        "INVOICE" or "PAYMENT" => "Tài chính",
-        _ => "PropFlow"
+        "SERVICE_REQUEST" => ("Yêu cầu dịch vụ", "assignment"),
+        "MAINTENANCE" or "ASSET_STATUS" => ("Vận hành tòa nhà", "build"),
+        "COMPLAINT" => ("Phản ánh", "forum"),
+        "INVOICE" or "PAYMENT" => ("Tài chính", "receipt_long"),
+        _ => ("PropFlow", "notifications")
     };
 
     public async ValueTask DisposeAsync()
