@@ -11,8 +11,11 @@
     else if (invoice is null) { <p role="alert">@(error ?? "Không tìm thấy hóa đơn.")</p><button @onclick="Load">Thử lại</button> }
     else
     {
-        <header class="detail-heading">
-            <div><h1>Chi tiết hóa đơn · @invoice.InvoiceNumber</h1><div class="badges"><span>@InvoiceStatus(invoice.Status)</span><span class="@(Overdue ? "overdue" : "")">@(Overdue ? "Quá hạn" : Settlement(invoice.SettlementStatus))</span></div></div>
+        <header class="detail-heading pf-management-header pf-management-existing-header">
+            <div class="pf-management-heading">
+                <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                <div><h1>Chi tiết hóa đơn · @invoice.InvoiceNumber</h1><div class="badges"><span>@InvoiceStatus(invoice.Status)</span><span class="@(Overdue ? "overdue" : "")">@(Overdue ? "Quá hạn" : Settlement(invoice.SettlementStatus))</span></div></div>
+            </div>
             <div class="detail-actions">
                 @if (invoice.Status == "ISSUED") { <FinanceSendInvoiceButton InvoiceId="InvoiceId" /><FinanceDocumentButton @key="InvoiceId" Path="@($"api/v1/billing/cycle/invoices/{InvoiceId}/print")" Label="In / Lưu PDF" /> }
                 @if (invoice.Status == "ISSUED" && invoice.OutstandingAmount > 0) { <FinanceReminderButton @key="InvoiceId" InvoiceIds="@(new[] { InvoiceId })" /> }
@@ -34,7 +37,7 @@
                     </dl>@if (!string.IsNullOrWhiteSpace(invoice.Note)) { <p class="invoice-note">@invoice.Note</p> }
                     </article>
                 </div>
-                <article class="detail-card"><h2>Chi tiết các khoản phí</h2><div class="table-scroll"><table><thead><tr><th>Khoản phí / diễn giải</th><th>Số lượng</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>
+                <article class="detail-card"><h2>Chi tiết các khoản phí</h2><div class="table-scroll"><table class="pf-list-table"><thead><tr><th>Khoản phí / diễn giải</th><th>Số lượng</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>
                     @foreach (var line in invoice.Lines) { <tr><td><strong>@line.FeeName</strong>@if (!string.IsNullOrWhiteSpace(line.Description)) { <small>@line.Description</small> }</td><td>@line.Quantity.ToString("0.####", Vi) @line.UnitName @if (line.AmountDivisor > 1) { <small>Chia theo @line.AmountDivisor ngày/tháng</small> }</td><td class="money">@Money(line.UnitRate)</td><td class="money">@Money(line.Amount)</td></tr> }
                     @if (invoice.Lines.Count == 0) { <tr><td colspan="4">Hóa đơn chưa có khoản phí.</td></tr> }
                 </tbody></table></div></article>

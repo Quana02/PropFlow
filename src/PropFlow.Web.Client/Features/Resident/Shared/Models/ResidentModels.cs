@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace PropFlow.Web.Client.Features.Resident.Shared.Models;
 
 public sealed record PagedResidentsResponse(IReadOnlyList<ResidentListItem> Items, int TotalCount, int PageIndex, int PageSize);
+public sealed record ResidentManagementSummary(int TotalResidents, int ActiveResidents, int LinkedAccounts, int NewResidentsThisMonth);
 public sealed record ResidentListItem(Guid Id, string ResidentCode, string FullName, string? PhoneNumber, string? Email, string Status, bool HasAccount, IReadOnlyList<ResidentApartmentRelationshipSummary> ApartmentRelationships);
 public sealed record ResidentApartmentRelationshipSummary(Guid ApartmentUnitId, string UnitNumber, int FloorNumber, bool IsCurrentOwner, bool IsCurrentResident);
 public sealed record ResidentDetailResponse(Guid Id, string ResidentCode, string FullName, DateOnly? DateOfBirth, string? Gender, string? Nationality, string? IdentityType, string? IdentityNumber, DateOnly? IdentityIssuedDate, DateOnly? IdentityExpiryDate, string? PhoneNumber, string? Email, string? Note, string Status, bool HasAccount, IReadOnlyList<OwnershipItem> Ownerships, IReadOnlyList<ResidencyItem> Residencies);

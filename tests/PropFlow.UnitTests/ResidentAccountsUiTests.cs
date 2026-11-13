@@ -24,6 +24,42 @@ namespace PropFlow.UnitTests;
 
 public sealed class ResidentAccountsUiTests
 {
+    [Fact]
+    public async Task Resident_management_renders_four_server_kpis_between_header_and_list()
+    {
+        var html = await RenderAsync<ResidentManagement>("MANAGER", true);
+        var header = html.IndexOf("Quản lý cư dân", StringComparison.Ordinal);
+        var overview = html.IndexOf("aria-label=\"Tổng quan cư dân\"", StringComparison.Ordinal);
+        var list = html.IndexOf("class=\"resident-panel ", StringComparison.Ordinal);
+        Assert.True(header >= 0 && header < overview && overview < list);
+        var cards = html[overview..list];
+        Assert.Equal(4, Regex.Matches(cards, "class=\"pf-management-kpi\"").Count);
+        Assert.Matches(@"Tổng cư dân</div>\s*<strong>41</strong>", cards);
+        Assert.Matches(@"Đang hoạt động</div>\s*<strong>38</strong>", cards);
+        Assert.Matches(@"Đã liên kết tài khoản</div>\s*<strong>12</strong>", cards);
+        Assert.Matches(@"Cư dân mới trong tháng</div>\s*<strong>3</strong>", cards);
+        Assert.DoesNotContain("Chưa có tài khoản", cards);
+        Assert.Contains("Xem chi tiết cư dân Cư dân mẫu", html[list..]);
+        Assert.Contains("1 / 3", html[list..]);
+    }
+
+    [Fact]
+    public async Task Resident_summary_loading_and_error_leave_the_directory_visible()
+    {
+        var response = new TaskCompletionSource<HttpResponseMessage>();
+        var html = await RenderAsync<ResidentManagement>("MANAGER", true, summaryResponse: response.Task,
+            beforeQuiescence: loadingHtml =>
+            {
+                Assert.Contains("aria-busy=\"true\"", loadingHtml);
+                Assert.Contains("Đang tải tổng quan cư dân…", loadingHtml);
+                Assert.DoesNotContain("<strong>0</strong>", loadingHtml);
+                response.SetResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            });
+        Assert.Contains("Không thể tải số liệu tổng quan.", html);
+        Assert.Contains("Thử lại số liệu", html);
+        Assert.Contains("Xem chi tiết cư dân Cư dân mẫu", html);
+    }
+
     [Theory]
     [InlineData("MANAGER", true, true)]
     [InlineData("MANAGER", false, false)]
@@ -101,9 +137,10 @@ public sealed class ResidentAccountsUiTests
     }
 
     private static async Task<string> RenderAsync<T>(string role, bool hasReadPermission,
-        Dictionary<string, object?>? parameters = null) where T : IComponent
+        Dictionary<string, object?>? parameters = null, Task<HttpResponseMessage>? summaryResponse = null,
+        Action<string>? beforeQuiescence = null) where T : IComponent
     {
-        using var http = new HttpClient(new Transport()) { BaseAddress = new("https://test.invalid/") };
+        using var http = new HttpClient(new Transport(summaryResponse)) { BaseAddress = new("https://test.invalid/") };
         var publicApi = new ApiClient(http, NullLogger<ApiClient>.Instance);
         var session = new AuthSession(publicApi);
         session.Accept(new SessionResponse("test-token", DateTimeOffset.UtcNow.AddMinutes(10),
@@ -128,17 +165,27 @@ public sealed class ResidentAccountsUiTests
 
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         return await renderer.Dispatcher.InvokeAsync(async () =>
-            WebUtility.HtmlDecode((await renderer.RenderComponentAsync<T>(
-                parameters is null ? ParameterView.Empty : ParameterView.FromDictionary(parameters))).ToHtmlString()));
+        {
+            var root = renderer.BeginRenderingComponent<T>(
+                parameters is null ? ParameterView.Empty : ParameterView.FromDictionary(parameters));
+            beforeQuiescence?.Invoke(WebUtility.HtmlDecode(root.ToHtmlString()));
+            await root.QuiescenceTask;
+            return WebUtility.HtmlDecode(root.ToHtmlString());
+        });
     }
 
-    private sealed class Transport : HttpMessageHandler
+    private sealed class Transport(Task<HttpResponseMessage>? summaryResponse) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            if (request.RequestUri!.AbsolutePath == "/api/v1/residents/summary" && summaryResponse is not null)
+                return summaryResponse;
+
             object result = request.RequestUri!.AbsolutePath switch
             {
-                "/api/v1/residents" => new PagedResidentsResponse([], 0, 1, 20),
+                "/api/v1/residents" => new PagedResidentsResponse(
+                    [new(Guid.NewGuid(), "QA-01", "Cư dân mẫu", null, null, "ACTIVE", false, [])], 41, 1, 20),
+                "/api/v1/residents/summary" => new ResidentManagementSummary(41, 38, 12, 3),
                 "/api/v1/residents/apartments" => Array.Empty<ActiveApartmentOption>(),
                 "/api/v1/auth/resident-accounts" => new ResidentAccountPage(
                     [new(Guid.NewGuid(), "QA-01", "Cư dân mẫu", "contact@example.invalid", ["A-101"], "sample",

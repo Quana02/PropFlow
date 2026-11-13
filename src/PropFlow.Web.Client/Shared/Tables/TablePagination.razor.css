@@ -99,7 +99,7 @@
     overscroll-behavior: contain;
     border: 1px solid var(--app-line, #dce8f1);
     border-radius: .8rem;
-    background: var(--app-surface, #fff);
+    background: var(--pf-menu-surface, #fff);
     color: var(--app-text, #17243a);
     box-shadow: 0 .6rem 1.75rem #10294433;
 }

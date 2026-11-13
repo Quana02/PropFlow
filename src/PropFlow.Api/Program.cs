@@ -346,7 +346,9 @@ builder.Services.AddScoped<SePayWebhook>();
 builder.Services.AddScoped<SePayInbox>();
 builder.Services.AddScoped<BankTransferReview>();
 builder.Services.AddHostedService<SePayInboxWorker>();
-builder.Services.AddScoped<IBillingHouseholdDirectory, BillingHouseholdDirectory>();
+builder.Services.AddScoped<BillingHouseholdDirectory>();
+builder.Services.AddScoped<IBillingHouseholdDirectory>(sp => sp.GetRequiredService<BillingHouseholdDirectory>());
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceEmailRecipientDirectory>(sp => sp.GetRequiredService<BillingHouseholdDirectory>());
 builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
 builder.Services.AddScoped<IBillingCycle, BillingCycle>();
 builder.Services.AddScoped<IRentalPricing, RentalPricing>();
@@ -390,6 +392,7 @@ builder.Services.AddScoped<IServiceRequestEvidenceStorage>(services =>
 builder.Services.AddScoped<IServiceRequestRealtimeNotifier, ServiceRequestRealtimeNotifier>();
 builder.Services.AddScoped<StaffServiceRequestHandler>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
+builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentManagementSummaryQuery>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentOnboardingService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentCodeGenerator>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentDuplicatePolicy>();

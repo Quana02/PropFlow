@@ -10,11 +10,14 @@
 <PageTitle>Hóa đơn chưa thanh toán — PropFlow</PageTitle>
 
 <div class="unpaid-page">
-    <header class="unpaid-heading">
-        <div>
-            <nav class="unpaid-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Hóa đơn &amp; Công nợ</span></nav>
-            <div class="title-row"><h1>Hóa đơn chưa thanh toán</h1>@if (NearestDueDate is not null) { <span class="due-badge">Hạn gần nhất @NearestDueDate.Value.ToString("dd/MM/yyyy")</span> }</div>
-            <p>Theo dõi hóa đơn còn hạn thanh toán, bao gồm hóa đơn chưa thanh toán và thanh toán một phần. Hóa đơn qua hạn được theo dõi tại <a href="/finance/payments/overdue">Nợ quá hạn</a>.</p>
+    <header class="unpaid-heading pf-management-header pf-management-existing-header">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">receipt_long</span>
+            <div>
+                <nav class="unpaid-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Hóa đơn &amp; Công nợ</span></nav>
+                <div class="title-row"><h1>Hóa đơn chưa thanh toán</h1>@if (NearestDueDate is not null) { <span class="due-badge">Hạn gần nhất @NearestDueDate.Value.ToString("dd/MM/yyyy")</span> }</div>
+                <p>Theo dõi hóa đơn còn hạn thanh toán, bao gồm hóa đơn chưa thanh toán và thanh toán một phần. Hóa đơn qua hạn được theo dõi tại <a href="/finance/payments/overdue">Nợ quá hạn</a>.</p>
+            </div>
         </div>
         <div class="unpaid-actions">
             <span title="Chưa khả dụng: chưa có dịch vụ xuất danh sách hóa đơn"><button type="button" disabled><span class="material-symbols-outlined">description</span> Xuất danh sách (Excel)</button></span>
@@ -22,18 +25,21 @@
         </div>
     </header>
 
-    <section class="unpaid-summary" aria-label="Tổng quan hóa đơn chưa thanh toán">
+    <section class="unpaid-summary pf-management-metric-group" aria-label="Tổng quan hóa đơn chưa thanh toán">
         <article class="unpaid-card"><div class="card-label"><span>TỔNG CĂN CHƯA ĐÓNG</span><span class="material-symbols-outlined">apartment</span></div><strong>@ApartmentCount <small>căn hộ</small></strong><p>Dữ liệu từ các hóa đơn đang hiển thị</p></article>
         <article class="unpaid-card amount"><div class="card-label"><span>TỔNG TIỀN CHƯA THU</span><span class="material-symbols-outlined">payments</span></div><strong>@Money(OutstandingTotal)</strong><p>Tổng dư nợ của các bản ghi đang hiển thị</p></article>
         <article class="unpaid-card due-soon"><div class="card-label"><span>SẮP ĐẾN HẠN (≤ 3 NGÀY)</span><span class="material-symbols-outlined">schedule</span></div><strong>@DueSoonCount <small>hóa đơn</small></strong><p>Dựa trên hạn thanh toán trong hệ thống</p></article>
         <article class="unpaid-card partial"><div class="card-label"><span>THANH TOÁN MỘT PHẦN</span><span class="material-symbols-outlined">pie_chart</span></div><strong>@PartialCount <small>hóa đơn</small></strong><p>Còn lại @Money(PartialOutstanding)</p></article>
     </section>
 
-    <section class="unpaid-toolbar" aria-label="Bộ lọc hóa đơn">
-        <div class="unpaid-filters">
-            <label class="unpaid-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm hóa đơn</span><input type="search" placeholder="Tìm theo mã hóa đơn..." @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
+    <section class="unpaid-table-card pf-list-panel pf-management-list" aria-labelledby="unpaid-list-title">
+        <h2 class="visually-hidden" id="unpaid-list-title">Danh sách hóa đơn chưa thanh toán</h2>
+        <div class="unpaid-filters pf-list-toolbar pf-management-toolbar" role="group" aria-label="Bộ lọc hóa đơn">
+            <label class="unpaid-search pf-list-search pf-management-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm hóa đơn</span><input type="search" placeholder="Tìm theo mã hóa đơn..." @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
             <button class="unpaid-field" type="button" disabled title="Chưa có API lọc kỳ hóa đơn"><span class="material-symbols-outlined">calendar_month</span>Kỳ hóa đơn hiện tại<span class="material-symbols-outlined">expand_more</span></button>
             <button class="unpaid-field" type="button" disabled title="Dữ liệu thuộc phạm vi được phân quyền">Tất cả phạm vi<span class="material-symbols-outlined">expand_more</span></button>
+            <span class="pf-management-count">@(data?.Total ?? 0) hóa đơn</span>
+            <PropFlowListRefresh OnRefresh="ReloadAsync" Busy="@loading" />
         </div>
         <div class="status-filters" aria-label="Lọc trạng thái hóa đơn">
             <button class="@(filter == "ALL" ? "active" : null)" type="button" @onclick='() => SetFilter("ALL")'>Tất cả (@(data?.Counts?.GetValueOrDefault("ALL") ?? data?.Total ?? 0))</button>
@@ -42,11 +48,7 @@
             <button class="@(filter == "PARTIAL" ? "active partial" : "partial")" type="button" @onclick='() => SetFilter("PARTIAL")'>Thanh toán một phần (@(data?.Counts?.GetValueOrDefault("PARTIAL") ?? 0))</button>
             <span title="Chưa có API liên kết giao dịch chờ xác nhận"><button type="button" disabled>Chờ xác nhận giao dịch (—)</button></span>
         </div>
-    </section>
-
-    <section class="unpaid-table-card" aria-labelledby="unpaid-list-title">
-        <h2 class="visually-hidden" id="unpaid-list-title">Danh sách hóa đơn chưa thanh toán</h2>
-        <div class="unpaid-table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ HĐ &amp; NGÀY PHÁT<br />HÀNH</th><th>CĂN HỘ</th><th>CHI TIẾT KHOẢN PHÍ</th><th>TỔNG TIỀN CẦN THU</th><th>HẠN THANH TOÁN</th><th>TRẠNG THÁI</th><th>THAO TÁC</th></tr></thead><tbody>
+        <div class="unpaid-table-scroll"><table class="pf-list-table"><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ HĐ &amp; NGÀY PHÁT<br />HÀNH</th><th>CĂN HỘ</th><th>CHI TIẾT KHOẢN PHÍ</th><th>TỔNG TIỀN CẦN THU</th><th>HẠN THANH TOÁN</th><th>TRẠNG THÁI</th><th>THAO TÁC</th></tr></thead><tbody>
             @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có hóa đơn phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc trạng thái." Icon="inbox" /></td></tr> }

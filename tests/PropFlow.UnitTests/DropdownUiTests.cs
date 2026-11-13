@@ -122,7 +122,7 @@ public sealed class DropdownUiTests
     {
         var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
-        Assert.Contains("Bộ lọc cư dân", source, StringComparison.Ordinal);
+        Assert.Contains("<PropFlowFilterPopover", source, StringComparison.Ordinal);
         Assert.Contains("ActiveFilterCount", source, StringComparison.Ordinal);
         Assert.Contains("IdentityTypeOptions", source, StringComparison.Ordinal);
         Assert.Contains("CCCD", source, StringComparison.Ordinal);
@@ -259,9 +259,10 @@ public sealed class DropdownUiTests
         var source = File.ReadAllText(ResidentManagementFile("ResidentManagement.razor"));
 
         Assert.Contains(
-            "if(r.IsSuccess&&r.Data is not null){Close();await LoadAsync();",
+            "if(r.IsSuccess&&r.Data is not null){Close();await RefreshAsync();",
             source,
             StringComparison.Ordinal);
+        Assert.Contains("Task.WhenAll(LoadAsync(), LoadSummaryAsync())", source, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -9,7 +9,7 @@
 
 <PageTitle>Tài khoản của tôi — PropFlow</PageTitle>
 <div class="account-page">
-    <header class="account-heading">
+    <header class="account-heading pf-management-header pf-management-existing-header">
         <span class="account-eyebrow">CÀI ĐẶT TÀI KHOẢN</span>
         <h1>Tài khoản của tôi</h1>
         <p>Quản lý thông tin cá nhân và bảo mật tài khoản</p>
@@ -118,6 +118,7 @@
         <div><span class="material-symbols-outlined" aria-hidden="true">devices</span><p>Đăng xuất khỏi phiên làm việc trên thiết bị này.</p></div>
         <button type="button" class="account-button logout-button" disabled="@busy" @onclick="Logout"><span class="material-symbols-outlined" aria-hidden="true">logout</span>Đăng xuất</button>
     </footer>
+    <InformationLinks NewTab />
 </div>
 
 @code {

@@ -15,7 +15,7 @@ public sealed class FinanceNoticePublisher(CommunicationDbContext db, IFinanceNo
             x => x.RecipientUserId == n.UserId && x.SourceEventId == n.EventId, ct);
         var emailEvent = n.PreviousRecipientEventId ?? n.EventId;
         if (!string.IsNullOrWhiteSpace(n.Email))
-            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({emailEvent.ToString() + n.Email.ToUpperInvariant()}, 2))", ct);
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({emailEvent.ToString()}, 2))", ct);
         Notification? notification = null;
         if (n.UserId is Guid userId && !existingNotification) {
             notification = new Notification(userId, n.SourceType == "SERVICE_REQUEST" ? NotificationType.SERVICE_REQUEST : n.SourceType is "PRICING" or "ASSET_STATUS" ? NotificationType.ANNOUNCEMENT : n.SourceType == "MAINTENANCE" ? NotificationType.MAINTENANCE : n.SourceType == "PAYMENT" ? NotificationType.PAYMENT : NotificationType.INVOICE,
@@ -24,7 +24,8 @@ public sealed class FinanceNoticePublisher(CommunicationDbContext db, IFinanceNo
         }
         // A newly linked account needs the web notice, but reuse email already queued/sent to the addressed person.
         var existingRecipientEmail = !string.IsNullOrWhiteSpace(n.Email)
-            && await db.FinanceEmails.AnyAsync(x => x.EventId == emailEvent && x.Address.ToUpper() == n.Email.ToUpper(), ct);
+            && await db.FinanceEmails.AnyAsync(x => x.EventId == emailEvent
+                && ((n.UserId != null && x.UserId == n.UserId) || x.Address.ToUpper() == n.Email.ToUpper()), ct);
         if (!string.IsNullOrWhiteSpace(n.Email) && !existingRecipientEmail) db.FinanceEmails.Add(new FinanceEmail {
             Id = Guid.NewGuid(), EventId = emailEvent, UserId = n.UserId, Address = n.Email,
             Subject = n.Title, Html = n.Html, AttachmentFileName = n.AttachmentFileName, NextAttemptAt = DateTimeOffset.UtcNow });

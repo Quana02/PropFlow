@@ -12,7 +12,7 @@ public sealed partial class BillingCyclePostgresTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Apartment_catalog_merge_preserves_prices_and_rejects_conflicts(bool conflict)
+    public async Task Apartment_type_presets_preserve_existing_apartments_and_prices(bool differentPrices)
     {
         await using var db = new ApartmentsDbContext(new DbContextOptionsBuilder<ApartmentsDbContext>()
             .UseNpgsql(connection, x => x.MigrationsHistoryTable("__EFMigrationsHistory", "apartments")).Options);
@@ -28,28 +28,29 @@ public sealed partial class BillingCyclePostgresTests
         var pricing = new RentalPricing(billing, new CatalogDirectory([new(one.Id,one.Name),new(two.Id,two.Name)]));
         // A catalog type may be priced before any apartment of that type exists.
         await pricing.SaveAsync(new(Guid.Empty,"MONTHLY",5000000,Month,one.Id),actor,default);
-        await pricing.SaveAsync(new(Guid.Empty,"MONTHLY",conflict?6000000:5000000,Month,two.Id),actor,default);
+        var secondPrice = differentPrices ? 6000000 : 5000000;
+        await pricing.SaveAsync(new(Guid.Empty,"MONTHLY",secondPrice,Month,two.Id),actor,default);
+        var apartmentTypes = await db.ApartmentUnits.ToDictionaryAsync(x => x.Id, x => x.ApartmentUnitTypeId);
+        var prices = await billing.FeeRateRules.ToDictionaryAsync(x => x.Id, x => new { x.ApartmentTypeId, x.UnitRate, x.IsActive });
+        const string script = "tools/database/seeds/20261102_commercial_apartment_types.sql";
         var path = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
-        while(path is not null && !File.Exists(Path.Combine(path.FullName,"docs/deployment/20261016-four-apartment-types.sql"))) path=path.Parent;
-        var sql=await File.ReadAllTextAsync(Path.Combine(path!.FullName,"docs/deployment/20261016-four-apartment-types.sql"));
+        while(path is not null && !File.Exists(Path.Combine(path.FullName, script))) path=path.Parent;
+        Assert.True(path is not null, $"Missing repository fixture: {script}");
+        var sql=await File.ReadAllTextAsync(Path.Combine(path!.FullName, script));
         await using var conn = new NpgsqlConnection(connection); await conn.OpenAsync();
         async Task Run() { await using var command=new NpgsqlCommand(sql,conn); await command.ExecuteNonQueryAsync(); }
-        if(conflict) {
-            var error=await Assert.ThrowsAsync<PostgresException>(Run);
-            Assert.Contains("Conflicting rental prices",error.MessageText);
-            await using var rollback=new NpgsqlCommand("ROLLBACK",conn); await rollback.ExecuteNonQueryAsync();
-            Assert.Equal(2,await db.ApartmentUnitTypes.CountAsync());
-            Assert.Equal(2,await billing.FeeRateRules.CountAsync(x=>x.IsActive));
-            return;
-        }
-        await Run(); await Run();
-        var types=await db.ApartmentUnitTypes.AsNoTracking().OrderBy(x=>x.Name).ToArrayAsync();
-        Assert.Equal(new[]{"Căn hộ thông thường","Officetel","Penthouse","Studio"},types.Select(x=>x.Name));
-        var standard=types.Single(x=>x.Name=="Căn hộ thông thường");
-        Assert.All(await db.ApartmentUnits.AsNoTracking().ToArrayAsync(),x=>Assert.Equal(standard.Id,x.ApartmentUnitTypeId));
-        var rates=await billing.FeeRateRules.AsNoTracking().ToArrayAsync();
-        Assert.Equal(2,rates.Length); Assert.Single(rates.Where(x=>x.IsActive));
-        Assert.All(rates,x=>{Assert.Equal(5000000,x.UnitRate);Assert.Equal(standard.Id,x.ApartmentTypeId);});
+        await Run();
+        var types = await db.ApartmentUnitTypes.AsNoTracking().OrderBy(x => x.Id).ToArrayAsync();
+        await Run();
+        Assert.Equal(types.Select(x => (x.Id, x.UpdatedAt)), (await db.ApartmentUnitTypes.AsNoTracking()
+            .OrderBy(x => x.Id).ToArrayAsync()).Select(x => (x.Id, x.UpdatedAt)));
+        Assert.Equal(7, types.Length);
+        Assert.Equal(35m, types.Single(x => x.Name == "Căn hộ Studio").DefaultUsableAreaM2);
+        Assert.Equal(75m, types.Single(x => x.Name == "Căn hộ 2 phòng ngủ").DefaultUsableAreaM2);
+        Assert.Equal(apartmentTypes.OrderBy(x => x.Key), (await db.ApartmentUnits.AsNoTracking()
+            .ToDictionaryAsync(x => x.Id, x => x.ApartmentUnitTypeId)).OrderBy(x => x.Key));
+        Assert.Equal(prices.OrderBy(x => x.Key), (await billing.FeeRateRules.AsNoTracking()
+            .ToDictionaryAsync(x => x.Id, x => new { x.ApartmentTypeId, x.UnitRate, x.IsActive })).OrderBy(x => x.Key));
     }
     private sealed class CatalogDirectory(IReadOnlyList<BillingApartmentType> types) : IBillingHouseholdDirectory
     {

@@ -10,12 +10,15 @@
 <PageTitle>Cổng điều hành kế toán — PropFlow</PageTitle>
 
 <div class="finance-dashboard">
-    <header class="finance-heading">
-        <div><p class="finance-eyebrow">TỔNG QUAN TÀI CHÍNH</p><h1>Xin chào, <strong>@(Session.User?.DisplayName ?? "bạn")</strong></h1><p>Theo dõi hóa đơn, thanh toán và công nợ trong phạm vi được cấp quyền.</p></div>
+    <header class="finance-heading pf-management-header pf-management-existing-header">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
+            <div><p class="finance-eyebrow">TỔNG QUAN TÀI CHÍNH</p><h1>Xin chào, <strong>@(Session.User?.DisplayName ?? "bạn")</strong></h1><p>Theo dõi hóa đơn, thanh toán và công nợ trong phạm vi được cấp quyền.</p></div>
+        </div>
         <div class="finance-period"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span><span>Cập nhật @DateTime.Now.ToString("dd/MM/yyyy")</span></div>
     </header>
 
-    <section class="finance-metrics" aria-label="Chức năng tài chính">
+    <section class="finance-metrics pf-management-metric-group" aria-label="Chức năng tài chính">
         <article class="finance-metric pending">
             <div class="metric-top"><span class="metric-icon material-symbols-outlined" aria-hidden="true">schedule</span><span class="metric-tag">• Chờ đối soát</span></div>
             <h2>Các khoản thanh toán chờ xác minh</h2>
@@ -57,9 +60,9 @@
     else
     {
         <div class="finance-details">
-            <section class="finance-panel finance-transactions" aria-labelledby="transactions-title">
-                <div class="panel-heading"><div><h2 id="transactions-title">Lịch sử giao dịch thu phí mới nhất</h2><p>Giao dịch tự động khớp lệnh qua cổng thanh toán và đối soát thủ công</p></div><NavLink href="/finance/payments/confirmed" class="panel-mark" aria-label="Xem tất cả giao dịch"><span class="material-symbols-outlined">north_east</span></NavLink></div>
-                <div class="table-wrap"><table><thead><tr><th>MÃ GIAO DỊCH</th><th>NGÀY THU</th><th>TRẠNG THÁI</th><th>SỐ TIỀN</th></tr></thead><tbody>
+            <section class="finance-panel finance-transactions pf-list-panel pf-management-list" aria-labelledby="transactions-title">
+                <div class="panel-heading pf-list-toolbar pf-management-toolbar"><div><h2 id="transactions-title">Lịch sử giao dịch thu phí mới nhất</h2><p>Giao dịch tự động khớp lệnh qua cổng thanh toán và đối soát thủ công</p></div><NavLink href="/finance/payments/confirmed" class="panel-mark" aria-label="Xem tất cả giao dịch"><span class="material-symbols-outlined">north_east</span></NavLink><PropFlowListRefresh OnRefresh="LoadAsync" Busy="@loading" /></div>
+                <div class="table-wrap"><table class="pf-list-table"><thead><tr><th>MÃ GIAO DỊCH</th><th>NGÀY THU</th><th>TRẠNG THÁI</th><th>SỐ TIỀN</th></tr></thead><tbody>
                     @if (RecentPayments.Count == 0) { <tr><td colspan="4"><div class="finance-empty">Chưa có giao dịch để hiển thị.</div></td></tr> }
                     else { @foreach (var item in RecentPayments) { <tr><td><div class="transaction-name"><span class="transaction-avatar">@Initial(item.PaymentNumber)</span><div><strong>@item.PaymentNumber</strong><small>@Method(item.PaymentMethodCode) · @(item.ReferenceNumber ?? "Không có mã tham chiếu")</small></div></div></td><td>@item.PaymentDate.ToLocalTime().ToString("dd/MM/yyyy")<small>@item.PaymentDate.ToLocalTime().ToString("HH:mm")</small></td><td><span class="status-pill @(item.Status == "CONFIRMED" ? "success" : "waiting")">• @(item.Status == "CONFIRMED" ? "Thành công" : "Chờ đối soát")</span></td><td class="amount">@Money(item.Amount)</td></tr> } }
                 </tbody></table></div>

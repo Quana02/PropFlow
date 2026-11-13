@@ -1,4 +1,4 @@
-.service-fee-page{color:#17243a;display:grid;gap:18px;min-width:0;font-family:Inter,"Segoe UI",sans-serif}
+.service-fee-page{color:#17243a;display:grid;gap:18px;min-width:0;font-family:var(--pf-font)}
 .pricing-header,.pricing-panel,.invoice-summary article{background:#fff;border:1px solid #dbe8f3;border-radius:18px;box-shadow:0 8px 24px #0f4c8108}
 .pricing-header{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 24px;flex-wrap:wrap}
 .page-title{display:flex;gap:14px;align-items:center;min-width:0}.title-icon{display:grid;place-items:center;flex:none;width:46px;height:46px;border-radius:13px;background:#e7f5ff;color:#0284c7;font-size:25px}h1{font-size:23px;margin:0;font-weight:750;letter-spacing:-.02em}.page-title p,.panel-header p{margin:6px 0 0;color:#718096;font-size:13px;line-height:1.6}

@@ -9,6 +9,7 @@ using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
@@ -80,6 +81,31 @@ public sealed class StaffServiceRequestTests
     }
 
     [Fact]
+    public async Task EvidenceLookup_RequiresTheRightRequestAndCurrentAssignment()
+    {
+        await using var db = CreateDb();
+        var now = DateTimeOffset.UtcNow;
+        var staffId = Guid.NewGuid();
+        var request = AddAssigned(db, staffId, now, "SR-EVIDENCE-001");
+        var otherRequest = AddAssigned(db, staffId, now, "SR-EVIDENCE-002");
+        var assignment = db.ServiceRequestAssignments.Local.Single(x => x.ServiceRequestId == request.Id);
+        var activity = new ServiceRequestActivity(request.Id, ServiceActivityType.WORK_RESULT_ADDED, now, assignment.Id);
+        var evidence = new ServiceRequestEvidenceFile(request.Id, activity.Id, "photo.jpg", "image/jpeg", 12,
+            "cloudinary-authenticated:synthetic-asset", staffId, now);
+        db.AddRange(activity, evidence);
+        await db.SaveChangesAsync();
+        var store = new StaffServiceRequestStore(db);
+
+        Assert.NotNull(await store.EvidenceFileAsync(staffId, request.Id, evidence.Id, default));
+        Assert.Null(await store.EvidenceFileAsync(staffId, otherRequest.Id, evidence.Id, default));
+        Assert.Null(await store.EvidenceFileAsync(Guid.NewGuid(), request.Id, evidence.Id, default));
+
+        assignment.EndAsReassigned(now.AddMinutes(1));
+        await db.SaveChangesAsync();
+        Assert.Null(await store.EvidenceFileAsync(staffId, request.Id, evidence.Id, default));
+    }
+
+    [Fact]
     public async Task ListApi_EncodesRequestCodeStatusAndPagination()
     {
         var handler = new CapturingHandler();
@@ -121,6 +147,29 @@ public sealed class StaffServiceRequestTests
     }
 
     [Fact]
+    public async Task CloudinaryEvidenceStorage_RejectsInvalidContentAndOversizeBeforeNetwork()
+    {
+        var handler = new CloudinaryUploadHandler();
+        using var client = new HttpClient(handler);
+        var storage = new CloudinaryServiceRequestEvidenceStorage(client, Options.Create(new CloudinaryOptions
+        {
+            CloudName = "propflow-test", ApiKey = "test-key", ApiSecret = "test-secret"
+        }), new LocalServiceRequestEvidenceStorage(new TestWebHostEnvironment(Path.GetTempPath())));
+        using var content = new MemoryStream([0, 1, 2]);
+        var requestId = Guid.NewGuid();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => storage.SaveAsync(requestId, "bad.png", "image/png", 3, content, default));
+        await Assert.ThrowsAsync<ArgumentException>(() => storage.SaveAsync(requestId, "bad.png", "image/png", 10 * 1024 * 1024 + 1, content, default));
+        Assert.Null(handler.RequestUri);
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            storage.SaveAsync(requestId, "bad.png", "image/png", 3, content, cancelled.Token));
+        Assert.Null(handler.RequestUri);
+    }
+
+    [Fact]
     public async Task CloudinaryEvidenceStorage_UploadsToCloudWithoutCreatingProjectFile()
     {
         var contentRoot = Path.Combine(Path.GetTempPath(), $"propflow-cloud-evidence-{Guid.NewGuid():N}");
@@ -144,11 +193,28 @@ public sealed class StaffServiceRequestTests
             var saved = await storage.SaveAsync(
                 Guid.NewGuid(), "evidence.jpg", "image/jpeg", jpeg.Length, content, CancellationToken.None);
 
-            Assert.StartsWith("cloudinary:propflow/service-request-evidence/", saved.StorageKey);
+            Assert.Equal("cloudinary-authenticated:synthetic-asset", saved.StorageKey);
             Assert.Equal(jpeg.Length, saved.SizeBytes);
             Assert.Equal("https://api.cloudinary.com/v1_1/propflow-test/image/upload", handler.RequestUri?.AbsoluteUri);
             Assert.Matches("name=\"?signature\"?(?:\\r\\n|;)", handler.RequestBody);
+            Assert.Matches("name=\"?type\"?\\r\\n\\r\\nauthenticated", handler.RequestBody);
             Assert.False(Directory.Exists(Path.Combine(contentRoot, "App_Data", "service-request-evidence")));
+
+            await using var downloaded = await storage.OpenReadAsync(saved.StorageKey, default);
+            Assert.NotNull(downloaded);
+            Assert.Equal("/v1_1/propflow-test/asset/download", handler.RequestUri?.AbsolutePath);
+            Assert.Equal(string.Empty, handler.RequestUri!.UserInfo);
+            Assert.Contains("asset_id=synthetic-asset", handler.RequestBody);
+            Assert.Contains("signature=", handler.RequestBody);
+
+            await storage.DeleteAsync(saved.StorageKey, default);
+            Assert.Equal("/v1_1/propflow-test/asset/destroy", handler.RequestUri?.AbsolutePath);
+            Assert.Contains("asset_id=synthetic-asset", handler.RequestBody);
+            Assert.Contains("invalidate=true", handler.RequestBody);
+
+            await using var existing = await storage.OpenReadAsync("cloudinary:legacy/request/image", default);
+            Assert.NotNull(existing);
+            Assert.Equal("/propflow-test/image/upload/legacy/request/image", handler.RequestUri?.AbsolutePath);
         }
         finally
         {
@@ -197,13 +263,18 @@ public sealed class StaffServiceRequestTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             RequestUri = request.RequestUri;
-            RequestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+            RequestBody = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
+            if (RequestUri!.AbsolutePath.EndsWith("/destroy"))
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"result\":\"ok\"}") };
+            if (RequestUri.AbsolutePath.EndsWith("/download") || request.Method == HttpMethod.Get)
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([0xFF, 0xD8, 0xFF]) };
+            var id = System.Text.RegularExpressions.Regex.Match(RequestBody, "name=\"?public_id\"?\\r\\n\\r\\n([^\\r\\n]+)").Groups[1].Value;
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(
-                    "{\"public_id\":\"propflow/service-request-evidence/request/image\",\"bytes\":12}",
-                    Encoding.UTF8,
-                    "application/json")
+                Content = System.Net.Http.Json.JsonContent.Create(new
+                {
+                    asset_id = "synthetic-asset", public_id = id, type = "authenticated", bytes = 12
+                })
             };
         }
     }

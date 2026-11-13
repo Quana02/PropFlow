@@ -20,12 +20,12 @@
 
 @if (Tab == "overview")
 {
-    <section class="rbac-panel"><header class="rbac-header"><div class="rbac-title"><span class="section-icon">▦</span><div><h1>Tổng quan</h1><p>Chỉ số vận hành toàn hệ thống · chỉ đọc</p></div></div></header>
+    <section class="rbac-panel pf-list-panel pf-management-list"><header class="rbac-header pf-management-section-heading"><div class="rbac-title"><span class="section-icon">▦</span><div><h1>Tổng quan</h1><p>Chỉ số vận hành toàn hệ thống · chỉ đọc</p></div></div></header>
     @if (overviewLoading) { <p class="empty-state">Đang tải chỉ số…</p> }
     else if (overviewError is not null) { <p class="empty-state" role="alert">@overviewError</p> }
     else if (overview is not null)
     {
-        <div class="metrics-grid overview-metrics" aria-label="Chỉ số toàn hệ thống">
+        <div class="metrics-grid overview-metrics pf-management-metric-group" aria-label="Chỉ số toàn hệ thống">
             <article class="metric-card metric-accounts"><span class="metric-icon">⌂</span><div class="metric-copy"><span>Tổng số căn hộ</span><strong>@overview.TotalApartments</strong></div></article>
             <article class="metric-card metric-staff"><span class="metric-icon">◇</span><div class="metric-copy"><span>Căn hộ trống</span><strong>@overview.VacantApartments</strong></div></article>
             <article class="metric-card metric-accounts"><span class="metric-icon">♙</span><div class="metric-copy"><span>Tổng số cư dân</span><strong>@overview.TotalResidents</strong></div></article>
@@ -49,16 +49,16 @@ else if (Tab == "payment")
 }
 else
 {
-    <section class="metrics-grid" aria-label="Tóm tắt tài khoản nội bộ">
+    <section class="metrics-grid pf-management-metric-group" aria-label="Tóm tắt tài khoản nội bộ">
         <article class="metric-card metric-accounts"><span class="metric-icon">♙</span><div class="metric-copy"><span>Tổng tài khoản</span><strong>@(summary?.Total.ToString() ?? "—")</strong></div></article>
         <article class="metric-card metric-staff"><span class="metric-icon">●</span><div class="metric-copy"><span>Đang hoạt động</span><strong>@(summary?.Active.ToString() ?? "—")</strong></div></article>
         <article class="metric-card metric-restricted"><span class="metric-icon">◇</span><div class="metric-copy"><span>Bị vô hiệu hóa</span><strong>@(summary?.Disabled.ToString() ?? "—")</strong></div></article>
         <article class="metric-card metric-restricted"><span class="metric-icon">⌧</span><div class="metric-copy"><span>Đang bị khóa</span><strong>@(summary?.Locked.ToString() ?? "—")</strong></div></article>
     </section>
-    <section class="rbac-panel"><header class="rbac-header"><div class="rbac-title"><span class="section-icon">♙</span><div><div class="title-line"><h1>Tài khoản Ban quản lý</h1></div><p>Quản lý tài khoản nội bộ và vai trò của Ban quản lý.</p></div></div><div class="rbac-actions"><button type="button" @onclick="OpenRolesAsync"><span class="material-symbols-outlined" aria-hidden="true">policy</span> Vai trò &amp; quyền</button><button type="button" class="primary" @onclick="OpenCreate"><span class="material-symbols-outlined" aria-hidden="true">person_add</span> Tạo tài khoản</button></div></header>
+    <section class="rbac-panel pf-list-panel pf-management-list"><header class="rbac-header pf-management-section-heading"><div class="rbac-title"><span class="section-icon">♙</span><div><div class="title-line"><h1>Tài khoản Ban quản lý</h1></div><p>Quản lý tài khoản nội bộ và vai trò của Ban quản lý.</p></div></div><div class="rbac-actions"><button type="button" @onclick="OpenRolesAsync"><span class="material-symbols-outlined" aria-hidden="true">policy</span> Vai trò &amp; quyền</button><button type="button" class="primary" @onclick="OpenCreate"><span class="material-symbols-outlined" aria-hidden="true">person_add</span> Tạo tài khoản</button></div></header>
     @if (error is not null) { <p class="empty-state">@error</p> }
     <div class="policy-strip" aria-label="Lọc theo vai trò"><button type="button" class="role-tab @(role == "ALL" ? "selected" : null)" aria-pressed="@(role == "ALL")" @onclick='() => SelectRoleAsync("ALL")'><span class="material-symbols-outlined" aria-hidden="true">groups</span><span><strong>TẤT CẢ</strong><small>Toàn bộ tài khoản · @(summary?.Total ?? 0)</small></span></button><button type="button" class="role-tab @(role == "MANAGER" ? "selected" : null)" aria-pressed="@(role == "MANAGER")" @onclick='() => SelectRoleAsync("MANAGER")'><span class="material-symbols-outlined" aria-hidden="true">manage_accounts</span><span><strong>MANAGER</strong><small>Trưởng Ban Quản lý · @Count("MANAGER")</small></span></button><button type="button" class="role-tab @(role == "STAFF" ? "selected" : null)" aria-pressed="@(role == "STAFF")" @onclick='() => SelectRoleAsync("STAFF")'><span class="material-symbols-outlined" aria-hidden="true">engineering</span><span><strong>STAFF</strong><small>Nhân viên vận hành · @Count("STAFF")</small></span></button><button type="button" class="role-tab @(role == "ACCOUNTANT" ? "selected" : null)" aria-pressed="@(role == "ACCOUNTANT")" @onclick='() => SelectRoleAsync("ACCOUNTANT")'><span class="material-symbols-outlined" aria-hidden="true">calculate</span><span><strong>ACCOUNTANT</strong><small>Kế toán · @Count("ACCOUNTANT")</small></span></button></div>
-    <div class="table-tools"><label class="role-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input @bind="search" placeholder="Tìm theo tên, username hoặc email" /></label><div class="admin-filter-select"><PropFlowSelect @bind-Value="status" Options="AccountStatusFilterOptions" Variant="Filter" AriaLabel="Lọc theo trạng thái" /></div><button type="button" class="filter-submit" @onclick="SearchAsync"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span><span>Tìm</span></button></div>
+    <div class="table-tools pf-list-toolbar pf-management-toolbar"><label class="role-search pf-list-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input @bind="search" placeholder="Tìm theo tên, username hoặc email" /></label><div class="admin-filter-select"><PropFlowSelect @bind-Value="status" Options="AccountStatusFilterOptions" Variant="Filter" AriaLabel="Lọc theo trạng thái" /></div><button type="button" class="filter-submit" @onclick="SearchAsync"><span class="material-symbols-outlined" aria-hidden="true">filter_alt</span><span>Tìm</span></button><PropFlowListRefresh OnRefresh="() => LoadAccountsPageAsync(true)" Busy="@accountsLoading" /></div>
     @if (accountsLoading)
     {
         <p class="empty-state">Đang tải tài khoản…</p>

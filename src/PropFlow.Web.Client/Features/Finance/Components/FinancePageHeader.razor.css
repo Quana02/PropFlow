@@ -41,7 +41,7 @@
 .finance-page-header h1 {
     margin: 0 0 5px;
     color: var(--text, #17243a);
-    font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif;
+    font: 700 clamp(25px, 2.6vw, 34px)/1.2 var(--pf-font);
     letter-spacing: -.025em;
 }
 

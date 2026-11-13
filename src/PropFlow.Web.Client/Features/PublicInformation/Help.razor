@@ -1,0 +1,80 @@
+@page "/help"
+@layout PublicInformationLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Trung tâm trợ giúp · PropFlow</PageTitle>
+<InformationHeader Title="Trung tâm trợ giúp" Description="Tìm hướng dẫn về tài khoản, dịch vụ cư dân, hóa đơn và liên hệ Ban quản lý." />
+
+<div class="help-grid">
+    <section class="information-panel help-faq" aria-labelledby="faq-heading">
+        <h2 id="faq-heading">Câu hỏi thường gặp</h2>
+        <label for="faq-search">Tìm câu hỏi</label>
+        <div class="help-search">
+            <input @ref="searchInput" id="faq-search" type="search" placeholder="Ví dụ: quên mật khẩu, công nợ" @bind="query" @bind:event="oninput" />
+            @if (query.Length > 0)
+            {
+                <button type="button" class="help-button" @onclick="ClearSearch">Xóa tìm kiếm</button>
+            }
+        </div>
+        <div class="help-categories" role="group" aria-label="Chủ đề trợ giúp">
+            <button type="button" class="help-button" aria-pressed="@(category is null ? "true" : "false")" @onclick="() => category = null">Tất cả</button>
+            @foreach (var item in HelpContent.Categories)
+            {
+                <button type="button" class="help-button" aria-pressed="@(category == item.Id ? "true" : "false")" @onclick="() => category = item.Id">@item.Title</button>
+            }
+        </div>
+        @{
+            var groups = Results();
+        }
+        <p class="help-count" role="status">@groups.Sum(item => item.Entries.Count) câu hỏi</p>
+        @if (groups.Length == 0)
+        {
+            <p>Không tìm thấy câu hỏi phù hợp. Thử từ khóa khác hoặc chọn Tất cả.</p>
+        }
+        @foreach (var group in groups)
+        {
+            <section class="help-group" @key="group.Id">
+                <h3>@group.Title</h3>
+                @foreach (var item in group.Entries)
+                {
+                    <details @key="item">
+                        <summary>@item.Question</summary>
+                        <p>@item.Answer</p>
+                        @if (item.Link is not null)
+                        {
+                            <p><a href="@item.Link">@item.LinkLabel</a></p>
+                        }
+                    </details>
+                }
+            </section>
+        }
+    </section>
+    <aside class="information-panel help-related">
+        <h2>Cần hỗ trợ thêm?</h2>
+        <p>Chọn hướng liên hệ theo vấn đề bạn đang gặp.</p>
+        <p><a href="/contact">Liên hệ và hỗ trợ</a></p>
+        <p><a href="/privacy">Chính sách bảo vệ dữ liệu cá nhân</a></p>
+        <p><a href="/forgot-password">Khôi phục mật khẩu</a></p>
+    </aside>
+</div>
+
+@code {
+    private string query = "";
+    private string? category;
+    private ElementReference searchInput;
+
+    private FaqCategory[] Results() => HelpContent.Categories
+        .Where(group => category is null || category == group.Id)
+        .Select(group => group with
+        {
+            Entries = group.Entries.Where(entry => HelpSearch.Matches(entry, group.Title, query)).ToArray()
+        })
+        .Where(group => group.Entries.Count > 0)
+        .ToArray();
+
+    private async Task ClearSearch()
+    {
+        query = "";
+        await searchInput.FocusAsync();
+    }
+}

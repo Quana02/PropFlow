@@ -5,7 +5,7 @@
 <span class="finance-reminder"><button type="button" disabled="@busy" @onclick="BeginSend"><span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span>@(busy ? "Đang gửi…" : "Gửi hóa đơn")</button></span>
 @if (confirming)
 {
-    <PropFlowConfirmationDialog Title="Gửi hóa đơn?" Message="Cư dân sẽ nhận được hóa đơn này." ConfirmText="Gửi hóa đơn" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
+    <PropFlowConfirmationDialog Title="Gửi hóa đơn?" Message="Hệ thống sẽ xử lý yêu cầu gửi hóa đơn này." ConfirmText="Gửi hóa đơn" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
 }
 
 @code {
@@ -30,7 +30,7 @@
         {
             var result = await Api.SendInvoiceAsync(InvoiceId, requestKey);
             failed = !result.IsSuccess || result.Data?.Recipients is not > 0;
-            message = failed ? (result.IsSuccess ? "Hóa đơn chưa có người nhận phù hợp." : result.Message) : "Đã gửi hóa đơn.";
+            message = failed ? (result.IsSuccess ? "Hóa đơn chưa có người nhận phù hợp." : "Không thể tiếp nhận yêu cầu gửi hóa đơn. Vui lòng kiểm tra hóa đơn hoặc thử lại.") : "Đã tiếp nhận yêu cầu gửi hóa đơn.";
             if (!failed) requestKey = null;
         }
         catch (Exception) { failed = true; message = "Không thể gửi hóa đơn. Vui lòng thử lại."; }

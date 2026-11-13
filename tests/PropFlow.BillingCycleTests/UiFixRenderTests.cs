@@ -86,9 +86,13 @@ public sealed class UiFixRenderTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
         {
-            object result = request.RequestUri!.AbsolutePath == "/api/v1/residents"
-                ? new PagedResidentsResponse([new(Guid.NewGuid(),"CD-0001","Nguyễn Văn An","0900000001","demo@anphu.example","ACTIVE",false,[])],46,1,20)
-                : Array.Empty<ActiveApartmentOption>();
+            object result = request.RequestUri!.AbsolutePath switch
+            {
+                "/api/v1/residents" => new PagedResidentsResponse(
+                    [new(Guid.NewGuid(), "CD-0001", "Nguyễn Văn An", "0900000001", "demo@anphu.example", "ACTIVE", false, [])], 46, 1, 20),
+                "/api/v1/residents/summary" => new ResidentManagementSummary(46, 40, 12, 6),
+                _ => Array.Empty<ActiveApartmentOption>()
+            };
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(result,result.GetType()) });
         }
     }

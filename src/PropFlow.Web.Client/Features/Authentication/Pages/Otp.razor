@@ -32,6 +32,7 @@ else
     <button class="secondary otp-resend" disabled="@(busy || ResendWait > 0)" @onclick="Resend">@(ResendWait > 0 ? $"Gửi lại mã sau {ResendWait}s" : "Gửi lại mã")</button>
 }
 <nav class="auth-links"><a href="/login">Quay lại đăng nhập</a></nav>
+<InformationLinks SupportOnly NewTab />
 @code {
     private PropFlow.Web.Client.Shared.Feedback.ToastOperation? resultFeedback;
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();

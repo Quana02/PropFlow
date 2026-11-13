@@ -14,14 +14,17 @@
         <a href="/">Vận hành</a><span>/</span><a href="/manager/service-requests">Yêu cầu dịch vụ</a><span>/</span><strong>Chi tiết yêu cầu</strong>
     </nav>
 
-    <section class="request-hero" aria-labelledby="manager-request-title">
-        <div class="hero-copy">
-            <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>Không gian điều phối yêu cầu</div>
-            <div class="hero-title-row">
-                <h1 id="manager-request-title">Chi tiết yêu cầu</h1>
-                <span class="status-badge status-progress"><i></i>@StatusLabel(detail?.Status)</span>
+    <section class="request-hero pf-management-header pf-management-existing-header" aria-labelledby="manager-request-title">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">assignment</span>
+            <div class="hero-copy">
+                <div class="hero-kicker"><span class="material-symbols-outlined" aria-hidden="true">support_agent</span>Không gian điều phối yêu cầu</div>
+                <div class="hero-title-row">
+                    <h1 id="manager-request-title">Chi tiết yêu cầu</h1>
+                    <span class="status-badge status-progress"><i></i>@StatusLabel(detail?.Status)</span>
+                </div>
+                <p>Theo dõi tiếp nhận, điều phối nhân sự và liên kết công việc bảo trì trong một không gian quản lý.</p>
             </div>
-            <p>Theo dõi tiếp nhận, điều phối nhân sự và liên kết công việc bảo trì trong một không gian quản lý.</p>
         </div>
         <div class="hero-actions">
             <span class="request-code"><span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>@(detail?.RequestNumber ?? "Đang tải…")</span>

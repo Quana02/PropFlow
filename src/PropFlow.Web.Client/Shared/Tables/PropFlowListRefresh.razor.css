@@ -1,0 +1,29 @@
+.pf-list-refresh {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 2.55rem;
+    height: 2.55rem;
+    margin-inline-start: auto;
+    justify-self: end;
+    padding: 0;
+    border: 1px solid var(--pf-line, #d8e5f0);
+    border-radius: .7rem;
+    background: var(--pf-menu-surface, #fff);
+    color: var(--pf-text, #334155);
+    cursor: pointer;
+}
+
+.pf-list-refresh:hover:not(:disabled) {
+    border-color: var(--pf-accent, #0284c7);
+    color: var(--pf-accent, #0284c7);
+}
+
+.pf-list-refresh .material-symbols-outlined { font-size: 1.25rem; }
+.pf-list-refresh:disabled { opacity: .65; cursor: default; }
+
+@media (prefers-reduced-motion: no-preference) {
+    .pf-list-refresh[aria-busy="true"] .material-symbols-outlined { animation: pf-list-refresh-spin .9s linear infinite; }
+}
+
+@keyframes pf-list-refresh-spin { to { transform: rotate(360deg); } }

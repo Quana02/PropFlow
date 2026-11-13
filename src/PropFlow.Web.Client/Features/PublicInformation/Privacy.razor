@@ -1,0 +1,36 @@
+@page "/privacy"
+@layout PublicInformationLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Chính sách bảo vệ dữ liệu cá nhân · PropFlow</PageTitle>
+<InformationHeader Title="Chính sách bảo vệ dữ liệu cá nhân" Description="Các nhóm dữ liệu PropFlow xử lý để vận hành chung cư và cách tìm đầu mối hỗ trợ." Draft />
+<PolicyDocument Path="/privacy" Sections="Sections" />
+
+@code {
+    private static readonly PolicySection[] Sections =
+    [
+        new("pham-vi", "Phạm vi và đơn vị vận hành",
+            "Bản dự thảo mô tả cách xử lý dữ liệu trong PropFlow cho một chung cư. Tên đơn vị vận hành, vai trò của các bên, đầu mối bảo vệ dữ liệu và căn cứ xử lý cho từng mục đích cần được xác nhận trước khi ban hành."),
+        new("du-lieu", "Nhóm dữ liệu và nguồn thu thập",
+            "Thông tin tài khoản, xác minh và phiên đăng nhập đến từ thao tác của người dùng và quy trình quản trị. Hồ sơ cư dân gồm thông tin nhận dạng, thông tin liên hệ và quan hệ sở hữu hoặc cư trú do người dùng cung cấp và Ban quản lý đối chiếu, cập nhật.",
+            "Dữ liệu vận hành gồm yêu cầu dịch vụ, phản ánh, tiến độ và kết quả bảo trì, ảnh hoặc tệp, nội dung chat và thông báo. Dữ liệu tài chính gồm hóa đơn, công nợ, thông tin chuyển khoản phục vụ đối soát, kết quả xác nhận và chứng từ. Hệ thống có thể tạo báo cáo tổng hợp và nhật ký thao tác."),
+        new("muc-dich", "Mục đích xử lý và phạm vi truy cập",
+            "Dữ liệu phục vụ xác thực tài khoản, quản lý hồ sơ và quan hệ căn hộ, xử lý yêu cầu hoặc phản ánh, bảo trì, gửi thông báo, đối soát, báo cáo và kiểm tra an toàn vận hành.",
+            "Truy cập phụ thuộc vai trò và phạm vi công việc. Email đăng nhập và email liên hệ hồ sơ là hai trường riêng. Khi kế toán gửi hóa đơn hoặc nhắc phí, máy chủ xác định người nhận từ nghĩa vụ thanh toán. Kế toán không cần xem email hoặc số điện thoại liên hệ của cư dân để thực hiện việc này."),
+        new("tep", "Ảnh và nội dung đính kèm",
+            "Ảnh hỗ trợ mô tả sự cố và ghi nhận kết quả. Chỉ cung cấp hình ảnh cần thiết, tránh giấy tờ, thông tin ngân hàng và ảnh người khác nếu không liên quan. Ảnh bằng chứng nghiệp vụ được kiểm quyền qua ứng dụng. Phạm vi xử lý ảnh lưu từ trước cần được xác minh riêng khi triển khai."),
+        new("tich-hop", "Các dịch vụ tích hợp",
+            "Tùy cấu hình, hệ thống có thể dùng Cloudinary cho ảnh, SMTP để gửi mã xác minh và thư nghiệp vụ, SePay/VietQR cho nghiệp vụ chuyển khoản, Google Gemini cho tính năng AI và WebRTC với hạ tầng chuyển tiếp khi cần để hỗ trợ cuộc gọi. Hạ tầng lưu trữ, font/CDN và Open-Meteo có thể xử lý thông tin kết nối hoặc dữ liệu cần cho chức năng tương ứng.",
+            "Nhà cung cấp thực tế, dữ liệu được chuyển, vị trí lưu, thời hạn và quyền truy cập phụ thuộc cấu hình vận hành. Các nội dung này cùng dịch vụ ghi log cần được kiểm kê và duyệt trước khi công bố."),
+        new("ai-chat", "AI, chat và thông báo",
+            "Khi bật AI, câu hỏi, đoạn tài liệu hoặc thông tin nghiệp vụ cần thiết có thể được xử lý bởi dịch vụ cấu hình. Tránh nhập mật khẩu, OTP, giấy tờ hoặc thông tin nhạy cảm không cần thiết. Kiểm tra nguồn và hỏi Ban quản lý khi cần quyết định.",
+            "Khi đã kết nối hỗ trợ, Manager phụ trách có thể thấy nội dung cư dân đang gõ trước khi bấm Gửi. Chỉ tin đã gửi được lưu vào lịch sử chat. Thông báo được định tuyến theo vai trò và nghiệp vụ."),
+        new("luu-tru", "Lưu trữ và bảo vệ dữ liệu",
+            "Hệ thống có kiểm tra phiên, quyền truy cập và phạm vi hồ sơ. Cấu hình triển khai, thời hạn lưu cho từng nhóm, bản sao lưu, nhật ký và cách xử lý khi hết hạn cần được đơn vị vận hành xác nhận. Hồ sơ nghiệp vụ có thể cần được giữ để xử lý nghĩa vụ hoặc giải quyết tranh chấp theo quy định áp dụng."),
+        new("quyen", "Quyền dữ liệu và cách yêu cầu",
+            "Tùy trường hợp và pháp luật áp dụng, bạn có thể yêu cầu được biết về việc xử lý, xem hoặc sửa dữ liệu, đề nghị hạn chế hoặc xóa dữ liệu, phản đối việc xử lý hoặc rút lại sự đồng ý khi căn cứ xử lý là sự đồng ý.",
+            "Xem trang Liên hệ để biết cách tìm Ban quản lý. Chỉ cung cấp thông tin đủ xác minh qua kênh được chỉ định. Đầu mối chính thức, quy trình xác minh, thời hạn phản hồi và các trường hợp cần tiếp tục lưu dữ liệu phải được chốt trước khi sử dụng bản chính sách."),
+        new("phien-ban", "Phiên bản và cập nhật",
+            "Trang này là bản dự thảo chưa ban hành. Phiên bản chính thức, ngày hiệu lực và cách thông báo thay đổi sẽ được xác định khi nội dung được phê duyệt.")
+    ];
+}

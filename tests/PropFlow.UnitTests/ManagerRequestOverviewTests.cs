@@ -103,6 +103,7 @@ public sealed class ManagerRequestOverviewTests
         using var handler = new Responses(classification, recommendation);
         using var http = new HttpClient(handler) { BaseAddress = new Uri("https://propflow.test/") };
         using var services = new ServiceCollection().AddLogging()
+            .AddSingleton<Microsoft.JSInterop.IJSRuntime, UnusedJavaScript>()
             .AddSingleton<IManagerServiceRequestApiClient>(new ManagerServiceRequestApiClient(
                 new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance))).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
@@ -114,6 +115,14 @@ public sealed class ManagerRequestOverviewTests
         });
         Assert.Equal(2, handler.Reads);
         return html;
+    }
+
+    private sealed class UnusedJavaScript : Microsoft.JSInterop.IJSRuntime
+    {
+        public ValueTask<T> InvokeAsync<T>(string identifier, object?[]? args) =>
+            throw new InvalidOperationException("Static rendering should not invoke JavaScript.");
+        public ValueTask<T> InvokeAsync<T>(string identifier, CancellationToken ct, object?[]? args) =>
+            throw new InvalidOperationException("Static rendering should not invoke JavaScript.");
     }
 
     private sealed class Responses(ManagerServiceRequestClassificationView classification,
