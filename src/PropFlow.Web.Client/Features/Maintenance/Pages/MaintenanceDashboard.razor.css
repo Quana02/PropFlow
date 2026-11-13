@@ -350,38 +350,6 @@
     transition: border-color .15s ease;
 }
 .fe07-search-inline input:focus { border-color: var(--admin-accent); outline: 0; }
-
-.fe07-filter-apply {
-    display: inline-flex;
-    align-items: center;
-    gap: .3rem;
-    min-height: 2rem;
-    border: 1px solid var(--admin-line);
-    border-radius: .55rem;
-    padding: .35rem .6rem;
-    background: transparent;
-    color: var(--admin-accent);
-    font-size: .68rem;
-    font-weight: 750;
-    cursor: pointer;
-    white-space: nowrap;
-}
-.fe07-filter-apply:hover { background: rgba(2, 132, 199, 0.1); }
-.fe07-filter-apply .material-symbols-outlined { font-size: .95rem; }
-.fe07-filter-panel { display: grid; gap: .75rem; padding: .8rem 1.2rem; border-bottom: 1px solid var(--admin-line); background: rgba(0,0,0,.015); }
-.fe07-filter-panel-head h2 { margin: 0; color: var(--admin-text); font-size: .78rem; font-weight: 750; }
-.fe07-filter-panel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 20rem)); gap: .7rem; }
-.fe07-filter-panel .fe07-field { gap: .3rem; }
-.fe07-filter-panel .fe07-field label { color: var(--admin-muted); font-size: .66rem; font-weight: 700; }
-.fe07-filter-panel .fe07-field input,
-.fe07-filter-panel .fe07-field select { box-sizing: border-box; width: 100%; min-height: 2.1rem; border: 1px solid var(--admin-line); border-radius: .55rem; padding: .35rem .55rem; background: var(--admin-surface); color: var(--admin-text); font: inherit; font-size: .7rem; }
-.fe07-filter-panel .fe07-field input:focus,
-.fe07-filter-panel .fe07-field select:focus { border-color: var(--admin-accent); outline: 0; }
-.fe07-filter-panel .fe07-field ::deep .pf-date__trigger { min-height: 2.1rem; padding: .35rem .55rem; border-radius: .55rem; background: var(--admin-surface); color: var(--admin-text); font-size: .7rem; }
-.fe07-filter-panel .fe07-field ::deep .pf-date-range__trigger { min-height: 2.1rem; padding: .35rem .55rem; border-radius: .55rem; background: var(--admin-surface); color: var(--admin-text); font-size: .7rem; }
-.fe07-filter-panel .fe07-date-range-field { max-width: none; }
-.fe07-filter-panel-actions { display: flex; justify-content: flex-end; gap: .5rem; }
-.fe07-filter-panel-actions button { min-height: 2rem; border-radius: .55rem; padding: .35rem .7rem; font-size: .68rem; font-weight: 750; cursor: pointer; }
 .fe07-history-summary { display: flex; flex-wrap: wrap; gap: .45rem; padding: .65rem 1.2rem; border-bottom: 1px solid var(--admin-line); background: rgba(0,0,0,.015); }
 .fe07-history-summary span { border: 1px solid var(--admin-line); border-radius: .5rem; padding: .32rem .5rem; background: var(--admin-surface); color: var(--admin-muted); font-size: .67rem; }
 .fe07-history-summary b { color: var(--admin-text); }
@@ -859,7 +827,6 @@
     .fe07-agenda-time { padding: .7rem .6rem .7rem .5rem; }
     .fe07-agenda-card { padding: .7rem .75rem .7rem .6rem; }
     .fe07-filter-row { flex-wrap: wrap; }
-    .fe07-filter-panel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .fe07-search-inline { min-width: 0; max-width: 100%; }
     .fe07-compact-list article { grid-template-columns: 3.2rem 1fr auto; }
     .fe07-task-list article { grid-template-columns: 4.2rem minmax(0,1fr) auto auto; }
@@ -870,8 +837,6 @@
     .fe07-assignee-picker { grid-template-columns: 1fr; }
     .fe07-progress-milestones { grid-template-columns: 1fr; }
     .fe07-result-detail { grid-template-columns: 1fr; }
-    .fe07-filter-panel-grid { grid-template-columns: 1fr; }
-    .fe07-filter-panel .fe07-date-range-field { max-width: none; }
     .fe07-history-detail-dialog { width: min(66rem, 100%); }
     .fe07-history-context-grid { grid-template-columns: 1fr; }
     .fe07-history-timeline > div { grid-template-columns: 1fr; gap: .2rem; }

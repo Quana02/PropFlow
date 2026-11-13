@@ -112,8 +112,17 @@ public sealed partial class BillingCyclePostgresTests
         secondHub.On<FinanceNotificationUpdate>("FinanceNotificationCreated", n => { Interlocked.Increment(ref counts[1]); b.TrySetResult(n); });
         excludedHub.On<FinanceNotificationUpdate>("FinanceNotificationCreated", _ => Interlocked.Increment(ref counts[2]));
         await firstHub.StartAsync(); await secondHub.StartAsync(); await excludedHub.StartAsync();
-        var result = await manager.PatchAsync($"api/v1/equipments/{equipment.Id}/status", JsonContent.Create(new { status = "UNDER_MAINTENANCE" }));
-        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        var statusPath = $"api/v1/equipments/{equipment.Id}/status";
+        using var denied = await manager.PatchAsync(statusPath, JsonContent.Create(new { status = "UNDER_MAINTENANCE" }));
+        Assert.Equal(HttpStatusCode.Conflict, denied.StatusCode);
+        Assert.Empty(await assets.ResidentEvents.ToArrayAsync());
+        var result = await manager.PostAsJsonAsync("api/v1/maintenance/tasks", new
+        {
+            title = "Bảo trì khẩn cấp kiểm thử", description = "Kiểm tra thông báo thiết bị",
+            equipmentId = equipment.Id, isEmergency = true, priorityCode = "HIGH",
+            plannedStartAt = now.AddMinutes(1), dueAt = now.AddHours(1)
+        });
+        Assert.True(result.StatusCode == HttpStatusCode.Created, await result.Content.ReadAsStringAsync());
         using var scope = factory.Services.CreateScope();
         using var publication = factory.Services.CreateScope();
         var scopedAssets = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>();
@@ -160,7 +169,7 @@ public sealed partial class BillingCyclePostgresTests
         Assert.Equal(6, await communication.Notifications.CountAsync());
         var expectedCount = 6;
         foreach (var target in new[] { ("facilities", facility.Id), ("equipments", equipment.Id) }) {
-            foreach (var status in new[] { "OUT_OF_SERVICE", "ACTIVE", "UNDER_MAINTENANCE", "ACTIVE" }) {
+            foreach (var status in new[] { "OUT_OF_SERVICE", "ACTIVE" }) {
                 var pushed = new TaskCompletionSource<FinanceNotificationUpdate>(TaskCreationOptions.RunContinuationsAsynchronously);
                 using var changeSubscription = secondHub.On<FinanceNotificationUpdate>("FinanceNotificationCreated", n => pushed.TrySetResult(n));
                 var changed = await manager.PatchAsync($"api/v1/{target.Item1}/{target.Id}/status", JsonContent.Create(new { status }));
@@ -170,7 +179,6 @@ public sealed partial class BillingCyclePostgresTests
                 Assert.Equal("ASSET_STATUS", notice.SourceType);
                 Assert.Contains(status switch {
                     "OUT_OF_SERVICE" => "ngừng phục vụ",
-                    "UNDER_MAINTENANCE" => "bảo trì",
                     _ => "hoạt động trở lại"
                 }, notice.Message);
                 expectedCount += 2;

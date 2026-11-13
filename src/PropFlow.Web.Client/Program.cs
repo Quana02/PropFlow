@@ -46,6 +46,8 @@ builder.Services.AddAuthorizationCore(options =>
 builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.KnowledgeApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.ResidentChatApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatApi>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.EmergencyCalls.EmergencyCallApi>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.EmergencyCalls.EmergencyCallClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatConnection>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.ISupportChatConnection>(sp => sp.GetRequiredService<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatConnection>());
 builder.Services.AddScoped(sp =>

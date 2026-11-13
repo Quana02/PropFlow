@@ -1,5 +1,146 @@
-html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+:root {
+    --pf-font: Inter, "Segoe UI", Arial, sans-serif;
+    --pf-menu-surface: #fff;
+    --pf-list-heading: #f3f8fc;
+    --pf-line: #d8e5f0;
+    --pf-text: #26364e;
+    --pf-muted: #64748b;
+    --pf-accent: #0278b4;
+    --bs-font-sans-serif: var(--pf-font);
+    --bs-font-monospace: var(--pf-font);
+    color-scheme: light;
+}
+
+:root.dark, :root[data-theme="dark"] {
+    --pf-menu-surface: #131f31;
+    --pf-list-heading: #17263a;
+    --pf-line: #2b3e54;
+    --pf-text: #edf6ff;
+    --pf-muted: #a5b6cb;
+    --pf-accent: #38bdf8;
+    color-scheme: dark;
+}
+
+html, body, button, input, select, textarea, pre, code, kbd, samp {
+    font-family: var(--pf-font);
+}
+
+select option, select optgroup {
+    background-color: var(--pf-menu-surface);
+    color: var(--pf-text);
+}
+
+:where(form, [role="dialog"]) :where(input:not([type="checkbox"], [type="radio"], [type="file"], [type="hidden"], [type="range"]), select, textarea) {
+    min-width: 0;
+    border: 1px solid var(--pf-line);
+    border-radius: .7rem;
+    background-color: var(--pf-menu-surface);
+    color: var(--pf-text);
+}
+
+:where(form, [role="dialog"]) :where(input, select, textarea, button):focus:not(:focus-visible) {
+    outline: 0;
+    box-shadow: none;
+}
+
+:root :where(form, [role="dialog"], .pf-list-toolbar, .fe04-toolbar) :is(input, select, textarea):focus {
+    box-shadow: none;
+    outline-offset: -2px;
+}
+
+:root input[type="checkbox"]:not([role="switch"]) {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex: none;
+    width: 1.05rem;
+    height: 1.05rem;
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+    border: 1px solid var(--pf-muted);
+    border-radius: .28rem;
+    background: var(--pf-menu-surface);
+    color: var(--pf-accent);
+    cursor: pointer;
+}
+
+:root input[type="checkbox"]:not([role="switch"]):checked {
+    border-color: #0284c7;
+    background: #0284c7;
+}
+
+:root input[type="checkbox"]:not([role="switch"]):checked::before {
+    content: "";
+    width: .32rem;
+    height: .58rem;
+    border: solid #fff;
+    border-width: 0 .12rem .12rem 0;
+    transform: translateY(-.04rem) rotate(45deg);
+}
+
+:root input[type="checkbox"]:not([role="switch"]):focus {
+    outline: 0;
+    box-shadow: none;
+}
+
+:root input[type="checkbox"]:not([role="switch"]):focus-visible {
+    outline: 2px solid var(--pf-text);
+    outline-offset: -2px;
+}
+
+:root input[type="checkbox"]:not([role="switch"]):disabled {
+    cursor: default;
+    opacity: .55;
+}
+
+:root .pf-list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .65rem;
+    min-width: 0;
+}
+
+:root .pf-list-toolbar > :where(input[type="search"], .pf-list-search) {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.pf-list-toolbar > :is(.result-count, .audit-count) + .pf-list-refresh { margin-inline-start: 0; }
+
+:root .pf-list-panel {
+    min-width: 0;
+    border: 1px solid var(--pf-line);
+    border-radius: 1.15rem;
+    background-color: var(--pf-menu-surface);
+}
+
+.pf-list-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+:where(.pf-list-table) :where(th, td) { padding: .75rem 1rem; }
+
+:root .pf-list-table > thead > tr > th {
+    border-bottom: 1px solid var(--pf-line);
+    background: var(--pf-list-heading);
+    color: var(--pf-muted);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+}
+
+:root .pf-list-table > tbody > tr > td {
+    border-bottom: 1px solid color-mix(in srgb, var(--pf-line) 72%, transparent);
+}
+
+:root .pf-list-table > tbody > tr:last-child > td { border-bottom: 0; }
+
+.pf-list-table > tbody > tr:hover {
+    background-color: color-mix(in srgb, var(--pf-accent) 4%, transparent);
 }
 
 html:has(.pf-dialog[open]) {
@@ -17,7 +158,12 @@ a, .btn-link {
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+    box-shadow: none;
+}
+
+.btn:focus-visible, .btn-link.nav-link:focus-visible, .form-control:focus-visible {
+    outline: 2px solid var(--pf-accent);
+    outline-offset: -2px;
 }
 
 .content {

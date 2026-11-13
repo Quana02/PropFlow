@@ -1,0 +1,4 @@
+.info-links { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem 1.15rem; font-size: .875rem; line-height: 1.5; }
+.info-links a { color: var(--pf-accent); text-decoration: none; padding-block: .2rem; }
+.info-links a:hover { text-decoration: underline; }
+.info-links a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: .2rem; }

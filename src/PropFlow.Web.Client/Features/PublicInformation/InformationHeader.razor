@@ -1,0 +1,14 @@
+<header class="information-hero">
+    @if (Draft)
+    {
+        <span class="information-eyebrow">Bản dự thảo · Chưa ban hành</span>
+    }
+    <h1>@Title</h1>
+    <p>@Description</p>
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter] public bool Draft { get; set; }
+}

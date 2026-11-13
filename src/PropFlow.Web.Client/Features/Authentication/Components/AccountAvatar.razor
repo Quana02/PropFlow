@@ -1,0 +1,37 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Web.Client.Services.Authentication
+@using PropFlow.Web.Client.Services.Api
+@inject AuthSession Session
+@inject AuthenticatedApiClient Api
+@implements IDisposable
+
+@if (image is not null)
+{ <img class="account-avatar-image" src="@image" alt="Ảnh đại diện của bạn" /> }
+else
+{ <span aria-hidden="true">@Initials</span> }
+
+@code {
+    [Parameter] public string Initials { get; set; } = "";
+    private string? image;
+    private (Guid?, Guid?) loaded;
+    private bool disposed;
+    private readonly CancellationTokenSource lifetime = new();
+    protected override void OnInitialized() => Session.AuthenticationStateChanged += Changed;
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private void Changed(Task<AuthenticationState> state) => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+    private async Task LoadAsync()
+    {
+        var current = (Session.User?.Id, Session.User?.AvatarVersion);
+        if (loaded == current) return;
+        loaded = current; image = null;
+        if (current.Item2 is null) return;
+        try
+        {
+            var result = await Api.GetFileAsync($"api/v1/auth/me/avatar?v={current.Item2}", lifetime.Token);
+            if (!disposed && loaded == current && result is { IsSuccess: true, Data.ContentType: "image/jpeg" })
+                image = "data:image/jpeg;base64," + Convert.ToBase64String(result.Data.Bytes);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+    }
+    public void Dispose() { disposed = true; Session.AuthenticationStateChanged -= Changed; lifetime.Cancel(); lifetime.Dispose(); }
+}

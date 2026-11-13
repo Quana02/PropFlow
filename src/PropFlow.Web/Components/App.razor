@@ -21,12 +21,9 @@
     
     <title>PropFlow - Hệ Thống Quản Lý Vận Hành Chung Cư Đẳng Cấp</title>
     
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@@400;500;600;700;800&amp;display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@@300..700&amp;family=Inter:wght@@400..700&amp;family=Geist:wght@@400..700&amp;family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@@24,400,0,0" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@@100..900&amp;display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@@100..700,0..1&amp;display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@@100..900&amp;family=Inter:wght@@100..900&amp;family=Space+Grotesk:wght@@100..900&amp;display=swap" rel="stylesheet">
-    
+
     <!-- Tailwind Configuration and CSS -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script id="tailwind-config">
@@ -122,12 +119,15 @@
                         "gutter": "24px"
                     },
                     fontFamily: {
-                        "display-lg": ["Space Grotesk", "sans-serif"],
-                        "headline-lg": ["Space Grotesk", "sans-serif"],
+                        sans: ["Inter", "sans-serif"],
+                        serif: ["Inter", "sans-serif"],
+                        mono: ["Inter", "sans-serif"],
+                        "display-lg": ["Inter", "sans-serif"],
+                        "headline-lg": ["Inter", "sans-serif"],
                         "body-md": ["Inter", "sans-serif"],
-                        "mono-data": ["Geist", "Space Grotesk", "monospace"],
-                        "label-caps": ["Space Grotesk", "sans-serif"],
-                        "headline-lg-mobile": ["Space Grotesk", "sans-serif"]
+                        "mono-data": ["Inter", "sans-serif"],
+                        "label-caps": ["Inter", "sans-serif"],
+                        "headline-lg-mobile": ["Inter", "sans-serif"]
                     },
                     fontSize: {
                         "display-lg": ["46px", {"lineHeight": "54px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
@@ -151,13 +151,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
-    <link rel="stylesheet" href="app.css?v=20260927-5" />
     <link rel="stylesheet" href="@ScopedStylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
 
     <!-- FE-04.1 Custom Stitch UI -->
-    <link rel="stylesheet" href="css/fe041.css" />
-    <script src="js/fe041-tailwind.js?v=20261109-1"></script>
+    <link rel="stylesheet" href="css/fe041.css?v=20261112-2" />
+    <link rel="stylesheet" href="app.css?v=20261112-1" />
+    <link rel="stylesheet" href="internal-management.css" />
+    <script src="js/fe041-tailwind.js?v=20261112-1"></script>
 
     <HeadOutlet @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
 </head>
@@ -167,7 +168,7 @@
     <script src="_framework/blazor.web.js"></script>
     <script src="js/landing.js"></script>
     <script src="js/marketing.js"></script>
-    <script src="js/resident.js?v=20261010-2"></script>
+    <script src="js/resident.js?v=20261113-3"></script>
 </body>
 
 </html>

@@ -6,7 +6,7 @@
 <span class="finance-reminder"><button type="button" disabled="@(busy || InvoiceIds.Length == 0)" @onclick="BeginSend"><span class="material-symbols-outlined">mail</span> @(Label ?? $"Gửi nhắc thanh toán ({InvoiceIds.Length} hóa đơn)")</button></span>
 @if (confirming)
 {
-    <PropFlowConfirmationDialog Title="Gửi nhắc thanh toán?" Message="Cư dân sẽ nhận lời nhắc thanh toán cho các hóa đơn đã chọn." ConfirmText="Gửi lời nhắc" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
+    <PropFlowConfirmationDialog Title="Gửi nhắc thanh toán?" Message="Hệ thống sẽ xử lý lời nhắc cho các hóa đơn đã chọn." ConfirmText="Gửi lời nhắc" Busy="@busy" OnConfirm="Send" OnCancel="Cancel" />
 }
 
 @code {
@@ -34,7 +34,7 @@
         try {
             var r = await Api.PostAsync<ReminderResult>("api/v1/billing/cycle/reminders", new { invoiceIds = selectedIds, overdueOnly = OverdueOnly, requestId });
             failed = !r.IsSuccess || r.Data?.Recipients is not > 0;
-            message = !r.IsSuccess ? r.Message : failed ? "Không có hóa đơn hoặc người nhận phù hợp để nhắc." : "Đã gửi nhắc thanh toán.";
+            message = !r.IsSuccess ? "Không thể tiếp nhận yêu cầu nhắc thanh toán. Vui lòng thử lại." : failed ? "Không có hóa đơn hoặc người nhận phù hợp để nhắc." : "Đã tiếp nhận yêu cầu nhắc thanh toán.";
             if (r.IsSuccess) requestId = null;
         }
         catch (Exception) { failed = true; message = "Không thể gửi nhắc thanh toán. Vui lòng thử lại."; }

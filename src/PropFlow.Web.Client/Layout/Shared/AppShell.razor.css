@@ -419,7 +419,7 @@
     padding: 1rem;
     border: 1px solid var(--app-line);
     border-radius: 1rem;
-    background: var(--app-surface);
+    background: var(--pf-menu-surface, #fff);
     box-shadow: 0 1rem 2rem rgba(10, 30, 50, 0.18);
     backdrop-filter: blur(1rem);
     transition: background-color var(--theme-duration) var(--theme-ease),

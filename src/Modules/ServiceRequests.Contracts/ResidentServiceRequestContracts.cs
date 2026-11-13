@@ -1,11 +1,11 @@
 namespace PropFlow.Modules.ServiceRequests.Contracts;
 
 public sealed record CreateResidentServiceRequestRequest(
-    string CategoryCode,
-    string Title,
+    string? CategoryCode,
+    string? Title,
     string Description,
-    string ServiceAreaCode,
-    string PriorityCode,
+    string? ServiceAreaCode,
+    string? PriorityCode,
     DateOnly? PreferredDate,
     string? PreferredTimeCode,
     Guid? FacilityId = null);

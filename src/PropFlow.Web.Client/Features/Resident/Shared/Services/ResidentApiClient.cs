@@ -4,6 +4,7 @@ using PropFlow.Web.Client.Services.Api;
 namespace PropFlow.Web.Client.Features.Resident.Shared.Services;
 public interface IResidentApiClient
 {
+    Task<ApiResult<ResidentManagementSummary>> GetSummaryAsync(CancellationToken ct = default);
     Task<ApiResult<PagedResidentsResponse>> ListAsync(string? search, string? status, Guid? apartmentUnitId = null,
         string? relationshipKind = null, string? residencyType = null, string? householdRole = null,
         int page = 1, CancellationToken ct = default);
@@ -21,6 +22,9 @@ public interface IResidentApiClient
 }
 public sealed class ResidentApiClient(AuthenticatedApiClient api) : IResidentApiClient
 {
+    public Task<ApiResult<ResidentManagementSummary>> GetSummaryAsync(CancellationToken ct = default) =>
+        api.SendAsync<ResidentManagementSummary>(HttpMethod.Get, "api/v1/residents/summary", ct: ct);
+
     public Task<ApiResult<PagedResidentsResponse>> ListAsync(string? search, string? status, Guid? apartmentUnitId = null,
         string? relationshipKind = null, string? residencyType = null, string? householdRole = null,
         int page = 1, CancellationToken ct = default) =>

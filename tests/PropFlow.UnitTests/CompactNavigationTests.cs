@@ -66,7 +66,7 @@ public sealed class CompactNavigationTests
             var expected = role switch
             {
                 "ADMIN" => new[] { "/admin/dashboard?tab=overview", "/admin/dashboard?tab=accounts", "/admin/dashboard?tab=payment", "/admin/dashboard?tab=activity" },
-                "ACCOUNTANT" => new[] { "/finance/payments/bank-transfers", "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices" },
+                "ACCOUNTANT" => new[] { "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices", "/finance/payments/bank-transfers" },
                 "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee" },
                 "STAFF" when count > 0 => new[] { "/staff/service-requests", "/my-maintenance" },
                 _ => Array.Empty<string>()
@@ -77,6 +77,8 @@ public sealed class CompactNavigationTests
             if (count > 0) Assert.Single(links.Where(link => link.Contains("aria-current=\"page\"", StringComparison.Ordinal)));
             else Assert.DoesNotContain("/knowledge/documents", html);
             Assert.Contains("class=\"app-nav-scroll\"", html);
+            Assert.Contains("aria-label=\"Cuộn lên\" title=\"Cuộn lên\" hidden", html);
+            Assert.Contains("aria-label=\"Cuộn xuống\" title=\"Cuộn xuống\" hidden", html);
         });
     }
 }

@@ -9,11 +9,14 @@
 <PageTitle>Các khoản thu đã xác nhận — PropFlow</PageTitle>
 
 <div class="collections-page">
-    <header class="collections-heading">
-        <div>
-            <nav class="collections-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Thu phí hạch toán sổ cái</span></nav>
-            <div class="title-row"><h1>Các khoản thu đã xác nhận</h1><span class="ledger-badge"><span aria-hidden="true">●</span> Đã hạch toán vào sổ cái</span></div>
-            <p>Theo dõi dòng tiền thực thu, tự động đối soát và đồng bộ chứng từ kế toán điện tử.</p>
+    <header class="collections-heading pf-management-header pf-management-existing-header">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">task_alt</span>
+            <div>
+                <nav class="collections-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Thu phí hạch toán sổ cái</span></nav>
+                <div class="title-row"><h1>Các khoản thu đã xác nhận</h1><span class="ledger-badge"><span aria-hidden="true">●</span> Đã hạch toán vào sổ cái</span></div>
+                <p>Theo dõi dòng tiền thực thu, tự động đối soát và đồng bộ chứng từ kế toán điện tử.</p>
+            </div>
         </div>
         <div class="collections-actions">
             <span title="Chưa khả dụng: chưa có dịch vụ xuất sổ cái"><button type="button" disabled><span class="material-symbols-outlined">download</span> Xuất sổ cái thu tiền (Excel)</button></span>
@@ -21,29 +24,28 @@
         </div>
     </header>
 
-    <section class="collections-summary" aria-label="Tổng quan khoản thu đã xác nhận">
+    <section class="collections-summary pf-management-metric-group" aria-label="Tổng quan khoản thu đã xác nhận">
         <article class="summary-card"><div class="summary-label"><span>TỔNG PHIẾU ĐÃ HẠCH TOÁN</span><span class="material-symbols-outlined">receipt_long</span></div><strong>@Value(data?.Total)</strong><small>Giao dịch đã xác nhận trong hệ thống</small></article>
         <article class="summary-card revenue"><div class="summary-label"><span>DOANH THU TRANG HIỆN TẠI</span><span class="material-symbols-outlined">payments</span></div><strong>@Money(Revenue)</strong><small>Tổng tiền của các bản ghi đang hiển thị</small></article>
         <article class="summary-card matching"><div class="summary-label"><span>TỶ LỆ ĐÃ HẠCH TOÁN</span><span class="material-symbols-outlined">bolt</span></div><strong>@ConfirmedRate</strong><small>Giao dịch trong danh sách đã được xác nhận</small></article>
         <article class="summary-card invoice-export"><div class="summary-label"><span>HÓA ĐƠN ĐÃ XUẤT VAT</span><span class="material-symbols-outlined">description</span></div><strong class="unavailable-value">—</strong><small>Chưa tích hợp dịch vụ hóa đơn điện tử</small></article>
     </section>
 
-    <section class="collections-toolbar" aria-label="Bộ lọc khoản thu">
-        <div class="collections-filters">
+    <section class="collections-table-card pf-list-panel pf-management-list" aria-labelledby="collections-list-title">
+        <h2 class="visually-hidden" id="collections-list-title">Danh sách khoản thu đã xác nhận</h2>
+        <div class="collections-filters pf-list-toolbar pf-management-toolbar" role="group" aria-label="Bộ lọc khoản thu">
             <label class="search-field"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm khoản thu</span><input type="search" placeholder="Mã phiếu thu, hóa đơn, chủ hóa đơn, căn hộ…" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
             <button class="period-filter" type="button" disabled title="Chưa có API lọc kỳ hạch toán"><span class="material-symbols-outlined">calendar_month</span>Kỳ hạch toán hiện tại<span class="material-symbols-outlined">expand_more</span></button>
             <button class="scope-filter" type="button" disabled title="Dữ liệu thuộc tòa nhà hiện tại">Tất cả phạm vi<span class="material-symbols-outlined">expand_more</span></button>
+            <span class="pf-management-count">@(data?.Total ?? 0) khoản thu</span>
+            <PropFlowListRefresh OnRefresh="ReloadAsync" Busy="@loading" />
         </div>
         <div class="method-filters" aria-label="Lọc theo phương thức thanh toán">
             <button class="@(method == "ALL" ? "active" : null)" type="button" @onclick='() => SetMethod("ALL")'>Tất cả phiếu thu (@(data?.Counts?.GetValueOrDefault("ALL") ?? data?.Total ?? 0))</button>
             <button class="@(method == "BANK_TRANSFER" ? "active" : null)" type="button" @onclick='() => SetMethod("BANK_TRANSFER")'>Chuyển khoản (@CountMethod("BANK_TRANSFER"))</button>
             <button class="@(method == "CASH" ? "active" : null)" type="button" @onclick='() => SetMethod("CASH")'>Tiền mặt (@CountMethod("CASH"))</button>
         </div>
-    </section>
-
-    <section class="collections-table-card" aria-labelledby="collections-list-title">
-        <h2 class="visually-hidden" id="collections-list-title">Danh sách khoản thu đã xác nhận</h2>
-        <div class="table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ PHIẾU THU &amp;<br />THỜI GIAN</th><th>HÓA ĐƠN / CHỦ HÓA ĐƠN / CĂN HỘ</th><th>KHOẢN PHÍ HẠCH TOÁN</th><th>PHƯƠNG THỨC</th><th>SỐ TIỀN ĐÃ THU</th><th>TRẠNG THÁI SỔ CÁI</th><th>THAO TÁC</th></tr></thead><tbody>
+        <div class="table-scroll"><table class="pf-list-table"><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ PHIẾU THU &amp;<br />THỜI GIAN</th><th>HÓA ĐƠN / CHỦ HÓA ĐƠN / CĂN HỘ</th><th>KHOẢN PHÍ HẠCH TOÁN</th><th>PHƯƠNG THỨC</th><th>SỐ TIỀN ĐÃ THU</th><th>TRẠNG THÁI SỔ CÁI</th><th>THAO TÁC</th></tr></thead><tbody>
             @if (loading) { <tr><td colspan="8"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="8"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (FilteredItems.Count == 0) { <tr><td colspan="8"><FinanceUnavailableState Title="Không có khoản thu phù hợp" Message="Hãy thay đổi từ khóa hoặc bộ lọc phương thức." Icon="inbox" /></td></tr> }

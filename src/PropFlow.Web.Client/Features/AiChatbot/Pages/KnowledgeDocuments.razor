@@ -1,3 +1,4 @@
+@using PropFlow.Web.Client.Shared.Management
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/knowledge/documents"
 @layout PropFlow.Web.Client.Layout.MainLayout
@@ -12,39 +13,51 @@
 
 <PageTitle>Tài liệu chung cư - PropFlow</PageTitle>
 <div class="knowledge-workspace">
-    <header class="knowledge-hero">
-        <div><span class="eyebrow">KHO TÀI LIỆU</span><h1>Tài liệu chung cư</h1>
-            <p>Nội quy, hướng dẫn và quy trình vận hành tại một nơi.</p></div>
-        @if (canManage) { <button class="primary" disabled="@InteractionBlocked" @onclick="NewDocument">+ Thêm tài liệu</button> }
-    </header>
+    <ManagementPageHeader Icon="menu_book" Title="Tài liệu chung cư"
+                          Description="Nội quy, hướng dẫn và quy trình vận hành tại một nơi.">
+        <Actions>
+            @if (canManage)
+            {
+                <button type="button" class="pf-management-primary" disabled="@InteractionBlocked" @onclick="NewDocument">+ Thêm tài liệu
+                </button>
+            }
+        </Actions>
+    </ManagementPageHeader>
     <p class="knowledge-notice">@(canManage ? "Lưu bản nháp để kiểm tra nội dung trước khi xuất bản. Chỉ bản đã xuất bản cho cư dân mới đủ điều kiện làm nguồn trả lời của chatbot." : "Bạn có thể xem các tài liệu đã được Ban quản lý xuất bản, bao gồm tài liệu nội bộ.")</p>
     @if (error is not null) { <div class="error" role="alert">@error</div> }
 
-    <form class="knowledge-search" @onsubmit="Search" @onsubmit:preventDefault>
-        <label for="knowledge-search">Tìm theo tiêu đề</label>
-        <input id="knowledge-search" @bind="search" maxlength="200" placeholder="Nhập tên tài liệu…" disabled="@InteractionBlocked" />
-        <button disabled="@InteractionBlocked" type="submit">Tìm kiếm</button><button disabled="@InteractionBlocked" type="button" @onclick="Load">Tải lại</button>
-    </form>
-    @if (loading) { <p role="status">Đang tải tài liệu…</p> }
-    else if (pageData is not null)
-    {
-        @if (pageData.Total == 0) { <div class="empty">@(canManage ? "Chưa có tài liệu. Chọn “Thêm tài liệu” để tạo bản đầu tiên." : "Chưa có tài liệu được xuất bản.")</div> }
-        <div class="knowledge-grid">
-            @foreach (var item in pageData.Items)
-            {
-                <article class="knowledge-card">
-                    <span class="material-symbols-outlined book-icon" aria-hidden="true">description</span>
-                    <div class="badges"><span>@AudienceLabel(item.Audience)</span><span>@StatusLabel(item)</span></div>
-                    <h2>@item.Title</h2><p>Phiên bản @item.Revision</p>
-                    <button disabled="@InteractionBlocked" @onclick="() => Open(item.Id)">@(canManage ? "Xem và quản lý" : "Đọc tài liệu")</button>
-                </article>
-            }
-        </div>
-        <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(pageData.Total / (double)pageData.PageSize))" Busy="InteractionBlocked" Label="Phân trang tài liệu"
-            PageChanged="ChangePageAsync">
-            <span>@pageData.Total tài liệu</span>
-        </TablePagination>
-    }
+    <section class="knowledge-directory pf-list-panel pf-management-list" aria-label="Danh sách tài liệu" aria-busy="@loading">
+        <form class="pf-list-toolbar pf-management-toolbar" @onsubmit="Search" @onsubmit:preventDefault>
+            <label class="pf-list-search pf-management-search">
+                <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                <input type="search" aria-label="Tìm theo tiêu đề" @bind="search" maxlength="200"
+                       placeholder="Nhập tên tài liệu…" disabled="@InteractionBlocked" />
+            </label>
+            <button class="pf-management-secondary" disabled="@InteractionBlocked" type="submit">Tìm kiếm</button>
+            @if (pageData is not null) { <span class="pf-management-count result-count">@pageData.Total tài liệu</span> }
+            <PropFlowListRefresh OnRefresh="Load" Busy="@InteractionBlocked" />
+        </form>
+        @if (loading) { <div class="pf-management-empty" role="status">Đang tải tài liệu…</div> }
+        else if (pageData is not null)
+        {
+            @if (pageData.Total == 0) { <div class="pf-management-empty">@(canManage ? "Chưa có tài liệu. Chọn “Thêm tài liệu” để tạo bản đầu tiên." : "Chưa có tài liệu được xuất bản.")</div> }
+            <div class="knowledge-grid">
+                @foreach (var item in pageData.Items)
+                {
+                    <article class="knowledge-card">
+                        <span class="material-symbols-outlined book-icon" aria-hidden="true">description</span>
+                        <div class="badges"><span>@AudienceLabel(item.Audience)</span><span>@StatusLabel(item)</span></div>
+                        <h2>@item.Title</h2><p>Phiên bản @item.Revision</p>
+                        <button type="button" class="pf-management-secondary" disabled="@InteractionBlocked" @onclick="() => Open(item.Id)">@(canManage ? "Xem và quản lý" : "Đọc tài liệu")</button>
+                    </article>
+                }
+            </div>
+            <TablePagination Page="page" TotalPages="@((int)Math.Ceiling(pageData.Total / (double)pageData.PageSize))" Busy="InteractionBlocked" Label="Phân trang tài liệu"
+                PageChanged="ChangePageAsync">
+                <span>@pageData.Total tài liệu</span>
+            </TablePagination>
+        }
+    </section>
     @if (editorOpen)
     {
         <section class="knowledge-editor" aria-labelledby="editor-heading">

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.ServiceRequests.Application;
@@ -85,7 +86,9 @@ public sealed class StaffServiceRequestHandler(
     IApartmentResidentRelationshipSource apartments,
     IMaintenanceAssetSource assets,
     TimeProvider clock,
-    IServiceRequestRealtimeNotifier? realtime = null)
+    IServiceRequestRealtimeNotifier? realtime = null,
+    IAssignedServiceRequestRecommendationSource? recommendations = null,
+    ILogger<StaffServiceRequestHandler>? logger = null)
 {
     public async Task<StaffServiceRequestResult<StaffServiceRequestListResponse>> ListAsync(
         Guid staffUserId, StaffServiceRequestListQuery query, CancellationToken ct)
@@ -158,6 +161,7 @@ public sealed class StaffServiceRequestHandler(
 
         var now = clock.GetUtcNow();
         var saved = new List<(StaffEvidenceMetadata Metadata, string StorageKey)>();
+        var savingMetadata = false;
         try
         {
             foreach (var file in files)
@@ -168,23 +172,28 @@ public sealed class StaffServiceRequestHandler(
                 saved.Add((metadata, stored.StorageKey));
             }
 
+            savingMetadata = true;
             var outcome = await store.AddEvidenceAsync(staffUserId, id, activityId.Value, saved.Select(x => x.Metadata).ToArray(), now, ct);
             if (outcome != StaffServiceRequestOutcome.Success)
             {
-                await DeleteSavedAsync(saved, ct);
+                await DeleteSavedAsync(saved);
                 return outcome == StaffServiceRequestOutcome.NotFound
                     ? NotFound<StaffServiceRequestDetailResponse>()
                     : new(outcome, ErrorCode: "evidence_upload_conflict", Message: "Kết quả xử lý đã thay đổi nên không thể lưu ảnh bằng chứng.");
             }
         }
-        catch (ArgumentException exception)
+        catch (ArgumentException exception) when (!savingMetadata)
         {
-            await DeleteSavedAsync(saved, ct);
+            await DeleteSavedAsync(saved);
             return Invalid<StaffServiceRequestDetailResponse>("invalid_evidence_file", exception.Message);
         }
-        catch
+        catch (Exception ex)
         {
-            await DeleteSavedAsync(saved, ct);
+            if (savingMetadata)
+                logger?.LogWarning("Evidence metadata save could not be confirmed for request {RequestId}, activity {ActivityId} ({Type}).",
+                    id, activityId, ex.GetType().Name);
+            else
+                await DeleteSavedAsync(saved);
             throw;
         }
 
@@ -233,12 +242,13 @@ public sealed class StaffServiceRequestHandler(
         var evidence = (await store.EvidenceAsync(staffUserId, item.Id, ct)).Select(x => new StaffServiceRequestEvidenceItem(
             x.Id, x.ActivityId, x.FileName, x.ContentType, x.SizeBytes, x.UploadedAt,
             $"/api/v1/staff/service-requests/{item.Id}/evidence/{x.Id}")).ToArray();
+        var approvedRecommendation = recommendations is null ? null : await recommendations.GetApprovedAsync(item.Id, item.PriorityCode, ct);
         return new(StaffServiceRequestOutcome.Success, new StaffServiceRequestDetailResponse(
             item.Id, item.RequestNumber, item.Title, item.Description, item.CategoryName,
             apartment?.UnitNumber, apartment?.FloorNumber, facility?.Name, equipment?.Name,
             item.Status, item.PriorityCode, item.ServiceAreaCode, item.PreferredDate, item.PreferredTimeCode,
             item.AssignedAt, item.StartedAt, item.UpdatedAt, activities, evidence,
-            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote, item.AdditionalCostConsent));
+            item.BaseServiceCost, item.ProposedAdditionalCost, item.AdditionalCostNote, item.AdditionalCostConsent, approvedRecommendation));
     }
 
     private async Task<Dictionary<Guid, MaintenanceAssetReference>> AssetMapAsync(IEnumerable<StaffServiceRequestCore> items, CancellationToken ct)
@@ -262,10 +272,21 @@ public sealed class StaffServiceRequestHandler(
             facility?.Name, equipment?.Name, item.Status, item.PriorityCode, item.AssignedAt, item.UpdatedAt);
     }
 
-    private async Task DeleteSavedAsync(IEnumerable<(StaffEvidenceMetadata Metadata, string StorageKey)> saved, CancellationToken ct)
+    private async Task DeleteSavedAsync(IEnumerable<(StaffEvidenceMetadata Metadata, string StorageKey)> saved)
     {
         foreach (var file in saved)
-            await storage.DeleteAsync(file.StorageKey, ct);
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try
+            {
+                await storage.DeleteAsync(file.StorageKey, timeout.Token);
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning("Evidence cleanup failed for request {RequestId}, activity {ActivityId} ({Type}).",
+                    file.Metadata.ServiceRequestId, file.Metadata.ActivityId, ex.GetType().Name);
+            }
+        }
     }
 
     private static StaffServiceRequestListQuery? Normalize(StaffServiceRequestListQuery query)

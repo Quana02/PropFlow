@@ -116,7 +116,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     }
 
     [Fact]
-    public async Task Database_ShouldContain71BusinessTablesInCoreSchemas()
+    public async Task Database_ShouldContain72BusinessTablesInCoreSchemas()
     {
         var options = new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseNpgsql(_connectionString)
@@ -142,7 +142,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add((reader.GetString(0), reader.GetString(1)));
         }
 
-        Assert.Equal(71, tables.Count);
+        Assert.Equal(72, tables.Count);
 
         // PropertyAssets: 3
         Assert.Contains(("property_assets", "buildings"), tables);
@@ -217,6 +217,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Contains(("communication", "announcements"), tables);
         Assert.Contains(("communication", "announcement_versions"), tables);
         Assert.Contains(("communication", "announcement_audiences"), tables);
+        Assert.Contains(("communication", "emergency_calls"), tables);
+        Assert.Contains(("communication", "emergency_connections"), tables);
     }
 
     [Fact]
@@ -1320,7 +1322,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add(reader.GetString(0));
         }
 
-        Assert.Equal(9, tables.Count);
+        Assert.Equal(11, tables.Count);
         Assert.Contains("notifications", tables);
         Assert.Contains("announcements", tables);
         Assert.Contains("announcement_versions", tables);
@@ -1330,6 +1332,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Contains("support_manager_connections", tables);
         Assert.Contains("support_manager_presence", tables);
         Assert.Contains("support_messages", tables);
+        Assert.Contains("emergency_calls", tables);
+        Assert.Contains("emergency_connections", tables);
     }
 
     [Fact]

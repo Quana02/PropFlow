@@ -9,7 +9,7 @@
     gap: 20px;
     padding: 5px 0 28px;
     color: var(--collections-text);
-    font-family: Inter, sans-serif;
+    font-family: var(--pf-font);
 }
 
 .collections-heading {
@@ -44,7 +44,7 @@
 
 .collections-heading h1 {
     margin: 0 0 5px;
-    font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif;
+    font: 700 clamp(25px, 2.6vw, 34px)/1.2 var(--pf-font);
     letter-spacing: -0.025em;
 }
 
@@ -129,7 +129,7 @@
 .summary-card strong {
     margin-top: auto;
     color: var(--collections-text);
-    font: 700 27px/1.1 'Space Grotesk', sans-serif;
+    font: 700 27px/1.1 var(--pf-font);
 }
 
 .summary-card small {

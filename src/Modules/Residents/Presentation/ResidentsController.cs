@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Net.Mail;
@@ -23,6 +24,14 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
     IApartmentResidentRelationshipSource apartmentRelationships, ResidentResidencyService residencyService,
     ResidentOnboardingService onboarding, ResidentProfileService profiles, TimeProvider clock) : ControllerBase
 {
+    [HttpGet("summary")]
+    [Authorize(Policy = ResidentsAuthorizationPolicies.Read)]
+    [ProducesResponseType<ResidentManagementSummary>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public Task<ResidentManagementSummary> Summary([FromServices] ResidentManagementSummaryQuery query, CancellationToken ct)
+        => query.ExecuteAsync(ct);
+
     [HttpGet]
     [Authorize(Policy = ResidentsAuthorizationPolicies.Read)]
     public async Task<ActionResult<PagedResidentsResponse>> List([FromQuery] string? search, [FromQuery] ResidentStatus? status,
@@ -32,11 +41,13 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
     {
         pageIndex = Math.Max(1, pageIndex); pageSize = Math.Clamp(pageSize, 1, 100);
         var query = db.Residents.AsNoTracking().AsQueryable();
+        var exposeContact = User.IsInRole("MANAGER") || User.IsInRole("STAFF");
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToUpper();
             query = query.Where(r => r.FullName.ToUpper().Contains(term) || r.ResidentCode.ToUpper().Contains(term)
-                || (r.Email != null && r.Email.ToUpper().Contains(term)) || (r.PhoneNumber != null && r.PhoneNumber.Contains(term)));
+                || (exposeContact && ((r.Email != null && r.Email.ToUpper().Contains(term))
+                    || (r.PhoneNumber != null && r.PhoneNumber.Contains(term)))));
         }
         if (status is not null) query = query.Where(r => r.Status == status);
         var filterDate = await residencyService.BusinessDateAsync(ct);
@@ -82,7 +93,6 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
         var apartmentReferences = await apartmentRelationships.GetApartmentsAsync(residencyApartmentIds, ct);
         var apartmentById = apartmentReferences.ToDictionary(x => x.Id);
         var today = filterDate;
-        var exposeContact = User.IsInRole("MANAGER") || User.IsInRole("STAFF");
         var items = residents.Select(resident =>
         {
             var relations = ownerships.Where(x => x.ResidentId == resident.Id && x.StartDate <= today && x.EndDate is null)

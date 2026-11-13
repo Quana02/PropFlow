@@ -2,7 +2,7 @@ using PropFlow.Modules.Communication.Contracts;
 
 namespace PropFlow.Modules.Communication.Application.SupportChat;
 
-public sealed record SupportActor(Guid UserId, string Role, string Name, Guid? ResidentId = null, string TimeZoneId = "Asia/Ho_Chi_Minh");
+public sealed record SupportActor(Guid UserId, string Role, string Name, Guid? ResidentId = null, string TimeZoneId = "Asia/Ho_Chi_Minh", string? Apartment = null);
 public interface ISupportChatActors { Task<SupportActor?> FindAsync(Guid id, CancellationToken ct); }
 public interface ISupportChatRealtime
 {

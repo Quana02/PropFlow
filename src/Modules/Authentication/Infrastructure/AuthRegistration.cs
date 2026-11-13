@@ -40,6 +40,7 @@ public static class AuthRegistration
         services.AddScoped<IAuditActorLookup, InternalAccountDirectory>();
         services.AddScoped<IPrivilegedActionOtp, PrivilegedActionOtp>();
         services.AddScoped<AuthUseCases>();
+        services.AddScoped<AccountAvatarUseCases>();
         services.AddScoped<IInternalAccountProfiles>(sp => sp.GetRequiredService<AuthUseCases>());
         services.AddControllers().AddApplicationPart(typeof(AuthController).Assembly);
         services.Configure<ApiBehaviorOptions>(options => options.InvalidModelStateResponseFactory = context =>
@@ -91,6 +92,7 @@ public static class AuthRegistration
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/resident-notifications") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/notifications") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/support-chat") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/emergency-calls") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/announcements")) &&
                         context.Request.Query.TryGetValue("access_token", out var accessToken))
                     {

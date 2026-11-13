@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Shared;
@@ -11,9 +12,12 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure;
 public sealed class CloudinaryServiceRequestEvidenceStorage(
     HttpClient http,
     IOptions<CloudinaryOptions> configuredOptions,
-    LocalServiceRequestEvidenceStorage legacyStorage) : IServiceRequestEvidenceStorage
+    LocalServiceRequestEvidenceStorage legacyStorage,
+    ILogger<CloudinaryServiceRequestEvidenceStorage>? logger = null) : IServiceRequestEvidenceStorage
 {
     private const string StoragePrefix = "cloudinary:";
+    private const string ProtectedPrefix = "cloudinary-authenticated:";
+    private const string ProtectedType = "authenticated";
     private const long MaxBytes = 10 * 1024 * 1024;
     private readonly CloudinaryOptions options = configuredOptions.Value;
 
@@ -38,7 +42,7 @@ public sealed class CloudinaryServiceRequestEvidenceStorage(
             ? $"{serviceRequestId:N}/{Guid.NewGuid():N}"
             : $"{folder}/{serviceRequestId:N}/{Guid.NewGuid():N}";
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
-        var signature = Sign($"public_id={publicId}&timestamp={timestamp}");
+        var signature = Sign($"overwrite=false&public_id={publicId}&timestamp={timestamp}&type={ProtectedType}");
 
         using var form = new MultipartFormDataContent();
         using var imageContent = new StreamContent(image);
@@ -47,24 +51,39 @@ public sealed class CloudinaryServiceRequestEvidenceStorage(
         form.Add(new StringContent(options.ApiKey), "api_key");
         form.Add(new StringContent(timestamp), "timestamp");
         form.Add(new StringContent(publicId), "public_id");
+        form.Add(new StringContent(ProtectedType), "type");
+        form.Add(new StringContent("false"), "overwrite");
         form.Add(new StringContent(signature), "signature");
 
-        using var response = await http.PostAsync(ApiUri("upload"), form, ct);
-        response.EnsureSuccessStatusCode();
-        var uploaded = await response.Content.ReadFromJsonAsync<CloudinaryUploadResponse>(cancellationToken: ct);
-        if (uploaded is null || string.IsNullOrWhiteSpace(uploaded.PublicId) || uploaded.Bytes <= 0)
-            throw new InvalidOperationException("Cloudinary không trả về thông tin ảnh đã lưu.");
+        try
+        {
+            using var response = await http.PostAsync(ApiUri("upload"), form, ct);
+            response.EnsureSuccessStatusCode();
+            var uploaded = await response.Content.ReadFromJsonAsync<CloudinaryUploadResponse>(cancellationToken: ct);
+            if (uploaded is null || string.IsNullOrWhiteSpace(uploaded.AssetId) || uploaded.PublicId != publicId
+                || uploaded.Type != ProtectedType || uploaded.Bytes <= 0)
+                throw new InvalidOperationException("Cloudinary không trả về thông tin ảnh đã lưu.");
 
-        return new StoredEvidence(StoragePrefix + uploaded.PublicId, uploaded.Bytes);
+            return new StoredEvidence(ProtectedPrefix + uploaded.AssetId, uploaded.Bytes);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException or InvalidOperationException)
+        {
+            logger?.LogWarning("Evidence upload could not be confirmed for request {RequestId}, asset {PublicId} ({Type}).",
+                serviceRequestId, publicId, ex.GetType().Name);
+            throw;
+        }
     }
 
     public async Task<Stream?> OpenReadAsync(string storageKey, CancellationToken ct)
     {
-        if (!TryGetPublicId(storageKey, out var publicId))
+        var protectedAsset = storageKey.StartsWith(ProtectedPrefix, StringComparison.Ordinal);
+        if (!protectedAsset && !TryGetPublicId(storageKey, out _))
             return await legacyStorage.OpenReadAsync(storageKey, ct);
 
         EnsureConfigured();
-        using var response = await http.GetAsync(DeliveryUri(publicId), HttpCompletionOption.ResponseHeadersRead, ct);
+        using var response = protectedAsset
+            ? await SendAssetRequestAsync("download", storageKey[ProtectedPrefix.Length..], invalidate: false, ct)
+            : await http.GetAsync(DeliveryUri(storageKey[StoragePrefix.Length..]), HttpCompletionOption.ResponseHeadersRead, ct);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
         response.EnsureSuccessStatusCode();
         var copy = new MemoryStream();
@@ -75,6 +94,13 @@ public sealed class CloudinaryServiceRequestEvidenceStorage(
 
     public async Task DeleteAsync(string storageKey, CancellationToken ct)
     {
+        if (storageKey.StartsWith(ProtectedPrefix, StringComparison.Ordinal))
+        {
+            EnsureConfigured();
+            using var deleted = await SendAssetRequestAsync("destroy", storageKey[ProtectedPrefix.Length..], invalidate: true, ct);
+            await EnsureDeletedAsync(deleted, ct);
+            return;
+        }
         if (!TryGetPublicId(storageKey, out var publicId))
         {
             await legacyStorage.DeleteAsync(storageKey, ct);
@@ -93,7 +119,29 @@ public sealed class CloudinaryServiceRequestEvidenceStorage(
             ["signature"] = signature
         });
         using var response = await http.PostAsync(ApiUri("destroy"), form, ct);
+        await EnsureDeletedAsync(response, ct);
+    }
+
+    private async Task<HttpResponseMessage> SendAssetRequestAsync(string action, string assetId, bool invalidate, CancellationToken ct)
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var fields = new Dictionary<string, string> { ["asset_id"] = assetId, ["timestamp"] = timestamp };
+        if (invalidate) fields.Add("invalidate", "true");
+        var parameters = string.Join("&", fields.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => $"{x.Key}={x.Value}"));
+        fields.Add("signature", Sign(parameters));
+        fields.Add("api_key", options.ApiKey);
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(options.CloudName)}/asset/{action}")
+        { Content = new FormUrlEncodedContent(fields) };
+        return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+    }
+
+    private static async Task EnsureDeletedAsync(HttpResponseMessage response, CancellationToken ct)
+    {
         response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<CloudinaryDeleteResponse>(cancellationToken: ct);
+        if (result?.Result is not ("ok" or "not found"))
+            throw new InvalidOperationException("Không thể xóa ảnh bằng chứng khỏi kho lưu trữ.");
     }
 
     private async Task<MemoryStream> ReadValidatedImageAsync(Stream content, string contentType, long declaredSize, CancellationToken ct)
@@ -167,6 +215,9 @@ public sealed class CloudinaryServiceRequestEvidenceStorage(
     };
 
     private sealed record CloudinaryUploadResponse(
+        [property: JsonPropertyName("asset_id")] string AssetId,
         [property: JsonPropertyName("public_id")] string PublicId,
+        [property: JsonPropertyName("type")] string Type,
         [property: JsonPropertyName("bytes")] long Bytes);
+    private sealed record CloudinaryDeleteResponse([property: JsonPropertyName("result")] string Result);
 }

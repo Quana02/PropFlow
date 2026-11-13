@@ -12,8 +12,7 @@
 <section class="glass-panel resident-billing">
     <h1>Hóa đơn và thanh toán</h1>
     <p>Chủ sở hữu chịu phí dịch vụ; chủ hộ thuê căn hộ chưa có chủ sở hữu chịu thêm tiền thuê theo cấu hình. Chỉ khoản đã được kế toán xác nhận mới làm giảm dư nợ.</p>
-    <div class="billing-tabs"><button class="@(filter == "ALL" ? "active" : null)" @onclick='() => filter = "ALL"'>Tất cả (@invoices.Length)</button><button class="@(filter == "UNPAID" ? "active" : null)" @onclick='() => filter = "UNPAID"'>Chưa thanh toán (@invoices.Count(x => x.Outstanding > 0))</button><button class="@(filter == "PENDING" ? "active" : null)" @onclick='() => filter = "PENDING"'>Chờ xác minh (@invoices.Count(HasPending))</button><button class="@(filter == "PAID" ? "active" : null)" @onclick='() => filter = "PAID"'>Đã thanh toán (@invoices.Count(x => x.Outstanding == 0))</button></div>
-    <button @onclick="Load" disabled="@loading">Tải lại</button>
+    <div class="billing-tabs pf-list-toolbar"><button class="@(filter == "ALL" ? "active" : null)" @onclick='() => filter = "ALL"'>Tất cả (@invoices.Length)</button><button class="@(filter == "UNPAID" ? "active" : null)" @onclick='() => filter = "UNPAID"'>Chưa thanh toán (@invoices.Count(x => x.Outstanding > 0))</button><button class="@(filter == "PENDING" ? "active" : null)" @onclick='() => filter = "PENDING"'>Chờ xác minh (@invoices.Count(HasPending))</button><button class="@(filter == "PAID" ? "active" : null)" @onclick='() => filter = "PAID"'>Đã thanh toán (@invoices.Count(x => x.Outstanding == 0))</button><PropFlowListRefresh OnRefresh="Load" Busy="@loading" /></div>
     @if (error is not null) { <p role="alert">@error</p> }
     @if (!loading && invoices.Length == 0 && error is null) { <p>Chưa có hóa đơn được gửi cho bạn.</p> }
     @if (!loading && error is null && RequestedInvoiceId is { } invoiceId && invoices.All(i => i.Id != invoiceId))

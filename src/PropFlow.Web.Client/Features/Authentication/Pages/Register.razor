@@ -25,6 +25,7 @@
     <button disabled="@busy" type="submit">@(busy ? "Đang đăng ký…" : "Đăng ký")</button>
 </EditForm>
 <nav class="auth-links auth-links-register"><a href="/login">← Đã có tài khoản? Đăng nhập</a><a class="auth-resume" href="/registration/resume">Tiếp tục xác minh tài khoản đã đăng ký</a></nav>
+<InformationLinks NewTab />
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
     public void Dispose() => toastLifetime.Dispose();

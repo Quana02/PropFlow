@@ -2,6 +2,7 @@
 @using PropFlow.Web.Client.Features.Authentication.Components
 <AuthBootstrap>
 <PropFlow.Web.Client.Shared.Feedback.ToastHost />
+<PropFlow.Web.Client.Features.Communication.EmergencyCalls.EmergencyCallOverlay />
 <Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.LandingLayout)">

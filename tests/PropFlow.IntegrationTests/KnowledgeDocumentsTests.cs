@@ -27,7 +27,7 @@ public sealed class KnowledgeDatabaseFixture : IAsyncLifetime
     {
         var source = new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString());
         if (source.Database != "propflow_test") throw new InvalidOperationException("Unexpected test database source.");
-        source.Database = "postgres"; adminConnection = source.ConnectionString;
+        source.Database = "postgres"; source.Pooling = false; adminConnection = source.ConnectionString;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
         await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin); await create.ExecuteNonQueryAsync();
         source.Database = name; connection = source.ConnectionString;

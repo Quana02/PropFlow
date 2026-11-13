@@ -10,21 +10,22 @@
 
 <PageTitle>Đối soát SePay — PropFlow</PageTitle>
 <div class="bank-review-page">
-    <header class="bank-heading"><div><small>ĐỐI SOÁT NGÂN HÀNG</small><h1>Giao dịch SePay</h1><p>Kiểm tra giao dịch chưa khớp hóa đơn và tiền dư. Các khoản thu khớp được ghi nhận tự động.</p></div><button type="button" @onclick="ReloadAsync" disabled="@loading">Tải lại</button></header>
-    <div class="bank-toolbar"><label>Hiển thị<PropFlowSelect Value="@status" ValueChanged="StatusChanged" Options="StatusOptions" Disabled="loading" AriaLabel="Lọc trạng thái giao dịch SePay" /></label><span>@(data?.Total ?? 0) giao dịch · tự cập nhật mỗi 10 giây</span><a href="/finance/payments/pending">Báo chuyển khoản của cư dân →</a></div>
-
+    <header class="bank-heading pf-management-header pf-management-existing-header"><div class="pf-management-heading">    <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">account_balance</span><div><small>ĐỐI SOÁT NGÂN HÀNG</small><h1>Giao dịch SePay</h1><p>Kiểm tra giao dịch chưa khớp hóa đơn và tiền dư. Các khoản thu khớp được ghi nhận tự động.</p></div></div></header>
     @if (!string.IsNullOrWhiteSpace(error)) { <p class="bank-error" role="alert">@error</p> }
-    <section class="bank-table"><table><thead><tr><th>Giao dịch</th><th>Tài khoản nhận</th><th>Số tiền</th><th>Hóa đơn</th><th>Đối soát</th><th scope="col">Thao tác</th></tr></thead><tbody>
+    <section class="pf-list-panel pf-management-list">
+    <div class="bank-toolbar pf-list-toolbar pf-management-toolbar"><label>Hiển thị<PropFlowSelect Value="@status" ValueChanged="StatusChanged" Options="StatusOptions" Disabled="loading" AriaLabel="Lọc trạng thái giao dịch SePay" /></label><span>@(data?.Total ?? 0) giao dịch · tự cập nhật mỗi 10 giây</span><a href="/finance/payments/pending">Báo chuyển khoản của cư dân →</a><PropFlowListRefresh OnRefresh="ReloadAsync" Busy="@loading" /></div>
+    <div class="bank-table"><table class="pf-list-table"><thead><tr><th>Giao dịch</th><th>Tài khoản nhận</th><th>Số tiền</th><th>Hóa đơn</th><th>Đối soát</th><th scope="col">Thao tác</th></tr></thead><tbody>
     @if (loading && data is null) { <tr><td colspan="6">Đang tải giao dịch…</td></tr> }
     else if (data?.Items.Count is null or 0) { <tr><td colspan="6">Chưa có giao dịch trong nhóm này.</td></tr> }
     else { @foreach (var row in data.Items) {
         <tr><td><strong>SePay #@row.TransactionId</strong><small>@row.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small><small>@row.BankReference</small></td><td>@row.Gateway<small>@row.MaskedAccountNumber</small></td><td><strong>@Money(row.Amount)</strong>@if (row.AllocatedAmount > 0) { <small>Đã ghi nhận: @Money(row.AllocatedAmount)</small> }</td><td>@(row.InvoiceNumber ?? "Chưa khớp")<small>@row.TransferCode</small></td><td><span class="bank-badge">@Status(row.Status)</span><small>@Outcome(row.Outcome)</small></td><td><button type="button" @onclick="() => OpenAsync(row.Id)">Xem chi tiết</button></td></tr>
     } }
-    </tbody></table></section>
+    </tbody></table></div>
     <TablePagination Page="page" TotalPages="@((data?.Total ?? 0) > 0 ? Pages : 0)" Busy="loading" Label="Phân trang giao dịch"
         PageChanged="ChangePageAsync">
         <span>@(data?.Total ?? 0) giao dịch</span>
     </TablePagination>
+    </section>
 </div>
 
 @if (selected is not null)

@@ -13,13 +13,16 @@
         <a href="/">Trang chủ</a><span>/</span><span>Quản lý dịch vụ</span><span>/</span><strong>Yêu cầu được phân công</strong>
     </nav>
 
-    <section class="staff-request-hero" aria-labelledby="staff-request-title">
-        <div>
-            <div class="staff-title-row">
-                <h1 id="staff-request-title">Yêu cầu được phân công</h1>
-                <span class="staff-role-chip"><i></i>Kỹ thuật viên · Staff</span>
+    <section class="staff-request-hero pf-management-header pf-management-existing-header" aria-labelledby="staff-request-title">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">assignment_ind</span>
+            <div>
+                <div class="staff-title-row">
+                    <h1 id="staff-request-title">Yêu cầu được phân công</h1>
+                    <span class="staff-role-chip"><i></i>Kỹ thuật viên · Staff</span>
+                </div>
+                <p>Xem và theo dõi các yêu cầu dịch vụ được Ban Quản lý giao cho bạn.</p>
             </div>
-            <p>Xem và theo dõi các yêu cầu dịch vụ được Ban Quản lý giao cho bạn.</p>
         </div>
         <div class="staff-shift-card">
             <span class="material-symbols-outlined">badge</span>
@@ -29,7 +32,7 @@
         </div>
     </section>
 
-    <section class="staff-metrics" aria-label="Tổng quan công việc">
+    <section class="staff-metrics pf-management-metric-group" aria-label="Tổng quan công việc">
         <article>
             <div><small>Tổng yêu cầu được giao</small><strong>@Summary.Total</strong></div>
             <span class="metric-icon slate"><span class="material-symbols-outlined">assignment</span></span>
@@ -47,7 +50,7 @@
         </article>
     </section>
 
-    <section class="staff-workspace" aria-labelledby="assigned-list-title">
+    <section class="staff-workspace pf-list-panel pf-management-list" aria-labelledby="assigned-list-title">
         <header>
             <div>
                 <span class="section-icon"><span class="material-symbols-outlined">fact_check</span></span>
@@ -56,7 +59,7 @@
             <span class="request-count">@Requests.Count / @totalCount nhiệm vụ</span>
         </header>
 
-        <div class="staff-list-tools">
+        <div class="staff-list-tools pf-list-toolbar pf-management-toolbar">
             <div class="staff-status-filters" role="group" aria-label="Lọc yêu cầu theo trạng thái">
                 @foreach (var filter in StatusFilters)
                 {
@@ -70,7 +73,7 @@
                     </button>
                 }
             </div>
-            <label class="staff-code-search">
+            <label class="staff-code-search pf-list-search">
                 <span class="material-symbols-outlined">search</span>
                 <input aria-label="Tìm theo mã yêu cầu" maxlength="30" placeholder="Tìm theo mã yêu cầu…" @bind="requestCodeSearch" @bind:event="oninput" @bind:after="SearchAsync" />
                 @if (!string.IsNullOrWhiteSpace(requestCodeSearch))
@@ -78,6 +81,7 @@
                     <button type="button" aria-label="Xóa từ khóa tìm kiếm" @onclick="ClearSearch"><span class="material-symbols-outlined">close</span></button>
                 }
             </label>
+            <PropFlowListRefresh OnRefresh="LoadAsync" Busy="@loading" />
         </div>
 
         @if (loading)
@@ -100,7 +104,7 @@
         else if (Requests.Count > 0 || (totalCount > 0 && currentPage > TotalPages))
         {
             <div class="staff-table-wrap">
-            <table>
+            <table class="pf-list-table">
                 <thead><tr><th>Mã yêu cầu</th><th>Tiêu đề / Mô tả ngắn</th><th>Vị trí / Căn hộ</th><th>Mức độ ưu tiên</th><th>Trạng thái</th><th>Ngày phân công</th><th class="action-column">Thao tác</th></tr></thead>
                 <tbody>
                     @foreach (var request in Requests)
@@ -218,7 +222,7 @@
     private static string LocationLabel(PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestListItem request) =>
         request.ApartmentUnitNumber is not null ? $"{request.ApartmentUnitNumber} · Tầng {request.FloorNumber}" :
         request.EquipmentName ?? request.FacilityName ?? "Chưa gắn vị trí";
-    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", _ => "Tiêu chuẩn" };
+    private static string PriorityLabel(string? priority) => priority switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", null => "Chưa xác định", _ => "Tiêu chuẩn" };
     private static string PriorityClass(string? priority) => priority switch { "URGENT" => "priority-urgent", "HIGH" => "priority-high", _ => "priority-normal" };
     private static string StatusLabel(string status) => status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", "CANCELLED" => "Cư dân đã từ chối dịch vụ", _ => status };
     private static string StatusClass(string status) => status switch { "ASSIGNED" => "status-assigned", "RESOLVED" or "CLOSED" => "status-resolved", _ => "status-progress" };

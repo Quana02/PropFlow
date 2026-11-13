@@ -1,0 +1,36 @@
+.resident-profile-page { --app-surface: #fff; --app-text: #24334b; --app-muted: #64748b; --app-line: #dce5ef; --app-accent: #0284c7; --app-on-accent: #fff; padding: .5rem 0 1.5rem; color: var(--app-text); }
+:is(html.dark, html[data-theme="dark"]) .resident-profile-page { --app-surface: #101b2e; --app-text: #e2e8f0; --app-muted: #a9b7c9; --app-line: #2b3c53; --app-accent: #38bdf8; }
+.profile-back { display: inline-block; margin-bottom: 1rem; color: var(--app-accent); font-size: .875rem; text-decoration: none; }
+.profile-sections { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
+.profile-sections a { padding: .6rem .9rem; border: 1px solid var(--app-line); border-radius: 99px; color: var(--app-text); background: var(--app-surface); font-size: .875rem; text-decoration: none; }
+.profile-sections a:hover { border-color: #38bdf8; color: #0369a1; }
+.resident-profile-panel { min-width: 0; border: 1px solid var(--app-line, #e5e7ef); border-radius: 1rem; background: var(--app-surface, #fff); color: var(--app-text, #24334b); overflow: hidden; }
+.resident-profile-panel > header { display: flex; align-items: center; gap: .75rem; padding: 1.5rem; border-bottom: 1px solid var(--app-line, #e5e7ef); }
+.profile-section-icon { display: grid; flex-shrink: 0; width: 2.25rem; height: 2.25rem; place-items: center; border-radius: .65rem; color: #0369a1; background: #e0f2fe; }
+h2 { margin: 0; font-size: 1rem; font-weight: 600; scroll-margin-top: 1.5rem; }
+header p { margin: .25rem 0 0; color: var(--app-muted, #64748b); font-size: .8125rem; }
+.resident-information { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.25rem; margin: 0; padding: 1.5rem; }
+dt { margin-bottom: .3rem; color: var(--app-muted, #64748b); font-size: .8125rem; }
+dd { margin: 0; font-size: .9rem; font-weight: 500; overflow-wrap: anywhere; }
+.resident-profile-panel > footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; padding: 1rem 1.5rem; border-top: 1px solid var(--app-line, #e5e7ef); background: rgba(148,163,184,.04); font-size: .8125rem; }
+footer p { margin: 0; color: var(--app-muted, #64748b); }
+a { color: var(--app-accent, #0369a1); }
+.profile-state, .vehicle-content { padding: 1.5rem; }
+.vehicle-guidance { margin: 0; color: var(--app-muted, #64748b); font-size: .875rem; line-height: 1.7; }
+.vehicle-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1rem 0 1.5rem; font-size: .875rem; }
+.profile-primary { display: inline-flex; padding: .65rem .9rem; border-radius: .6rem; background: #0369a1; color: #fff; text-decoration: none; font-weight: 600; }
+h3 { margin: 0 0 .7rem; font-size: .9rem; font-weight: 600; }
+.vehicle-empty { padding: 1rem; border: 1px dashed #cbd5e1; border-radius: .7rem; color: var(--app-muted, #64748b); font-size: .875rem; }
+.vehicle-note { margin: 1rem 0 0; color: var(--app-muted, #64748b); font-size: .8125rem; line-height: 1.6; }
+.vehicle-requests { display: grid; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.vehicle-requests a { display: grid; gap: .3rem; padding: .85rem; border: 1px solid #dbe5f0; border-radius: .7rem; color: inherit; text-decoration: none; }
+.vehicle-requests strong { font-size: .875rem; overflow-wrap: anywhere; }
+.vehicle-requests span, .vehicle-requests small { color: var(--app-muted, #64748b); font-size: .75rem; overflow-wrap: anywhere; }
+.resident-security-content { padding: 0 1.5rem 1.5rem; }
+.email-verification-link { display: inline-flex; align-items: center; gap: .5rem; margin-bottom: 1.25rem; font-size: .875rem; }
+.resident-password { border: 1px solid var(--app-line, #e5e7ef); border-radius: .75rem; padding: 1rem; }
+.resident-password summary { color: var(--app-text, #24334b); font-size: .95rem; font-weight: 600; cursor: pointer; }
+.resident-password > p { color: var(--app-muted, #64748b); font-size: .8125rem; line-height: 1.7; }
+button { padding: .5rem .75rem; border: 1px solid #cbd5e1; border-radius: .5rem; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #38bdf8; outline-offset: 3px; }
+@media (max-width: 600px) { .resident-information { grid-template-columns: 1fr; } .resident-profile-panel > header, .profile-state, .vehicle-content { padding: 1rem; } .resident-security-content { padding: 0 1rem 1rem; } }

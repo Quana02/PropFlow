@@ -2,21 +2,21 @@
 .back-link { display: inline-flex; margin-bottom: 1.1rem; color: #64748b; font-size: .72rem; font-weight: 700; text-decoration: none; }
 .back-link:hover { color: #0284c7; }
 .eyebrow { margin: 0 0 .45rem; color: #0284c7; font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.page-heading h1 { margin: 0; color: #0f172a; font: 700 clamp(1.75rem, 3.5vw, 2.5rem)/1.15 "Space Grotesk", sans-serif; letter-spacing: -.025em; }
+.page-heading h1 { margin: 0; color: #0f172a; font: 700 clamp(1.75rem, 3.5vw, 2.5rem)/1.15 var(--pf-font); letter-spacing: -.025em; }
 .page-heading > div > p:last-child { margin: .6rem 0 0; color: #64748b; font-size: .85rem; }
 .create-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(18rem, .85fr); gap: 1.25rem; margin-right: 3.5rem; }
 .form-card, .guidance-card { border: 1px solid rgba(255, 255, 255, .85); border-radius: 1.5rem; background: rgba(255, 255, 255, .74); box-shadow: 0 16px 36px -6px rgba(15, 23, 42, .06), inset 0 0 15px rgba(255, 255, 255, .55); backdrop-filter: blur(24px); }
 .form-card { padding: 1.5rem; }
 .card-heading { display: flex; align-items: center; gap: .8rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(203, 213, 225, .55); }
 .heading-icon { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border-radius: .85rem; background: #e0f2fe; }
-.card-heading h2, .guidance-card h2 { margin: 0; color: #0f172a; font: 700 1rem "Space Grotesk", sans-serif; }
+.card-heading h2, .guidance-card h2 { margin: 0; color: #0f172a; font: 700 1rem var(--pf-font); }
 .card-heading p { margin: .25rem 0 0; color: #94a3b8; font-size: .68rem; }
 .form-card ::deep .api-state { margin-top: 1.1rem; }
 .request-form { display: grid; gap: 1rem; margin-top: 1.15rem; }
 .field-group { display: grid; gap: .4rem; }
 .field-group label { color: #334155; font-size: .72rem; font-weight: 700; }
 .field-group label span { color: #e11d48; }
-.field-group input, .field-group textarea { box-sizing: border-box; width: 100%; border: 1px solid rgba(203, 213, 225, .75); border-radius: 1rem; color: #475569; background: rgba(248, 250, 252, .75); font: 500 .78rem/1.55 "Plus Jakarta Sans", sans-serif; }
+.field-group input, .field-group textarea { box-sizing: border-box; width: 100%; border: 1px solid rgba(203, 213, 225, .75); border-radius: 1rem; color: #475569; background: rgba(248, 250, 252, .75); font: 500 .78rem/1.55 var(--pf-font); }
 .field-group input { min-height: 2.85rem; padding: .75rem 1rem; }
 .field-group textarea { padding: .85rem 1rem; resize: vertical; }
 .field-group input:disabled, .field-group textarea:disabled { cursor: not-allowed; opacity: .68; }

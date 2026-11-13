@@ -116,7 +116,7 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         var category = await db.ServiceRequestCategories.Where(row => row.IsActive).Select(row => row.Code).FirstAsync();
         var command = new CreateResidentServiceRequestRequest(category, "Yêu cầu mới", "Xin kiểm tra sự cố trong căn hộ.", "LIVING_ROOM", "NORMAL", null, null);
 
-        Assert.Equal(SubmitServiceRequestOutcome.InvalidInput, (await handler.HandleAsync(owner.Id, command with { Title = "" }, default)).Outcome);
+        Assert.Equal(SubmitServiceRequestOutcome.InvalidInput, (await handler.HandleAsync(owner.Id, command with { Description = "" }, default)).Outcome);
         await dispatcher.DispatchAsync(default);
         Assert.Empty(await communication.Notifications.ToArrayAsync());
         await using (var rolledBack = await db.Database.BeginTransactionAsync())
