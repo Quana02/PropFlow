@@ -113,6 +113,13 @@ builder.Services.AddSingleton(services =>
     return new Cloudinary(new Account(options.CloudName, options.ApiKey, options.ApiSecret));
 });
 builder.Services.AddHttpClient("MaintenanceEvidenceCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient("AccountAvatarCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient("BuildingWeatherGeocoding", client => { client.BaseAddress = new Uri("https://geocoding-api.open-meteo.com/"); client.Timeout = TimeSpan.FromSeconds(8); });
+builder.Services.AddHttpClient("BuildingWeatherForecast", client => { client.BaseAddress = new Uri("https://api.open-meteo.com/"); client.Timeout = TimeSpan.FromSeconds(8); });
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.ICurrentBuildingLocation, PropFlow.Modules.PropertyAssets.Infrastructure.CurrentBuildingLocationReader>();
+builder.Services.AddScoped<PropFlow.Api.Composition.CurrentBuildingWeatherService>();
+builder.Services.AddScoped<PropFlow.Modules.Authentication.Application.IAccountAvatarStorage, PropFlow.Api.Composition.CloudinaryAccountAvatarStorage>();
 
 // Authentication and Administration share one scoped connection so their
 // account-provisioning workflow can commit atomically across module DbContexts.

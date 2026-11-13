@@ -17,6 +17,7 @@
     <ProjectReference Include="../Modules/Payments.Contracts/PropFlow.Modules.Payments.Contracts.csproj" />
     <ProjectReference Include="../Modules/AiChatbot.Contracts/PropFlow.Modules.AiChatbot.Contracts.csproj" />
     <ProjectReference Include="../Modules/Communication.Contracts/PropFlow.Modules.Communication.Contracts.csproj" />
+    <ProjectReference Include="../Modules/PropertyAssets.Contracts/PropFlow.Modules.PropertyAssets.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

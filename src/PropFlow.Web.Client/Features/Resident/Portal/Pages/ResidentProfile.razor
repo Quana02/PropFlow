@@ -1,0 +1,105 @@
+@page "/resident/profile"
+@attribute [Authorize(Roles = "RESIDENT")]
+@layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
+@using PropFlow.Web.Client.Features.Authentication.Components
+@using PropFlow.Web.Client.Features.Resident.Portal.Models
+@using PropFlow.Web.Client.Features.Resident.Portal.Services
+@using PropFlow.Modules.ServiceRequests.Contracts
+@inject IResidentServiceRequestApiClient Requests
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="resident-profile-page">
+    <a class="profile-back" href="/resident">← Trang chủ cư dân</a>
+    <nav class="profile-sections" aria-label="Các phần trong hồ sơ">
+        <a href="/resident/profile#personal-title" @onclick:preventDefault @onclick='() => ScrollToAsync("personal-title")'>Thông tin cá nhân</a><a href="/resident/profile#resident-details-title" @onclick:preventDefault @onclick='() => ScrollToAsync("resident-details-title")'>Hồ sơ cư trú</a>
+        <a href="/resident/profile#resident-vehicles-title" @onclick:preventDefault @onclick='() => ScrollToAsync("resident-vehicles-title")'>Xe đăng ký</a><a href="/resident/profile#security-title" @onclick:preventDefault @onclick='() => ScrollToAsync("security-title")'>Tài khoản &amp; bảo mật</a>
+    </nav>
+    <AccountWorkspace Title="Hồ sơ cá nhân" Description="Thông tin cá nhân, xe đăng ký và bảo mật tài khoản tại một nơi.">
+        <AdditionalSections>
+            <section class="resident-profile-panel" aria-labelledby="resident-details-title">
+                <header><span class="profile-section-icon material-symbols-outlined" aria-hidden="true">home</span><div><h2 id="resident-details-title">Hồ sơ cư trú</h2><p>Thông tin được Ban quản lý ghi nhận cho cư dân.</p></div></header>
+                @if (Profile.IsLoading) { <p class="profile-state" role="status">Đang tải hồ sơ cư trú…</p> }
+                else if (Profile.Error is not null) { <p class="profile-state" role="alert">@Profile.Error</p> }
+                else if (Profile.Profile is { } resident)
+                {
+                    <dl class="resident-information">
+                        <div><dt>Họ và tên cư dân</dt><dd>@resident.FullName</dd></div>
+                        <div><dt>Căn hộ</dt><dd>@Profile.ApartmentLabel</dd></div>
+                        <div><dt>Quan hệ với căn hộ</dt><dd>@Profile.RelationshipLabel</dd></div>
+                        <div><dt>Mã cư dân</dt><dd>@resident.ResidentCode</dd></div>
+                        <div><dt>Số điện thoại trên hồ sơ</dt><dd>@(resident.PhoneNumber ?? "Chưa cập nhật")</dd></div>
+                        <div><dt>Email trên hồ sơ</dt><dd>@(resident.Email ?? "Chưa cập nhật")</dd></div>
+                    </dl>
+                }
+                else { <p class="profile-state">Tài khoản chưa có hồ sơ cư trú để hiển thị.</p> }
+                <footer><p>Cần điều chỉnh thông tin cư trú?</p><a href="/resident/contact-management">Liên hệ Ban quản lý →</a></footer>
+            </section>
+
+            <section class="resident-profile-panel" aria-labelledby="resident-vehicles-title">
+                <header><span class="profile-section-icon material-symbols-outlined" aria-hidden="true">directions_car</span><div><h2 id="resident-vehicles-title">Xe đăng ký</h2><p>Gửi yêu cầu đăng ký hoặc thay đổi thông tin xe đến Ban quản lý.</p></div></header>
+                <div class="vehicle-content">
+                    <p class="vehicle-guidance">Khi đăng ký, vui lòng ghi rõ loại xe, biển số và màu xe. Việc đăng ký được Ban quản lý tiếp nhận qua yêu cầu dịch vụ.</p>
+                    <div class="vehicle-actions"><a class="profile-primary" href="/resident/service-requests/new">Gửi yêu cầu về xe</a><a href="/resident/service-requests">Theo dõi yêu cầu</a></div>
+                    <h3>Yêu cầu về xe đã được phân loại</h3>
+                    @if (loadingVehicles) { <p role="status">Đang tải yêu cầu về xe…</p> }
+                    else if (vehicleError is not null)
+                    {
+                        <p role="alert">@vehicleError</p><button type="button" @onclick="LoadVehiclesAsync">Thử lại</button>
+                    }
+                    else if (vehicleRequests.Count == 0) { <p class="vehicle-empty">Chưa có yêu cầu về xe được phân loại để hiển thị.</p> }
+                    else
+                    {
+                        <ul class="vehicle-requests">
+                            @foreach (var request in vehicleRequests)
+                            {
+                                <li><a href="@($"/resident/service-requests/{request.Id}")"><strong>@request.Title</strong><span>#@request.RequestNumber</span><small>@RequestStatus(request.Status)</small></a></li>
+                            }
+                        </ul>
+                    }
+                    <p class="vehicle-note">Đây là lịch sử yêu cầu dịch vụ, chưa phải danh sách xe đã được cấp quyền ra vào.</p>
+                </div>
+            </section>
+        </AdditionalSections>
+        <SecurityContent>
+            <div class="resident-security-content">
+                <a class="email-verification-link" href="/resident/account-email"><span class="material-symbols-outlined" aria-hidden="true">mark_email_read</span>Xác minh email theo yêu cầu Ban quản lý →</a>
+                <details class="resident-password">
+                    <summary>Đổi mật khẩu</summary>
+                    <p>Sau khi đổi mật khẩu, các phiên đăng nhập sẽ bị thu hồi. Bạn cần đăng nhập lại bằng mật khẩu mới.</p>
+                    <AccountPasswordForm />
+                </details>
+            </div>
+        </SecurityContent>
+    </AccountWorkspace>
+</div>
+
+@code {
+    [CascadingParameter] private ResidentPortalProfileContext Profile { get; set; } = ResidentPortalProfileContext.Loading;
+    private readonly CancellationTokenSource lifetime = new();
+    private IReadOnlyList<ResidentServiceRequestListItem> vehicleRequests = [];
+    private bool loadingVehicles, disposed;
+    private string? vehicleError;
+    protected override Task OnInitializedAsync() => LoadVehiclesAsync();
+    private ValueTask ScrollToAsync(string id) => JS.InvokeVoidAsync("propFlowResident.scrollToProfileSection", id);
+    private async Task LoadVehiclesAsync()
+    {
+        if (loadingVehicles || disposed) return;
+        loadingVehicles = true; vehicleError = null;
+        try
+        {
+            var result = await Requests.ListAsync(cancellationToken: lifetime.Token);
+            if (disposed) return;
+            if (result.IsSuccess) vehicleRequests = (result.Data ?? []).Where(x => x.CategoryCode == "VEHICLE").OrderByDescending(x => x.SubmittedAt).ToArray();
+            else vehicleError = result.Message ?? "Chưa tải được yêu cầu về xe. Vui lòng thử lại.";
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { if (!disposed) loadingVehicles = false; }
+    }
+    private static string RequestStatus(string status) => status switch
+    {
+        "SUBMITTED" => "Chờ tiếp nhận", "UNDER_REVIEW" => "Đang xem xét", "ASSIGNED" => "Đã phân công",
+        "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "REJECTED" => "Đã từ chối", _ => "Đang theo dõi"
+    };
+    public void Dispose() { disposed = true; lifetime.Cancel(); lifetime.Dispose(); }
+}

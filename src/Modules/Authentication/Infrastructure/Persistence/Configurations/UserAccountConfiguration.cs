@@ -11,6 +11,8 @@ public class UserAccountConfiguration : IEntityTypeConfiguration<UserAccount>
         builder.ToTable("users", "auth");
 
         builder.HasKey(u => u.Id);
+        builder.Property(u => u.AvatarStorageKey).HasColumnName("avatar_storage_key").HasMaxLength(512);
+        builder.Property(u => u.AvatarVersion).HasColumnName("avatar_version");
         builder.HasOne<UserAccount>().WithMany().HasForeignKey(u => u.CreatedBy).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<UserAccount>().WithMany().HasForeignKey(u => u.UpdatedBy).OnDelete(DeleteBehavior.Restrict);
         builder.Property(u => u.Id)

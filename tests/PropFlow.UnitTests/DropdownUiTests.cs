@@ -98,7 +98,8 @@ public sealed class DropdownUiTests
         Assert.Contains(".resident-portal-modal-backdrop {", styles, StringComparison.Ordinal);
         Assert.DoesNotContain("\n.resident-modal {", styles, StringComparison.Ordinal);
         Assert.DoesNotContain("\n.resident-modal-backdrop {", styles, StringComparison.Ordinal);
-        Assert.Contains("class=\"resident-portal-modal\"", portalHeader, StringComparison.Ordinal);
+        Assert.DoesNotContain("id=\"profileModal\"", portalHeader, StringComparison.Ordinal);
+        Assert.Contains("href=\"/resident/profile\"", portalHeader, StringComparison.Ordinal);
         Assert.Contains("class=\"resident-modal\"", manager, StringComparison.Ordinal);
     }
 
@@ -308,16 +309,16 @@ public sealed class DropdownUiTests
     }
 
     [Fact]
-    public void ResidentDashboard_GlobalSearchOffersMatchingServiceSuggestions()
+    public void ResidentDashboard_RemovesGlobalSearchAndKeepsServiceActions()
     {
         var source = File.ReadAllText(Path.Combine(
             SolutionDirectory, "src", "PropFlow.Web.Client", "Features", "Resident", "Portal", "Pages", "ResidentDashboard.razor"));
 
-        Assert.Contains("role=\"combobox\"", source, StringComparison.Ordinal);
-        Assert.Contains("resident-search-suggestions", source, StringComparison.Ordinal);
-        Assert.Contains("SearchResults", source, StringComparison.Ordinal);
-        Assert.Contains("OpenSearchResult", source, StringComparison.Ordinal);
-        Assert.Contains("NormalizeSearch", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("id=\"residentSearch\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("resident-search-wrap", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenSearchResult", source, StringComparison.Ordinal);
+        Assert.Contains("<ResidentDashboardClock", source, StringComparison.Ordinal);
+        Assert.Contains("resident-service-grid", source, StringComparison.Ordinal);
     }
 
     [Fact]

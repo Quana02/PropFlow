@@ -17,45 +17,7 @@
 
 <section class="resident-hero" data-purpose="hero-center-area">
     <div class="resident-greeting glass-panel"><span>👋</span><strong>Xin chào buổi sáng, @DisplayName</strong><i></i></div>
-    <div class="resident-clock" data-purpose="digital-clock"><span id="clockTime">--:--</span><small id="clockPeriod">--</small></div>
-    <p id="clockDate" class="resident-date">Đang cập nhật ngày giờ…</p>
-    <div class="resident-search-wrap" @onfocusin="ShowSearchResults" @onfocusout="HideSearchResults">
-        <label class="resident-search glass-panel">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg>
-            <span class="sr-only">Tìm kiếm</span>
-            <input id="residentSearch" type="search" role="combobox" autocomplete="off"
-                   placeholder="Tìm dịch vụ sửa chữa, vệ sinh, đăng ký xe... (Ctrl + K)"
-                   aria-autocomplete="list" aria-controls="residentSearchSuggestions"
-                   aria-expanded="@ShowCatalogSuggestions" aria-activedescendant="@ActiveSearchOptionId"
-                   @bind="_catalogSearch" @bind:event="oninput" @onkeydown="HandleCatalogSearchKeyDown" />
-            <kbd>Ctrl K</kbd>
-        </label>
-        @if (ShowCatalogSuggestions)
-        {
-            <section class="resident-search-suggestions glass-panel" id="residentSearchSuggestions" role="listbox" aria-label="Dịch vụ phù hợp">
-                @if (SearchResults.Count == 0)
-                {
-                    <div class="resident-search-empty">Không tìm thấy dịch vụ phù hợp.</div>
-                }
-                else
-                {
-                    @for (var index = 0; index < SearchResults.Count; index++)
-                    {
-                        var resultIndex = index;
-                        var service = SearchResults[index];
-                        <button id="@SearchOptionId(resultIndex)" class="@(resultIndex == _activeSearchIndex ? "active" : null)" type="button" role="option"
-                                aria-selected="@(resultIndex == _activeSearchIndex)"
-                                @onmouseenter="() => _activeSearchIndex = resultIndex"
-                                @onmousedown="() => OpenSearchResult(service)" @onmousedown:preventDefault>
-                            <span class="service-icon @service.Accent">@service.Icon</span>
-                            <span><strong>@service.Title</strong><small>@service.Description</small></span>
-                            <em>Chọn</em>
-                        </button>
-                    }
-                }
-            </section>
-        }
-    </div>
+    <ResidentDashboardClock />
 </section>
 
 <section class="resident-tabs" data-purpose="tab-content-container">
@@ -65,7 +27,7 @@
                 <div>
                     <header class="card-heading"><span><h2>Tiến độ xử lý yêu cầu</h2><small>Cập nhật từ dữ liệu của bạn</small></span><em class="badge badge-sky">Đã xong @CompletedRequestCount / @_requests.Count</em></header>
                     <div class="request-progress"><span style="@ProgressStyle"></span></div>
-                    <div class="resident-card-list">
+                    <div class="resident-card-list" role="region" aria-label="Các yêu cầu gần đây" tabindex="0">
                         @if (_loadingRequests)
                         {
                             <div class="resident-request-state">Đang tải yêu cầu…</div>
@@ -82,7 +44,16 @@
                         {
                             @foreach (var request in _requests.Take(3))
                             {
-                                <button class="glass-inner request-list-item" type="button" @onclick="() => OpenRequest(request)"><span><strong>@request.Title</strong><small>Mã phiếu: #@request.RequestNumber</small></span><span><em class="badge @StatusBadgeClass(request.Status)">@StatusLabel(request.Status)</em><small>@FormatSubmittedAt(request.SubmittedAt)</small></span></button>
+                                <button class="glass-inner request-list-item" type="button" @onclick="() => OpenRequest(request)">
+                                    <span class="request-list-copy">
+                                        <strong title="@request.Title">@request.Title</strong>
+                                        <small title="@request.RequestNumber">Mã phiếu: #@request.RequestNumber</small>
+                                    </span>
+                                    <span class="request-list-meta">
+                                        <em class="badge @StatusBadgeClass(request.Status)">@StatusLabel(request.Status)</em>
+                                        <small>@FormatSubmittedAt(request.SubmittedAt)</small>
+                                    </span>
+                                </button>
                             }
                         }
                     </div>
@@ -94,10 +65,10 @@
                 <div>
                     <header class="card-heading"><span><h2>Dịch vụ cư dân</h2><small>Gửi yêu cầu, thanh toán và liên hệ</small></span><em class="badge badge-neutral">@(ServiceCatalog.Count + 1) mục</em></header>
                     <div class="resident-service-grid">
-                        <button class="service-btn emergency-service-button" type="button" @onclick="EmergencyCalls.StartAsync" disabled="@EmergencyCalls.Busy"><span class="service-icon rose material-symbols-outlined" aria-hidden="true">emergency</span><strong>Khẩn cấp</strong><small>Gọi thoại với BQL</small></button>
+                        <button class="service-btn emergency-service-button" type="button" @onclick="EmergencyCalls.StartAsync" disabled="@EmergencyCalls.Busy"><ResidentServiceIcon Kind="EMERGENCY" Accent="rose" /><strong>Khẩn cấp</strong><small>Gọi thoại với BQL</small></button>
                         @foreach (var service in ServiceCatalog)
                         {
-                            <button class="service-btn glass-inner" type="button" @onclick="() => OpenSearchResult(service)"><span class="service-icon @service.Accent">@service.Icon</span><strong>@service.ShortTitle</strong></button>
+                            <button class="service-btn glass-inner" type="button" @onclick="() => OpenService(service.CategoryCode, service.Title)"><ResidentServiceIcon Kind="@service.CategoryCode" Accent="@service.Accent" /><strong>@service.ShortTitle</strong></button>
                         }
                     </div>
                 </div>
@@ -205,15 +176,11 @@
     private DateOnly? _draftRequestFromDate, _draftRequestToDate;
     private DateOnly? _requestFromDate;
     private DateOnly? _requestToDate;
-    private string? _catalogSearch;
-    private bool _catalogSearchFocused;
-    private int _activeSearchIndex;
-
     private static readonly IReadOnlyList<ResidentServiceSearchItem> ServiceCatalog =
     [
-        new("OTHER", "Yêu cầu dịch vụ", "Yêu cầu dịch vụ", "Mô tả nhu cầu để Ban quản lý tiếp nhận và điều phối", "📋", "sky", ["sửa chữa", "hỏng", "điện", "nước", "vệ sinh", "dịch vụ", "yêu cầu", "thi công", "chuyển đồ"]),
-        new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "💳", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
-        new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "💬", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"])
+        new("OTHER", "Yêu cầu dịch vụ", "Yêu cầu dịch vụ", "Mô tả nhu cầu để Ban quản lý tiếp nhận và điều phối", "sky", ["sửa chữa", "hỏng", "điện", "nước", "vệ sinh", "dịch vụ", "yêu cầu", "thi công", "chuyển đồ"]),
+        new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
+        new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"])
     ];
 
     protected override async Task OnInitializedAsync() =>
@@ -321,74 +288,6 @@
         _serviceRequestModal?.Open(categoryCode, title);
     }
 
-    private IReadOnlyList<ResidentServiceSearchItem> SearchResults
-    {
-        get
-        {
-            var query = NormalizeSearch(_catalogSearch);
-            if (query.Length == 0) return [];
-
-            return ServiceCatalog
-                .Where(service => SearchText(service).Contains(query, StringComparison.Ordinal))
-                .OrderBy(service => NormalizeSearch(service.Title).StartsWith(query, StringComparison.Ordinal) ? 0 : 1)
-                .ThenBy(service => service.Title)
-                .Take(6)
-                .ToArray();
-        }
-    }
-
-    private bool ShowCatalogSuggestions => _catalogSearchFocused && !string.IsNullOrWhiteSpace(_catalogSearch);
-    private string? ActiveSearchOptionId => SearchResults.Count == 0 ? null : SearchOptionId(Math.Clamp(_activeSearchIndex, 0, SearchResults.Count - 1));
-    private static string SearchOptionId(int index) => $"residentSearchOption{index}";
-
-    private void ShowSearchResults()
-    {
-        _catalogSearchFocused = true;
-        _activeSearchIndex = 0;
-    }
-
-    private void HideSearchResults() => _catalogSearchFocused = false;
-
-    private void OpenSearchResult(ResidentServiceSearchItem service)
-    {
-        _catalogSearch = null;
-        _catalogSearchFocused = false;
-        _activeSearchIndex = 0;
-        OpenService(service.CategoryCode, service.Title);
-    }
-
-    private void HandleCatalogSearchKeyDown(KeyboardEventArgs args)
-    {
-        var results = SearchResults;
-        if (args.Key == "Escape")
-        {
-            _catalogSearchFocused = false;
-            return;
-        }
-        if (results.Count == 0) return;
-
-        if (args.Key == "ArrowDown")
-            _activeSearchIndex = (_activeSearchIndex + 1) % results.Count;
-        else if (args.Key == "ArrowUp")
-            _activeSearchIndex = (_activeSearchIndex - 1 + results.Count) % results.Count;
-        else if (args.Key == "Enter")
-            OpenSearchResult(results[Math.Clamp(_activeSearchIndex, 0, results.Count - 1)]);
-    }
-
-    private static string SearchText(ResidentServiceSearchItem service) =>
-        NormalizeSearch(string.Join(' ', new[] { service.Title, service.ShortTitle, service.Description }.Concat(service.Keywords)));
-
-    private static string NormalizeSearch(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-
-        var decomposed = value.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
-        return new string(decomposed
-            .Where(character => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(character) != System.Globalization.UnicodeCategory.NonSpacingMark)
-            .ToArray())
-            .Normalize(System.Text.NormalizationForm.FormC)
-            .Replace('đ', 'd');
-    }
     private async Task OpenRequest(ResidentServiceRequestListItem request)
     {
         if (_requestDetailModal is not null)
@@ -475,7 +374,6 @@
         string Title,
         string ShortTitle,
         string Description,
-        string Icon,
         string Accent,
         IReadOnlyList<string> Keywords);
 }
