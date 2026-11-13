@@ -1,0 +1,19 @@
+<button type="button" class="pf-list-refresh" title="Tải lại danh sách" aria-label="Tải lại danh sách"
+        aria-busy="@((Busy || refreshing) ? "true" : "false")" disabled="@(Busy || refreshing)" @onclick="RefreshAsync">
+    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+</button>
+
+@code {
+    [Parameter, EditorRequired] public EventCallback OnRefresh { get; set; }
+    [Parameter] public bool Busy { get; set; }
+
+    private bool refreshing;
+
+    private async Task RefreshAsync()
+    {
+        if (Busy || refreshing) return;
+        refreshing = true;
+        try { await OnRefresh.InvokeAsync(); }
+        finally { refreshing = false; }
+    }
+}

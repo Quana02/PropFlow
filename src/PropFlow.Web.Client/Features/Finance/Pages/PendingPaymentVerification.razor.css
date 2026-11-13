@@ -9,7 +9,7 @@
     gap: 20px;
     padding: 5px 0 28px;
     color: var(--pending-text);
-    font-family: Inter, sans-serif;
+    font-family: var(--pf-font);
 }
 
 .pending-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
@@ -18,7 +18,7 @@
 .pending-breadcrumb ::deep a:hover, .pending-breadcrumb [aria-current] { color: var(--pending-accent); }
 .pending-breadcrumb [aria-current] { font-weight: 700; }
 .title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.pending-heading h1 { margin: 0 0 5px; font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif; letter-spacing: -.025em; text-transform: capitalize; }
+.pending-heading h1 { margin: 0 0 5px; font: 700 clamp(25px, 2.6vw, 34px)/1.2 var(--pf-font); letter-spacing: -.025em; text-transform: capitalize; }
 .pending-heading p { margin: 0; color: var(--pending-muted); font-size: 12px; }
 .realtime-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid #a7f3d0; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 9px; font-weight: 750; }
 .realtime-badge i { width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
@@ -34,8 +34,8 @@
 .pending-card { display: flex; flex-direction: column; gap: 7px; min-height: 110px; padding: 16px 18px; }
 .pending-card-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--pending-muted); font-size: 9px; font-weight: 750; letter-spacing: .03em; }
 .pending-card-label .material-symbols-outlined { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; background: #eff6ff; color: #2563eb; font-size: 16px; }
-.pending-card strong { margin-top: auto; color: var(--pending-text); font: 700 25px/1.1 'Space Grotesk', sans-serif; white-space: nowrap; }
-.pending-card strong small { color: var(--pending-muted); font: 500 10px/1 Inter, sans-serif; }
+.pending-card strong { margin-top: auto; color: var(--pending-text); font: 700 25px/1.1 var(--pf-font); white-space: nowrap; }
+.pending-card strong small { color: var(--pending-muted); font: 500 10px/1 var(--pf-font); }
 .pending-card p { margin: 0; color: var(--pending-muted); font-size: 9px; }
 .pending-card.pending-amount strong { color: var(--pending-accent); }
 .pending-card.pending-amount .material-symbols-outlined { background: #ecfdf5; color: var(--pending-accent); }

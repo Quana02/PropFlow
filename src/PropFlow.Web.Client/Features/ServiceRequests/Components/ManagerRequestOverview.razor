@@ -23,10 +23,10 @@
             </span>
             @if (editingPlan || recommendation?.CanSetPriority == true)
             {
-                <select aria-label="Mức ưu tiên Manager chọn" @bind="priority" disabled="@(busy || loading)">
-                    <option value="">Chọn mức ưu tiên</option>
-                    @foreach (var optionCode in ManagerRecommendationPriorities.Codes) { <option value="@optionCode">@PriorityLabel(optionCode)</option> }
-                </select>
+                <div class="request-priority-select">
+                    <PropFlowSelect AriaLabel="Mức ưu tiên Manager chọn" @bind-Value="priority" Disabled="@(busy || loading)"
+                        Placeholder="Chọn mức ưu tiên" Options="PriorityOptions" />
+                </div>
             }
         </div>
         <span class="request-location"><span class="material-symbols-outlined" aria-hidden="true">location_on</span>@Location</span>
@@ -43,9 +43,10 @@
             {
                 @if (editingCategory)
                 {
-                    <select aria-label="Hạng mục Manager chọn" @bind="selectedCategory" disabled="@(busy || loading)">
-                        @foreach (var category in classification!.Categories) { <option value="@category.Id">@category.Name</option> }
-                    </select>
+                    <div class="request-category-select">
+                        <PropFlowSelect AriaLabel="Hạng mục Manager chọn" Value="@(selectedCategory?.ToString() ?? string.Empty)"
+                            ValueChanged="SelectCategory" Disabled="@(busy || loading)" Options="CategoryOptions" />
+                    </div>
                 }
                 <div class="inline-actions">
                     <button type="button" @onclick="SaveCategoryAsync" disabled="@(busy || loading || selectedCategory is null)">@(selectedCategory == PendingCategory.SuggestedCategoryId ? "Xác nhận" : "Lưu hạng mục")</button>

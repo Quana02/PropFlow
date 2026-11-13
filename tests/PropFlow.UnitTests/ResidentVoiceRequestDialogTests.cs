@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,44 @@ namespace PropFlow.UnitTests;
 public sealed class ResidentVoiceRequestDialogTests
 {
     [Fact]
+    public async Task Description_is_enabled_and_editable_when_opened_for_keyboard_input()
+    {
+        using var api = new Responses(new(true, []));
+        await Scenario(api, (_, _, html) =>
+        {
+            var textarea = DescriptionTag(html());
+            Assert.DoesNotMatch(@"\bdisabled(?:\s|=|>)", textarea);
+            Assert.DoesNotMatch(@"\breadonly(?:\s|=|>)", textarea);
+            Assert.Equal(0, api.Checks);
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Description_only_locks_keyboard_while_listening_and_becomes_editable_after_speech_ends()
+    {
+        using var api = new Responses(new(true, []));
+        await Scenario(api, async (dialog, js, html) =>
+        {
+            await Invoke(dialog, "ToggleVoiceAsync");
+            Assert.Matches(@"\breadonly(?:\s|=|>)", DescriptionTag(html()));
+            Assert.DoesNotMatch(@"\bdisabled(?:\s|=|>)", DescriptionTag(html()));
+            await dialog.OnVoiceResult(js.Epoch, "Tôi cần sửa vòi nước trong bếp.", "");
+            await dialog.OnVoiceEnded(js.Epoch, "");
+            Assert.DoesNotMatch(@"\breadonly(?:\s|=|>)", DescriptionTag(html()));
+            Assert.DoesNotMatch(@"\bdisabled(?:\s|=|>)", DescriptionTag(html()));
+            Assert.Contains("Tôi cần sửa vòi nước trong bếp.", html());
+        });
+    }
+
+    private static string DescriptionTag(string html)
+    {
+        var match = Regex.Match(html, "<textarea\\b[^>]*\\bid=\"service-description\"[^>]*>");
+        Assert.True(match.Success, "Ô mô tả yêu cầu phải được hiển thị.");
+        return match.Value;
+    }
+
+    [Fact]
     public async Task Voice_completion_shows_missing_information_popup_and_keeps_text_and_attachments_without_submitting()
     {
         using var api = new Responses(new(true, [new("visitor_name", "Họ tên người viếng thăm"), new("visit_duration", "Khách ở lại bao lâu")]));
@@ -32,16 +71,20 @@ public sealed class ResidentVoiceRequestDialogTests
             Assert.Equal(0, api.Submissions);
             var rendered = html();
             Assert.Contains("Cần bổ sung thông tin", rendered);
+            Assert.Contains("data-tone=\"info\"", rendered);
             Assert.Contains("Họ tên người viếng thăm", rendered);
             Assert.Contains("Khách ở lại bao lâu", rendered);
             Assert.Contains("Tôi muốn đăng ký người viếng thăm", rendered);
             Assert.Contains("type=\"file\"", rendered);
+            Assert.Contains("aria-describedby=\"resident-attachment-note\"", rendered);
+            Assert.Contains("Tệp chỉ hiển thị trên thiết bị này.", rendered);
             Assert.DoesNotContain("id=\"service-date\"", rendered);
             Assert.DoesNotContain("Khung giờ thuận tiện</label>", rendered);
             await Invoke(dialog, "SubmitAsync");
             Assert.Equal(1, api.Checks);
             Assert.Equal(0, api.Submissions);
             Assert.Contains("Vẫn gửi nội dung này", html());
+            Assert.Contains("data-tone=\"decision\"", html());
             await Invoke(dialog, "SendFromPopupAsync");
             Assert.Equal(1, api.Submissions);
         });

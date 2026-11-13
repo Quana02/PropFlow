@@ -63,6 +63,7 @@ public sealed class StaffServiceRequestsController(StaffServiceRequestHandler ha
     }
 
     [HttpGet("{id:guid}/evidence/{evidenceId:guid}")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadEvidence(Guid id, Guid evidenceId, CancellationToken ct)

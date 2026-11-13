@@ -1,19 +1,22 @@
-<header class="finance-page-header">
-    <div>
-        @if (!string.IsNullOrWhiteSpace(CurrentPage))
-        {
-            <nav class="finance-breadcrumb" aria-label="Đường dẫn trang">
-                <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
-                <span aria-hidden="true">›</span>
-                <span aria-current="page">@CurrentPage</span>
-            </nav>
-        }
-        else if (!string.IsNullOrWhiteSpace(Eyebrow))
-        {
-            <p class="finance-eyebrow">@Eyebrow</p>
-        }
-        <h1>@Title</h1>
-        <p class="finance-description">@Description</p>
+<header class="finance-page-header pf-management-header pf-management-existing-header">
+    <div class="pf-management-heading">
+        <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">account_balance_wallet</span>
+        <div>
+            @if (!string.IsNullOrWhiteSpace(CurrentPage))
+            {
+                <nav class="finance-breadcrumb" aria-label="Đường dẫn trang">
+                    <NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink>
+                    <span aria-hidden="true">›</span>
+                    <span aria-current="page">@CurrentPage</span>
+                </nav>
+            }
+            else if (!string.IsNullOrWhiteSpace(Eyebrow))
+            {
+                <p class="finance-eyebrow">@Eyebrow</p>
+            }
+            <h1>@Title</h1>
+            <p class="finance-description">@Description</p>
+        </div>
     </div>
 </header>
 

@@ -52,6 +52,17 @@ public class UserAccount
     public string? PhoneNumber { get; private set; }
     public string PasswordHash { get; private set; } = null!;
     public string DisplayName { get; private set; } = null!;
+    public string? AvatarStorageKey { get; private set; }
+    public Guid? AvatarVersion { get; private set; }
+
+    public void ChangeAvatar(string storageKey, Guid version, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(storageKey);
+        AvatarStorageKey = storageKey;
+        AvatarVersion = version;
+        UpdatedBy = Id;
+        UpdatedAt = now;
+    }
     public AccountStatus Status { get; private set; } = AccountStatus.PENDING;
     public bool EmailVerified { get; private set; }
     public int FailedLoginCount { get; private set; }

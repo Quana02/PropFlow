@@ -1,0 +1,19 @@
+<nav class="info-links" aria-label="@Label">
+    @if (!SupportOnly)
+    {
+        <a href="/terms" target="@Target" rel="@Rel" aria-label="@AccessibleLabel("Điều khoản sử dụng")">Điều khoản sử dụng</a>
+        <a href="/privacy" target="@Target" rel="@Rel" aria-label="@AccessibleLabel("Quyền riêng tư")">Quyền riêng tư</a>
+    }
+    <a href="/help" target="@Target" rel="@Rel" aria-label="@AccessibleLabel("Trợ giúp")">Trợ giúp</a>
+    <a href="/contact" target="@Target" rel="@Rel" aria-label="@AccessibleLabel("Liên hệ")">Liên hệ</a>
+</nav>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Thông tin và hỗ trợ";
+    [Parameter] public bool NewTab { get; set; }
+    [Parameter] public bool SupportOnly { get; set; }
+
+    private string? Target => NewTab ? "_blank" : null;
+    private string? Rel => NewTab ? "noopener" : null;
+    private string? AccessibleLabel(string label) => NewTab ? $"{label} (mở tab mới)" : null;
+}

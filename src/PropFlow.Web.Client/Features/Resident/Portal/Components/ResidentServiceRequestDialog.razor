@@ -4,6 +4,7 @@
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @using PropFlow.Web.Client.Services.Api
+@using PropFlow.Web.Client.Shared.Feedback
 
 @if (_open)
 {
@@ -60,7 +61,7 @@
                                 @(_listening ? "Dừng nói" : string.IsNullOrWhiteSpace(_form.Description) ? "Nhập bằng giọng nói" : "Nói bổ sung")
                             </button>
                         </div>
-                        <textarea id="service-description" @ref="_descriptionInput" @bind="_form.Description" @bind:event="oninput" @bind:after="InvalidateReview" rows="6" maxlength="3500" disabled="_submitting" readonly="_listening" placeholder="Khách thăm: nêu họ tên khách. Chuyển đồ: nêu đồ cần chuyển và chuyển vào/ra. Dịch vụ: nêu dịch vụ cần đăng ký, nhu cầu và nơi thực hiện. Có thể ghi thêm thời gian nếu đã xác định."></textarea>
+                        <textarea id="service-description" @ref="_descriptionInput" @bind="_form.Description" @bind:event="oninput" @bind:after="InvalidateReview" rows="6" maxlength="3500" disabled="@_submitting" readonly="@_listening" placeholder="Khách thăm: nêu họ tên khách. Chuyển đồ: nêu đồ cần chuyển và chuyển vào/ra. Dịch vụ: nêu dịch vụ cần đăng ký, nhu cầu và nơi thực hiện. Có thể ghi thêm thời gian nếu đã xác định."></textarea>
                         <ValidationMessage For="@(() => _form.Description)" />
                         <small class="voice-privacy">Giọng nói được trình duyệt chuyển thành chữ, có thể qua dịch vụ trực tuyến. PropFlow chỉ nhận văn bản.</small>
                         @if (_listening) { <p class="voice-status" role="status"><span class="voice-recording-dot"></span>Đang nghe tiếng Việt. Bấm Dừng nói khi hoàn tất.</p> }
@@ -77,11 +78,12 @@
                     </div>
 
                     <div class="service-form-section">
-                        <label class="service-field-label">Hình ảnh / Video tham khảo</label>
+                        <p class="service-field-label">Xem trước hình ảnh hoặc video</p>
+                        <p id="resident-attachment-note">Tệp chỉ hiển thị trên thiết bị này. Khi gửi yêu cầu, hệ thống chỉ gửi nội dung mô tả và thông tin trên biểu mẫu. Nếu cần bổ sung tệp, hãy hỏi Ban quản lý về kênh tiếp nhận.</p>
                         <label class="service-file-drop">
-                            <InputFile OnChange="SelectAttachments" multiple accept="image/png,image/jpeg,video/mp4" />
+                            <InputFile OnChange="SelectAttachments" multiple accept="image/png,image/jpeg,video/mp4" aria-describedby="resident-attachment-note" />
                             <span class="service-upload-icon" aria-hidden="true">⇧</span>
-                            <strong>Kéo thả hoặc chọn tệp đính kèm</strong>
+                            <strong>Kéo thả hoặc chọn tệp để xem tên</strong>
                             <small>PNG, JPG, MP4 • tối đa 5 tệp, 25MB/tệp</small>
                         </label>
                         @if (_selectedFiles.Count > 0)
@@ -91,7 +93,6 @@
                                 {
                                     <span title="@file.Name">📎 @file.Name</span>
                                 }
-                                <small>Tệp đang được xem trước; API lưu tệp sẽ được kết nối sau.</small>
                             </div>
                         }
                         @if (!string.IsNullOrWhiteSpace(_attachmentError))
@@ -116,9 +117,9 @@
 
 @if (_showReviewPopup)
 {
-    <PropFlow.Web.Client.Shared.Feedback.PropFlowConfirmationDialog
+    <PropFlowConfirmationDialog
         Title="@(_review?.Available == true ? "Cần bổ sung thông tin" : "Chưa kiểm tra được nội dung")"
-        Message="@ReviewMessage" InformationOnly="@(!_popupSendIntent)" Destructive="false"
+        Message="@ReviewMessage" Tone="@(_popupSendIntent ? DialogTone.Decision : DialogTone.Info)"
         ConfirmText="@(_popupSendIntent ? "Vẫn gửi nội dung này" : "Bổ sung nội dung")" CancelText="Bổ sung nội dung"
         OnConfirm="SendFromPopupAsync" OnCancel="DismissReviewAsync" />
 }

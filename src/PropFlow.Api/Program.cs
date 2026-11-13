@@ -113,6 +113,13 @@ builder.Services.AddSingleton(services =>
     return new Cloudinary(new Account(options.CloudName, options.ApiKey, options.ApiSecret));
 });
 builder.Services.AddHttpClient("MaintenanceEvidenceCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient("AccountAvatarCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient("BuildingWeatherGeocoding", client => { client.BaseAddress = new Uri("https://geocoding-api.open-meteo.com/"); client.Timeout = TimeSpan.FromSeconds(8); });
+builder.Services.AddHttpClient("BuildingWeatherForecast", client => { client.BaseAddress = new Uri("https://api.open-meteo.com/"); client.Timeout = TimeSpan.FromSeconds(8); });
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.ICurrentBuildingLocation, PropFlow.Modules.PropertyAssets.Infrastructure.CurrentBuildingLocationReader>();
+builder.Services.AddScoped<PropFlow.Api.Composition.CurrentBuildingWeatherService>();
+builder.Services.AddScoped<PropFlow.Modules.Authentication.Application.IAccountAvatarStorage, PropFlow.Api.Composition.CloudinaryAccountAvatarStorage>();
 
 // Authentication and Administration share one scoped connection so their
 // account-provisioning workflow can commit atomically across module DbContexts.
@@ -346,7 +353,9 @@ builder.Services.AddScoped<SePayWebhook>();
 builder.Services.AddScoped<SePayInbox>();
 builder.Services.AddScoped<BankTransferReview>();
 builder.Services.AddHostedService<SePayInboxWorker>();
-builder.Services.AddScoped<IBillingHouseholdDirectory, BillingHouseholdDirectory>();
+builder.Services.AddScoped<BillingHouseholdDirectory>();
+builder.Services.AddScoped<IBillingHouseholdDirectory>(sp => sp.GetRequiredService<BillingHouseholdDirectory>());
+builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IFinanceEmailRecipientDirectory>(sp => sp.GetRequiredService<BillingHouseholdDirectory>());
 builder.Services.AddScoped<IPaymentNoticeSource, PaymentNoticeSource>();
 builder.Services.AddScoped<IBillingCycle, BillingCycle>();
 builder.Services.AddScoped<IRentalPricing, RentalPricing>();
@@ -390,6 +399,7 @@ builder.Services.AddScoped<IServiceRequestEvidenceStorage>(services =>
 builder.Services.AddScoped<IServiceRequestRealtimeNotifier, ServiceRequestRealtimeNotifier>();
 builder.Services.AddScoped<StaffServiceRequestHandler>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentResidencyService>();
+builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentManagementSummaryQuery>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentOnboardingService>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentCodeGenerator>();
 builder.Services.AddScoped<PropFlow.Modules.Residents.Application.ResidentDuplicatePolicy>();

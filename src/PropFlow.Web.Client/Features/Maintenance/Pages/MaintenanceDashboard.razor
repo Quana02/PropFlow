@@ -70,7 +70,7 @@
     @* ── WORKSPACE ── *@
     @if (IsScheduleWorkspace)
     {
-    <section class="fe07-workspace" aria-labelledby="schedule-workspace-title">
+    <section class="fe07-workspace pf-list-panel pf-management-list" aria-labelledby="schedule-workspace-title">
 
         @* Week nav + view switcher *@
         <div class="fe07-workspace-head">
@@ -88,9 +88,7 @@
                 <div class="fe07-view-switcher">
                     <button type="button" class="is-selected" aria-current="page">Lưới Giờ</button>
                 </div>
-                <button class="fe07-icon-button" type="button" title="Tải lại" aria-label="Tải lại" @onclick="LoadSchedules" disabled="@IsLoading">
-                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
-                </button>
+                <PropFlowListRefresh OnRefresh="LoadSchedules" Busy="@IsLoading" />
             </div>
         </div>
 
@@ -112,8 +110,8 @@
         </div>
 
         @* Filter / search toolbar *@
-        <div class="fe07-filter-row">
-            <div class="fe07-search-inline">
+        <div class="fe07-filter-row pf-list-toolbar pf-management-toolbar">
+            <div class="fe07-search-inline pf-list-search">
                 <span class="material-symbols-outlined" aria-hidden="true">search</span>
                 <input @bind="scheduleSearchText" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
                        placeholder="Tìm theo mã hoặc tên lịch…" aria-label="Tìm lịch bảo trì" />
@@ -262,16 +260,16 @@
     }
     else if (IsHistoryWorkspace)
     {
-        <section class="fe07-workspace" aria-labelledby="history-workspace-title">
+        <section class="fe07-workspace pf-list-panel pf-management-list" aria-labelledby="history-workspace-title">
             <div class="fe07-workspace-head">
                 <strong id="history-workspace-title">Lịch sử bảo trì</strong>
                 <div class="fe07-workspace-head-right">
                     <PropFlowSelect Options="HistorySortOptions" @bind-Value="HistorySort" @bind-Value:after="ApplyHistoryFilter" Variant="Filter" AriaLabel="Sắp xếp lịch sử" />
-                    <button class="fe07-icon-button" type="button" title="Tải lại" aria-label="Tải lại" @onclick="LoadHistory" disabled="@IsHistoryLoading"><span class="material-symbols-outlined" aria-hidden="true">refresh</span></button>
+                    <PropFlowListRefresh OnRefresh="LoadHistory" Busy="@IsHistoryLoading" />
                 </div>
             </div>
-            <div class="fe07-filter-row">
-                <div class="fe07-search-inline"><span class="material-symbols-outlined" aria-hidden="true">search</span><input @bind="historySearchText" @bind:event="oninput" @onkeyup="OnHistorySearchKeyUp" placeholder="Tìm theo mã hoặc tên công việc..." aria-label="Tìm lịch sử bảo trì" /></div>
+            <div class="fe07-filter-row pf-list-toolbar pf-management-toolbar">
+                <div class="fe07-search-inline pf-list-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input @bind="historySearchText" @bind:event="oninput" @onkeyup="OnHistorySearchKeyUp" placeholder="Tìm theo mã hoặc tên công việc..." aria-label="Tìm lịch sử bảo trì" /></div>
                 <PropFlowFilterPopover ActiveCount="@HistoryActiveFilterCount" Disabled="@IsHistoryLoading" OnOpen="OpenHistoryFilters"
                                      OnReset="ResetHistoryDraft" Validate="ValidateHistoryDraft" OnApply="ApplyHistoryDraft">
                     <label>Trạng thái<PropFlowSelect Options="TaskStatusOptions" @bind-Value="HistoryStatusFilter" Variant="Filter" AriaLabel="Trạng thái lịch sử" /></label>
@@ -297,7 +295,7 @@
                     <span>Tổng <b>@History.Summary.Total</b></span><span>Đã đóng <b>@History.Summary.Closed</b></span><span>Hoàn thành <b>@History.Summary.Completed</b></span><span>Đang xử lý <b>@(History.Summary.Assigned + History.Summary.InProgress)</b></span>
                 </div>
                 <div class="fe07-history-table-wrap" tabindex="0" aria-label="Bảng lịch sử bảo trì">
-                    <table class="fe07-history-table">
+                    <table class="pf-list-table fe07-history-table">
                         <thead><tr><th>Mã &amp; công việc</th><th>Tài sản &amp; vị trí</th><th>Loại bảo trì</th><th>Ưu tiên</th><th>Người thực hiện</th><th>Ngày thi công</th><th>Hoàn thành</th><th>Kết quả bảo trì</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
                         <tbody>
                         @foreach (var item in History.Page.Items)
@@ -327,15 +325,13 @@
     }
     else
     {
-        <section class="fe07-workspace" aria-labelledby="task-workspace-title">
+        <section class="fe07-workspace pf-list-panel pf-management-list" aria-labelledby="task-workspace-title">
             <div class="fe07-workspace-head">
                 <strong id="task-workspace-title">Công việc bảo trì</strong>
-                <button class="fe07-icon-button" type="button" title="Tải lại" aria-label="Tải lại" @onclick="LoadTasks" disabled="@IsTasksLoading">
-                    <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
-                </button>
+                <PropFlowListRefresh OnRefresh="LoadTasks" Busy="@IsTasksLoading" />
             </div>
-            <div class="fe07-filter-row">
-                <div class="fe07-search-inline">
+            <div class="fe07-filter-row pf-list-toolbar pf-management-toolbar">
+                <div class="fe07-search-inline pf-list-search">
                     <span class="material-symbols-outlined" aria-hidden="true">search</span>
                     <input type="text" @bind="taskSearchText" @bind:event="oninput" @onkeyup="OnTaskSearchKeyUp" placeholder="Tìm theo mã hoặc tên công việc..." aria-label="Tìm công việc bảo trì" />
                 </div>

@@ -1,0 +1,27 @@
+<div class="policy-grid">
+    <nav class="information-panel policy-contents" aria-label="Mục lục">
+        <h2>Mục lục</h2>
+        @foreach (var item in Sections)
+        {
+            <a href="@($"{Path}#{item.Id}")">@item.Title</a>
+        }
+    </nav>
+    <article class="information-panel policy-copy">
+        @foreach (var item in Sections)
+        {
+            <section id="@item.Id" aria-labelledby="@($"{item.Id}-heading")">
+                <h2 id="@($"{item.Id}-heading")">@item.Title</h2>
+                @foreach (var paragraph in item.Paragraphs)
+                {
+                    <p>@paragraph</p>
+                }
+            </section>
+        }
+        <p><a href="/contact">Xem hướng dẫn liên hệ và hỗ trợ</a></p>
+    </article>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Path { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<PolicySection> Sections { get; set; } = [];
+}

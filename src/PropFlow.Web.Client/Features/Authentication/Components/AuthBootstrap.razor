@@ -9,7 +9,8 @@ else { <p role="status" style="padding:2rem">Đang kiểm tra phiên đăng nh�
     private bool IsPublicRoute => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/') switch
     {
         "" or "login" or "register" or "registration/resume" or "otp" or "account-activated"
-            or "forgot-password" or "reset-password" or "forbidden" => true,
+            or "forgot-password" or "reset-password" or "forbidden"
+            or "terms" or "privacy" or "help" or "contact" => true,
         _ => false
     };
 

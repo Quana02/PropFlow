@@ -3,7 +3,7 @@
 @using PropFlow.Web.Client.Features.Finance.Services
 @inject FinanceCycleApi Api
 <section class="rental-pricing">
-    <button type="button" @onclick="() => open = true">Thiết lập giá thuê tháng</button>
+    <button type="button" class="pf-management-secondary" @onclick="() => open = true">Thiết lập giá thuê tháng</button>
     @if (open) {
     <FinancePricingDialog Title="Thiết lập giá thuê theo tháng" Busy="@(busy || loadingVersions)" OnClose="() => open = false">
     <p>Các căn cùng loại dùng chung giá thuê tháng. Chỉ chủ hộ thuê căn chưa có chủ sở hữu chịu tiền thuê. Tháng lẻ tính theo ngày cư trú thực tế, gồm cả ngày bắt đầu và kết thúc. Dịch vụ và nước nằm trên hóa đơn dịch vụ riêng.</p>
@@ -21,8 +21,9 @@
     @if (loadingVersions) { <p role="status">Đang tải phiên bản giá…</p> }
     else if (versionsError is not null) { <p role="alert">@versionsError <button type="button" @onclick="LoadVersions">Thử lại</button></p> }
     else if (apartmentId != Guid.Empty && versions.Length == 0) { <p>Loại căn hộ này chưa có phiên bản giá thuê tháng.</p> }
+    @if (apartmentId != Guid.Empty) { <div class="pf-list-toolbar"><PropFlowListRefresh OnRefresh="LoadVersions" Busy="@(loadingVersions || busy)" /></div> }
     @if (versions.Length > 0) {
-    <table><thead><tr><th>Cơ sở tính</th><th>Đơn giá</th><th>Từ ngày</th><th>Đến ngày</th><th></th></tr></thead><tbody>
+    <table class="pf-list-table"><thead><tr><th>Cơ sở tính</th><th>Đơn giá</th><th>Từ ngày</th><th>Đến ngày</th><th></th></tr></thead><tbody>
     @foreach (var v in versions)
     {
         var selected = selectedVersion?.Id == v.Id;

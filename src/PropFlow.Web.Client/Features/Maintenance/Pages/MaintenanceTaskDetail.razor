@@ -32,11 +32,14 @@
     {
         var lifecycle = MaintenanceProgressLifecycleMapper.Map(Task);
 
-        <section class="request-hero mtd-hero" aria-labelledby="maintenance-task-title">
-            <div class="hero-copy">
+        <section class="request-hero mtd-hero pf-management-header pf-management-existing-header" aria-labelledby="maintenance-task-title">
+            <div class="pf-management-heading">
+                <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">build</span>
+                <div class="hero-copy">
 
-                <div class="hero-title-row"><h1 id="maintenance-task-title">Chi tiết công việc bảo trì</h1><span class="status-badge @StatusClass(Task.Status)"><i></i>@Status(Task.Status)</span></div>
-                <p>@Task.Title</p>
+                    <div class="hero-title-row"><h1 id="maintenance-task-title">Chi tiết công việc bảo trì</h1><span class="status-badge @StatusClass(Task.Status)"><i></i>@Status(Task.Status)</span></div>
+                    <p>@Task.Title</p>
+                </div>
             </div>
             <div class="hero-actions">
                 <span class="request-code"><span class="material-symbols-outlined" aria-hidden="true">confirmation_number</span>@Task.TaskNumber</span>

@@ -3,6 +3,7 @@ using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Web.Client.Features.ServiceRequests.Models;
 using PropFlow.Web.Client.Features.ServiceRequests.Services;
 using PropFlow.Web.Client.Services.Api;
+using PropFlow.Web.Client.Shared.Forms;
 
 namespace PropFlow.Web.Client.Features.ServiceRequests.Components;
 
@@ -20,6 +21,13 @@ public partial class ManagerRequestOverview : IDisposable
     private string priority = "";
     private string? action, resources, note, error;
     private bool maintenance, busy, loading, disposed, editingCategory, editingPlan;
+
+    private static readonly PropFlowSelectOption[] PriorityOptions = ManagerRecommendationPriorities.Codes
+        .Select(code => new PropFlowSelectOption(code, PriorityLabel(code))).ToArray();
+    private PropFlowSelectOption[] CategoryOptions => classification?.Categories
+        .Select(category => new PropFlowSelectOption(category.Id.ToString(), category.Name)).ToArray() ?? [];
+
+    private void SelectCategory(string value) => selectedCategory = Guid.TryParse(value, out var id) ? id : null;
 
     private ManagerClassificationSuggestion? PendingCategory => classification is { CanReview: true, Suggestion.Status: "SUCCESS" }
         ? classification.Suggestion : null;

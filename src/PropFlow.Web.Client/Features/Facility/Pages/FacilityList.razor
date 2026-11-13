@@ -1,3 +1,4 @@
+@using PropFlow.Web.Client.Shared.Management
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @page "/facilities"
 @layout PropFlow.Web.Client.Layout.MainLayout
@@ -29,102 +30,27 @@
      aria-hidden="@(IsFacilityTypeDialogOpen ? "true" : null)"
      inert="@(IsFacilityTypeDialogOpen ? "inert" : null)">
 
-    <!-- Page Header & Title Section -->
-    <div class="fe04-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs mb-6">
-        <div class="flex items-start gap-3.5">
-            <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shadow-xs mt-0.5">
-                <span class="material-symbols-outlined text-2xl">pool</span>
-            </div>
-            <div>
-                <h1 class="text-2xl font-black text-slate-900 tracking-tight">Danh Mục Cơ Sở Vật Chất</h1>
-                <p class="text-xs text-slate-500 mt-1">
-                    Quản lý danh sách, vòng đời sử dụng và cập nhật trạng thái vận hành của các tiện ích công cộng chung cư
-                </p>
-            </div>
-        </div>
-        <div class="flex items-center gap-2.5 flex-wrap">
+    <ManagementPageHeader Icon="pool"
+                          Title="Danh mục cơ sở vật chất"
+                          Description="Quản lý danh sách, vòng đời sử dụng và trạng thái vận hành của các tiện ích công cộng chung cư.">
+        <Actions>
             @if (IsManager)
             {
-                <button class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-sm shadow-sky-600/20 transition-colors" @onclick="OpenCreateDialog">
-                    <span class="material-symbols-outlined text-[17px]">add_circle</span>
+                <button type="button" class="pf-management-primary" @onclick="OpenCreateDialog">
+                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
                     Thêm Cơ Sở Vật Chất
                 </button>
             }
-        </div>
-    </div>
+        </Actions>
+    </ManagementPageHeader>
 
-    <!-- KPI Metric Cards -->
-    <div class="fe04-metrics grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <!-- Total -->
-        <div class="fe04-metric-card bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
-            <div class="flex items-center justify-between text-[#64748b]">
-                <span class="text-xs font-semibold uppercase tracking-wider">Tổng CSVT</span>
-                <span class="material-symbols-outlined text-sky-600 text-xl">domain</span>
-            </div>
-            <div class="mt-3 flex items-baseline gap-2">
-                <span class="text-2xl font-bold font-display text-[#0f172a]">@(FacilitySummary?.Total ?? 0)</span>
-
-            </div>
-        </div>
-
-        <!-- Active -->
-        <div class="fe04-metric-card bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
-            <div class="flex items-center justify-between text-[#64748b]">
-                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-700">Đang hoạt động</span>
-                <span class="material-symbols-outlined text-emerald-600 text-xl">check_circle</span>
-            </div>
-            <div class="mt-3 flex items-baseline gap-2">
-                <span class="text-2xl font-bold font-display text-emerald-600">
-                    @(FacilitySummary?.Active ?? 0)
-                </span>
-
-            </div>
-        </div>
-
-        <!-- Maintenance -->
-        <div class="fe04-metric-card bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
-            <div class="flex items-center justify-between text-[#64748b]">
-                <span class="text-xs font-semibold uppercase tracking-wider text-amber-700">Đang bảo trì</span>
-                <span class="material-symbols-outlined text-amber-600 text-xl">engineering</span>
-            </div>
-            <div class="mt-3 flex items-baseline gap-2">
-                <span class="text-2xl font-bold font-display text-amber-600">
-                    @(FacilitySummary?.UnderMaintenance ?? 0)
-                </span>
-
-            </div>
-        </div>
-
-        <!-- Inactive / Unavailable -->
-        <div class="fe04-metric-card bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all">
-            <div class="flex items-center justify-between text-[#64748b]">
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-600">Tạm ngưng </span>
-                <span class="material-symbols-outlined text-slate-500 text-xl">do_not_disturb_on</span>
-            </div>
-            <div class="mt-3 flex items-baseline gap-2">
-                <span class="text-2xl font-bold font-display text-slate-600">
-                    @(FacilitySummary?.Unavailable ?? 0)
-                </span>
-
-            </div>
-        </div>
-
-        <!-- Out of Service -->
-        <div class="fe04-metric-card bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all col-span-2 lg:col-span-1">
-            <div class="flex items-center justify-between text-[#64748b]">
-                <span class="text-xs font-semibold uppercase tracking-wider text-rose-700">Ngừng phục vụ</span>
-                <span class="material-symbols-outlined text-rose-600 text-xl">cancel</span>
-            </div>
-            <div class="mt-3 flex items-baseline gap-2">
-                <span class="text-2xl font-bold font-display text-rose-600">
-                    @(FacilitySummary?.OutOfService ?? 0)
-                </span>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- Alert Notifications -->
+    <section class="pf-management-metrics" aria-label="Tổng quan">
+        <ManagementKpi Icon="domain" Label="Tổng CSVT" Value="@((FacilitySummary?.Total ?? 0).ToString())" />
+        <ManagementKpi Icon="check_circle" Label="Đang hoạt động" Value="@((FacilitySummary?.Active ?? 0).ToString())" Tone="success" />
+        <ManagementKpi Icon="engineering" Label="Đang bảo trì" Value="@((FacilitySummary?.UnderMaintenance ?? 0).ToString())" Tone="warning" />
+        <ManagementKpi Icon="do_not_disturb_on" Label="Tạm ngưng" Value="@((FacilitySummary?.Unavailable ?? 0).ToString())" Tone="neutral" />
+        <ManagementKpi Icon="cancel" Label="Ngừng phục vụ" Value="@((FacilitySummary?.OutOfService ?? 0).ToString())" Tone="danger" />
+    </section>
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
@@ -138,21 +64,19 @@
     }
 
     <!-- Main Table Container Card -->
-    <div class="fe04-panel bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+    <div class="fe04-panel pf-list-panel pf-management-list" aria-busy="@IsLoading">
 
         <!-- Table Toolbar (Search, Filter, Actions) -->
-        <div class="fe04-toolbar p-5 border-b border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-slate-50/50">
+        <div class="pf-list-toolbar pf-management-toolbar">
 
             <!-- Left: Search Box & Status quick filter -->
-            <div class="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-3 max-w-2xl">
-                <!-- Search Bar -->
-                <div class="relative flex-1">
-                    <span class="material-symbols-outlined text-slate-400 absolute left-3.5 top-2.5 text-lg">search</span>
-                    <input type="text"
+            <div class="pf-management-tools">
+                <label class="pf-list-search pf-management-search">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <input type="search" aria-label="Tìm cơ sở vật chất"
                            placeholder="Tìm theo Mã CSVT, Tên cơ sở vật chất, Vị trí..."
-                           class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-[#0f172a] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0284c7]/20 focus:border-[#0284c7] transition-all"
                            @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
-                </div>
+                </label>
 
                 <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
                                      OnReset="ResetDraft" OnApply="ApplyDraft">
@@ -162,11 +86,9 @@
             </div>
 
             <!-- Right: Filter actions & View counts -->
-            <div class="flex items-center justify-between sm:justify-end gap-3 text-xs text-[#64748b]">
-                <span class="font-medium">Hiển thị <b class="text-[#0f172a]">@(PagedResult.Items?.Count ?? 0)</b> / @PagedResult.TotalCount hạng mục</span>
-                <button class="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-colors shadow-2xs" title="Tải lại" aria-label="Tải lại" @onclick="LoadData" disabled="@IsLoading">
-                    <span class="material-symbols-outlined text-base">refresh</span>
-                </button>
+            <div class="pf-management-tools pf-management-toolbar-end">
+                <span class="pf-management-count">Hiển thị <b class="text-[#0f172a]">@(PagedResult.Items?.Count ?? 0)</b> / @PagedResult.TotalCount hạng mục</span>
+                <PropFlowListRefresh OnRefresh="() => Task.WhenAll(LoadData(), LoadSummaryAsync())" Busy="@IsLoading" />
             </div>
 
         </div>
@@ -174,7 +96,7 @@
         <!-- Loading State Overlay -->
         @if (IsLoading)
         {
-            <div class="fe04-empty flex py-12 flex-col items-center justify-center space-y-3 bg-white/80">
+            <div class="pf-management-empty" role="status">
                 <div class="w-8 h-8 border-3 border-sky-200 border-t-[#0284c7] rounded-full animate-spin"></div>
                 <p class="text-xs font-semibold text-[#0284c7]">Đang tải dữ liệu Cơ sở vật chất...</p>
             </div>
@@ -182,8 +104,8 @@
         else if (PagedResult.Items is null || (!PagedResult.Items.Any() &&
                  (PagedResult.TotalCount == 0 || PagedResult.PageIndex <= PagedResult.TotalPages)))
         {
-            <div class="fe04-empty flex py-12 flex-col items-center justify-center space-y-3 bg-white/80">
-                <span class="material-symbols-outlined text-[64px] text-slate-300">domain_disabled</span>
+            <div class="pf-management-empty">
+                <span class="material-symbols-outlined" aria-hidden="true">domain_disabled</span>
                 <p class="text-sm text-slate-500">Không có cơ sở vật chất nào</p>
                 @if (IsManager)
                 {
@@ -198,7 +120,7 @@
         {
             <!-- Data Table -->
             <div class="fe04-table-scroll overflow-x-auto @(OpenStatusDropdownId.HasValue ? "status-menu-open" : string.Empty)">
-                <table class="w-full text-left border-collapse">
+                <table class="pf-list-table w-full text-left border-collapse">
                     <thead>
                         <tr class="border-b border-slate-100 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-[#64748b]">
                             <th class="py-3.5 px-5">Mã CSVT</th>
@@ -209,12 +131,12 @@
                             <th class="py-3.5 px-5 text-right">Thao Tác</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
+                    <tbody class="divide-y divide-slate-100">
                         @foreach (var item in PagedResult.Items)
                         {
                             <tr class="hover:bg-sky-50/40 transition-colors group @(OpenStatusDropdownId == item.Id ? "status-dropdown-row-open" : null)">
                                 <td class="py-4 px-5">
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold font-display bg-sky-50 text-[#0284c7] border border-sky-200/70">
+                                    <span class="pf-management-identifier">
                                         @item.Code
                                     </span>
                                 </td>
@@ -224,15 +146,15 @@
                                     </div>
                                     @if (!string.IsNullOrEmpty(item.Description))
                                     {
-                                        <div class="text-xs text-[#64748b] line-clamp-1">@item.Description</div>
+                                        <div class="pf-management-cell-detail line-clamp-1">@item.Description</div>
                                     }
                                 </td>
                                 <td class="py-4 px-4">
-                                    <span class="text-xs font-medium text-slate-600 bg-blue-50/70 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
+                                    <span class="font-medium text-slate-600 bg-blue-50/70 text-blue-700 px-2 py-0.5 rounded border border-blue-100">
                                         @(string.IsNullOrEmpty(item.FacilityType) ? "-" : item.FacilityType)
                                     </span>
                                 </td>
-                                <td class="py-4 px-4 text-xs text-slate-600">
+                                <td class="py-4 px-4 text-slate-600">
                                     <div class="flex items-center gap-1">
                                         <span class="material-symbols-outlined text-xs text-slate-400">pin_drop</span>
                                         @(string.IsNullOrEmpty(item.LocationDescription) ? "-" : item.LocationDescription)
@@ -242,28 +164,28 @@
                                     @switch (item.Status)
                                     {
                                         case MasterDataStatus.ACTIVE:
-                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 shadow-2xs">
-                                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>Đang hoạt động
+                                            <span class="pf-management-status" data-tone="success">
+                                                Đang hoạt động
                                             </span>
                                             break;
                                         case MasterDataStatus.INACTIVE:
-                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200/70 shadow-2xs">
-                                                <span class="w-2 h-2 rounded-full bg-slate-400"></span>Ngừng kích hoạt
+                                            <span class="pf-management-status" data-tone="neutral">
+                                                Ngừng kích hoạt
                                             </span>
                                             break;
                                         case MasterDataStatus.UNDER_MAINTENANCE:
-                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70 shadow-2xs">
-                                                <span class="w-2 h-2 rounded-full bg-amber-500"></span>Đang bảo trì
+                                            <span class="pf-management-status" data-tone="warning">
+                                                Đang bảo trì
                                             </span>
                                             break;
                                         case MasterDataStatus.UNAVAILABLE:
-                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/70 shadow-2xs">
-                                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>Tạm ngưng
+                                            <span class="pf-management-status" data-tone="neutral">
+                                                Tạm ngưng
                                             </span>
                                             break;
                                         case MasterDataStatus.OUT_OF_SERVICE:
-                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/70 shadow-2xs">
-                                                <span class="w-2 h-2 rounded-full bg-rose-500"></span>Ngừng phục vụ
+                                            <span class="pf-management-status" data-tone="danger">
+                                                Ngừng phục vụ
                                             </span>
                                             break;
                                     }
@@ -271,20 +193,20 @@
                                 <td class="py-4 px-5 text-right">
                                     <div class="inline-flex items-center gap-1.5 justify-end">
                                         <!-- Xem chi tiết -->
-                                        <button @onclick="() => OpenDetailDialog(item)" class="p-1.5 text-slate-500 hover:text-[#0284c7] hover:bg-sky-50 rounded-lg transition-all" title="Xem chi tiết">
+                                        <button @onclick="() => OpenDetailDialog(item)" class="pf-management-row-action" title="Xem chi tiết" aria-label="Xem chi tiết">
                                             <span class="material-symbols-outlined text-lg">visibility</span>
                                         </button>
                                         @if (IsManager)
                                         {
                                             <!-- Sửa -->
-                                            <button @onclick="() => OpenEditDialog(item)" class="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" title="Chỉnh sửa">
+                                            <button @onclick="() => OpenEditDialog(item)" class="pf-management-row-action" data-tone="warning" title="Chỉnh sửa" aria-label="Chỉnh sửa">
                                                 <span class="material-symbols-outlined text-lg">edit</span>
                                             </button>
                                             <!-- Đổi trạng thái Dropdown -->
                                             <div class="relative inline-block text-left status-dropdown-container @(OpenStatusDropdownId == item.Id ? "is-open" : null)">
                                             <button @onclick="() => ToggleStatusDropdown(item.Id)"
-                                                    class="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all"
-                                                    title="Đổi trạng thái"
+                                                    class="pf-management-row-action"
+                                                    title="Đổi trạng thái" aria-label="Đổi trạng thái"
                                                     aria-haspopup="menu"
                                                     aria-expanded="@(OpenStatusDropdownId == item.Id)">
                                                 <span class="material-symbols-outlined text-lg">sync_saved_locally</span>
@@ -298,7 +220,7 @@
                                                         <button @onclick="() => ChangeStatus(item, MasterDataStatus.ACTIVE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-emerald-50 text-emerald-700 font-medium transition-colors">
                                                             <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Đang hoạt động
                                                         </button>
-                                                        <button @onclick="() => ChangeStatus(item, MasterDataStatus.UNAVAILABLE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-50 text-indigo-700 font-medium transition-colors">
+                                                        <button @onclick="() => ChangeStatus(item, MasterDataStatus.UNAVAILABLE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 text-slate-700 font-medium transition-colors">
                                                             <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Tạm ngưng
                                                         </button>
                                                         <button @onclick="() => ChangeStatus(item, MasterDataStatus.INACTIVE)" class="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100 text-slate-700 font-medium transition-colors">

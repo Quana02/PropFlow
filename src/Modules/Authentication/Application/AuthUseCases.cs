@@ -32,7 +32,7 @@ public sealed partial class AuthUseCases(IAuthStore store, IAuthSecrets secrets,
     {
         var grants = await access.GetAsync(user.Id, ct);
         if (grants == null) throw new AuthFailure(403, "access_unavailable", "Tài khoản chưa được cấp quyền truy cập. Vui lòng liên hệ quản trị viên.");
-        return new(user.Id, user.Username, user.DisplayName, user.Email, user.PhoneNumber, user.Status.ToString(), user.EmailVerified, grants.Role, grants.Permissions);
+        return new(user.Id, user.Username, user.DisplayName, user.Email, user.PhoneNumber, user.Status.ToString(), user.EmailVerified, grants.Role, grants.Permissions, user.AvatarVersion);
     }
     private async Task RevokeAllAsync(Guid userId, string reason, CancellationToken ct)
     {

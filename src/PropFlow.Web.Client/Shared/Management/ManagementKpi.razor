@@ -1,0 +1,14 @@
+<article class="pf-management-kpi" data-tone="@Tone">
+    <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">@Icon</span>
+    <div>
+        <div class="pf-management-kpi-label">@Label</div>
+        <strong>@Value</strong>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Tone { get; set; }
+}

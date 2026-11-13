@@ -1,0 +1,18 @@
+@inherits LayoutComponentBase
+
+<div class="public-information">
+    <PropFlow.Web.Client.Layout.Shared.PublicHeader />
+    <main class="information-main" id="information-main">
+        <nav class="information-nav" aria-label="Trang thông tin PropFlow">
+            <NavLink href="/terms" Match="NavLinkMatch.All">Điều khoản</NavLink>
+            <NavLink href="/privacy" Match="NavLinkMatch.All">Quyền riêng tư</NavLink>
+            <NavLink href="/help" Match="NavLinkMatch.All">Trợ giúp</NavLink>
+            <NavLink href="/contact" Match="NavLinkMatch.All">Liên hệ</NavLink>
+        </nav>
+        @Body
+    </main>
+    <footer class="information-footer">
+        <a href="/">PropFlow</a>
+        <InformationLinks />
+    </footer>
+</div>

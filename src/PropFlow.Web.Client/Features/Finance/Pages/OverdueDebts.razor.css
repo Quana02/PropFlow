@@ -9,7 +9,7 @@
     gap: 20px;
     padding: 5px 0 28px;
     color: var(--overdue-text);
-    font-family: Inter, sans-serif;
+    font-family: var(--pf-font);
 }
 
 .overdue-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
@@ -18,7 +18,7 @@
 .overdue-breadcrumb ::deep a:hover, .overdue-breadcrumb [aria-current] { color: var(--overdue-accent); }
 .overdue-breadcrumb [aria-current] { font-weight: 700; }
 .title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.overdue-heading h1 { margin: 0 0 5px; font: 700 clamp(25px, 2.6vw, 34px)/1.2 'Space Grotesk', sans-serif; letter-spacing: -.025em; text-transform: capitalize; }
+.overdue-heading h1 { margin: 0 0 5px; font: 700 clamp(25px, 2.6vw, 34px)/1.2 var(--pf-font); letter-spacing: -.025em; text-transform: capitalize; }
 .overdue-heading p { margin: 0; color: var(--overdue-muted); font-size: 12px; }
 .overdue-badge { display: inline-flex; align-items: center; padding: 5px 9px; border: 1px solid #fecdd3; border-radius: 999px; background: #fff1f2; color: #e11d48; font-size: 9px; font-weight: 750; }
 .overdue-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
@@ -31,8 +31,8 @@
 .overdue-card { display: flex; flex-direction: column; gap: 7px; min-height: 110px; padding: 16px 18px; }
 .overdue-card-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--overdue-muted); font-size: 9px; font-weight: 750; letter-spacing: .03em; }
 .overdue-card-label .material-symbols-outlined { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; background: #fff1f2; color: var(--overdue-accent); font-size: 16px; }
-.overdue-card strong { margin-top: auto; color: var(--overdue-text); font: 700 25px/1.1 'Space Grotesk', sans-serif; white-space: nowrap; }
-.overdue-card strong small { color: var(--overdue-muted); font: 500 10px/1 Inter, sans-serif; }
+.overdue-card strong { margin-top: auto; color: var(--overdue-text); font: 700 25px/1.1 var(--pf-font); white-space: nowrap; }
+.overdue-card strong small { color: var(--overdue-muted); font: 500 10px/1 var(--pf-font); }
 .overdue-card p { margin: 0; color: var(--overdue-muted); font-size: 9px; }
 .overdue-card.principal strong { color: var(--overdue-accent); }
 .overdue-card.interest strong { color: #e97905; }

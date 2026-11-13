@@ -1,5 +1,6 @@
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Web.Client.Features.Communication.Services
+@using PropFlow.Web.Client.Shared.Management
 @inject AnnouncementApiClient Api
 @inject AnnouncementRealtimeClient Realtime
 @implements IDisposable
@@ -7,14 +8,23 @@
 <section class="announcement-workspace @(Embedded ? "embedded" : "") @(Manager && !Embedded ? "internal-workspace" : null)">
     @if (!Embedded)
     {
-    <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">@(Manager ? "Vận hành" : "Trang chủ")</a><span>/</span><strong>Thông báo chung</strong></nav>
-    <header class="hero">
-        <div><span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">campaign</span>Thông tin từ Ban Quản lý</span><h1>Thông báo chung</h1><p>Cập nhật thông tin và hoạt động dành cho cư dân.</p></div>
-        @if (Manager)
-        {
-            <button class="primary" @onclick="OpenComposer" disabled="@busy"><span class="material-symbols-outlined" aria-hidden="true">add</span>Đăng thông báo</button>
-        }
-    </header>
+    @if (Manager)
+    {
+        <ManagementPageHeader Icon="campaign" Title="Thông báo chung" Description="Cập nhật thông tin và hoạt động dành cho cư dân.">
+            <Actions>
+                <button type="button" class="pf-management-primary" @onclick="OpenComposer" disabled="@busy">
+                    <span class="material-symbols-outlined" aria-hidden="true">add</span>Đăng thông báo
+                </button>
+            </Actions>
+        </ManagementPageHeader>
+    }
+    else
+    {
+        <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">Trang chủ</a><span>/</span><strong>Thông báo chung</strong></nav>
+        <header class="hero">
+            <div><span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">campaign</span>Thông tin từ Ban Quản lý</span><h1>Thông báo chung</h1><p>Cập nhật thông tin và hoạt động dành cho cư dân.</p></div>
+        </header>
+    }
     }
     @if (error is not null) { <div class="notice error" role="alert">@error <button @onclick="LoadAsync" disabled="@busy">Tải lại danh sách</button></div> }
 
@@ -42,8 +52,8 @@
             </form>
         </section>
     }
-    <section class="panel" aria-labelledby="announcements-title" aria-busy="@loading">
-        <header class="panel-heading"><div><h2 id="announcements-title">Danh sách thông báo <span class="count">@(data?.Total.ToString() ?? "—")</span></h2><p>Chọn thông báo để đọc đầy đủ nội dung.</p></div><button @onclick="LoadAsync" disabled="@busy"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Làm mới</button></header>
+    <section class="panel pf-list-panel @(Manager && !Embedded ? "pf-management-list" : null)" aria-labelledby="announcements-title" aria-busy="@loading">
+        <header class="panel-heading"><div><h2 id="announcements-title">Danh sách thông báo <span class="count">@(data?.Total.ToString() ?? "—")</span></h2><p>Chọn thông báo để đọc đầy đủ nội dung.</p></div><PropFlowListRefresh OnRefresh="LoadAsync" Busy="@busy" /></header>
         @if (loading)
         {
             <div class="empty-state" role="status"><span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><h3>Đang tải thông báo…</h3></div>

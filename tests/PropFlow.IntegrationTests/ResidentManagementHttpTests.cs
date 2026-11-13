@@ -15,8 +15,10 @@ using PropFlow.Modules.Authentication.Application;
 using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Modules.Authentication.Domain.Users;
 using PropFlow.Modules.Authentication.Infrastructure.Persistence;
+using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Residents.Domain.ResidentApartments;
 using PropFlow.Modules.Residents.Domain.Residents;
+using PropFlow.Modules.Residents.Application;
 using PropFlow.Modules.Residents.Infrastructure.Persistence;
 using PropFlow.Modules.Residents.Presentation;
 
@@ -26,6 +28,99 @@ namespace PropFlow.IntegrationTests;
 public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : IClassFixture<AuthDatabaseFixture>
 {
     private static readonly DateOnly Today = DateOnly.FromDateTime(DateTime.UtcNow);
+    private const string SummaryPath = "api/v1/residents/summary";
+
+    [Theory]
+    [InlineData("MANAGER", HttpStatusCode.OK)]
+    [InlineData("STAFF", HttpStatusCode.OK)]
+    [InlineData("ACCOUNTANT", HttpStatusCode.OK)]
+    [InlineData("ADMIN", HttpStatusCode.Forbidden)]
+    [InlineData("RESIDENT", HttpStatusCode.Forbidden)]
+    public async Task Summary_obeys_resident_read_policy(string role, HttpStatusCode expected)
+    {
+        using var client = await ClientAsync(role);
+        using var response = await client.GetAsync(SummaryPath);
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Summary_requires_authentication()
+    {
+        using var client = database.Factory.CreateClient();
+        using var response = await client.GetAsync(SummaryPath);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(2027, 2, 28, "Asia/Ho_Chi_Minh", 7, 7)]
+    [InlineData(2028, 2, 29, "Asia/Ho_Chi_Minh", 7, 7)]
+    [InlineData(2027, 4, 30, "Asia/Ho_Chi_Minh", 7, 7)]
+    [InlineData(2027, 12, 31, "Asia/Ho_Chi_Minh", 7, 7)]
+    [InlineData(2027, 3, 31, "America/New_York", -5, -4)]
+    public async Task Summary_uses_resident_fields_and_building_local_month(
+        int year, int month, int days, string zoneId, int startOffset, int endOffset)
+    {
+        var monthStart = new DateTime(year, month, 1);
+        var start = new DateTimeOffset(monthStart, TimeSpan.FromHours(startOffset)).ToUniversalTime();
+        var end = new DateTimeOffset(monthStart.AddDays(days), TimeSpan.FromHours(endOffset)).ToUniversalTime();
+        var clock = database.Factory.Clock;
+        var original = clock.Current;
+        using var client = await ClientAsync("MANAGER");
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var propertyAssets = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>();
+        var building = await propertyAssets.Buildings.SingleAsync();
+        var originalZone = building.TimeZoneId;
+        clock.Current = start;
+        try
+        {
+            if (zoneId != originalZone)
+            {
+                building.Update(building.Name, building.Address, zoneId, building.NumberOfFloors, building.Description, null, start);
+                await propertyAssets.SaveChangesAsync();
+            }
+            var before = Assert.IsType<ResidentManagementSummary>(
+                await client.GetFromJsonAsync<ResidentManagementSummary>(SummaryPath));
+
+            var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            var suffix = Guid.NewGuid().ToString("N")[..12];
+            var disabled = new UserAccount($"summary_{suffix}", "test-password-hash", "Disabled account",
+                start.AddYears(-1), $"disabled-{suffix}@example.test", status: AccountStatus.DISABLED);
+            var newAccount = new UserAccount($"recent_{suffix}", "test-password-hash", "Recent account",
+                start, $"recent-{suffix}@example.test", status: AccountStatus.ACTIVE);
+            auth.UserAccounts.AddRange(disabled, newAccount);
+            await auth.SaveChangesAsync();
+
+            var inactive = new Resident($"RS-{suffix}-1", "At month start", start, disabled.Id);
+            inactive.Deactivate(null, start);
+            var residents = scope.ServiceProvider.GetRequiredService<ResidentsDbContext>();
+            residents.Residents.AddRange(
+                inactive,
+                new Resident($"RS-{suffix}-2", "Just before month end", end.AddMilliseconds(-1), email: $"unlinked-{suffix}@example.test"),
+                new Resident($"RS-{suffix}-3", "Just before month start", start.AddMilliseconds(-1), newAccount.Id),
+                new Resident($"RS-{suffix}-4", "At next month start", end));
+            await residents.SaveChangesAsync();
+
+            var expected = new ResidentManagementSummary(before.TotalResidents + 4, before.ActiveResidents + 3,
+                before.LinkedAccounts + 2, before.NewResidentsThisMonth + 2);
+            Assert.Equal(expected, await client.GetFromJsonAsync<ResidentManagementSummary>(SummaryPath));
+
+            var filtered = Assert.IsType<PagedResidentsResponse>(await client.GetFromJsonAsync<PagedResidentsResponse>(
+                "api/v1/residents?status=ACTIVE&pageIndex=2&pageSize=1"));
+            Assert.Single(filtered.Items);
+            Assert.Equal(2, filtered.PageIndex);
+            Assert.Equal(expected, await client.GetFromJsonAsync<ResidentManagementSummary>(
+                $"{SummaryPath}?status=ACTIVE&search=absent&pageIndex=2&pageSize=1"));
+        }
+        finally
+        {
+            clock.Current = original;
+            if (building.TimeZoneId != originalZone)
+            {
+                building.Update(building.Name, building.Address, originalZone, building.NumberOfFloors, building.Description, null, clock.GetUtcNow());
+                await propertyAssets.SaveChangesAsync();
+            }
+        }
+    }
 
     [Theory]
     [InlineData("MANAGER", HttpStatusCode.Created)]
@@ -686,11 +781,22 @@ public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : 
         var byName = await client.GetFromJsonAsync<PagedResidentsResponse>("api/v1/residents?search=Needle");
         Assert.Contains(byName!.Items, x => x.Id == matched.Id);
         var byEmail = await client.GetFromJsonAsync<PagedResidentsResponse>("api/v1/residents?search=unique-search%40example.test");
-        Assert.Contains(byEmail!.Items, x => x.Id == matched.Id);
+        Assert.Empty(byEmail!.Items);
+        Assert.Equal(0, byEmail.TotalCount);
         var byPhone = await client.GetFromJsonAsync<PagedResidentsResponse>("api/v1/residents?search=%2B84111111111");
-        var accountantRow = Assert.Single(byPhone!.Items, x => x.Id == matched.Id);
+        Assert.Empty(byPhone!.Items);
+        Assert.Equal(0, byPhone.TotalCount);
+        var accountantRow = Assert.Single(byCode.Items, x => x.Id == matched.Id);
         Assert.Null(accountantRow.PhoneNumber);
         Assert.Null(accountantRow.Email);
+        foreach (var role in new[] { "MANAGER", "STAFF" })
+        {
+            using var permitted = await ClientAsync(role);
+            var byPartialEmail = await permitted.GetFromJsonAsync<PagedResidentsResponse>("api/v1/residents?search=unique-search");
+            var byPartialPhone = await permitted.GetFromJsonAsync<PagedResidentsResponse>("api/v1/residents?search=84111111");
+            Assert.Contains(byPartialEmail!.Items, x => x.Id == matched.Id && x.Email == "unique-search@example.test");
+            Assert.Contains(byPartialPhone!.Items, x => x.Id == matched.Id && x.PhoneNumber == "+84111111111");
+        }
         var byStatus = await client.GetFromJsonAsync<PagedResidentsResponse>("api/v1/residents?status=ACTIVE&pageSize=5&pageIndex=2");
         Assert.Equal(2, byStatus!.PageIndex); Assert.Equal(5, byStatus.PageSize); Assert.True(byStatus.TotalCount > 5);
         var byApartment = await client.GetFromJsonAsync<PagedResidentsResponse>($"api/v1/residents?apartmentUnitId={apartmentId}");

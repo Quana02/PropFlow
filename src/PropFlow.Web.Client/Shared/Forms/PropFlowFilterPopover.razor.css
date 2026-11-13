@@ -18,7 +18,7 @@
 .pf-filter-trigger .material-symbols-outlined, .pf-filter-close .material-symbols-outlined { font-size: 1.05rem; }
 .pf-filter-trigger strong { padding: .03rem .35rem; border-radius: 1rem; background: color-mix(in srgb, currentColor 14%, transparent); }
 button:hover, .pf-filter-trigger[aria-expanded="true"] { background: color-mix(in srgb, var(--app-accent, #0284c7) 12%, var(--app-surface, white)); }
-button:focus-visible { outline: 2px solid var(--app-accent, #0284c7); outline-offset: 2px; }
+button:focus-visible { outline: 2px solid var(--app-accent, #0284c7); outline-offset: -2px; }
 button:disabled, .pf-filter-trigger[aria-disabled="true"] { opacity: .55; cursor: default; }
 .pf-filter-popover {
     position: fixed;
@@ -31,7 +31,7 @@ button:disabled, .pf-filter-trigger[aria-disabled="true"] { opacity: .55; cursor
     border: 1px solid var(--app-line, #d6e4ef);
     border-radius: 1rem;
     padding: 0;
-    background: var(--app-popover-surface, #fff);
+    background: var(--pf-menu-surface, #fff);
     color: var(--app-text, #17243a);
     box-shadow: 0 1rem 2.5rem #091e3a30;
 }
@@ -51,9 +51,21 @@ footer .pf-filter-apply:hover { background: color-mix(in srgb, var(--app-accent,
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--app-accent, #0284c7) 38%, transparent) transparent;
 }
-.pf-filter-controls { display: grid; gap: .75rem; }
+.pf-filter-controls { display: grid; gap: .7rem; }
 .pf-filter-fields ::deep label { display: grid; gap: .32rem; font-size: .78rem; font-weight: 650; }
-.pf-filter-fields ::deep label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: .55rem; }
+.pf-filter-fields ::deep label:has(> input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    padding: .55rem .65rem;
+    border: 1px solid var(--pf-line);
+    border-radius: .65rem;
+    cursor: pointer;
+}
+.pf-filter-fields ::deep label:has(> input[type="checkbox"]:checked) {
+    border-color: color-mix(in srgb, var(--pf-accent) 32%, var(--pf-line));
+    background: color-mix(in srgb, var(--pf-accent) 8%, var(--pf-menu-surface));
+}
 .pf-filter-fields ::deep label > input:not([type="checkbox"]) {
     min-width: 0;
     padding: .55rem .65rem;

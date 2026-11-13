@@ -118,7 +118,10 @@
                 }
             </div>
             <div class="app-page-body">@ChildContent</div>
-            <footer class="app-footer">© @DateTime.Now.Year PropFlow · Hệ thống quản lý vận hành chung cư</footer>
+            <footer class="app-footer">
+                <div>© @DateTime.Now.Year PropFlow · Hệ thống quản lý vận hành chung cư</div>
+                <InformationLinks NewTab />
+            </footer>
         </main>
     </div>
 </div>

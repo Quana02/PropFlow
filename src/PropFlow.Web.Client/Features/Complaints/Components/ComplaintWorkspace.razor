@@ -7,8 +7,11 @@
 @implements IAsyncDisposable
 
 <section class="complaint-workspace @(Role is "MANAGER" or "STAFF" ? "internal-workspace" : null)">
-    <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">@(Role == "RESIDENT" ? "Trang chủ" : "Vận hành")</a><span>/</span><strong>Phản ánh</strong></nav>
-    <header class="hero"><div><span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">feedback</span>Kết nối với Ban Quản lý</span><h1>@(Role == "RESIDENT" ? "Phản ánh của tôi" : Role == "STAFF" ? "Công việc phản ánh được giao" : "Quản lý phản ánh")</h1><p>Gửi ý kiến, theo dõi tiến độ và nhận phản hồi chính thức.</p></div>
+    @if (Role == "RESIDENT")
+    {
+        <nav class="breadcrumb" aria-label="Đường dẫn"><a href="/">Trang chủ</a><span>/</span><strong>Phản ánh</strong></nav>
+    }
+    <header class="hero @(Role is "MANAGER" or "STAFF" ? "pf-management-header pf-management-existing-header" : null)"><div><span class="kicker"><span class="material-symbols-outlined" aria-hidden="true">feedback</span>Kết nối với Ban Quản lý</span><h1>@(Role == "RESIDENT" ? "Phản ánh của tôi" : Role == "STAFF" ? "Công việc phản ánh được giao" : "Quản lý phản ánh")</h1><p>Gửi ý kiến, theo dõi tiến độ và nhận phản hồi chính thức.</p></div>
         @if (Role == "RESIDENT" && !Id.HasValue) { <button class="primary" disabled="@busy" @onclick="() => composing = !composing"><span class="material-symbols-outlined" aria-hidden="true">@(composing ? "close" : "add")</span>@(composing ? "Đóng soạn thảo" : "Gửi phản ánh mới")</button> }
     </header>
     @if (error is not null) { <div role="alert" class="feedback error">@error <button @onclick="LoadAsync" disabled="@busy">Tải lại</button></div> }
@@ -31,19 +34,20 @@
                 <button type="submit">Gửi phản ánh</button>
             </form>
         }
-        <section class="list-panel">
+        <section class="list-panel pf-list-panel @(Role is "MANAGER" or "STAFF" ? "pf-management-list" : null)">
         <header class="list-heading"><div><h2>Danh sách phản ánh</h2><p class="muted">Theo dõi tình trạng xử lý và phản hồi của từng phản ánh.</p></div><span class="total">@(items?.Total.ToString() ?? "—") phản ánh</span></header>
-        <form class="filters" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+        <form class="filters pf-list-toolbar @(Role is "MANAGER" or "STAFF" ? "pf-management-toolbar" : null)" @onsubmit="SearchAsync" @onsubmit:preventDefault>
             <label>Tìm kiếm<input @bind="search" maxlength="200" placeholder="Mã hoặc tiêu đề" /></label>
             <label>Trạng thái<PropFlowSelect @bind-Value="status" Options="StatusOptions" Disabled="busy" AriaLabel="Trạng thái phản ánh" /></label>
             <button type="submit">Tìm kiếm</button>
+            <PropFlowListRefresh OnRefresh="LoadAsync" Busy="@busy" />
         </form>
         @if (items is not null)
         {
             @if (items.Total == 0) { <div class="empty-state"><span class="material-symbols-outlined" aria-hidden="true">forum</span><h3>Chưa có phản ánh phù hợp</h3><p>Thử thay đổi bộ lọc hoặc gửi phản ánh mới để Ban Quản lý hỗ trợ.</p></div> }
             else
             {
-                <div class="table-scroll"><table><thead><tr><th>Mã phản ánh</th><th>Tiêu đề</th><th>Trạng thái</th><th></th></tr></thead><tbody>
+                <div class="table-scroll"><table class="pf-list-table"><thead><tr><th>Mã phản ánh</th><th>Tiêu đề</th><th>Trạng thái</th><th></th></tr></thead><tbody>
                     @foreach (var item in items.Items) { <tr><td>@item.ComplaintNumber</td><td>@item.Subject</td><td><span class="status-chip status-@item.Status.ToLowerInvariant()">@ComplaintLabels.Status(item.Status)</span></td><td><button @onclick="() => Open(item.Id)">Xem chi tiết</button></td></tr> }
                 </tbody></table></div>
                 @if (Role is "MANAGER" or "STAFF")
