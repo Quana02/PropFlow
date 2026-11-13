@@ -28,6 +28,13 @@ public sealed class AuthenticationService(ApiClient publicApi, AuthenticatedApiC
         return result;
     }
     public Task<ApiResult<AccountResponse>> MeAsync() => privateApi.SendAsync<AccountResponse>(HttpMethod.Get, "api/v1/auth/me");
+    public async Task<ApiResult<AccountResponse>> UploadAvatarAsync(MultipartFormDataContent content, CancellationToken ct)
+    {
+        var version = session.Version;
+        var result = await privateApi.SendMultipartAsync<AccountResponse>("api/v1/auth/me/avatar", content, ct);
+        if (result.IsSuccess && session.Version == version && result.Data is { } account) session.UpdateUser(account);
+        return result;
+    }
     public async Task<ApiResult<AccountResponse>> UpdateAsync(UpdateProfileRequest request)
     {
         var version = session.Version;

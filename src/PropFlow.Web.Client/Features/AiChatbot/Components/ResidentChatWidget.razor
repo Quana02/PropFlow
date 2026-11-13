@@ -1,10 +1,11 @@
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.AiChatbot.Contracts
 @using PropFlow.Web.Client.Features.AiChatbot.Services
-@implements IDisposable
+@implements IAsyncDisposable
 @inject ResidentChatApiClient Api
+@inject IJSRuntime JS
 
-<div class="rag-widget">
+<div class="rag-widget" @ref="widgetElement">
     @if (open)
     {
         <section class="rag-window" aria-labelledby="rag-heading">
@@ -48,10 +49,22 @@
             <footer><span>AI có thể trả lời chưa chính xác. Hãy kiểm tra nguồn.</span><button type="button" disabled="@busy" @onclick="Clear">Xóa hội thoại</button></footer>
         </section>
     }
-    <button type="button" class="rag-launch" aria-expanded="@open" aria-label="@(open ? "Thu nhỏ trợ lý tài liệu" : "Mở trợ lý tài liệu")" @onclick="Toggle"><span aria-hidden="true">✦</span> Hỏi PropFlow</button>
+    <button type="button" class="rag-launch" aria-expanded="@open" aria-label="@(open ? "Thu nhỏ Hỏi PropFlow" : "Mở Hỏi PropFlow")" title="Bấm để hỏi PropFlow; giữ và kéo để di chuyển" @onclick="Toggle"><span class="rag-launch-icon" aria-hidden="true">✦</span><span class="rag-launch-label">Hỏi PropFlow</span></button>
 </div>
 
 @code {
+    private ElementReference widgetElement;
+    private IJSObjectReference? dragModule, dragHandle;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/chat-widget.js?v=20261113-2");
+        if (lifetime.IsCancellationRequested) { await module.DisposeAsync(); return; }
+        dragModule = module;
+        var handle = await module.InvokeAsync<IJSObjectReference>("attach", widgetElement);
+        if (lifetime.IsCancellationRequested) { await handle.InvokeVoidAsync("dispose"); await handle.DisposeAsync(); return; }
+        dragHandle = handle;
+    }
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime chatFeedback = new();
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
 
@@ -110,5 +123,15 @@
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { loadingSource = false; }
     }
-    public void Dispose() { toastLifetime.Dispose();  lifetime.Cancel(); lifetime.Dispose(); }
+    public async ValueTask DisposeAsync()
+    {
+        toastLifetime.Dispose(); chatFeedback.Dispose(); lifetime.Cancel();
+        try
+        {
+            if (dragHandle is not null) { await dragHandle.InvokeVoidAsync("dispose"); await dragHandle.DisposeAsync(); }
+            if (dragModule is not null) await dragModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        finally { lifetime.Dispose(); }
+    }
 }

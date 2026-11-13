@@ -9,7 +9,14 @@
     <div class="notice-list" aria-live="polite">
         @if (loading && data is null) { <p role="status">Đang tải thông báo…</p> }
         else if (error is not null) { <p role="alert">@error</p><button type="button" @onclick="ReloadAsync">Thử lại</button> }
-        else if (data is null || data.Items.Count == 0) { <p>Chưa có thông báo từ Ban Quản lý.</p> }
+        else if (data is null || data.Items.Count == 0)
+        {
+            <div class="announcement-empty" role="status">
+                <span class="announcement-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4M12 2V1" /></svg></span>
+                <strong>Chưa có thông báo mới</strong>
+                <p>Thông báo từ Ban quản lý sẽ hiển thị tại đây.</p>
+            </div>
+        }
         else
         {
             @foreach (var item in data.Items.Take(3))

@@ -4,6 +4,7 @@
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
 @using PropFlow.Web.Client.Services.Api
+@using PropFlow.Web.Client.Shared.Feedback
 
 @if (_open)
 {
@@ -60,7 +61,7 @@
                                 @(_listening ? "Dừng nói" : string.IsNullOrWhiteSpace(_form.Description) ? "Nhập bằng giọng nói" : "Nói bổ sung")
                             </button>
                         </div>
-                        <textarea id="service-description" @ref="_descriptionInput" @bind="_form.Description" @bind:event="oninput" @bind:after="InvalidateReview" rows="6" maxlength="3500" disabled="_submitting" readonly="_listening" placeholder="Khách thăm: nêu họ tên khách. Chuyển đồ: nêu đồ cần chuyển và chuyển vào/ra. Dịch vụ: nêu dịch vụ cần đăng ký, nhu cầu và nơi thực hiện. Có thể ghi thêm thời gian nếu đã xác định."></textarea>
+                        <textarea id="service-description" @ref="_descriptionInput" @bind="_form.Description" @bind:event="oninput" @bind:after="InvalidateReview" rows="6" maxlength="3500" disabled="@_submitting" readonly="@_listening" placeholder="Khách thăm: nêu họ tên khách. Chuyển đồ: nêu đồ cần chuyển và chuyển vào/ra. Dịch vụ: nêu dịch vụ cần đăng ký, nhu cầu và nơi thực hiện. Có thể ghi thêm thời gian nếu đã xác định."></textarea>
                         <ValidationMessage For="@(() => _form.Description)" />
                         <small class="voice-privacy">Giọng nói được trình duyệt chuyển thành chữ, có thể qua dịch vụ trực tuyến. PropFlow chỉ nhận văn bản.</small>
                         @if (_listening) { <p class="voice-status" role="status"><span class="voice-recording-dot"></span>Đang nghe tiếng Việt. Bấm Dừng nói khi hoàn tất.</p> }
@@ -118,7 +119,7 @@
 {
     <PropFlow.Web.Client.Shared.Feedback.PropFlowConfirmationDialog
         Title="@(_review?.Available == true ? "Cần bổ sung thông tin" : "Chưa kiểm tra được nội dung")"
-        Message="@ReviewMessage" InformationOnly="@(!_popupSendIntent)" Destructive="false"
+        Message="@ReviewMessage" Tone="@(_popupSendIntent ? DialogTone.Decision : DialogTone.Info)"
         ConfirmText="@(_popupSendIntent ? "Vẫn gửi nội dung này" : "Bổ sung nội dung")" CancelText="Bổ sung nội dung"
         OnConfirm="SendFromPopupAsync" OnCancel="DismissReviewAsync" />
 }

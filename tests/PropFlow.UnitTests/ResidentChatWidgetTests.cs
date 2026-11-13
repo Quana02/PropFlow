@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.JSInterop;
 using PropFlow.Modules.AiChatbot.Contracts;
 using PropFlow.Web.Client.Features.AiChatbot.Components;
 using PropFlow.Web.Client.Features.AiChatbot.Services;
@@ -21,7 +22,7 @@ public sealed class ResidentChatWidgetTests
         var capture = new Capture();
         using var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IComponentActivator>(capture)
             .AddSingleton<AuthenticatedApiClient>(sp => new(new HttpClient(new Responses()) { BaseAddress = new("https://test.invalid") }, sp.GetRequiredService<ILogger<ApiClient>>()))
-            .AddSingleton<ResidentChatApiClient>().BuildServiceProvider();
+            .AddSingleton<IJSRuntime, NoJavaScript>().AddSingleton<ResidentChatApiClient>().BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>
         {
@@ -50,6 +51,11 @@ public sealed class ResidentChatWidgetTests
         public ResidentChatWidget? Widget;
         public IComponent CreateInstance(Type type)
         { var component = (IComponent)Activator.CreateInstance(type)!; if (component is ResidentChatWidget widget) Widget = widget; return component; }
+    }
+    private sealed class NoJavaScript : IJSRuntime
+    {
+        public ValueTask<T> InvokeAsync<T>(string id, object?[]? args) => throw new NotSupportedException();
+        public ValueTask<T> InvokeAsync<T>(string id, CancellationToken ct, object?[]? args) => InvokeAsync<T>(id, args);
     }
     private sealed class Responses : HttpMessageHandler
     {

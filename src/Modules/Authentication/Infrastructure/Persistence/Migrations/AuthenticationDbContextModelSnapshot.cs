@@ -330,6 +330,15 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AvatarStorageKey")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("avatar_storage_key");
+
+                    b.Property<Guid?>("AvatarVersion")
+                        .HasColumnType("uuid")
+                        .HasColumnName("avatar_version");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
