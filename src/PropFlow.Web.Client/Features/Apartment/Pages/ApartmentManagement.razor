@@ -21,10 +21,10 @@
  </section>
  @if(initialized){<section class="apartment-kpis"><div><span class="material-symbols-outlined">domain</span><p>Tổng số căn hộ<strong>@data.Summary.TotalCount</strong></p></div><div><span class="material-symbols-outlined">groups</span><p>Đang có cư dân<strong>@data.Summary.OccupiedCount</strong></p></div><div><span class="material-symbols-outlined">meeting_room</span><p>Căn hộ trống<strong>@data.Summary.VacantCount</strong></p></div><div><span class="material-symbols-outlined">pause_circle</span><p>Ngừng quản lý<strong>@data.Summary.InactiveCount</strong></p></div></section>}
  @if(!string.IsNullOrWhiteSpace(message)){<p class="notice" role="alert">@message <button class="link" @onclick="Load">Thử lại</button></p>}
- <section class="apartment-panel">
+ <section class="apartment-panel pf-list-panel">
   <div class="toolbar-shell">
-   <div class="toolbar">
-    <div class="apartment-search"><span class="material-symbols-outlined">search</span><input aria-label="Tìm theo mã căn hộ" placeholder="Tìm theo mã căn hộ..." @bind="search" @bind:event="oninput" @onkeyup="SearchKey" />@if(!string.IsNullOrWhiteSpace(search)){<button type="button" class="clear-search" title="Xóa mã căn hộ" aria-label="Xóa mã căn hộ" @onclick="ClearSearch"><span class="material-symbols-outlined">close</span></button>}</div>
+   <div class="toolbar pf-list-toolbar">
+    <div class="apartment-search pf-list-search"><span class="material-symbols-outlined">search</span><input aria-label="Tìm theo mã căn hộ" placeholder="Tìm theo mã căn hộ..." @bind="search" @bind:event="oninput" @onkeyup="SearchKey" />@if(!string.IsNullOrWhiteSpace(search)){<button type="button" class="clear-search" title="Xóa mã căn hộ" aria-label="Xóa mã căn hộ" @onclick="ClearSearch"><span class="material-symbols-outlined">close</span></button>}</div>
     <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters" OnReset="ResetFilters" OnApply="ApplyFilters">
                 <label><span>Trạng thái quản lý</span><PropFlowSelect Options="StatusOptions" Value="@draftStatus" ValueChanged="SetDraftStatus" Variant="Filter" AriaLabel="Trạng thái quản lý" /></label>
                 <label><span>Tầng</span><input type="number" min="0" placeholder="Nhập số tầng" @bind="draftFloorText" /></label>
@@ -32,13 +32,14 @@
                 <label><span>Tình trạng cư trú</span><PropFlowSelect Options="OccupancyOptions" Value="@draftOccupancy" ValueChanged="SetDraftOccupancy" Variant="Filter" AriaLabel="Tình trạng cư trú" /></label>
             </PropFlowFilterPopover>
     <span class="result-count"><i></i>Hiển thị @data.Items.Count / @data.TotalCount căn hộ</span>
+    <PropFlowListRefresh OnRefresh="Load" Busy="@loading" />
    </div>
   </div>
   <div class="apartment-results @(loading?"is-loading":null)" aria-busy="@loading">
    @if(loading&&data.Items.Count>0){<div class="list-loading-overlay" role="status"><span class="loading-spinner"></span><span>Đang cập nhật…</span></div>}
    @if(loading&&data.Items.Count==0){<p class="state">Đang tải căn hộ…</p>}
    else if(data.Items.Count==0){<div class="state">Không tìm thấy căn hộ phù hợp.</div>}
-   else{<table><thead><tr><th>CĂN HỘ</th><th>LOẠI & DIỆN TÍCH</th><th>CHỦ SỞ HỮU / CƯ TRÚ</th><th>TRẠNG THÁI</th><th>HÀNH ĐỘNG</th></tr></thead><tbody>
+   else{<table class="pf-list-table"><thead><tr><th>CĂN HỘ</th><th>LOẠI & DIỆN TÍCH</th><th>CHỦ SỞ HỮU / CƯ TRÚ</th><th>TRẠNG THÁI</th><th>HÀNH ĐỘNG</th></tr></thead><tbody>
     @foreach(var x in data.Items){<tr><td><button class="link" @onclick="()=>Detail(x.Id)">@x.UnitNumber</button><small>Tầng @x.FloorNumber</small></td><td><strong>@x.UsableAreaM2.ToString("0.##") m²</strong> · @x.UnitType</td><td>@OwnerSummary(x.Owners)<small>@(x.IsOccupied?"Có cư dân đang cư trú":"Căn hộ trống")</small></td><td><span class="status-chip @(x.Status=="ACTIVE"?"active":"inactive")">@(x.Status=="ACTIVE"?"Đang quản lý":"Ngừng quản lý")</span></td><td class="row-actions"><button title="Xem chi tiết" @onclick="()=>Detail(x.Id)"><span class="material-symbols-outlined">visibility</span></button>@if(CanManage){<button type="button" title="Nhập điện và nước đã dùng" aria-label="Nhập điện và nước căn hộ @x.UnitNumber" @onclick="()=>electricityApartment=x"><span class="material-symbols-outlined">electric_meter</span></button><button title="Chỉnh sửa" @onclick="()=>OpenEdit(x.Id)"><span class="material-symbols-outlined">edit</span></button><button title="@StatusActionTitle(x)" @onclick="()=>RequestStatusChange(x)"><span class="material-symbols-outlined">@(x.Status=="ACTIVE"?"pause_circle":"play_circle")</span></button>}</td></tr>}
    </tbody></table>}
    @if (initialized && data.TotalCount > 0)

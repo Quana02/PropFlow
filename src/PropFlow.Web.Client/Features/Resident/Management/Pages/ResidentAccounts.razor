@@ -7,7 +7,7 @@
 <PageTitle>Tài khoản cư dân - PropFlow</PageTitle>
 
 <div class="accounts">
-    <header class="page-header">
+    <header class="page-header pf-management-header pf-management-existing-header">
         <div class="heading-group">
             <svg class="heading-icon icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4"/><circle cx="17" cy="16" r="3"/><path d="M17 12v1m0 6v1m-4-4h1m6 0h1"/></svg>
             <div>
@@ -21,9 +21,9 @@
         </a>
     </header>
 
-    <section class="directory" aria-label="Danh sách tài khoản cư dân" aria-busy="@loading">
-        <div class="toolbar">
-            <form class="search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+    <section class="directory pf-list-panel pf-management-list" aria-label="Danh sách tài khoản cư dân" aria-busy="@loading">
+        <div class="toolbar pf-list-toolbar pf-management-toolbar">
+            <form class="search pf-list-search" @onsubmit="SearchAsync" @onsubmit:preventDefault>
                 <div class="search-field">
                     <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4 4"/></svg>
                     <input id="account-search" type="search" aria-label="Tìm cư dân" placeholder="Tìm theo họ tên, mã cư dân hoặc email liên hệ"
@@ -35,6 +35,7 @@
             {
                 <span class="result-count" role="status"><span aria-hidden="true"></span>@results.TotalCount hồ sơ</span>
             }
+            <PropFlowListRefresh OnRefresh="() => LoadAsync(requestedPage)" Busy="@loading" />
         </div>
         @if (search.Length > 0)
         {
@@ -74,7 +75,7 @@
         else
         {
             <div class="table-wrap" tabindex="0" role="region" aria-label="Bảng tài khoản cư dân">
-                <table>
+                <table class="pf-list-table">
                     <thead>
                         <tr>
                             <th scope="col">Cư dân</th>

@@ -11,7 +11,7 @@
         <PropFlow.Web.Client.Features.Communication.Components.AnnouncementWorkspace Embedded="true" />
     </div>
     <section hidden="@(!personal)" aria-label="Thông báo tài chính và cá nhân">
-        <div class="personal-heading"><span>@Notices.UnreadCount thông báo cá nhân chưa đọc</span><button type="button" disabled="@(Notices.Loading || Notices.UnreadCount == 0)" @onclick="Notices.ReadAllAsync">Đánh dấu tất cả đã đọc</button></div>
+        <div class="personal-heading pf-list-toolbar"><span>@Notices.UnreadCount thông báo cá nhân chưa đọc</span><button type="button" disabled="@(Notices.Loading || Notices.UnreadCount == 0)" @onclick="Notices.ReadAllAsync">Đánh dấu tất cả đã đọc</button><PropFlowListRefresh OnRefresh="Notices.ReloadAsync" Busy="@Notices.Loading" /></div>
         <div class="personal-list"><PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentFinanceNotifications Cards="true" /></div>
     </section>
 </section>

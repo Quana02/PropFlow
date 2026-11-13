@@ -2,12 +2,13 @@
 @using PropFlow.Modules.Communication.Contracts
 
 <aside class="manager-inbox" aria-labelledby="manager-inbox-title">
-    <header class="inbox-heading">
+    <header class="inbox-heading pf-list-toolbar pf-management-toolbar">
         <h2 id="manager-inbox-title">Hộp thư của bạn</h2>
         @if (Conversations is { Total: > 0 } summary)
         {
             <span class="inbox-count" aria-label="@($"{summary.Total} hội thoại")">@summary.Total</span>
         }
+        @if (OnRefresh.HasDelegate) { <PropFlowListRefresh OnRefresh="OnRefresh" Busy="@(Loading || Busy)" /> }
     </header>
     @if (Loading)
     {
@@ -63,6 +64,7 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public bool Loading { get; set; }
     [Parameter] public EventCallback<Guid> OnSelect { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
     [Parameter] public EventCallback<int> OnPageChanged { get; set; }
 
     private int TotalPages => (int)Math.Ceiling((Conversations?.Total ?? 0) / 12d);

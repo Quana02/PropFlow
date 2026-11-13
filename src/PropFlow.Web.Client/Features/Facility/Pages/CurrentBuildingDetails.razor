@@ -17,11 +17,14 @@
 }
 
 <main class="building-details" aria-labelledby="building-page-title">
-    <header class="page-header">
-        <div>
-            <span class="eyebrow">Hồ sơ hiện tại</span>
-            <h1 id="building-page-title">Chi tiết chung cư: @Building?.Name</h1>
-            <p>Thông tin hồ sơ và tổng quan vận hành của chung cư đang được PropFlow quản lý.</p>
+    <header class="page-header pf-management-header pf-management-existing-header">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">apartment</span>
+            <div>
+                <span class="eyebrow">Hồ sơ hiện tại</span>
+                <h1 id="building-page-title">Chi tiết chung cư: @Building?.Name</h1>
+                <p>Thông tin hồ sơ và tổng quan vận hành của chung cư đang được PropFlow quản lý.</p>
+            </div>
         </div>
         @if (CanEdit && !IsLoading)
         {
@@ -58,7 +61,7 @@
     }
     else if (Building is not null)
     {
-        <section class="metrics-grid" aria-label="Tổng quan vận hành">
+        <section class="metrics-grid pf-management-metric-group" aria-label="Tổng quan vận hành">
             @if (CanEdit)
             {
             <article class="metric-card apartments"><span class="metric-icon material-symbols-outlined" aria-hidden="true">apartment</span><div><span>Căn hộ</span><small>Tổng số căn hộ</small></div><strong>@Building.TotalApartments</strong></article>

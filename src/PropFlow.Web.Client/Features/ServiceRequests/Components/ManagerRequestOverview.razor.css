@@ -50,15 +50,15 @@ h4 .material-symbols-outlined { color: var(--app-accent); font-size: 1.2rem; }
 .handling-grid h5 .material-symbols-outlined { font-size: 1.1rem; color: var(--app-accent); }
 .handling-grid p { margin: .65rem 0 0; font-size: .9rem; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .handling-grid textarea { margin-top: .7rem; resize: vertical; }
-select, textarea, .review-note input { box-sizing: border-box; width: 100%; max-width: 100%; padding: .55rem .65rem; border: 1px solid var(--app-line); border-radius: .55rem; background: var(--app-surface); color: var(--app-text); font: inherit; font-size: .82rem; }
-.category-fact select { margin-top: .65rem; }
-.request-title-row select { width: auto; }
+textarea, .review-note input { box-sizing: border-box; width: 100%; max-width: 100%; padding: .55rem .65rem; border: 1px solid var(--app-line); border-radius: .55rem; background: var(--app-surface); color: var(--app-text); font: inherit; font-size: .82rem; }
+.request-category-select { margin-top: .65rem; }
+.request-priority-select { width: min(100%, 13rem); }
 button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; padding: .5rem .75rem; border: 1px solid var(--app-accent); border-radius: .6rem; background: #0369a1; color: #fff; font: inherit; font-size: .75rem; font-weight: 750; cursor: pointer; }
 .ai-analyze { flex: 0 0 auto; }
 .ai-analyze .material-symbols-outlined { font-size: 1.1rem; }
 .text-action { background: transparent; color: var(--app-accent); border-color: var(--app-line); }
 button:disabled { opacity: .55; cursor: default; }
-button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; }
 .plan-actions { flex-wrap: wrap; margin-top: 1rem; }
 .review-help, .maintenance-note, .maintenance-choice, .review-note { display: block; margin: .75rem 0 0; color: var(--app-muted); font-size: .75rem; line-height: 1.6; }
 .maintenance-choice { display: flex; align-items: center; gap: .4rem; }

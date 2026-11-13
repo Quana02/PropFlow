@@ -41,7 +41,7 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var source = Environment.GetEnvironmentVariable("PROPFLOW_TEST_DATABASE") ?? throw new InvalidOperationException("Set PROPFLOW_TEST_DATABASE to a local PostgreSQL admin connection.");
-        var builder = new NpgsqlConnectionStringBuilder(source) { Database = "postgres" }; admin = builder.ConnectionString;
+        var builder = new NpgsqlConnectionStringBuilder(source) { Database = "postgres", Pooling = false }; admin = builder.ConnectionString;
         await using var c = new NpgsqlConnection(admin); await c.OpenAsync();
         await using var create = new NpgsqlCommand($"CREATE DATABASE {name}", c); await create.ExecuteNonQueryAsync();
         builder.Database = name; connection = builder.ConnectionString;
@@ -55,7 +55,6 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
     }
     public async Task DisposeAsync()
     {
-        NpgsqlConnection.ClearAllPools();
         if (string.IsNullOrEmpty(admin)) return;
         await using var c = new NpgsqlConnection(admin); await c.OpenAsync();
         await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {name} WITH (FORCE)", c); await drop.ExecuteNonQueryAsync();
@@ -374,6 +373,7 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.Equal(user,(await db.Notifications.SingleAsync(x=>x.Id==pushed.Id)).RecipientUserId);
         Assert.Equal(notice.Title,pushed.Title); Assert.Equal(notice.ActionPath,pushed.ActionPath);
         await publisher.PublishAsync(notice,default);
+        await publisher.PublishAsync(notice with { Email = "changed@example.invalid" }, default);
         await Task.Delay(150);
         Assert.Equal(1,ownCount); Assert.Equal(0,otherCount);
         Assert.Single(await db.FinanceEmails.ToArrayAsync());
@@ -730,7 +730,9 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
                     ["Authentication:PrivateKeyPem"]=rsa.ExportRSAPrivateKeyPem(),
                     ["Authentication:OtpHashKey"]=Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                     ["Authentication:Mail:Host"]="invalid.test",["Authentication:Mail:From"]="test@example.invalid",
-                    ["Logging:LogLevel:Default"]="None"
+                    ["Cloudinary:CloudName"]="fixture",["Cloudinary:ApiKey"]="fixture",["Cloudinary:ApiSecret"]="fixture",
+                    ["Logging:LogLevel:Default"]="None",
+                    ["Logging:LogLevel:PropFlow.Modules.Authentication.Presentation.AuthExceptionHandler"]="Error"
                 });
             });
             builder.ConfigureTestServices(services=> {
@@ -830,6 +832,22 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         using var resident=factory.Client("RESIDENT",user);
         using var stranger=factory.Client("RESIDENT",Guid.NewGuid());
         var sendPath=$"api/v1/billing/cycle/invoices/{invoiceId}/send";
+        await using var reminderNotices = Communication();
+        var previousEmailIds = await reminderNotices.FinanceEmails.Select(x => x.Id).ToArrayAsync();
+        const string reminderPath = "api/v1/billing/cycle/reminders";
+        var reminder = new { invoiceIds = new[] { invoiceId }, requestId = Guid.NewGuid() };
+        using (var denied = await resident.PostAsJsonAsync(reminderPath, reminder))
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var accepted = await accountant.PostAsJsonAsync(reminderPath, reminder);
+            Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+            var reminderResult = await accepted.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            Assert.Equal(1, reminderResult.GetProperty("recipients").GetInt32());
+            Assert.Single(reminderResult.EnumerateObject());
+        }
+        var queued = Assert.Single(await reminderNotices.FinanceEmails.Where(x => !previousEmailIds.Contains(x.Id)).ToArrayAsync());
+        Assert.Equal(user, queued.UserId);
         Assert.Equal(HttpStatusCode.Forbidden,(await resident.PostAsJsonAsync(sendPath,new{})).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await manager.PostAsJsonAsync(sendPath,new{})).StatusCode);
         Assert.Equal(HttpStatusCode.OK,(await accountant.PostAsJsonAsync(sendPath,new{})).StatusCode);
@@ -1059,7 +1077,9 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         await using(var c=Communication()) await new FinanceNoticePublisher(c).PublishAsync(new(Guid.NewGuid(),user,"head@resident.local","Receipt","Paid","<p>Receipt</p>","PAYMENT",Guid.NewGuid(),"/resident/billing","PT.html"),default);
         var listener=new System.Net.Sockets.TcpListener(IPAddress.Loopback,0); listener.Start();
         var port=((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop();
-        var services=new ServiceCollection(); services.AddScoped(_=>Communication()); await using var provider=services.BuildServiceProvider();
+        var services=new ServiceCollection(); services.AddScoped(_=>Communication());
+        services.AddSingleton<PropFlow.Modules.Communication.Application.IFinanceEmailRecipientDirectory>(new QueuedRecipientDirectory("head@resident.local"));
+        await using var provider=services.BuildServiceProvider();
         using var worker=new FinanceEmailWorker(provider.GetRequiredService<IServiceScopeFactory>(),Options.Create(new FinanceMailOptions {Host="127.0.0.1",Port=port,From="finance@propflow.local",EnableSsl=false,PollSeconds=1}),Microsoft.Extensions.Logging.Abstractions.NullLogger<FinanceEmailWorker>.Instance);
         using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(20));
         await worker.StartAsync(timeout.Token);
@@ -1081,6 +1101,10 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
             while (await reader.ReadLineAsync(timeout.Token) is { } line) {
                 if (data) { if (line == ".") { data = false; await writer.WriteLineAsync("250 queued"); } else body.AppendLine(line); }
                 else if (line.StartsWith("EHLO") || line.StartsWith("HELO")) await writer.WriteLineAsync("250 localhost");
+                else if (line.StartsWith("RCPT TO:", StringComparison.OrdinalIgnoreCase)) {
+                    body.AppendLine(line);
+                    await writer.WriteLineAsync("250 OK");
+                }
                 else if (line == "DATA") { data = true; await writer.WriteLineAsync("354 send data"); }
                 else if (line == "QUIT") { await writer.WriteLineAsync("221 goodbye"); return body.ToString(); }
                 else await writer.WriteLineAsync("250 OK");
@@ -1088,16 +1112,26 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
             return body.ToString();
         }
         var received = Receive();
+        var inactiveUser = Guid.NewGuid();
         try {
-            await using (var c = Communication()) await new PropFlow.Api.Composition.FinanceNoticePublisherBridge(new FinanceNoticePublisher(c)).PublishAsync(new(Guid.NewGuid(),user,
-                "head@resident.local", "Receipt", "Confirmed payment", "<h1>Receipt</h1><p>Paid 700000 VND</p>", "PAYMENT", Guid.NewGuid(), "/resident/billing", "PT-test.html"), default);
+            await using (var c = Communication())
+            {
+                var publisher = new PropFlow.Api.Composition.FinanceNoticePublisherBridge(new FinanceNoticePublisher(c));
+                var notice = new FinanceNotice(Guid.NewGuid(), user, "head@resident.local", "Receipt", "Confirmed payment",
+                    "<h1>Receipt</h1><p>Paid 700000 VND</p>", "PAYMENT", Guid.NewGuid(), "/resident/billing", "PT-test.html");
+                await publisher.PublishAsync(notice, default);
+                await publisher.PublishAsync(notice with { EventId = Guid.NewGuid(), UserId = inactiveUser, Email = "inactive@resident.local" }, default);
+            }
             var services = new ServiceCollection(); services.AddScoped(_ => Communication());
+            services.AddSingleton<PropFlow.Modules.Communication.Application.IFinanceEmailRecipientDirectory>(new QueuedRecipientDirectory("updated@resident.local", inactiveUser));
             await using var provider = services.BuildServiceProvider();
             using var worker = new FinanceEmailWorker(provider.GetRequiredService<IServiceScopeFactory>(),
                 Options.Create(new FinanceMailOptions { Host = "127.0.0.1", Port = port, From = "finance@propflow.local", EnableSsl = false, PollSeconds = 1 }),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FinanceEmailWorker>.Instance);
             await worker.StartAsync(timeout.Token);
             var body = await received;
+            Assert.Contains("updated@resident.local", body);
+            Assert.DoesNotContain("head@resident.local", body);
             Assert.Contains("Receipt", body); Assert.Contains("text/html", body); Assert.DoesNotContain("multipart/mixed", body);
             while (true) {
                 await using var check = Communication();
@@ -1106,8 +1140,19 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
             }
             await worker.StopAsync(default);
             await using var db = Communication();
-            Assert.NotNull((await db.FinanceEmails.SingleAsync()).SentAt);
+            Assert.NotNull((await db.FinanceEmails.SingleAsync(x => x.UserId == user)).SentAt);
+            var deferred = await db.FinanceEmails.SingleAsync(x => x.UserId == inactiveUser);
+            Assert.Null(deferred.SentAt);
+            Assert.True(deferred.NextAttemptAt > DateTimeOffset.UtcNow.AddMinutes(50));
+            Assert.False(listener.Pending());
         } finally { listener.Stop(); }
+    }
+
+    private sealed class QueuedRecipientDirectory(string currentAddress, Guid? inactiveUser = null)
+        : PropFlow.Modules.Communication.Application.IFinanceEmailRecipientDirectory
+    {
+        public Task<string?> RecipientEmailAsync(Guid? userId, string? snapshotEmail, CancellationToken ct) =>
+            Task.FromResult(userId is null ? snapshotEmail : userId == inactiveUser ? null : currentAddress);
     }
 }
 

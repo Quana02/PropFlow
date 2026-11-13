@@ -21,10 +21,13 @@ else if (!string.IsNullOrWhiteSpace(loadError) || detail is null)
 else
 {
 <div class="staff-work-page">
-    <section class="work-heading">
-        <div>
-            <nav><a href="/staff/service-requests"><span class="material-symbols-outlined">arrow_back</span>Quay lại danh sách yêu cầu</a><span>/</span><strong>#@Code</strong></nav>
-            <div class="work-title-row"><h1>@RequestTitle</h1><span class="priority-chip">@PriorityLabel</span><span class="location-chip">@Location</span><span class="zone-chip">@ServiceArea</span></div>
+    <section class="work-heading pf-management-header pf-management-existing-header">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">assignment</span>
+            <div>
+                <nav><a href="/staff/service-requests"><span class="material-symbols-outlined">arrow_back</span>Quay lại danh sách yêu cầu</a><span>/</span><strong>#@Code</strong></nav>
+                <div class="work-title-row"><h1>@RequestTitle</h1><span class="priority-chip">@PriorityLabel</span><span class="location-chip">@Location</span><span class="zone-chip">@ServiceArea</span></div>
+            </div>
         </div>
         <div class="sla-card"><i></i><strong>@StatusLabel</strong><small>Cập nhật @UpdatedAtLabel</small></div>
     </section>
@@ -57,7 +60,7 @@ else
         <p class="permission-note"><span class="material-symbols-outlined">info</span><span><strong>Quy tắc tuần tự:</strong> Staff xác nhận bước 2, sau đó nhập tóm tắt và tải ảnh cùng lúc tại bước 3. Bước 4 chỉ do Manager nghiệm thu hoặc đóng yêu cầu.</span></p>
     </section>
 
-    <section class="work-metrics" aria-label="Mốc thời gian xử lý">
+    <section class="work-metrics pf-management-metric-group" aria-label="Mốc thời gian xử lý">
         <article><small>Thời gian mong muốn</small><strong>@PreferredSchedule</strong><span class="success-text">Do cư dân cung cấp</span><em>Phục vụ điều phối công việc</em></article>
         <article><small>Ngày phân công</small><strong>@AssignedAtLabel</strong><span class="blue-text">Ban Quản lý phân công</span><em>@(detail.StartedAt.HasValue ? $"Tiếp nhận {detail.StartedAt.Value.ToLocalTime():dd/MM/yyyy · HH:mm}" : "Chưa tiếp nhận")</em></article>
         <article><small>Tiến độ gần nhất</small><strong>@LatestProgressTime</strong><span class="warning-text">@LatestProgressSummary</span><em>Cập nhật bởi Staff</em></article>

@@ -8,19 +8,18 @@
 @inject IFinanceApiClient Finance
 @inject IJSRuntime Js
 @implements IAsyncDisposable
-<section class="billing-workspace">
+<section class="billing-workspace pf-list-panel pf-management-list">
 <nav class="billing-breadcrumb" aria-label="Đường dẫn trang"><a href="/finance/dashboard">Tài chính &amp; Sổ cái</a><span aria-hidden="true">›</span><span aria-current="page">@Title</span></nav>
 <h1>@Title</h1>
 <p>Hóa đơn được lập từ căn hộ, kỳ thu và đơn giá đã cấu hình. Chọn một hóa đơn để xem nguồn từng khoản phí, lịch sử phát hành và thanh toán.</p>
 <div class="actions">
     @if (CanWrite) { <button disabled="@busy" @onclick="NewDraft">Tạo hóa đơn nháp</button><a class="button" href="/finance/fees">Cấu hình loại phí / đơn giá</a> }
     <button disabled="@(busy || loading)" @onclick="Export">Xuất báo cáo Excel</button>
-    <button disabled="@(busy || loading)" @onclick="() => Load(1)">Tải lại</button>
 </div>
 @if (error is not null) { <p role="alert" class="error">@error</p> }
 
 <form @onsubmit="Search" @onsubmit:preventDefault>
-<div class="fields">
+<div class="fields pf-list-toolbar pf-management-toolbar">
     <label>Mã hóa đơn<input @bind="search" /></label>
     <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@(loading || busy)" OnOpen="OpenFilters"
                          OnReset="ResetDraft" Validate="ValidateDraft" OnApply="ApplyDraft">
@@ -32,18 +31,19 @@
         @if (filterError is not null) { <p role="alert">@filterError</p> }
     </PropFlowFilterPopover>
     <button type="submit" disabled="@(loading || busy)">Tìm kiếm</button>
+    <PropFlowListRefresh OnRefresh="() => Load(page)" Busy="@(busy || loading)" />
 </div></form>
 @if (loading) { <p role="status">Đang tải hóa đơn…</p> }
 else if (data is not null)
 {
-    <div class="summary" aria-label="Tổng quan hóa đơn">
+    <div class="summary pf-management-metric-group" aria-label="Tổng quan hóa đơn">
         <article class="summary-card"><span>Hóa đơn phù hợp</span><strong>@data.Total</strong><small>Theo bộ lọc hiện tại</small></article>
         <article class="summary-card"><span>Tổng phải thu</span><strong>@Money(data.TotalAmount)</strong><small>Hóa đơn đã phát hành</small></article>
         <article class="summary-card collected"><span>Đã xác nhận</span><strong>@Money(data.ConfirmedPaidAmount)</strong><small>Khoản thu đã được xác nhận</small></article>
         <article class="summary-card outstanding"><span>Còn nợ</span><strong>@Money(data.OutstandingAmount)</strong><small>Tổng dư nợ theo bộ lọc</small></article>
     </div>
     <p><small>Tổng thu tính trên toàn bộ kết quả đã phát hành, không tính hóa đơn nháp/hủy. Đơn vị: VND.</small></p>
-    <div class="table-scroll"><table><thead><tr><th>Mã / căn hộ</th><th>Kỳ thu / hạn trả</th><th>Trạng thái</th><th>Tổng hóa đơn</th><th>Đã xác nhận</th><th>Còn nợ</th><th>Chi tiết</th></tr></thead><tbody>
+    <div class="table-scroll pf-management-table-scroll"><table class="pf-list-table"><thead><tr><th>Mã / căn hộ</th><th>Kỳ thu / hạn trả</th><th>Trạng thái</th><th>Tổng hóa đơn</th><th>Đã xác nhận</th><th>Còn nợ</th><th>Chi tiết</th></tr></thead><tbody>
     @foreach (var x in data.Items)
     { <tr><td><strong>@x.InvoiceNumber</strong><small>Căn hộ @x.ApartmentNumber</small></td><td>@Date(x.PeriodStart) – @Date(x.PeriodEnd)<small>Hạn: @Date(x.DueDate)</small></td><td>@Status(x.Status)<small>@Status(x.SettlementStatus)</small></td><td class="money">@Money(x.TotalAmount)</td><td class="money">@Money(x.ConfirmedPaidAmount)</td><td class="money">@Money(x.OutstandingAmount)</td><td><button disabled="@busy" @onclick="() => Open(x.Id)">Xem</button></td></tr> }
     @if (data.Items.Count == 0) { <tr><td colspan="7">Chưa có hóa đơn phù hợp. Hóa đơn chỉ xuất hiện sau khi được lập và lưu.</td></tr> }

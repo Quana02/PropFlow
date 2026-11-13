@@ -1,0 +1,17 @@
+.help-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(14rem, 1fr); gap: 1rem; align-items: start; }
+.help-faq label { display: block; font-weight: 650; margin-bottom: .35rem; }
+.help-search { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .85rem; }
+.help-search input { flex: 1 1 12rem; min-width: 0; padding: .65rem .8rem; border: 1px solid var(--pf-line); border-radius: .65rem; background: var(--pf-menu-surface); color: var(--pf-text); }
+.help-search input::placeholder { color: var(--pf-muted); }
+.help-categories { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .65rem; }
+.help-button { border: 1px solid var(--pf-line); border-radius: .65rem; background: var(--pf-menu-surface); color: var(--pf-text); padding: .45rem .7rem; font-size: .875rem; cursor: pointer; }
+.help-button:hover, .help-button[aria-pressed="true"] { background: color-mix(in srgb, var(--pf-accent) 10%, var(--pf-menu-surface)); color: var(--pf-accent); border-color: var(--pf-accent); }
+.help-faq :is(input, button, summary):focus-visible { outline: 2px solid var(--pf-accent); outline-offset: 3px; }
+.help-count { color: var(--pf-muted); font-size: .875rem; }
+.help-group { margin-top: 1rem; }
+.help-group h3 { font-size: 1rem; color: var(--pf-accent); font-weight: 700; margin: 0 0 .3rem; }
+.help-group details { border-bottom: 1px solid var(--pf-line); }
+.help-group summary { padding: .7rem .3rem; cursor: pointer; font-weight: 650; }
+.help-group summary:hover { color: var(--pf-accent); }
+.help-group details p { margin: 0 .3rem .75rem; }
+@media (max-width: 50rem) { .help-grid { grid-template-columns: minmax(0, 1fr); } }

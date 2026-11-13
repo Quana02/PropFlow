@@ -42,8 +42,8 @@
 
 .fe04-panel table { min-width: 48rem; }
 .fe04-panel thead tr { height: 2.35rem; }
-.fe04-panel th { padding-top: .5rem; padding-bottom: .5rem; font-size: .53rem; letter-spacing: .04em; }
-.fe04-panel td { padding-top: .56rem; padding-bottom: .56rem; font-size: .67rem; }
+.fe04-panel th { padding-top: .5rem; padding-bottom: .5rem; letter-spacing: .04em; }
+.fe04-panel td { padding-top: .56rem; padding-bottom: .56rem; }
 .fe04-panel tbody tr { height: 3.65rem; }
 .fe04-panel td:nth-child(1), .fe04-panel th:nth-child(1) { width: 17%; }
 .fe04-panel td:nth-child(2), .fe04-panel th:nth-child(2) { width: 25%; }
@@ -51,11 +51,8 @@
 .fe04-panel td:nth-child(4), .fe04-panel th:nth-child(4) { width: 17%; }
 .fe04-panel td:nth-child(5), .fe04-panel th:nth-child(5) { width: 14%; }
 .fe04-panel td:nth-child(6), .fe04-panel th:nth-child(6) { width: 7%; }
-.fe04-panel td .font-semibold { font-size: .68rem; line-height: 1.2; }
-.fe04-panel td .text-xs { font-size: .55rem; line-height: 1.25; }
-.fe04-panel td .rounded-lg, .fe04-panel td .rounded-full { padding-top: .2rem; padding-bottom: .2rem; font-size: .55rem; }
+.fe04-panel td .rounded-lg, .fe04-panel td .rounded-full { padding-top: .2rem; padding-bottom: .2rem; }
 .fe04-panel td .rounded-full .w-2, .fe04-legend .rounded-full .w-2 { width: .35rem; height: .35rem; }
-.fe04-panel td .material-symbols-outlined { font-size: .85rem; }
 .fe04-panel td button { padding: .25rem; }
 
 .fe04-panel > .fe04-pagination { min-height: 3rem; padding: .55rem .75rem; gap: .55rem; font-size: .6rem; }

@@ -1,0 +1,32 @@
+@page "/terms"
+@layout PublicInformationLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Điều khoản sử dụng · PropFlow</PageTitle>
+<InformationHeader Title="Điều khoản sử dụng" Description="Phạm vi dịch vụ, tài khoản và cách sử dụng PropFlow trong chung cư." Draft />
+<PolicyDocument Path="/terms" Sections="Sections" />
+
+@code {
+    private static readonly PolicySection[] Sections =
+    [
+        new("dich-vu", "Dịch vụ và phạm vi",
+            "PropFlow hỗ trợ vận hành một chung cư trên mỗi hệ thống triển khai, gồm hồ sơ căn hộ và cư dân, yêu cầu dịch vụ, phản ánh, thông báo, liên lạc và theo dõi nghĩa vụ thanh toán. Cư dân và nhân sự truy cập theo vai trò và phạm vi nghiệp vụ của mình."),
+        new("tai-khoan", "Đăng ký và quản lý tài khoản",
+            "Chủ sở hữu hiện hành đủ điều kiện hoặc người thuê là chủ hộ đang cư trú tại căn chưa có chủ sở hữu hiện hành có thể đăng ký nếu hồ sơ còn hiệu lực, chưa liên kết tài khoản và thông tin đối chiếu khớp. Đăng ký gồm xác minh email theo quy trình hiện hành.",
+            "Với cư dân, Ban quản lý đối chiếu hồ sơ và khởi tạo yêu cầu đổi email đăng nhập. Cư dân hoàn tất xác minh qua luồng được cung cấp. Email liên hệ trong hồ sơ cư dân được quản lý riêng."),
+        new("bao-mat", "Bảo vệ phiên và sử dụng đúng quyền",
+            "Giữ riêng mật khẩu, mã xác minh và phiên đăng nhập. Cung cấp thông tin phù hợp với yêu cầu và báo Ban quản lý khi hồ sơ sai hoặc nghi ngờ tài khoản bị dùng trái phép.",
+            "Chỉ sử dụng dữ liệu, ảnh và chức năng trong phạm vi được cấp. Tránh gửi nội dung quấy rối, giả mạo, thông tin của người khác khi không cần thiết, hoặc tìm cách truy cập ngoài quyền. Tài khoản có thể bị khóa tạm thời theo cơ chế bảo mật hoặc bị vô hiệu hóa theo quy trình quản trị."),
+        new("dich-vu-cu-dan", "Yêu cầu dịch vụ và phản ánh",
+            "Dùng yêu cầu dịch vụ để báo việc cần xử lý, theo dõi tiến độ và thực hiện các bước xác nhận khi được yêu cầu. Dùng phản ánh để gửi góp ý hoặc vấn đề cần Ban quản lý phản hồi. Chỉ đính kèm nội dung cần thiết cho vụ việc."),
+        new("lien-lac", "Chat và thông báo",
+            "Tin nhắn hỗ trợ và thông báo phục vụ xử lý nghiệp vụ. Khi kết nối với Manager phụ trách, nội dung cư dân đang gõ có thể hiển thị trực tiếp cho người phụ trách trước khi gửi. Chỉ tin đã gửi được lưu vào lịch sử chat."),
+        new("thanh-toan", "Hóa đơn, phí và đối soát",
+            "Cư dân có thể xem hóa đơn và công nợ trong phạm vi của mình. Báo chuyển khoản là bước ghi nhận yêu cầu đối soát. Khoản chờ xác minh chưa giảm dư nợ. Sau xác nhận, hệ thống cập nhật khoản đã thu và có thể cung cấp chứng từ nghiệp vụ.",
+            "Thông tin hiển thị hoặc bản in trong PropFlow dùng để theo dõi nghiệp vụ. Tư cách của chứng từ thuế và phương thức thanh toán phụ thuộc đơn vị phát hành và kênh được phê duyệt. Việc hiển thị giao dịch không xác lập rằng PropFlow giữ tiền."),
+        new("ai", "Tính năng AI",
+            "AI hỗ trợ tra cứu tài liệu, rà thông tin và gợi ý xử lý khi được cấu hình. Kiểm tra nguồn và trao đổi với Ban quản lý khi cần xác nhận. Người có thẩm quyền chịu trách nhiệm quyết định nghiệp vụ."),
+        new("cap-nhat", "Thay đổi và hỗ trợ",
+            "Đây là bản dự thảo để rà soát. Đơn vị vận hành, kênh liên hệ chính thức, phiên bản và ngày hiệu lực cần được xác nhận trước khi ban hành. Trang này không ghi nhận việc chấp thuận điều khoản.")
+    ];
+}

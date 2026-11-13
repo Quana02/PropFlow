@@ -5,9 +5,9 @@
 @inject IAdministrationApiClient Api
 @implements IAsyncDisposable
 
-<section class="system-audit">
+<section class="system-audit pf-list-panel pf-management-list">
     <header class="panel-heading"><span class="material-symbols-outlined">history</span><div><h1>Nhật ký hệ thống</h1><p>Thao tác và thay đổi dữ liệu trên các phân hệ · Chỉ đọc</p></div></header>
-    <div class="audit-toolbar">
+    <div class="audit-toolbar pf-list-toolbar pf-management-toolbar">
         <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters"
                              OnReset="ResetDraft" Validate="ValidateDraft" OnApply="ApplyAsync">
             <label>Phân hệ<PropFlowSelect Value="@module" ValueChanged="v => module = v" Options="ModuleOptions" Placeholder="Tất cả phân hệ" AriaLabel="Lọc theo phân hệ" /></label>
@@ -19,8 +19,8 @@
             @if (filterError is not null) { <p class="filter-error" role="alert">@filterError</p> }
         </PropFlowFilterPopover>
         @if (ActiveFilterCount > 0) { <button type="button" class="secondary" @onclick="ResetAsync" disabled="@loading">Xóa bộ lọc</button> }
-        <button type="button" class="secondary" @onclick="LoadAsync" disabled="@loading"><span class="material-symbols-outlined" aria-hidden="true">refresh</span>Làm mới</button>
         <span class="audit-count">@(data?.Total ?? 0) hoạt động</span>
+        <PropFlowListRefresh OnRefresh="LoadAsync" Busy="@loading" />
     </div>
     <p class="audit-note">Ghi nhận từ khi tính năng được triển khai; giữ nguyên lịch sử quản trị tài khoản trước đó. Nội dung nhạy cảm được ẩn.</p>
     @if (loading) { <p class="audit-empty" role="status">Đang tải nhật ký hệ thống…</p> }
@@ -28,7 +28,7 @@
     else if (data?.Items.Length is not > 0) { <p class="audit-empty">Không có hoạt động phù hợp với bộ lọc.</p> }
     else
     {
-        <div class="audit-table-wrap"><table><thead><tr><th>Thời gian</th><th>Phân hệ</th><th>Hành động</th><th>Người thực hiện</th><th>Đối tượng</th><th>Kết quả</th><th>Chi tiết</th></tr></thead><tbody>
+        <div class="audit-table-wrap"><table class="pf-list-table"><thead><tr><th>Thời gian</th><th>Phân hệ</th><th>Hành động</th><th>Người thực hiện</th><th>Đối tượng</th><th>Kết quả</th><th>Chi tiết</th></tr></thead><tbody>
         @foreach (var item in data.Items)
         {
             <tr><td><time datetime="@item.Timestamp.ToString("O")">@LocalTime(item.Timestamp).ToString("dd/MM/yyyy")<small>@LocalTime(item.Timestamp).ToString("HH:mm:ss")</small></time></td>
@@ -57,7 +57,7 @@
                 @{ var businessChanges = selected.Changes?.Where(change => FieldLabel(change.Field) is not null).ToArray() ?? []; }
                 @if (businessChanges.Length > 0)
                 {
-                    <div class="audit-table-wrap"><table class="changes"><thead><tr><th>Trường thay đổi</th><th>Trước</th><th>Sau</th></tr></thead><tbody>
+                    <div class="audit-table-wrap"><table class="pf-list-table changes"><thead><tr><th>Trường thay đổi</th><th>Trước</th><th>Sau</th></tr></thead><tbody>
                     @foreach (var change in businessChanges) { <tr><td>@FieldLabel(change.Field)</td><td>@FieldValue(change.Field, change.Before)</td><td>@FieldValue(change.Field, change.After)</td></tr> }
                     </tbody></table></div>
                 }

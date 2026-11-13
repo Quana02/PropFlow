@@ -6,3 +6,8 @@ public interface IFinanceNotificationStore
 {
     Task PublishAsync(FinanceNotification notification, CancellationToken ct);
 }
+
+public interface IFinanceEmailRecipientDirectory
+{
+    Task<string?> RecipientEmailAsync(Guid? userId, string? snapshotEmail, CancellationToken ct);
+}

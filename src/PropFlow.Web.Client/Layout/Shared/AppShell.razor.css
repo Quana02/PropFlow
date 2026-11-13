@@ -2,7 +2,6 @@
     --theme-duration: 620ms;
     --theme-ease: cubic-bezier(0.22, 1, 0.36, 1);
     --app-surface: rgba(255, 255, 255, 0.86);
-    --app-popover-surface: #fff;
     --app-text: #17243a;
     --app-muted: #64748b;
     --app-line: rgba(71, 126, 176, 0.16);
@@ -37,7 +36,6 @@
 
 .app-shell-dark {
   --app-surface: rgba(19, 28, 43, 0.88);
-  --app-popover-surface: #131c2b;
   --app-pill-surface: rgba(30, 41, 59, 0.96);
   --app-pill-shadow: 0 0.25rem 0.9rem rgba(0, 0, 0, 0.35);
   --app-text: #edf6ff;
@@ -421,7 +419,7 @@
     padding: 1rem;
     border: 1px solid var(--app-line);
     border-radius: 1rem;
-    background: var(--app-surface);
+    background: var(--pf-menu-surface, #fff);
     box-shadow: 0 1rem 2rem rgba(10, 30, 50, 0.18);
     backdrop-filter: blur(1rem);
     transition: background-color var(--theme-duration) var(--theme-ease),

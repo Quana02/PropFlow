@@ -32,7 +32,7 @@
 .source-facts dt { color:#71829a; }
 .source-facts dd { margin:0; text-align:right; color:#172640; font-weight:750; }
 .source-facts dd small { display:block; color:#96a2b3; font-weight:500; margin-top:.12rem; }
-.source-facts .code-value { color:#087fb3; font-family:monospace; }
+.source-facts .code-value { color:#087fb3; font-family:var(--pf-font); }
 .source-facts .original-apartment { display:grid; margin:.45rem 0; padding:.8rem; border:1px solid #e1e8f0; border-radius:1rem; background:#f8fafc; }
 .original-apartment dd { display:flex; align-items:center; justify-content:flex-end; gap:.3rem; }
 .original-apartment dd .material-symbols-outlined { font-size:1rem; color:#f59e0b; }
@@ -56,7 +56,7 @@
 .context-summary header div { display:flex; align-items:center; gap:.45rem; }
 .context-summary header i { width:.48rem; height:.48rem; border-radius:50%; background:#10b981; box-shadow:0 0 0 4px #d1fae5; }
 .context-summary h3 { margin:0; color:#45556e; font-size:.66rem; letter-spacing:.06em; text-transform:uppercase; }
-.context-summary header > span { font:700 .62rem monospace; color:#6b7b91; }
+.context-summary header > span { font:700 .62rem var(--pf-font); color:#6b7b91; }
 .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; padding:.8rem 0; }
 .summary-grid article { padding:.7rem; border:1px solid #e2e8f0; border-radius:.75rem; background:white; min-width:0; }
 .summary-grid small { display:block; color:#96a2b3; font-size:.6rem; margin-bottom:.28rem; }
@@ -64,7 +64,7 @@
 .summary-grid article:first-child strong { color:#0783bd; }
 .summary-grid .material-symbols-outlined { font-size:.82rem; }
 .context-summary footer { display:flex; align-items:center; justify-content:space-between; gap:1rem; color:#7c8ca3; font-size:.63rem; }
-.context-summary footer b { padding:.25rem .4rem; border:1px solid #bae6fd; border-radius:.4rem; background:#edf9ff; color:#087dac; font-family:monospace; }
+.context-summary footer b { padding:.25rem .4rem; border:1px solid #bae6fd; border-radius:.4rem; background:#edf9ff; color:#087dac; font-family:var(--pf-font); }
 .form-actions { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:1rem; padding-top:1rem; border-top:1px solid #e5ebf2; }
 .form-actions > span { display:flex; align-items:center; gap:.35rem; color:#8290a4; font-size:.62rem; }
 .form-actions > span .material-symbols-outlined { color:#10b981; font-size:1rem; }

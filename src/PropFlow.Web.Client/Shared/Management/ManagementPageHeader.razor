@@ -1,0 +1,20 @@
+<header class="pf-management-header">
+    <div class="pf-management-heading">
+        <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">@Icon</span>
+        <div>
+            <h1>@Title</h1>
+            <p>@Description</p>
+        </div>
+    </div>
+    @if (Actions is not null)
+    {
+        <div class="pf-management-actions">@Actions</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

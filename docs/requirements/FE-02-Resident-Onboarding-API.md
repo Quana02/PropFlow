@@ -62,3 +62,16 @@ Sau khi kích hoạt, `residents.residents.email` là email liên hệ do MANAGE
 - End lại residency trả conflict và giữ nguyên lịch sử; ngày kết thúc trước ngày bắt đầu trả validation. Move thất bại phải rollback cả source và target.
 
 Giới hạn đã ghi nhận trong đợt sửa ngày 03/11/2026: UI chưa nhận business date từ response và còn phụ thuộc ngày máy người dùng. Nếu cần hỗ trợ máy ở múi giờ khác, phải chốt contract ngày/timezone; không coi kiểm thử backend là nghiệm thu toàn bộ UI.
+
+## Tổng quan danh sách cư dân
+
+`GET /api/v1/residents/summary` dùng policy `residents.read` như danh sách cư dân. Phản hồi chỉ có bốn số đếm trên toàn bộ hồ sơ trong deployment.
+
+| Trường | Nguồn tính |
+| --- | --- |
+| `totalResidents` | Tất cả hồ sơ Resident |
+| `activeResidents` | Hồ sơ có `Resident.Status == ACTIVE` |
+| `linkedAccounts` | Hồ sơ có `Resident.UserId` |
+| `newResidentsThisMonth` | Hồ sơ có `Resident.CreatedAt` trong khoảng đầu tháng đến trước đầu tháng tiếp theo |
+
+API lấy múi giờ chung cư qua `ICurrentBuildingTimeZone` của PropertyAssets. Backend đổi hai mốc đầu tháng sang UTC để so sánh với `CreatedAt`. Kết quả độc lập với từ khóa, bộ lọc và trang hiện tại của danh sách.

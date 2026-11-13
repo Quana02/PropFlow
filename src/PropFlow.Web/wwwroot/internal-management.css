@@ -1,0 +1,375 @@
+.app-page-body {
+    --pf-management-header-padding: 1.25rem 1.5rem;
+    --pf-management-toolbar-padding: .875rem 1rem;
+    --pf-management-radius: 1.15rem;
+}
+
+.app-page-body .pf-management-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 0;
+    min-height: 5.875rem;
+    margin: 0;
+    padding: var(--pf-management-header-padding);
+    border: 1px solid var(--pf-line);
+    border-radius: var(--pf-management-radius);
+    background: var(--pf-menu-surface);
+    color: var(--pf-text);
+    box-shadow: 0 8px 26px rgb(35 61 89 / 5%);
+}
+
+.pf-management-heading,
+.pf-management-actions {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    min-width: 0;
+}
+
+.pf-management-heading { flex: 1 1 18rem; }
+.pf-management-heading > div { min-width: 0; }
+.pf-management-actions { flex-wrap: wrap; }
+.pf-management-actions:empty { display: none; }
+
+.app-page-body .pf-management-header h1 {
+    margin: 0;
+    font-size: clamp(1.25rem, 2vw, 1.5rem);
+    font-weight: 650;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.app-page-body .pf-management-header p {
+    margin: .35rem 0 0;
+    color: var(--pf-muted);
+    font-size: .875rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.app-page-body :is(.pf-management-primary, .pf-management-secondary) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    min-height: 2.75rem;
+    padding: .6rem .9rem;
+    border: 1px solid var(--pf-line);
+    border-radius: .75rem;
+    background: var(--pf-menu-surface);
+    color: var(--pf-accent);
+    font-family: var(--pf-font);
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+.app-page-body .pf-management-primary {
+    border-color: transparent;
+    background: linear-gradient(135deg, #047eb6, #006fa6);
+    color: white;
+}
+
+.app-page-body .pf-management-primary:hover:enabled { background: #036493; }
+.app-page-body .pf-management-secondary:hover:enabled {
+    background: color-mix(in srgb, var(--pf-accent) 8%, var(--pf-menu-surface));
+}
+.app-page-body :is(.pf-management-primary, .pf-management-secondary):disabled { opacity: .55; }
+
+.pf-management-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+    gap: .8rem;
+    min-width: 0;
+}
+
+.pf-management-kpi {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    min-width: 0;
+    min-height: 5.125rem;
+    padding: .875rem 1rem;
+    border: 1px solid var(--pf-line);
+    border-radius: 1rem;
+    background: var(--pf-menu-surface);
+    color: var(--pf-text);
+}
+
+.pf-management-kpi > div { min-width: 0; overflow-wrap: anywhere; }
+
+.pf-management-icon {
+    display: grid;
+    flex: 0 0 2.4rem;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: .75rem;
+    background: color-mix(in srgb, var(--pf-management-tone, var(--pf-accent)) 12%, var(--pf-menu-surface));
+    color: var(--pf-management-tone, var(--pf-accent));
+    font-size: 1.25rem;
+}
+
+.pf-management-kpi-label { color: var(--pf-muted); font-size: .75rem; }
+.pf-management-kpi strong { font-size: 1.3rem; font-weight: 700; line-height: 1.25; }
+.app-page-body [data-tone="success"] { --pf-management-tone: #087c62; }
+.app-page-body [data-tone="warning"] { --pf-management-tone: #a95103; }
+.app-page-body [data-tone="danger"] { --pf-management-tone: #be294f; }
+.app-page-body [data-tone="neutral"] { --pf-management-tone: var(--pf-muted); }
+.app-shell-dark .app-page-body [data-tone="success"] { --pf-management-tone: #6ee7b7; }
+.app-shell-dark .app-page-body [data-tone="warning"] { --pf-management-tone: #fcd38d; }
+.app-shell-dark .app-page-body [data-tone="danger"] { --pf-management-tone: #fda4af; }
+
+.app-page-body .pf-management-list { min-height: 0; }
+
+.app-page-body :is(.fe04-panel, .knowledge-directory).pf-management-list { overflow: hidden; }
+
+.app-page-body .pf-management-table-scroll { overflow-x: auto; }
+
+.app-page-body .pf-management-toolbar {
+    padding: var(--pf-management-toolbar-padding);
+    border-bottom: 1px solid var(--pf-line);
+    background: var(--pf-menu-surface);
+}
+
+.pf-management-tools {
+    display: flex;
+    flex: 1 1 18rem;
+    align-items: center;
+    gap: .65rem;
+    min-width: 0;
+}
+
+.pf-management-toolbar-end { flex: 0 1 auto; margin-inline-start: auto; }
+.pf-management-toolbar .pf-list-refresh { margin-inline-start: auto; }
+
+.app-page-body .pf-management-search {
+    display: flex;
+    flex: 1 1 14rem;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    min-height: 3rem;
+    padding-inline: .75rem;
+    border: 1px solid var(--pf-line);
+    border-radius: .7rem;
+    background: var(--pf-menu-surface);
+    color: var(--pf-muted);
+}
+
+.app-page-body .pf-management-search input {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.65rem;
+    padding: .25rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--pf-text);
+    font-size: .9rem;
+}
+
+.pf-management-search > .material-symbols-outlined { font-size: 1.15rem; }
+.pf-management-count { color: var(--pf-muted); font-size: .75rem; }
+.pf-management-count b { color: var(--pf-text); }
+.pf-management-identifier { color: var(--pf-accent); font-weight: 700; overflow-wrap: anywhere; }
+
+.app-page-body .pf-management-row-action {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid var(--pf-line);
+    border-radius: .65rem;
+    background: var(--pf-menu-surface);
+    color: var(--pf-management-tone, var(--pf-accent));
+}
+
+.app-page-body .pf-management-row-action:hover {
+    background: color-mix(in srgb, currentColor 9%, var(--pf-menu-surface));
+}
+
+.pf-management-row-action .material-symbols-outlined { font-size: 1.1rem; }
+
+.pf-management-empty {
+    display: grid;
+    justify-items: center;
+    gap: .5rem;
+    padding: 2rem 1rem;
+    color: var(--pf-muted);
+    text-align: center;
+}
+
+.pf-management-empty > .material-symbols-outlined { color: var(--pf-muted); font-size: 2rem; }
+.pf-management-empty :is(h5, p) { margin: 0; color: var(--pf-muted); }
+
+@media (max-width: 40rem) {
+    .app-page-body {
+        --pf-management-header-padding: 1rem;
+        --pf-management-toolbar-padding: .75rem;
+    }
+
+    .pf-management-actions { width: 100%; }
+    .pf-management-kpi { padding: .75rem; }
+    .pf-management-toolbar-end { flex-basis: 100%; justify-content: space-between; }
+}
+
+.app-page-body .pf-management-existing-header > :where(div, section) {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.app-page-body .account-heading.pf-management-header {
+    display: grid;
+    justify-content: start;
+    gap: .25rem;
+}
+
+.app-page-body .pf-management-metric-group {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    gap: .8rem;
+}
+
+.app-page-body .pf-management-metric-group > :is(article, .smt-stat-card) {
+    min-width: 0;
+    min-height: 5.125rem;
+    padding: .875rem 1rem;
+    border: 1px solid var(--pf-line);
+    border-radius: 1rem;
+    background: var(--pf-menu-surface);
+    overflow-wrap: anywhere;
+}
+
+.app-page-body .pf-management-list .pf-list-table > thead > tr > th {
+    padding-block: .8rem;
+}
+
+.app-page-body .pf-management-list .pf-list-table > tbody > tr > td {
+    padding-block: 1rem;
+}
+
+.app-page-body .pf-management-list .pf-list-table td[colspan] {
+    padding: 2rem 1rem;
+    color: var(--pf-muted);
+    text-align: center;
+}
+
+.app-page-body .pf-management-toolbar:first-child,
+.app-page-body .pf-management-list .pf-list-table > thead > tr:first-child > th {
+    background-clip: padding-box;
+}
+
+.app-page-body .fe04-panel .fe04-table-scroll table { min-width: 42rem; }
+
+.app-page-body .fe04-page .pf-management-search input { font-size: 1rem; }
+.app-page-body .fe04-page .pf-management-primary { font-size: .92rem; }
+
+.fe04-page .pf-list-table > tbody > tr > td { font-size: .9rem; }
+.fe04-page .pf-list-table .pf-management-cell-detail {
+    color: var(--app-muted, var(--pf-muted));
+    font-size: .75rem;
+}
+
+.app-page-body .fe04-panel .status-dropdown-menu {
+    background: var(--pf-menu-surface);
+    color: var(--pf-text);
+}
+
+.app-page-body .knowledge-workspace {
+    display: grid;
+    gap: .9rem;
+    min-width: 0;
+    color: var(--pf-text);
+}
+
+.app-page-body .knowledge-workspace .knowledge-notice {
+    margin: 0;
+    padding: .75rem 1rem;
+    background: var(--pf-list-heading);
+    color: var(--pf-muted);
+}
+
+.app-page-body .knowledge-directory .knowledge-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    padding: 1rem;
+    gap: .75rem;
+}
+
+.app-page-body .knowledge-directory .knowledge-grid:empty { display: none; }
+
+.app-page-body .knowledge-directory .knowledge-card {
+    padding: 1rem;
+    border-color: var(--pf-line);
+    background: var(--pf-menu-surface);
+    color: var(--pf-text);
+    gap: .65rem;
+}
+
+.app-page-body .knowledge-directory .knowledge-card h2 { font-size: 1rem; }
+.app-page-body .knowledge-directory .knowledge-card p { color: var(--pf-muted); }
+.app-page-body .knowledge-directory .knowledge-card .book-icon { color: var(--pf-accent); font-size: 1.5rem; }
+.app-page-body .knowledge-directory .badges span {
+    background: var(--pf-list-heading);
+    color: var(--pf-muted);
+}
+
+.app-page-body .knowledge-workspace :is(.knowledge-editor, .knowledge-editor input, .knowledge-editor textarea, .knowledge-editor select) {
+    border-color: var(--pf-line);
+    background: var(--pf-menu-surface);
+    color: var(--pf-text);
+}
+
+.app-page-body .knowledge-workspace button:not(.pf-management-primary, .pf-management-secondary, .danger, .primary, .pf-list-refresh) {
+    border-color: var(--pf-line);
+    background: var(--pf-menu-surface);
+    color: var(--pf-accent);
+}
+
+.app-page-body .service-fee-page .pf-management-toolbar > :first-child { min-width: 0; }
+
+@media (max-width: 40rem) {
+    .app-page-body .pf-management-metric-group {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+    }
+}
+
+.app-page-body .pf-management-section-heading {
+    padding: var(--pf-management-toolbar-padding);
+    color: var(--pf-text);
+}
+
+.app-page-body .pf-management-section-heading :is(h1, h2) { color: var(--pf-text); }
+.app-page-body .pf-management-section-heading p { color: var(--pf-muted); }
+
+.app-page-body .pf-management-section-heading .count-pill {
+    background: var(--pf-list-heading);
+    color: var(--pf-muted);
+}
+
+.app-page-body :is(.unpaid-table-card, .overdue-table-card, .collections-table-card, .pending-table-card).pf-management-list {
+    padding: 0;
+}
+
+@media (max-width: 40rem) {
+    .app-page-body .pf-management-list .pf-list-table td[colspan] {
+        padding-inline: 1rem;
+        text-align: start;
+    }
+
+    .app-page-body .pf-management-list .pf-list-table td[colspan] > :where(div, p, strong) {
+        max-width: min(13rem, calc(100vw - 8rem));
+    }
+}
+
+.app-page-body .pf-management-status {
+    display: inline-block;
+    padding: .35rem .7rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--pf-management-tone, var(--pf-accent)) 13%, var(--pf-menu-surface));
+    color: var(--pf-management-tone, var(--pf-accent));
+    font-size: .75rem;
+    font-weight: 650;
+}
