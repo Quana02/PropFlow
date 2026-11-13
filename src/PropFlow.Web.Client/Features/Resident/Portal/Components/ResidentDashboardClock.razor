@@ -1,0 +1,33 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="resident-clock-stage" @ref="element">
+    <div class="resident-clock" data-purpose="digital-clock"><span id="clockTime">--:--</span><small id="clockPeriod">--</small></div>
+    <p id="clockDate" class="resident-date">Đang cập nhật ngày giờ…</p>
+</div>
+
+@code {
+    private ElementReference element;
+    private IJSObjectReference? module, handle;
+    private bool disposed;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./js/resident-clock.js?v=20261113-1");
+        if (disposed) { await imported.DisposeAsync(); return; }
+        module = imported;
+        var attached = await imported.InvokeAsync<IJSObjectReference>("attach", element);
+        if (disposed) { await attached.InvokeVoidAsync("dispose"); await attached.DisposeAsync(); return; }
+        handle = attached;
+    }
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        try
+        {
+            if (handle is not null) { await handle.InvokeVoidAsync("dispose"); await handle.DisposeAsync(); }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

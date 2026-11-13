@@ -3,7 +3,6 @@
 
     const themeKey = "propflow-theme";
 
-    let clockTimer = null;
     let canvasState = null;
     let outsideClickBound = false;
 
@@ -96,68 +95,6 @@
         });
     }
 
-    function updateClock() {
-        const time =
-            document.getElementById("clockTime") ||
-            document.getElementById("digital-clock-time");
-
-        const period =
-            document.getElementById("clockPeriod") ||
-            document.getElementById("digital-clock-period");
-
-        const date =
-            document.getElementById("clockDate") ||
-            document.getElementById("digital-clock-date");
-
-        if (!time) {
-            return;
-        }
-
-        const now = new Date();
-        const hours = now.getHours();
-
-        time.textContent =
-            `${String(hours % 12 || 12).padStart(2, "0")}:` +
-            `${String(now.getMinutes()).padStart(2, "0")}`;
-
-        if (period) {
-            period.textContent =
-                hours >= 12 ? "PM" : "AM";
-        }
-
-        if (date) {
-            date.textContent =
-                new Intl.DateTimeFormat(
-                    "vi-VN",
-                    {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric"
-                    }
-                )
-                    .format(now)
-                    .replace(
-                        /^./,
-                        value => value.toUpperCase()
-                    );
-        }
-    }
-
-    function initializeClock() {
-        if (clockTimer) {
-            clearInterval(clockTimer);
-        }
-
-        updateClock();
-
-        clockTimer =
-            window.setInterval(
-                updateClock,
-                1000
-            );
-    }
-
     function initializeProfileMenu() {
         const trigger =
             document.getElementById("profileDropdownBtn") ||
@@ -180,8 +117,6 @@
         trigger.addEventListener(
             "click",
             event => {
-                event.stopPropagation();
-
                 const isHidden =
                     popover.hidden ||
                     popover.classList.contains("hidden");
@@ -262,24 +197,8 @@
             "keydown",
             event => {
 
-                if (
-                    (event.ctrlKey || event.metaKey) &&
-                    event.key.toLowerCase() === "k"
-                ) {
-                    const input =
-                        document.getElementById("residentSearch") ||
-                        document.querySelector(
-                            "input[type='search'], input[placeholder*='Tìm kiếm']"
-                        );
-
-                    if (input) {
-                        event.preventDefault();
-                        input.focus();
-                    }
-                }
-
                 if (event.key === "Escape") {
-                    api.closeProfile();
+                    api.closeProfileMenu();
                     api.closeService();
                 }
             }
@@ -1377,7 +1296,6 @@
     const api = {
         init() {
             initializeTheme();
-            initializeClock();
             initializeProfileMenu();
             initializeSearchShortcut();
             initializeFloatingNavigation();
@@ -1519,49 +1437,20 @@
             }
         },
 
-        openProfile() {
-            const modal =
-                document.getElementById("profileModal") ||
-                document.getElementById("userProfileModal");
-
-            const popover =
-                document.getElementById("profilePopover") ||
-                document.getElementById("userProfilePopover");
-
-            if (popover) {
-                popover.hidden = true;
-                popover.classList.add("hidden");
-            }
-
-            if (modal) {
-                modal.hidden = false;
-                modal.classList.remove("hidden");
-            }
-
-            document.body.style.overflow =
-                "hidden";
+        scrollToProfileSection(id) {
+            const heading = document.getElementById(id);
+            if (!heading) return;
+            heading.scrollIntoView({ behavior: global.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+            heading.setAttribute('tabindex', '-1');
+            heading.focus({ preventScroll: true });
         },
 
-        closeProfile() {
-            const modal =
-                document.getElementById("profileModal") ||
-                document.getElementById("userProfileModal");
-
-            if (modal) {
-                modal.hidden = true;
-                modal.classList.add("hidden");
-            }
-
-            if (
-                !document.querySelector(
-                    ".resident-portal-modal:not([hidden]):not(.hidden)"
-                )
-            ) {
-                document.body.style.overflow =
-                    "";
-            }
+        closeProfileMenu() {
+            const popover = document.getElementById("profilePopover") || document.getElementById("userProfilePopover");
+            const trigger = document.getElementById("profileDropdownBtn") || document.getElementById("userProfileBtn");
+            if (popover) { popover.hidden = true; popover.classList.add("hidden"); }
+            trigger?.setAttribute("aria-expanded", "false");
         },
-
         openService(title) {
             const modal =
                 document.getElementById("serviceModal") ||
@@ -1666,14 +1555,6 @@
         },
 
         destroy() {
-            if (clockTimer) {
-                clearInterval(
-                    clockTimer
-                );
-
-                clockTimer = null;
-            }
-
             if (canvasState) {
                 canvasState.dispose();
                 canvasState = null;

@@ -1,0 +1,35 @@
+@using System.Globalization
+@using PropFlow.Modules.PropertyAssets.Contracts
+@using PropFlow.Web.Client.Services.Api
+@inject AuthenticatedApiClient Api
+@implements IDisposable
+
+<div class="resident-weather glass-panel" data-purpose="weather-widget" data-building-time-zone="@(weather?.TimeZoneId ?? "Asia/Ho_Chi_Minh")"
+     aria-busy="@loading" title="@(weather?.Message ?? "Thời tiết theo địa chỉ chung cư · Nguồn Open-Meteo")">
+    <span class="weather-icon material-symbols-outlined" aria-hidden="true">@(weather?.Icon ?? "cloud")</span>
+    <span class="weather-copy">
+        <strong>@(weather?.TemperatureC is { } value ? Math.Round(value).ToString("0", CultureInfo.InvariantCulture) + "°C" : "—°C")</strong>
+        <small>@(loading ? "Đang tải…" : weather?.Condition ?? "Chưa có dữ liệu")</small>
+        <em>@(weather?.City ?? (loading ? "Đang lấy vị trí chung cư…" : weather?.Message ?? "Chưa lấy được vị trí chung cư"))
+            @if (weather?.TemperatureC is not null) { <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" title="Nguồn dữ liệu thời tiết">· Open-Meteo</a> }
+        </em>
+    </span>
+</div>
+
+@code {
+    private CurrentBuildingWeatherResponse? weather;
+    private bool loading = true, disposed;
+    private readonly CancellationTokenSource lifetime = new();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await Api.SendAsync<CurrentBuildingWeatherResponse>(HttpMethod.Get, "api/v1/resident/weather", ct: lifetime.Token);
+            if (disposed) return;
+            weather = result.Data ?? new(null, "Asia/Ho_Chi_Minh", null, "Chưa tải được thời tiết", "cloud_off", null, result.Message);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { if (!disposed) loading = false; }
+    }
+    public void Dispose() { disposed = true; lifetime.Cancel(); lifetime.Dispose(); }
+}

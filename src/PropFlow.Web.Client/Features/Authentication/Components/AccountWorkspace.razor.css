@@ -34,7 +34,7 @@
 .pending-badge { color: color-mix(in srgb, var(--app-text, #17243a) 35%, var(--feedback-warning, #a16b16)); background: rgba(181,125,31,.1); }
 .neutral-badge { color: var(--account-muted); background: rgba(128,140,160,.1); }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.card-heading { display: flex; align-items: center; gap: 12px; padding: 24px; }
+.card-heading { display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin-bottom: 0; padding: 24px; }
 .card-heading p { margin: 4px 0 0; color: var(--account-muted); font-size: 12px; }
 .section-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--account-soft); color: var(--account-ink); }
 .account-details .card-heading { gap: 10px; padding-bottom: 8px; }

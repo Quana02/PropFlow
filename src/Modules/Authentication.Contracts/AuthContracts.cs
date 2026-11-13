@@ -48,7 +48,7 @@ public sealed record VerifyEmailChangeRequest(Guid ChallengeId, [Required, Email
 public sealed record UpdateProfileRequest([Required, StringLength(150)] string DisplayName, [StringLength(20)] string? PhoneNumber);
 public sealed record ChallengeResponse(Guid ChallengeId, DateTimeOffset ExpiresAt, DateTimeOffset ResendAfter, string Message);
 public sealed record ResetProofResponse(Guid ChallengeId, string Proof, DateTimeOffset ExpiresAt);
-public sealed record AccountResponse(Guid Id, string Username, string DisplayName, string? Email, string? PhoneNumber, string Status, bool EmailVerified, string Role, string[] Permissions);
+public sealed record AccountResponse(Guid Id, string Username, string DisplayName, string? Email, string? PhoneNumber, string Status, bool EmailVerified, string Role, string[] Permissions, Guid? AvatarVersion = null);
 public sealed record SessionResponse(string AccessToken, DateTimeOffset ExpiresAt, AccountResponse User);
 public sealed record CsrfResponse(string Token);
 

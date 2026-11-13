@@ -1,0 +1,44 @@
+@inject AuthenticationService Auth
+@implements IDisposable
+
+<div class="avatar-editor" aria-busy="@busy">
+    <label class="avatar-upload @(busy ? "busy" : "")">
+        <InputFile OnChange="UploadAsync" accept="image/png,image/jpeg" disabled="@busy" aria-label="Thay đổi ảnh đại diện" />
+        @(busy ? "Đang lưu ảnh…" : "Thay đổi ảnh đại diện")
+    </label>
+    <small>PNG, JPG · Tối đa 5 MB</small>
+    @if (error is not null) { <p role="alert">@error</p> }
+    @if (saved) { <p class="avatar-saved" role="status">Đã cập nhật ảnh đại diện.</p> }
+</div>
+
+@code {
+    [Parameter] public EventCallback<AccountResponse> Saved { get; set; }
+    private bool busy, saved, disposed;
+    private string? error;
+    private readonly CancellationTokenSource lifetime = new();
+    private async Task UploadAsync(InputFileChangeEventArgs args)
+    {
+        if (busy) return;
+        error = null; saved = false;
+        var file = args.File;
+        if (file.Size is <= 0 or > 5 * 1024 * 1024 || file.ContentType is not ("image/png" or "image/jpeg"))
+        { error = "Chọn ảnh PNG hoặc JPG hợp lệ, tối đa 5 MB."; return; }
+        busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024, lifetime.Token);
+            using var content = new MultipartFormDataContent();
+            var image = new StreamContent(stream);
+            image.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+            content.Add(image, "file", "avatar" + (file.ContentType == "image/png" ? ".png" : ".jpg"));
+            var result = await Auth.UploadAvatarAsync(content, lifetime.Token);
+            if (disposed) return;
+            if (result.IsSuccess && result.Data is not null) { saved = true; await Saved.InvokeAsync(result.Data); }
+            else error = result.Message ?? "Chưa lưu được ảnh. Vui lòng thử lại.";
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        catch (IOException) { if (!disposed) error = "Không đọc được ảnh. Vui lòng chọn lại tệp."; }
+        finally { if (!disposed) busy = false; }
+    }
+    public void Dispose() { disposed = true; lifetime.Cancel(); lifetime.Dispose(); }
+}
