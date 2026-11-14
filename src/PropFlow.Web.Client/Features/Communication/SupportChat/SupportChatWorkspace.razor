@@ -33,13 +33,13 @@
         @if (ForManager)
         {
             <ManagerSupportConversationList Conversations="conversations" SelectedId="selected?.Id"
-                Page="page" Busy="busy" Loading="loading" OnSelect="Select" OnPageChanged="ChangePageAsync" />
+                Page="page" Busy="busy" Loading="loading" OnSelect="Select" OnPageChanged="ChangePageAsync" OnRefresh="Reload" />
         }
         else
         {
         <aside class="support-list" aria-label="Lịch sử liên hệ">
-            <div class="support-list-heading"><h2>Lịch sử liên hệ</h2>
-                <button type="button" disabled="@(busy || activeId is not null)" @onclick="New">+ Phiên mới</button></div>
+            <div class="support-list-heading pf-list-toolbar"><h2>Lịch sử liên hệ</h2>
+                <button type="button" disabled="@(busy || activeId is not null)" @onclick="New">+ Phiên mới</button><PropFlowListRefresh OnRefresh="Reload" Busy="@(loading || busy)" /></div>
             @if (loading) { <p class="support-empty" role="status">Đang tải…</p> }
             else if (conversations is null || conversations.Items.Count == 0) { <p class="support-empty">Bạn chưa có cuộc trò chuyện nào. Hãy gửi nội dung cần hỗ trợ ở khung bên cạnh.</p> }
             @if (conversations is not null)

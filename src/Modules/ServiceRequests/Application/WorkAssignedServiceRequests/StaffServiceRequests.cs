@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.ServiceRequests.Application;
@@ -86,7 +87,8 @@ public sealed class StaffServiceRequestHandler(
     IMaintenanceAssetSource assets,
     TimeProvider clock,
     IServiceRequestRealtimeNotifier? realtime = null,
-    IAssignedServiceRequestRecommendationSource? recommendations = null)
+    IAssignedServiceRequestRecommendationSource? recommendations = null,
+    ILogger<StaffServiceRequestHandler>? logger = null)
 {
     public async Task<StaffServiceRequestResult<StaffServiceRequestListResponse>> ListAsync(
         Guid staffUserId, StaffServiceRequestListQuery query, CancellationToken ct)
@@ -159,6 +161,7 @@ public sealed class StaffServiceRequestHandler(
 
         var now = clock.GetUtcNow();
         var saved = new List<(StaffEvidenceMetadata Metadata, string StorageKey)>();
+        var savingMetadata = false;
         try
         {
             foreach (var file in files)
@@ -169,23 +172,28 @@ public sealed class StaffServiceRequestHandler(
                 saved.Add((metadata, stored.StorageKey));
             }
 
+            savingMetadata = true;
             var outcome = await store.AddEvidenceAsync(staffUserId, id, activityId.Value, saved.Select(x => x.Metadata).ToArray(), now, ct);
             if (outcome != StaffServiceRequestOutcome.Success)
             {
-                await DeleteSavedAsync(saved, ct);
+                await DeleteSavedAsync(saved);
                 return outcome == StaffServiceRequestOutcome.NotFound
                     ? NotFound<StaffServiceRequestDetailResponse>()
                     : new(outcome, ErrorCode: "evidence_upload_conflict", Message: "Kết quả xử lý đã thay đổi nên không thể lưu ảnh bằng chứng.");
             }
         }
-        catch (ArgumentException exception)
+        catch (ArgumentException exception) when (!savingMetadata)
         {
-            await DeleteSavedAsync(saved, ct);
+            await DeleteSavedAsync(saved);
             return Invalid<StaffServiceRequestDetailResponse>("invalid_evidence_file", exception.Message);
         }
-        catch
+        catch (Exception ex)
         {
-            await DeleteSavedAsync(saved, ct);
+            if (savingMetadata)
+                logger?.LogWarning("Evidence metadata save could not be confirmed for request {RequestId}, activity {ActivityId} ({Type}).",
+                    id, activityId, ex.GetType().Name);
+            else
+                await DeleteSavedAsync(saved);
             throw;
         }
 
@@ -264,10 +272,21 @@ public sealed class StaffServiceRequestHandler(
             facility?.Name, equipment?.Name, item.Status, item.PriorityCode, item.AssignedAt, item.UpdatedAt);
     }
 
-    private async Task DeleteSavedAsync(IEnumerable<(StaffEvidenceMetadata Metadata, string StorageKey)> saved, CancellationToken ct)
+    private async Task DeleteSavedAsync(IEnumerable<(StaffEvidenceMetadata Metadata, string StorageKey)> saved)
     {
         foreach (var file in saved)
-            await storage.DeleteAsync(file.StorageKey, ct);
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try
+            {
+                await storage.DeleteAsync(file.StorageKey, timeout.Token);
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning("Evidence cleanup failed for request {RequestId}, activity {ActivityId} ({Type}).",
+                    file.Metadata.ServiceRequestId, file.Metadata.ActivityId, ex.GetType().Name);
+            }
+        }
     }
 
     private static StaffServiceRequestListQuery? Normalize(StaffServiceRequestListQuery query)

@@ -474,8 +474,8 @@ html.dark .resident-profile-alert button,html[data-theme="dark"] .resident-profi
 .resident-dashboard-card,.resident-card-list,.notice-list,.notice-list-item{min-width:0;max-width:100%;box-sizing:border-box}.notice-list-item{overflow:hidden}.notice-list-item>span{min-width:0}.notice-list-item>span small{flex-shrink:0}.notice-list-item strong,.notice-list-item p{max-width:100%}.announcement{min-width:0;overflow-wrap:anywhere}
 
 /* Shared feature components use the portal palette in both themes. */
-.resident-portal{--app-popover-surface:#fff;--app-text:var(--resident-ink);--app-muted:var(--resident-muted);--app-surface:rgba(255,255,255,.9);--app-line:rgba(203,213,225,.6);--app-accent:#0284c7}
-html.dark .resident-portal,html[data-theme="dark"] .resident-portal{--app-popover-surface:#131c2b;--app-on-accent:#082f49;--app-text:#f1f5f9;--app-muted:#94a3b8;--app-surface:rgba(13,20,36,.95);--app-line:rgba(148,163,184,.22);--app-accent:#0ea5e9}
+.resident-portal{--app-text:var(--resident-ink);--app-muted:var(--resident-muted);--app-surface:rgba(255,255,255,.9);--app-line:rgba(203,213,225,.6);--app-accent:#0284c7}
+html.dark .resident-portal,html[data-theme="dark"] .resident-portal{--app-on-accent:#082f49;--app-text:#f1f5f9;--app-muted:#94a3b8;--app-surface:rgba(13,20,36,.95);--app-line:rgba(148,163,184,.22);--app-accent:#0ea5e9}
 
 .service-ai-guidance { padding: .85rem 1rem; border: 1px solid #bae6fd; border-radius: .85rem; background: #f0f9ff; color: #075985; font-size: .85rem; line-height: 1.6; }
 .emergency-service-button { border: 1px solid #fca5a5; background: #fef2f2; color: #b91c1c; }
@@ -486,6 +486,12 @@ html.dark .resident-portal,html[data-theme="dark"] .resident-portal{--app-popove
 :is(html.dark,html[data-theme="dark"]) .emergency-service-button strong { color:#fecdd3 }
 :is(html.dark,html[data-theme="dark"]) .emergency-service-button small { color:#fda4af }
 html.dark .service-ai-guidance, html[data-theme="dark"] .service-ai-guidance { background: #0c3045; border-color: #155e75; color: #bae6fd; }
+
+:root .resident-profile-popover.glass-panel, :root .resident-search-suggestions.glass-panel {
+    background: var(--pf-menu-surface, #fff);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
 /* The dashboard clock docks beside the building weather as the document scrolls. */
 .resident-portal:has(.resident-clock-stage) .resident-header{position:sticky;top:1rem;align-self:center}
 .resident-context-strip{display:flex;min-width:0;align-items:center;gap:.6rem}

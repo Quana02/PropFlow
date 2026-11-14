@@ -107,22 +107,34 @@ public sealed class SupportChatUiTests
         await Invoke("Input", new ChangeEventArgs { Value = "Nội dung chưa gửi" });
         await Invoke("CloseConversation");
         var popup = await fixture.RenderAgain();
-        Assert.Contains("role=\"alertdialog\"", popup);
+        Assert.Contains("role=\"dialog\"", popup);
+        Assert.Contains("aria-modal=\"true\"", popup);
+        Assert.Matches("aria-labelledby=\"([^\"]+)\"[\\s\\S]*?<h2 id=\"\\1\"[^>]*>Kết thúc cuộc trò chuyện\\?</h2>", WebUtility.HtmlDecode(popup));
         Assert.Contains("Kết thúc cuộc trò chuyện?", popup);
         Assert.Contains("Ở lại", popup);
         Assert.Equal(0, fixture.Http.Posts);
 
         await Invoke("CancelConfirmation");
         var cancelled = await fixture.RenderAgain();
-        Assert.DoesNotContain("role=\"alertdialog\"", cancelled);
+        Assert.DoesNotContain("Kết thúc cuộc trò chuyện?", cancelled);
         Assert.Contains("Nội dung chưa gửi", cancelled);
         Assert.Equal(0, fixture.Http.Posts);
+
+        fixture.Http.FailClose = true;
+        await Invoke("CloseConversation");
+        await Invoke("ConfirmAction");
+        Assert.Contains("Nội dung chưa gửi", await fixture.RenderAgain());
+        Assert.Equal("error", Assert.Single(fixture.Toasts.Messages).Severity);
+        Assert.Equal(1, fixture.Http.Posts);
+        fixture.Toasts.Clear();
+        fixture.Http.FailClose = false;
 
         await Invoke("CloseConversation");
         await Invoke("ConfirmAction");
         await Invoke("ConfirmAction");
-        Assert.Equal(1, fixture.Http.Posts);
-        Assert.DoesNotContain("role=\"alertdialog\"", await fixture.RenderAgain());
+        Assert.Equal(2, fixture.Http.Posts);
+        Assert.Equal("success", Assert.Single(fixture.Toasts.Messages).Severity);
+        Assert.DoesNotContain("Kết thúc cuộc trò chuyện?", await fixture.RenderAgain());
 
         Task Invoke(string method, params object?[] args) => fixture.Renderer.Dispatcher.InvokeAsync(async () => {
             var result = fixture.Widget!.GetType().GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(fixture.Widget, args);
@@ -135,6 +147,7 @@ public sealed class SupportChatUiTests
         public SupportChatWorkspace? Widget;
         public readonly Transport Transport = new(); public readonly Responses Http;
         public readonly AuthSession Session;
+        public readonly PropFlow.Web.Client.Shared.Feedback.ToastService Toasts = new();
         public readonly HtmlRenderer Renderer;
         private readonly ServiceProvider services;
         private readonly bool manager;
@@ -146,7 +159,7 @@ public sealed class SupportChatUiTests
             Session = new(new ApiClient(new HttpClient(Http) { BaseAddress = new("https://test.invalid") }, logger.CreateLogger<ApiClient>()));
             Session.Accept(new("test-token", DateTimeOffset.UtcNow.AddHours(1), new(Guid.NewGuid(), "demo", "Người kiểm thử", null, null, "ACTIVE", true,
                 manager ? "MANAGER" : "RESIDENT", [manager ? "MANAGE_OPERATIONS" : "USE_RESIDENT_SERVICES"])));
-            services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IComponentActivator>(this).AddSingleton(Session)
+            services = new ServiceCollection().AddSingleton(Toasts).AddLogging().AddSingleton<IComponentActivator>(this).AddSingleton(Session)
                 .AddSingleton<NavigationManager, TestNavigation>()
                 .AddSingleton<ISupportChatConnection>(Transport).AddSingleton<IJSRuntime, NoJavaScript>()
                 .AddSingleton<AuthenticatedApiClient>(sp => new(new HttpClient(Http) { BaseAddress = new("https://test.invalid") }, sp.GetRequiredService<ILogger<ApiClient>>()))
@@ -168,10 +181,13 @@ public sealed class SupportChatUiTests
     {
         public int Posts;
         public bool FailDetail;
+        public bool FailClose;
         private readonly Guid id = Guid.NewGuid();
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             if (request.Method != HttpMethod.Get) Posts++;
+            if (FailClose && request.RequestUri!.AbsolutePath.EndsWith("/close"))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Conflict) { Content = JsonContent.Create(new { title = "Chưa thể kết thúc hội thoại" }) });
             if (FailDetail && !request.RequestUri!.AbsolutePath.EndsWith("/messages") && !request.RequestUri.AbsolutePath.EndsWith("/conversations"))
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = JsonContent.Create(new { title = "Không thể mở cuộc trò chuyện này" }) });
             var now = DateTimeOffset.UtcNow;

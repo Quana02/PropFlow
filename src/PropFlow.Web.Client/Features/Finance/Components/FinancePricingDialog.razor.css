@@ -1,5 +1,5 @@
 .pricing-backdrop{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.48);backdrop-filter:blur(5px);display:grid;place-items:center;padding:24px}
-.pricing-dialog{box-sizing:border-box;width:min(650px,100%);max-height:calc(100dvh - 48px);overflow:auto;background:#fff;color:#24334b;border:1px solid #e2eaf2;border-radius:18px;box-shadow:0 24px 70px #0f172a30;font-family:Inter,"Segoe UI",sans-serif}
+.pricing-dialog{box-sizing:border-box;width:min(650px,100%);max-height:calc(100dvh - 48px);overflow:auto;background:#fff;color:#24334b;border:1px solid #e2eaf2;border-radius:18px;box-shadow:0 24px 70px #0f172a30;font-family:var(--pf-font)}
 .pricing-dialog-header{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 22px;border-bottom:1px solid #e7eef5}
 .pricing-dialog-title{display:flex;align-items:center;gap:12px;min-width:0}.pricing-dialog-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border-radius:11px;background:#eaf5fc;color:#0284c7;font-size:22px}
 .pricing-dialog h2{font-size:17px;font-weight:650;line-height:1.5;margin:0}.pricing-dialog-close{display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border:0;border-radius:8px;background:transparent;color:#94a3b8;font-size:24px;cursor:pointer}.pricing-dialog-close:hover{background:#f1f5f9;color:#475569}

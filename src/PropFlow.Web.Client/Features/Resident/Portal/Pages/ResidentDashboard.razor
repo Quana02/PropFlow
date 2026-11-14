@@ -80,10 +80,10 @@
     </div>
 
     <div class="resident-tab-panel" id="tabProcessingContent" hidden>
-        <article class="resident-detail-panel glass-panel">
+        <article class="resident-detail-panel glass-panel pf-list-panel">
             <header class="detail-heading"><span><h2>📋 Chi tiết yêu cầu dịch vụ kỹ thuật &amp; tiện ích</h2><p>Theo dõi tiến độ, phân công nhân sự và phản hồi đánh giá trực tiếp</p></span><button class="resident-primary-action" type="button" @onclick='() => OpenService("OTHER", "Đăng ký hỗ trợ mới")'>+ Đăng ký hỗ trợ mới</button></header>
-            <div class="request-filter-toolbar" aria-label="Tìm kiếm và lọc yêu cầu cá nhân">
-                <label class="request-filter-search">
+            <div class="request-filter-toolbar pf-list-toolbar" aria-label="Tìm kiếm và lọc yêu cầu cá nhân">
+                <label class="request-filter-search pf-list-search">
                     <span class="sr-only">Tìm theo mã đơn hoặc tiêu đề</span>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" /></svg>
                     <input type="search" placeholder="Tìm theo mã đơn hoặc tiêu đề..." @bind="_requestSearch" @bind:event="oninput" @onkeydown="HandleRequestFilterKeyDown" />
@@ -100,6 +100,7 @@
                 {
                     <button class="request-filter-clear" type="button" disabled="@_loadingRequests" @onclick="ClearRequestFiltersAsync">Xóa lọc</button>
                 }
+                <PropFlowListRefresh OnRefresh="LoadRequestsAsync" Busy="@_loadingRequests" />
             </div>
             <div class="filter-chips" role="group" aria-label="Lọc yêu cầu theo trạng thái">
                 <button class="@RequestFilterClass(RequestFilter.All)" type="button" aria-pressed="@(_requestFilter == RequestFilter.All)" @onclick="() => SelectRequestFilter(RequestFilter.All)">Tất cả (@_requests.Count)</button>
@@ -132,7 +133,7 @@
     </div>
 
     <div class="resident-tab-panel" id="tabNotificationsContent" hidden>
-        <article class="resident-detail-panel glass-panel">
+        <article class="resident-detail-panel glass-panel pf-list-panel">
             <PropFlow.Web.Client.Features.Communication.Components.ResidentNotificationCenter />
         </article>
     </div>

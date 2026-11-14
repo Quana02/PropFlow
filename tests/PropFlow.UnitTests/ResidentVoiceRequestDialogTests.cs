@@ -76,6 +76,8 @@ public sealed class ResidentVoiceRequestDialogTests
             Assert.Contains("Khách ở lại bao lâu", rendered);
             Assert.Contains("Tôi muốn đăng ký người viếng thăm", rendered);
             Assert.Contains("type=\"file\"", rendered);
+            Assert.Contains("aria-describedby=\"resident-attachment-note\"", rendered);
+            Assert.Contains("Tệp chỉ hiển thị trên thiết bị này.", rendered);
             Assert.DoesNotContain("id=\"service-date\"", rendered);
             Assert.DoesNotContain("Khung giờ thuận tiện</label>", rendered);
             await Invoke(dialog, "SubmitAsync");

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PropFlow.Modules.AiClassification.Infrastructure.Persistence;
@@ -18,8 +19,11 @@ using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Residents.Domain.Residents;
 using PropFlow.Modules.Residents.Infrastructure.Persistence;
 using PropFlow.Modules.Residents.Contracts;
+using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestEvidence;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 
@@ -27,6 +31,93 @@ namespace PropFlow.IntegrationTests;
 
 public sealed class ServiceRequestClassificationHttpTests(AuthDatabaseFixture database) : IClassFixture<AuthDatabaseFixture>
 {
+    [Fact, Trait("Feature", "FE-05")]
+    public async Task Evidence_requires_manager_or_assigned_staff_and_is_never_cached()
+    {
+        await using var baseFactory = Factory(new GeminiStub());
+        var storage = new SyntheticEvidenceStorage();
+        await using var factory = baseFactory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<IServiceRequestEvidenceStorage>();
+            services.AddSingleton<IServiceRequestEvidenceStorage>(storage);
+        }));
+        var now = DateTimeOffset.UtcNow;
+        var managerId = Guid.NewGuid();
+        var staffId = Guid.NewGuid();
+        var ownerId = Guid.NewGuid();
+        var resident = new Resident("EVIDENCE-TEST", "Cư dân kiểm thử", now);
+        var request = new ServiceRequest("EVIDENCE-REQUEST", resident.Id, Guid.NewGuid(), "Ảnh kiểm thử", "Yêu cầu kiểm tra ảnh tổng hợp.", now);
+        request.MarkUnderReview(now);
+        request.MarkAssigned(now);
+        var assignment = new ServiceRequestAssignment(request.Id, staffId, managerId, now);
+        var activity = new ServiceRequestActivity(request.Id, ServiceActivityType.WORK_RESULT_ADDED, now, assignment.Id);
+        var evidence = new ServiceRequestEvidenceFile(request.Id, activity.Id, "synthetic.png", "image/png",
+            SyntheticEvidenceStorage.Image.Length, "cloudinary-authenticated:synthetic", staffId, now);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceRequestsDbContext>();
+        await db.Database.MigrateAsync();
+        var residents = scope.ServiceProvider.GetRequiredService<ResidentsDbContext>();
+        residents.Residents.Add(resident);
+        await residents.SaveChangesAsync();
+        db.AddRange(request, assignment, activity, evidence);
+        await db.SaveChangesAsync();
+
+        var suffix = $"/service-requests/{request.Id}/evidence/{evidence.Id}";
+        var managerPath = "/api/v1/manager" + suffix;
+        var staffPath = "/api/v1/staff" + suffix;
+        using var anonymous = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
+        using var residentClient = Client(factory, "RESIDENT", "USE_RESIDENT_SERVICES", ownerId);
+        using var otherResident = Client(factory, "RESIDENT", "USE_RESIDENT_SERVICES", Guid.NewGuid());
+        using var wrongStaff = Client(factory, "STAFF", "PERFORM_ASSIGNED_OPERATIONS", Guid.NewGuid());
+        using var manager = Client(factory, "MANAGER", "MANAGE_OPERATIONS", managerId);
+        using var staff = Client(factory, "STAFF", "PERFORM_ASSIGNED_OPERATIONS", staffId);
+        foreach (var (client, path, status) in new[]
+        {
+            (anonymous, managerPath, HttpStatusCode.Unauthorized),
+            (anonymous, staffPath, HttpStatusCode.Unauthorized),
+            (residentClient, managerPath, HttpStatusCode.Forbidden),
+            (otherResident, staffPath, HttpStatusCode.Forbidden),
+            (wrongStaff, staffPath, HttpStatusCode.NotFound)
+        })
+        {
+            using var response = await client.GetAsync(path);
+            Assert.Equal(status, response.StatusCode);
+        }
+        Assert.Equal(0, storage.Reads);
+        foreach (var (client, path) in new[] { (manager, managerPath), (staff, staffPath) })
+        {
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Null(response.Headers.Location);
+            Assert.Equal(SyntheticEvidenceStorage.Image, await response.Content.ReadAsByteArrayAsync());
+        }
+
+        assignment.EndAsReassigned(now.AddMinutes(1));
+        await db.SaveChangesAsync();
+        using var revoked = await staff.GetAsync(staffPath);
+        Assert.Equal(HttpStatusCode.NotFound, revoked.StatusCode);
+        Assert.Equal(2, storage.Reads);
+    }
+
+    private sealed class SyntheticEvidenceStorage : IServiceRequestEvidenceStorage
+    {
+        public static readonly byte[] Image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG1sAAAAASUVORK5CYII=");
+        public int Reads { get; private set; }
+
+        public Task<Stream?> OpenReadAsync(string storageKey, CancellationToken ct)
+        {
+            Assert.Equal("cloudinary-authenticated:synthetic", storageKey);
+            Reads++;
+            return Task.FromResult<Stream?>(new MemoryStream(Image));
+        }
+
+        public Task<StoredEvidence> SaveAsync(Guid id, string fileName, string contentType, long sizeBytes, Stream content, CancellationToken ct) =>
+            throw new NotSupportedException();
+        public Task DeleteAsync(string storageKey, CancellationToken ct) => throw new NotSupportedException();
+    }
+
     [Fact, Trait("Feature", "FE-05"), Trait("UseCase", "FE-05.1")]
     public async Task Resident_draft_review_is_scoped_advisory_and_handles_provider_failure()
     {

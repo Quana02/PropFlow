@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using PropFlow.Modules.Communication.Application;
 using PropFlow.Modules.Communication.Infrastructure.Persistence;
 namespace PropFlow.Modules.Communication.Infrastructure;
 public sealed class FinanceMailOptions
@@ -28,17 +29,23 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
             if (string.IsNullOrWhiteSpace(options.Host) || string.IsNullOrWhiteSpace(options.From)) continue;
             try {
                 using var scope = scopes.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<CommunicationDbContext>();
+                var directory = scope.ServiceProvider.GetRequiredService<IFinanceEmailRecipientDirectory>();
                 await using var tx = await db.Database.BeginTransactionAsync(ct);
                 var mails = await db.FinanceEmails.FromSqlRaw("SELECT * FROM communication.finance_emails WHERE sent_at IS NULL AND next_attempt_at <= now() ORDER BY next_attempt_at LIMIT 10 FOR UPDATE SKIP LOCKED").ToListAsync(ct);
                 foreach (var item in mails) {
+                    var address = await directory.RecipientEmailAsync(item.UserId, item.Address, ct);
+                    if (string.IsNullOrWhiteSpace(address)) {
+                        item.NextAttemptAt = DateTimeOffset.UtcNow.AddHours(1);
+                        continue;
+                    }
                     // Demo accounts use reserved domains and must never send to external mailboxes.
-                    if (item.Address.EndsWith(".example", StringComparison.OrdinalIgnoreCase) || item.Address.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase)) {
+                    if (address.EndsWith(".example", StringComparison.OrdinalIgnoreCase) || address.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase)) {
                         item.NextAttemptAt = DateTimeOffset.UtcNow.AddDays(1); continue;
                     }
                     try {
                         using var client = new SmtpClient(options.Host, options.Port) { EnableSsl = options.EnableSsl,
                             Credentials = new NetworkCredential(options.Username, options.Password), Timeout = 15000 };
-                        using var mail = new MailMessage(options.From, item.Address) { Subject = item.Subject, Body = item.Html, IsBodyHtml = true };
+                        using var mail = new MailMessage(options.From, address) { Subject = item.Subject, Body = item.Html, IsBodyHtml = true };
                         mail.Headers.Add("X-PropFlow-Event", item.EventId.ToString());
                         // The complete receipt is rendered in the email body for direct viewing.
                         // Do not attach a duplicate HTML file that mail clients display as source.

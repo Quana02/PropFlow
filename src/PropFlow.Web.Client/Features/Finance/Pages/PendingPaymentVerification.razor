@@ -11,11 +11,14 @@
 <PageTitle>Thanh toán chờ xác minh — PropFlow</PageTitle>
 
 <div class="pending-page">
-    <header class="pending-heading">
-        <div>
-            <nav class="pending-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Đối soát ngân hàng</span></nav>
-            <div class="title-row"><h1>Các khoản thanh toán chờ xác minh</h1><span class="realtime-badge"><i></i> Đối soát thời gian thực 24/7</span></div>
-            <p>Các khoản cư dân báo đã thanh toán tự động xuất hiện tại đây để kế toán kiểm tra. Chỉ sau khi xác nhận, số tiền mới được tính vào tổng thu và giảm công nợ; hóa đơn còn thiếu tiền vẫn tiếp tục được theo dõi.</p>
+    <header class="pending-heading pf-management-header pf-management-existing-header">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon material-symbols-outlined" aria-hidden="true">payments</span>
+            <div>
+                <nav class="pending-breadcrumb" aria-label="Đường dẫn trang"><NavLink href="/finance/dashboard">Tài chính &amp; Sổ cái</NavLink><span aria-hidden="true">›</span><span aria-current="page">Đối soát ngân hàng</span></nav>
+                <div class="title-row"><h1>Các khoản thanh toán chờ xác minh</h1><span class="realtime-badge"><i></i> Đối soát thời gian thực 24/7</span></div>
+                <p>Các khoản cư dân báo đã thanh toán tự động xuất hiện tại đây để kế toán kiểm tra. Chỉ sau khi xác nhận, số tiền mới được tính vào tổng thu và giảm công nợ; hóa đơn còn thiếu tiền vẫn tiếp tục được theo dõi.</p>
+            </div>
         </div>
         <div class="pending-actions">
             <a href="/finance/payments/bank-transfers">Giao dịch SePay cần xử lý →</a>
@@ -24,28 +27,27 @@
         </div>
     </header>
 
-    <section class="pending-summary" aria-label="Tổng quan thanh toán chờ xác minh">
+    <section class="pending-summary pf-management-metric-group" aria-label="Tổng quan thanh toán chờ xác minh">
         <article class="pending-card"><div class="pending-card-label"><span>TỔNG GIAO DỊCH CHỜ</span><span class="material-symbols-outlined">receipt_long</span></div><strong>@Value(data?.Total) <small>giao dịch</small></strong><p>Giao dịch đang chờ kế toán xử lý</p></article>
         <article class="pending-card pending-amount"><div class="pending-card-label"><span>TỔNG SỐ TIỀN TREO</span><span class="material-symbols-outlined">payments</span></div><strong>@Money(PendingAmount)</strong><p>Tổng tiền của các bản ghi đang hiển thị</p></article>
         <article class="pending-card ai-card"><div class="pending-card-label"><span>AI MATCH CHÍNH XÁC</span><span class="material-symbols-outlined">auto_awesome</span></div><strong>—</strong><p>Chưa tích hợp dịch vụ AI matching</p></article>
         <article class="pending-card manual-card"><div class="pending-card-label"><span>CẦN RÀ SOÁT THỦ CÔNG</span><span class="material-symbols-outlined">priority_high</span></div><strong>@CurrentPageCount <small>giao dịch</small></strong><p>Các bản ghi chờ quyết định trên trang</p></article>
     </section>
 
-    <section class="pending-toolbar" aria-label="Bộ lọc giao dịch chờ">
-        <div class="pending-filters">
-            <label class="pending-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm giao dịch</span><input type="search" placeholder="Mã giao dịch, hóa đơn, chủ hóa đơn, căn hộ…" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
+    <section class="pending-table-card pf-list-panel pf-management-list" aria-labelledby="pending-list-title">
+        <h2 class="visually-hidden" id="pending-list-title">Danh sách thanh toán chờ xác minh</h2>
+        <div class="pending-filters pf-list-toolbar pf-management-toolbar" role="group" aria-label="Bộ lọc giao dịch chờ">
+            <label class="pending-search pf-list-search pf-management-search"><span class="material-symbols-outlined">search</span><span class="visually-hidden">Tìm giao dịch</span><input type="search" placeholder="Mã giao dịch, hóa đơn, chủ hóa đơn, căn hộ…" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label>
             <button class="pending-field" type="button" disabled title="Chưa có API lọc khoảng thời gian"><span class="material-symbols-outlined">calendar_month</span>Khoảng thời gian<span class="material-symbols-outlined">expand_more</span></button>
             <div class="pending-status-filters" aria-label="Trạng thái đối soát">
                 <button class="active" type="button">Tất cả (@(data?.Total ?? 0))</button>
                 <span title="Chưa có dữ liệu AI matching"><button type="button" disabled>Gợi ý AI &gt; 90% (—)</button></span>
                 <span title="Chưa có dữ liệu sai lệch giao dịch"><button type="button" disabled>Lệch số tiền (—)</button></span>
             </div>
+            <span class="pf-management-count">@(data?.Total ?? 0) giao dịch</span>
+            <PropFlowListRefresh OnRefresh="ReloadAsync" Busy="@loading" />
         </div>
-    </section>
-
-    <section class="pending-table-card" aria-labelledby="pending-list-title">
-        <h2 class="visually-hidden" id="pending-list-title">Danh sách thanh toán chờ xác minh</h2>
-        <div class="pending-table-scroll"><table><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ GD &amp; THỜI GIAN</th><th>NỘI DUNG CHUYỂN KHOẢN</th><th>SỐ TIỀN NHẬN</th><th>HÓA ĐƠN LIÊN KẾT</th><th>TRẠNG THÁI ĐỐI SOÁT</th><th>THAO TÁC</th></tr></thead><tbody>
+        <div class="pending-table-scroll"><table class="pf-list-table"><thead><tr><th><input type="checkbox" disabled aria-label="Chọn tất cả" /></th><th>MÃ GD &amp; THỜI GIAN</th><th>NỘI DUNG CHUYỂN KHOẢN</th><th>SỐ TIỀN NHẬN</th><th>HÓA ĐƠN LIÊN KẾT</th><th>TRẠNG THÁI ĐỐI SOÁT</th><th>THAO TÁC</th></tr></thead><tbody>
             @if (loading) { <tr><td colspan="7"><FinanceUnavailableState Title="Đang tải dữ liệu…" Message="Vui lòng chờ trong giây lát." Icon="progress_activity" /></td></tr> }
             else if (!string.IsNullOrWhiteSpace(error)) { <tr><td colspan="7"><FinanceUnavailableState Title="Không thể tải dữ liệu" Message="@error" Icon="error" /><button class="retry-button" @onclick="ReloadAsync">Thử lại</button></td></tr> }
             else if (data is null || data.Items.Length == 0) { <tr><td colspan="7"><FinanceUnavailableState Title="Không có giao dịch chờ xác minh" Message="Không tìm thấy giao dịch phù hợp với từ khóa hiện tại." Icon="inbox" /></td></tr> }

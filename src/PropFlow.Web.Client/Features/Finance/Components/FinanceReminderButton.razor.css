@@ -1,5 +1,5 @@
 .finance-reminder { display: inline-flex; vertical-align: middle; margin: 3px; }
-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 12px; border: 0; border-radius: 9px; background: #10a580; color: #fff; font: 700 11px/1.4 Inter, sans-serif; white-space: nowrap; cursor: pointer; }
+button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 12px; border: 0; border-radius: 9px; background: #10a580; color: #fff; font: 700 11px/1.4 var(--pf-font); white-space: nowrap; cursor: pointer; }
 button:hover { background: #059669; }
 button:disabled { opacity: .6; cursor: default; }
 .material-symbols-outlined { font-size: 16px; }

@@ -7,7 +7,7 @@
     min-height: calc(100vh - 135px);
     padding: 8px 0 20px;
     color: var(--finance-text);
-    font-family: Inter, sans-serif;
+    font-family: var(--pf-font);
 }
 
 .finance-heading {
@@ -28,7 +28,7 @@
 
 .finance-heading h1 {
     margin: 0 0 4px;
-    font: 400 clamp(24px, 2.8vw, 35px)/1.18 'Space Grotesk', sans-serif;
+    font: 400 clamp(24px, 2.8vw, 35px)/1.18 var(--pf-font);
     letter-spacing: -0.025em;
 }
 
@@ -131,7 +131,7 @@
 .metric-value {
     margin-top: auto;
     color: var(--tone);
-    font: 700 30px/1.1 'Space Grotesk', sans-serif;
+    font: 700 30px/1.1 var(--pf-font);
 }
 
 .metric-empty,
@@ -353,7 +353,7 @@
 
 .debt-value {
     margin-top: 28px;
-    font: 700 35px/1.1 'Space Grotesk', sans-serif;
+    font: 700 35px/1.1 var(--pf-font);
 }
 
 .debt-caption {

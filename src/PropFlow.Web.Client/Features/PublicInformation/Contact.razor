@@ -1,0 +1,40 @@
+@page "/contact"
+@layout PublicInformationLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Liên hệ và hỗ trợ · PropFlow</PageTitle>
+<InformationHeader Title="Liên hệ và hỗ trợ" Description="Tìm hướng xử lý phù hợp dù bạn đã có tài khoản hay đang gặp khó khăn khi đăng nhập." />
+
+<aside class="information-panel contact-notice" aria-label="Kênh liên hệ">
+    <p>PropFlow chưa công bố email, số điện thoại hoặc giờ hỗ trợ cho bản này. Nếu chưa đăng nhập được, xem <a href="/help">Trung tâm trợ giúp</a> và dùng kênh Ban quản lý đã công bố tại chung cư của bạn.</p>
+</aside>
+
+<div class="contact-grid">
+    @foreach (var topic in Topics)
+    {
+        <section class="information-panel">
+            <h2>@topic.Title</h2>
+            <p>@topic.Guidance</p>
+            @if (topic.Link is not null)
+            {
+                <a href="@topic.Link">@topic.LinkLabel</a>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private sealed record SupportTopic(string Title, string Guidance, string? Link = null, string? LinkLabel = null);
+
+    private static readonly SupportTopic[] Topics =
+    [
+        new("Tài khoản và OTP", "Kiểm tra hướng dẫn đăng ký, gửi lại mã hoặc khôi phục mật khẩu. Nếu không còn truy cập email, liên hệ đầu mối quản lý tài khoản qua kênh đã được chung cư cung cấp.", "/forgot-password", "Mở Quên mật khẩu"),
+        new("Hồ sơ cư dân", "Ban quản lý đối chiếu hồ sơ và thông tin căn hộ. Chuẩn bị mã cư dân hoặc căn hộ nếu có.", "/resident/apartment", "Xem căn hộ · cần đăng nhập"),
+        new("Yêu cầu dịch vụ", "Cư dân tạo yêu cầu kỹ thuật hoặc xem tiến độ. Khi cần trao đổi thêm, chuẩn bị mã yêu cầu để Ban quản lý tra cứu.", "/resident/service-requests", "Mở Yêu cầu dịch vụ · cần đăng nhập"),
+        new("Phản ánh", "Dùng mục Phản ánh để gửi góp ý hoặc theo dõi phản hồi từ Ban quản lý.", "/resident/complaints", "Mở Phản ánh · cần đăng nhập"),
+        new("Hóa đơn và thanh toán", "Chuẩn bị mã hóa đơn khi hỏi về số tiền, công nợ hoặc khoản chuyển đang chờ đối soát. Gửi thông tin thanh toán qua kênh được hướng dẫn.", "/resident/billing", "Xem hóa đơn · cần đăng nhập"),
+        new("Quyền riêng tư", "Đề nghị Ban quản lý chỉ dẫn đầu mối xử lý dữ liệu. Bản dự thảo chính sách nêu các quyền có thể áp dụng và các thông tin còn chờ xác nhận.", "/privacy#quyen", "Đọc mục Quyền dữ liệu"),
+        new("Sự cố kỹ thuật", "Ghi lại thời điểm, trang đang dùng và thông báo lỗi. Tránh chia sẻ mật khẩu, mã xác minh hoặc ảnh chứa dữ liệu cá nhân.", "/resident/contact-management", "Chat với Ban quản lý · cần đăng nhập"),
+        new("Trường hợp khẩn cấp", "Nếu có nguy cơ tức thời, dùng kênh ứng cứu chung cư đã công bố. Cuộc gọi hỗ trợ trong ứng dụng phụ thuộc kết nối và người tiếp nhận.", "/resident/contact-management", "Mở Liên hệ Ban quản lý · cần đăng nhập")
+    ];
+}

@@ -25,6 +25,7 @@
     </div>
     <button type="submit" disabled="@busy">@(busy ? "Đang xử lý…" : "Yêu cầu mã xác minh")</button>
 </EditForm><nav class="auth-links"><a href="/login">Quay lại đăng nhập</a></nav>
+<InformationLinks SupportOnly NewTab />
 @code {
     private PropFlow.Web.Client.Shared.Feedback.ToastOperation? resultFeedback;
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();

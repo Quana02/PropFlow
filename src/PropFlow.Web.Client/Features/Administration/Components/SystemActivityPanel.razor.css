@@ -31,7 +31,7 @@ nav { display:flex; gap:.5rem; }
 .audit-dialog>header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }
 dl { display:grid; grid-template-columns:9rem minmax(0,1fr); gap:.8rem; font-size:.8rem; }
 dt { color:var(--admin-muted,#64748b); } dd { margin:0; overflow-wrap:anywhere; }
-.reference { font-family:ui-monospace,monospace; font-size:.7rem; }
+.reference { font-family:var(--pf-font); font-size:.7rem; }
 .changes { min-width:30rem; } .changes td { overflow-wrap:anywhere; max-width:18rem; }
 .legacy-change { padding:.8rem; background:rgba(2,132,199,.06); border-radius:.6rem; font-size:.85rem; }
 details { margin-top:1rem; } summary { cursor:pointer; color:var(--admin-muted,#64748b); font-size:.75rem; }

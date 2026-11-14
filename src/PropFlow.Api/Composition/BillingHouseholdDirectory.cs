@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.Billing.Contracts;
+using PropFlow.Modules.Communication.Application;
 using PropFlow.Modules.Apartments.Infrastructure.Persistence;
 using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 using PropFlow.Modules.Authentication.Domain.Users;
@@ -11,7 +12,7 @@ namespace PropFlow.Api.Composition;
 
 // Joins module-owned data only at the composition root. Ownership and residency remain distinct.
 public sealed class BillingHouseholdDirectory(ResidentsDbContext residents,
-    ApartmentsDbContext apartments, AuthenticationDbContext accounts) : IBillingHouseholdDirectory
+    ApartmentsDbContext apartments, AuthenticationDbContext accounts) : IBillingHouseholdDirectory, IFinanceEmailRecipientDirectory
 {
     public async Task<IReadOnlyDictionary<Guid, int>> ResidentCountsAsync(IReadOnlyCollection<Guid> apartmentIds, DateOnly date, CancellationToken ct)
     {

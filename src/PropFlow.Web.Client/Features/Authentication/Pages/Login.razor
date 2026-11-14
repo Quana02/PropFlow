@@ -25,6 +25,7 @@
     <button disabled="@(busy || Session.Revocation != SessionRevocationState.None)" type="submit">@(busy ? "ĐANG ĐĂNG NHẬP…" : "XÁC THỰC & TRUY CẬP →")</button>
 </EditForm>
 <nav class="auth-links auth-links-login"><span>Chưa có tài khoản?</span><a href="/register">Tạo tài khoản</a><a class="auth-resume" href="/registration/resume">Đã đăng ký? Tiếp tục xác minh</a></nav>
+<InformationLinks />
 @if (Session.Revocation == SessionRevocationState.Unconfirmed || retrying)
 {
     <section class="session-revocation" aria-labelledby="session-revocation-title" aria-busy="@retrying">
