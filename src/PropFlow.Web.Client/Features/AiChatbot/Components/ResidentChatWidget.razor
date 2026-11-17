@@ -41,9 +41,10 @@
                 </div>
                 <form class="rag-input" @onsubmit="Send" @onsubmit:preventDefault>
                     <label class="rag-sr" for="rag-question">Câu hỏi cho trợ lý tài liệu</label>
-                    <input id="rag-question" @bind="question" @bind:event="oninput" maxlength="1000" required minlength="2" placeholder="Nhập câu hỏi của bạn…" disabled="@(busy || blocked)" />
+                    <textarea id="rag-question" data-enter-submit rows="1" enterkeyhint="send" aria-describedby="rag-compose-hint" @bind="question" @bind:event="oninput" maxlength="1000" required minlength="2" placeholder="Nhập câu hỏi của bạn…" disabled="@(busy || blocked)"></textarea>
                     <button type="submit" disabled="@(busy || blocked || question.Trim().Length < 2)">Gửi</button>
                 </form>
+                <small id="rag-compose-hint" class="rag-shortcuts">Enter để gửi · Ctrl+Enter để xuống dòng</small>
                 <nav class="rag-links" aria-label="Mở chức năng PropFlow"><a href="/resident/service-requests">Yêu cầu dịch vụ</a><a href="/resident/billing">Hóa đơn và thanh toán</a><a href="/resident/contact-management">Liên hệ BQL</a></nav>
             }
             <footer><span>AI có thể trả lời chưa chính xác. Hãy kiểm tra nguồn.</span><button type="button" disabled="@busy" @onclick="Clear">Xóa hội thoại</button></footer>

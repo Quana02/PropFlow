@@ -68,11 +68,11 @@
                         <button class="service-btn emergency-service-button" type="button" @onclick="EmergencyCalls.StartAsync" disabled="@EmergencyCalls.Busy"><ResidentServiceIcon Kind="EMERGENCY" Accent="rose" /><strong>Khẩn cấp</strong><small>Gọi thoại với BQL</small></button>
                         @foreach (var service in ServiceCatalog)
                         {
-                            <button class="service-btn glass-inner" type="button" @onclick="() => OpenService(service.CategoryCode, service.Title)"><ResidentServiceIcon Kind="@service.CategoryCode" Accent="@service.Accent" /><strong>@service.ShortTitle</strong></button>
+                            <button class="service-btn glass-inner @(service.CategoryCode == "FACILITIES" ? "facility-ai-service" : "")" type="button" @onclick="() => OpenService(service.CategoryCode, service.Title)"><ResidentServiceIcon Kind="@service.CategoryCode" Accent="@service.Accent" /><strong>@service.ShortTitle</strong>@if(service.CategoryCode == "FACILITIES"){<small>Trò chuyện cùng AI</small>}</button>
                         }
                     </div>
                 </div>
-                <footer class="service-card-footer"><span><i></i>Kết nối với Manager đang sẵn sàng</span><a href="/resident/contact-management">Liên hệ BQL →</a></footer>
+                <footer class="service-card-footer"><span>Nói điều bạn cần, PropFlow giúp bạn tìm.</span><a href="/resident/contact-management">Liên hệ BQL →</a></footer>
             </article>
 
             <PropFlow.Web.Client.Features.Communication.Components.ResidentAnnouncementCard />
@@ -180,7 +180,8 @@
     [
         new("OTHER", "Yêu cầu dịch vụ", "Yêu cầu dịch vụ", "Mô tả nhu cầu để Ban quản lý tiếp nhận và điều phối", "sky", ["sửa chữa", "hỏng", "điện", "nước", "vệ sinh", "dịch vụ", "yêu cầu", "thi công", "chuyển đồ"]),
         new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
-        new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"])
+        new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"]),
+        new("FACILITIES", "Trợ lý tiện ích", "Tiện ích AI", "Nói nhu cầu và khám phá tiện ích phù hợp", "cyan", ["tiện ích", "hồ bơi", "gym", "trẻ em", "đọc sách", "đi bộ"])
     ];
 
     protected override async Task OnInitializedAsync() =>
@@ -189,6 +190,15 @@
     private string? lastSyncedUri;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            try
+            {
+                await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/facility-assistant-voice.js?v=20261117-2");
+                await module.InvokeVoidAsync("preloadGreetings");
+            }
+            catch (JSException) { /* Greeting will load on demand without blocking resident services. */ }
+        }
         if (lastSyncedUri == Navigation.Uri) return;
         lastSyncedUri = Navigation.Uri;
 
@@ -285,6 +295,7 @@
     {
         if (categoryCode == "CONTACT") { Navigation.NavigateTo("/resident/contact-management"); return; }
         if (categoryCode == "BILLING") { Navigation.NavigateTo("/resident/billing"); return; }
+        if (categoryCode == "FACILITIES") { Navigation.NavigateTo("/resident/facilities"); return; }
         _serviceRequestModal?.Open(categoryCode, title);
     }
 

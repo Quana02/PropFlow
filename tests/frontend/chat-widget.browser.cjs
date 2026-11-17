@@ -10,13 +10,27 @@ const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const root = path.resolve(__dirname, '../..');
 const css = fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/Features/AiChatbot/Components/ResidentChatWidget.razor.css'), 'utf8');
 const moduleSource = fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/js/chat-widget.js'), 'utf8');
-const html = `<!doctype html><html lang="vi"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:Arial}*{box-sizing:border-box}${css}</style></head><body><div class="rag-widget"><button class="rag-launch" aria-label="Mở Hỏi PropFlow"><span class="rag-launch-icon">✦</span><span class="rag-launch-label">Hỏi PropFlow</span></button></div><script type="module">import { attach } from '/chat-widget.js'; const widget=document.querySelector('.rag-widget'); window.dragHandle=attach(widget); window.openCount=0; widget.querySelector('button').addEventListener('click',()=>{window.openCount++; if(widget.querySelector('.rag-window')) {widget.querySelector('.rag-window').remove();return;} const panel=document.createElement('section');panel.className='rag-window';panel.innerHTML='<header><h2>Hỏi PropFlow</h2><button>Đóng</button></header><div class="rag-thread">Nội dung trò chuyện</div>';panel.querySelector('button').onclick=()=>panel.remove();widget.prepend(panel);});window.ready=true;</script></body></html>`;
+const shortcutsSource = fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/js/composer-shortcuts.js'), 'utf8');
+if(!fs.readFileSync(path.join(root,'src/PropFlow.Web/Components/App.razor'),'utf8').includes('src="js/composer-shortcuts.js?v='))
+  throw Error('The app does not load composer shortcuts.');
+const composerFiles = [
+  ['Features/Communication/SupportChat/SupportChatWorkspace.razor', 'support-message'],
+  ['Features/AiChatbot/Components/ResidentChatWidget.razor', 'rag-question'],
+  ['Features/Resident/Portal/Pages/ResidentFacilities.razor', 'facility-need'],
+  ['Features/Resident/Portal/Components/ResidentServiceRequestDialog.razor', 'service-description']
+];
+for(const [file,id] of composerFiles) {
+  if(!new RegExp('<textarea[^>]*id="'+id+'"[^>]*data-enter-submit').test(fs.readFileSync(path.join(root,'src/PropFlow.Web.Client',file),'utf8')))
+    throw Error('Composer is not wired to shortcuts: '+id);
+}
+const html = `<!doctype html><html lang="vi"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:Arial}*{box-sizing:border-box}${css}</style></head><body><div class="rag-widget"><button class="rag-launch" aria-label="Mở Hỏi PropFlow"><span class="rag-launch-icon">✦</span><span class="rag-launch-label">Hỏi PropFlow</span></button></div><script type="module">import '/composer-shortcuts.js'; import { attach } from '/chat-widget.js'; const widget=document.querySelector('.rag-widget'); window.dragHandle=attach(widget); window.openCount=0; widget.querySelector('button').addEventListener('click',()=>{window.openCount++; if(widget.querySelector('.rag-window')) {widget.querySelector('.rag-window').remove();return;} const panel=document.createElement('section');panel.className='rag-window';panel.innerHTML='<header><h2>Hỏi PropFlow</h2><button>Đóng</button></header><div class="rag-thread">Nội dung trò chuyện</div>';panel.querySelector('button').onclick=()=>panel.remove();widget.prepend(panel);});window.ready=true;</script></body></html>`;
 const browserPath = [process.env.RESIDENT_TEST_BROWSER, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/usr/bin/chromium', '/usr/bin/google-chrome'].find(p => p && fs.existsSync(p));
 if (!browserPath) throw new Error('Set RESIDENT_TEST_BROWSER to a Chromium executable.');
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'propflow-resident-layout-'));
 const server = http.createServer((req, res) => {
-  res.setHeader('Content-Type', req.url === '/chat-widget.js' ? 'text/javascript' : 'text/html; charset=utf-8');
-  res.end(req.url === '/chat-widget.js' ? moduleSource : html);
+  const script = req.url === '/chat-widget.js' ? moduleSource : req.url === '/composer-shortcuts.js' ? shortcutsSource : null;
+  res.setHeader('Content-Type', script !== null ? 'text/javascript' : 'text/html; charset=utf-8');
+  res.end(script ?? html);
 });
 let browser, socket, sequence = 0, port;
 const pending = new Map();
@@ -47,7 +61,7 @@ function send(method, params = {}, sessionId) {
 
     const evaluate = async expression => {
       const result = await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true},session);
-      if(result.exceptionDetails) throw new Error(result.exceptionDetails.text); return result.result.value;
+      if(result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text); return result.result.value;
     };
     for(let i=0;i<100 && !await evaluate('window.ready === true');i++) await wait(50);
     const assert = (condition, message) => { if(!condition) throw new Error(message); };
@@ -96,7 +110,45 @@ function send(method, params = {}, sessionId) {
       results.push({width,circle:true,hoverLabel:true,stationaryOnHover:true,hoverLabelFits:true,drag:true,clickAfterDragSuppressed:true,panelFits:true});
     }
     await evaluate('window.dragHandle.dispose()');
-    console.log(JSON.stringify({passed:true,checks:results}));
+    await evaluate(`window.setupComposer=(id,marked=true)=>{
+      document.querySelector('#keyboard-fixture')?.remove();
+      const form=document.createElement('form');form.id='keyboard-fixture';
+      const input=document.createElement('textarea');input.id=id;if(marked)input.setAttribute('data-enter-submit','');input.maxLength=100;
+      const button=document.createElement('button');button.type='submit';button.id='keyboard-send';button.textContent='Gửi';
+      form.append(input,button);document.body.append(form);window.sent=[];window.draft='';
+      input.addEventListener('input',()=>window.draft=input.value);
+      form.addEventListener('submit',event=>{event.preventDefault();window.sent.push({text:input.value,submitter:event.submitter?.id});});
+      input.value='Xin chào';input.focus();input.setSelectionRange(input.value.length,input.value.length);
+    }`);
+    const key = async (modifiers=0,repeat=false) => {
+      await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13,text:'\r',unmodifiedText:'\r',modifiers,autoRepeat:repeat},session);
+      await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13,modifiers},session);
+    };
+    for(const [,id] of composerFiles) {
+      await evaluate('setupComposer('+JSON.stringify(id)+')');await key();
+      assert(await evaluate(`sent.length===1&&sent[0].text==='Xin chào'&&sent[0].submitter==='keyboard-send'`),'Enter did not submit once: '+id);
+      await evaluate('setupComposer('+JSON.stringify(id)+')');await key(2);
+      assert(await evaluate(`sent.length===0&&draft==='Xin chào\\n'&&document.querySelector('#keyboard-fixture textarea').value===draft`),'Ctrl+Enter did not update the bound draft: '+id);
+      await key();assert(await evaluate(`sent.length===1&&sent[0].text==='Xin chào\\n'`),'Enter lost multiline content: '+id);
+      results.push({composer:id,enterSends:true,ctrlEnterAddsBoundNewline:true});
+    }
+    await evaluate(`setupComposer('selection');var input=document.querySelector('#selection');input.value='abcd';input.setSelectionRange(1,3)`);await key(2);
+    assert(await evaluate(`draft==='a\\nd'&&document.querySelector('#selection').selectionStart===2`),'Ctrl+Enter did not replace the selected text');
+    await evaluate(`setupComposer('readonly');document.querySelector('#readonly').readOnly=true`);await key();await key(2);
+    assert(await evaluate(`sent.length===0&&document.querySelector('#readonly').value==='Xin chào'`),'Readonly composer changed or submitted');
+    await evaluate(`setupComposer('busy');document.querySelector('#keyboard-send').disabled=true`);await key();
+    assert(await evaluate('sent.length===0'),'Disabled send button was bypassed');
+    await evaluate(`setupComposer('blank');document.querySelector('#blank').value='  '`);await key();
+    assert(await evaluate('sent.length===0'),'Whitespace was submitted');
+    await evaluate(`setupComposer('validation');var required=document.createElement('input');required.required=true;document.querySelector('#keyboard-fixture').append(required)`);await key();
+    assert(await evaluate('sent.length===0'),'Enter bypassed normal form validation');
+    await evaluate(`setupComposer('repeat')`);await key(0,true);assert(await evaluate('sent.length===0'),'Holding Enter submitted a duplicate');
+    assert(await evaluate(`(()=>{setupComposer('ime');var input=document.querySelector('#ime');for(const options of [{isComposing:true},{keyCode:229}]){const event=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,...options});input.dispatchEvent(event);if(event.defaultPrevented)return false;}return sent.length===0;})()`),'Vietnamese/IME confirmation was intercepted');
+    await evaluate(`setupComposer('max');var input=document.querySelector('#max');input.maxLength=input.value.length`);await key(2);
+    assert(await evaluate(`document.querySelector('#max').value==='Xin chào'`),'Ctrl+Enter bypassed maxlength');
+    await evaluate(`setupComposer('ordinary',false)`);await key();
+    assert(await evaluate(`sent.length===0&&document.querySelector('#ordinary').value==='Xin chào\\n'`),'Ordinary textareas were affected');
+    console.log(JSON.stringify({passed:true,checks:results,keyboardGuards:['selection','readonly','busy','blank','validation','repeat','IME','maxlength','unmarked']}));
   } catch (e) { console.error(e.message); process.exitCode = 1; }
   finally {
     if (socket?.readyState === WebSocket.OPEN) { try { await send('Browser.close'); } catch {} socket.close(); }

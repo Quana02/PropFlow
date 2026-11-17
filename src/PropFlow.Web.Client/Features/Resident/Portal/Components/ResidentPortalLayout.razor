@@ -6,7 +6,7 @@
 @using PropFlow.Web.Client.Features.Resident.Portal.Models
 
 <HeadContent>
-    <link rel="stylesheet" href="css/resident-portal.css?v=20261113-9" />
+    <link rel="stylesheet" href="css/resident-portal.css?v=20261116-1" />
 </HeadContent>
 
 <div class="resident-portal">
@@ -34,7 +34,8 @@
             </footer>
 
             <ResidentNavigation />
-            @if (!Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/contact-management", StringComparison.OrdinalIgnoreCase))
+            @if (!Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/contact-management", StringComparison.OrdinalIgnoreCase)
+                && !Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/facilities", StringComparison.OrdinalIgnoreCase))
             { <PropFlow.Web.Client.Features.AiChatbot.Components.ResidentChatWidget /> }
         </div>
     </CascadingValue>

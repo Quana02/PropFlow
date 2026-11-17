@@ -1,0 +1,32 @@
+@using PropFlow.Web.Client.Features.UtilityInsights.Services
+@inject UtilityInsightsApi Api
+@implements IDisposable
+
+<section class="reading-insight" aria-label="Kiểm tra mức tiêu thụ">
+    <h3>Phân tích mức tiêu thụ</h3>
+    @if (loading) { <p role="status">Đang đối chiếu lịch sử điện, nước…</p> }
+    else if (error is not null) { <p role="alert">@error</p><button type="button" @onclick="Load">Thử lại phân tích</button> }
+    else if (data is not null)
+    {
+        @foreach (var signal in new[] { data.Analysis.Electricity, data.Analysis.Water })
+        { <p><strong>@(signal.Utility == "ELECTRICITY" ? "Điện" : "Nước"): @UtilityInsightsApi.SeverityLabel(signal.Severity)</strong> · @signal.Reason</p> }
+        <a href="/operations/utility-insights">Mở biểu đồ và xét duyệt cảnh báo →</a>
+    }
+</section>
+@code {
+    [Parameter] public Guid ApartmentId { get; set; }
+    [Parameter] public DateOnly Month { get; set; }
+    private UtilityInsightView? data;
+    private string? error;
+    private bool loading, disposed;
+    private readonly CancellationTokenSource lifetime = new();
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load()
+    {
+        loading = true; error = null;
+        try { var result = await Api.GetAsync(ApartmentId, Month, lifetime.Token); if (!disposed) { data = result.Data; error = result.IsSuccess ? null : result.Message; } }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { if (!disposed) loading = false; }
+    }
+    public void Dispose() { disposed = true; lifetime.Cancel(); lifetime.Dispose(); }
+}

@@ -23,6 +23,7 @@
             else { <button type="submit" disabled="@busy">Lưu điện và nước</button> }
             @if (data.UpdatedAt is { } at) { <small>Lần lưu gần nhất: @at.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small> }
         </form>
+        <PropFlow.Web.Client.Features.UtilityInsights.Components.UtilityReadingInsight ApartmentId="ApartmentId" Month="data.UsageMonth" @key="(ApartmentId, data.UsageMonth, data.UpdatedAt)" />
     }
 </FinancePricingDialog>
 @code {

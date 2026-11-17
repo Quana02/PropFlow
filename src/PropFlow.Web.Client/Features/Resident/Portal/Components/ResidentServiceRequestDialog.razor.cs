@@ -42,7 +42,7 @@ public partial class ResidentServiceRequestDialog
     private string ScheduleLabel => string.Join(" · ", new[]
         { _form.PreferredDate?.ToString("dd/MM/yyyy"), _form.PreferredTimeCode is null ? null : ServiceRequestAreaText.TimeSlot(_form.PreferredTimeCode) }.Where(x => x is not null));
 
-    public void Open(string categoryCode, string title)
+    public void Open(string categoryCode, string title, string? initialDescription = null)
     {
         _checkCancellation?.Cancel();
         _voiceEpoch++;
@@ -52,7 +52,7 @@ public partial class ResidentServiceRequestDialog
         _selectedFiles = [];
         _attachmentError = _interimText = null;
         if (_voiceSupported || !_voiceInitialized) _voiceNotice = null;
-        _form.Description = "";
+        _form.Description = initialDescription is { Length: <= 3500 } ? initialDescription : "";
         InvalidateReview();
         _open = true;
         StateHasChanged();

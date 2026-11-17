@@ -40,11 +40,12 @@ function serviceIcon(kind, accent) {
 const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/resident.css"></head>
 <body style="margin:0"><div class="resident-portal"><div class="resident-page-frame"><main class="resident-main"><div class="resident-card-grid">
 <article class="resident-dashboard-card glass-panel" data-purpose="request-status-card"><div><header class="card-heading"><span><h2>Tiến độ xử lý yêu cầu</h2><small>Cập nhật từ dữ liệu của bạn</small></span><em class="badge badge-sky">Đã xong 6 / 17</em></header><div class="request-progress"><span style="width:35%"></span></div><div class="resident-card-list"><div class="resident-request-state" data-empty style="display:none">Bạn chưa gửi yêu cầu nào.</div>${rows}</div></div><footer class="card-actions"><button class="resident-text-action">Xem tất cả 17 yêu cầu ›</button><button class="resident-primary-action">+ Tạo yêu cầu mới</button></footer></article>
-<article class="resident-dashboard-card glass-panel" data-purpose="services-catalog-card"><div><header class="card-heading"><span><h2>Dịch vụ cư dân</h2><small>Gửi yêu cầu, thanh toán và liên hệ</small></span><em class="badge badge-neutral">4 mục</em></header><div class="resident-service-grid">
+<article class="resident-dashboard-card glass-panel" data-purpose="services-catalog-card"><div><header class="card-heading"><span><h2>Dịch vụ cư dân</h2><small>Gửi yêu cầu, thanh toán và liên hệ</small></span><em class="badge badge-neutral">5 mục</em></header><div class="resident-service-grid">
 <button class="service-btn emergency-service-button">${serviceIcon('EMERGENCY', 'rose')}<strong>Khẩn cấp</strong><small>Gọi thoại với BQL</small></button>
 <button class="service-btn glass-inner">${serviceIcon('OTHER', 'sky')}<strong>Yêu cầu dịch vụ</strong></button>
 <button class="service-btn glass-inner">${serviceIcon('BILLING', 'teal')}<strong>Hóa đơn</strong></button>
 <button class="service-btn glass-inner">${serviceIcon('CONTACT', 'cyan')}<strong>Liên hệ BQL</strong></button>
+<button class="service-btn glass-inner facility-ai-service">${serviceIcon('FACILITIES', 'cyan')}<strong>Tiện ích AI</strong><small>Trò chuyện cùng AI</small></button>
 </div></div><footer class="service-card-footer"><span><i></i>Kết nối với Manager đang sẵn sàng</span><a>Liên hệ BQL →</a></footer></article>
 ${announcementMarkup}
 </div></main></div></div></body></html>`;
@@ -105,11 +106,11 @@ function send(method, params = {}, sessionId) {
             const svg = icon.querySelector('svg'), style = getComputedStyle(icon);
             return { kind: svg?.dataset.serviceIcon, contrast: contrast(style.color,style.backgroundColor), visible: !!svg && svg.getBoundingClientRect().width >= 24 && svg.getBoundingClientRect().height >= 24 };
           });
-          const iconsVisible = iconChecks.length === 4 && iconChecks.every(icon => icon.visible && icon.contrast >= 3);
+          const iconsVisible = iconChecks.length === 5 && iconChecks.every(icon => icon.visible && icon.contrast >= 3);
           const emergency = services.querySelector('.emergency-service-button');
           const emergencyReadable = contrast(getComputedStyle(emergency.querySelector('strong')).color,getComputedStyle(emergency).backgroundColor) >= 4.5 && contrast(getComputedStyle(emergency.querySelector('small')).color,getComputedStyle(emergency).backgroundColor) >= 4.5;
           const tiles = [...services.querySelectorAll('.service-btn')].map(tile => tile.getBoundingClientRect());
-          const balancedServices = innerWidth > 760 && innerWidth <= 1024 ? tiles.every(tile => Math.abs(tile.top - tiles[0].top) < 1) : Math.abs(tiles[0].top - tiles[1].top) < 1 && Math.abs(tiles[2].top - tiles[3].top) < 1 && tiles[2].top > tiles[0].top;
+          const balancedServices = (innerWidth > 760 && innerWidth <= 1024 ? tiles.slice(0,4).every(tile => Math.abs(tile.top - tiles[0].top) < 1) : Math.abs(tiles[0].top - tiles[1].top) < 1 && Math.abs(tiles[2].top - tiles[3].top) < 1 && tiles[2].top > tiles[0].top) && tiles[4].top > tiles[0].top;
           const filledServices = services.querySelector('footer').getBoundingClientRect().top - services.querySelector('.resident-service-grid').getBoundingClientRect().bottom <= 25;
           const notice = document.querySelector('.announcement-card'), serviceBounds = services.getBoundingClientRect(), noticeBounds = notice.getBoundingClientRect();
           const noticeFits = notice.querySelector('footer').getBoundingClientRect().bottom <= noticeBounds.bottom + 1;

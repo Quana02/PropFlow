@@ -153,6 +153,20 @@ builder.Services.AddScoped<IServiceRequestClassifier, GeminiServiceRequestClassi
 builder.Services.AddScoped<PropFlow.Modules.AiClassification.Application.ResidentDraftReview.IResidentDraftReviewer, GeminiResidentDraftReviewer>();
 builder.Services.AddScoped<ResidentServiceRequestDraftChecker>();
 builder.Services.AddScoped<IServiceRequestAdvisor, GeminiServiceRequestAdvisor>();
+builder.Services.AddScoped<PropFlow.Modules.Billing.Contracts.IUtilityConsumptionSource, PropFlow.Modules.Billing.Infrastructure.Finance.UtilityConsumptionSource>();
+builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.UtilityConsumption.UtilityInsightOptions>()
+    .BindConfiguration("UtilityInsights")
+    .Validate(x => x.MinimumHistory is >= 6 and <= 24 && x.AiRequestsPerUserDay > 0 && x.AiRequestsPerDay > 0
+        && x.Confidence is > 50 and < 100 && x.MediumDeviation > 0 && x.HighDeviation > x.MediumDeviation
+        && x.MinimumRelativeChange > 0 && x.MinimumElectricityChange > 0 && x.MinimumWaterChange > 0, "Cấu hình phân tích điện nước không hợp lệ.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PropFlow.Modules.AiRecommendation.Application.UtilityConsumption.UtilityInsightOptions>>().Value);
+builder.Services.AddSingleton<PropFlow.Modules.AiRecommendation.Application.UtilityConsumption.IUtilitySpikeModel, PropFlow.Modules.AiRecommendation.Infrastructure.UtilityConsumption.MlNetUtilitySpikeModel>();
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.UtilityConsumption.UtilityConsumptionAnalyzer>();
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.UtilityConsumption.IUtilityExplanation, PropFlow.Modules.AiRecommendation.Infrastructure.UtilityConsumption.GeminiUtilityExplanation>();
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Infrastructure.UtilityConsumption.UtilityInsights>();
+builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.AiRecommendation.Presentation.UtilityConsumptionController).Assembly);
+builder.Services.AddHostedService<PropFlow.Modules.AiRecommendation.Infrastructure.UtilityConsumption.UtilityNoticeWorker>();
 builder.Services.AddScoped<ManagerServiceRequestClassification>();
 builder.Services.AddScoped<ManagerServiceRequestRecommendation>();
 builder.Services.AddScoped<IAssignedServiceRequestRecommendationSource, AssignedServiceRequestRecommendationSource>();
@@ -291,6 +305,34 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.IProperty
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Facilities.Services.IFacilityService, PropFlow.Modules.PropertyAssets.Application.Facilities.Services.FacilityService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment.Services.IEquipmentService, PropFlow.Modules.PropertyAssets.Application.Equipment.Services.EquipmentService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
+builder.Services.AddScoped<ISharedFacilityCatalog, SharedFacilityCatalog>();
+builder.Services.AddScoped<FacilityGuideService>();
+builder.Services.AddScoped<IFacilityGuideSource>(sp => sp.GetRequiredService<FacilityGuideService>());
+builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityRecommendationOptions>()
+    .BindConfiguration("FacilityRecommendations")
+    .Validate(x => x.MaxCandidates is >= 1 and <= 30 && x.AiRequestsPerUserDay > 0 && x.AiRequestsPerDay > 0 && x.CacheMinutes is >= 1 and <= 30,
+        "Cấu hình gợi ý tiện ích không hợp lệ.").ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityRecommendationOptions>>().Value);
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.IFacilityResidentAccess, FacilityResidentAccess>();
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.IFacilityNeedAdvisor, PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilityNeedAdvisor>();
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilityRecommendations>();
+builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilitySpeechOptions>()
+    .BindConfiguration("FacilityRecommendations:Speech")
+    .Validate(x => System.Text.RegularExpressions.Regex.IsMatch(x.Model, "^[a-zA-Z0-9._-]{1,128}$") && x.PerResidentHour > 0 && x.PerDay > 0, "Cấu hình giọng đọc tiện ích không hợp lệ.").ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilitySpeechOptions>>().Value);
+builder.Services.AddHttpClient("FacilityGeminiSpeech", (sp, client) => {
+    var configured = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    client.BaseAddress = new Uri(configured.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(45); client.MaxResponseContentBufferSize = 8 * 1024 * 1024;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddSingleton<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.IFacilitySpeechProvider>(sp => {
+    var configured = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    return new PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilitySpeech(
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient("FacilityGeminiSpeech"), configured.ApiKey,
+        sp.GetRequiredService<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilitySpeechOptions>().Model, configured.Ready,
+        sp.GetRequiredService<ILogger<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilitySpeech>>());
+});
+builder.Services.AddSingleton<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilitySpeech>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
 builder.Services.AddScoped<IMaintenanceAssetTransactionCoordinator, MaintenanceAssetTransactionCoordinator>();

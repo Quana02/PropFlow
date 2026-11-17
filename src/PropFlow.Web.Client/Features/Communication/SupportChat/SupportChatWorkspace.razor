@@ -176,7 +176,7 @@
                     }
                     <label class="support-sr" for="support-message">Nội dung tin nhắn</label>
                     <div class="support-compose-row">
-                        <textarea id="support-message" value="@text" @oninput="Input" rows="1" maxlength="4000"
+                        <textarea id="support-message" data-enter-submit value="@text" @oninput="Input" rows="1" maxlength="4000"
                                   readonly="@busy" enterkeyhint="send" aria-describedby="support-compose-hint"
                                   placeholder="@(ForManager ? "Nhập tin nhắn…" : "Bạn cần Ban quản lý hỗ trợ điều gì?")"></textarea>
                         <button type="submit" class="support-send" aria-label="Gửi tin nhắn" title="Gửi tin nhắn"
@@ -196,7 +196,7 @@
                     </div>
                     <div class="support-compose-meta">
                         <small id="support-compose-hint">
-                            <span class="support-compose-shortcuts">Enter để gửi · Shift+Enter để xuống dòng</span>
+                            <span class="support-compose-shortcuts">Enter để gửi · Ctrl+Enter để xuống dòng</span>
                             @if (!ForManager) { <span>@DraftStatus</span> }
                         </small>
                         <small>@text.Length / 4.000 ký tự</small>
@@ -532,7 +532,6 @@
             var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Features/Communication/SupportChat/SupportChatWorkspace.razor.js");
             if (disposed) { await module.DisposeAsync(); return; }
             workspaceModule = module;
-            await module.InvokeVoidAsync("bindComposer", workspace);
         }
         if (disposed || workspaceModule is null) return;
         if (focusSelectionId is Guid messageId)

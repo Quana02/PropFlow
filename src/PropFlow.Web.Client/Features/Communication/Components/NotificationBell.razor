@@ -176,6 +176,7 @@
     private static (string Label, string Icon) Source(string? value) => value switch
     {
         "SERVICE_REQUEST" => ("Yêu cầu dịch vụ", "assignment"),
+        "UTILITY_CONSUMPTION" => ("Điện, nước", "monitoring"),
         "MAINTENANCE" or "ASSET_STATUS" => ("Vận hành tòa nhà", "build"),
         "COMPLAINT" => ("Phản ánh", "forum"),
         "INVOICE" or "PAYMENT" => ("Tài chính", "receipt_long"),
