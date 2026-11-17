@@ -28,6 +28,9 @@ const supplemental = process.env.PROPFLOW_AUTHZ_SUPPLEMENTAL === '1';
 const sessionCheckOnly = scope === 'Session';
 const maintenanceCheckOnly = scope === 'Maintenance';
 const scanThemeRoutes = themeCheckOnly && process.env.PROPFLOW_THEME_ROUTE_SCAN === '1';
+const bellCheckOnly = themeCheckOnly && process.env.PROPFLOW_NOTIFICATION_DOT_CHECK === '1';
+let bellNotices = [];
+let notificationWrites = 0;
 const routeEvidence = supplemental ? await readJson(join(root, 'browser-matrix.json')) : [];
 const apiEvidence = supplemental ? await readJson(join(root, 'api-matrix.json')) : [];
 const credentialEvidence = [];
@@ -101,11 +104,27 @@ try {
   socket.addEventListener('message', event => {
     const message = JSON.parse(event.data);
     if (message.method === 'Fetch.requestPaused') {
+      const request = message.params.request;
+      const path = new URL(request.url).pathname;
+      const noticeRequest = bellCheckOnly && path.startsWith('/api/v1/notifications');
+      if (noticeRequest && request.method === 'OPTIONS') {
+        void call('Fetch.continueRequest', { requestId: message.params.requestId }, message.sessionId);
+        return;
+      }
+      const requestedHeaders = Object.entries(request.headers).find(([name]) => name.toLowerCase() === 'access-control-request-headers')?.[1];
+      if (noticeRequest && !['GET', 'OPTIONS'].includes(request.method)) notificationWrites++;
+      const body = noticeRequest
+        ? path.endsWith('/unread-count') ? { count: bellNotices.length } : bellNotices
+        : webConfig;
       void call('Fetch.fulfillRequest', {
         requestId: message.params.requestId,
         responseCode: 200,
-        responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
-        body: Buffer.from(JSON.stringify(webConfig)).toString('base64')
+        responseHeaders: [{ name: 'Content-Type', value: 'application/json' },
+          ...(noticeRequest ? [{ name: 'Access-Control-Allow-Origin', value: site },
+            { name: 'Access-Control-Allow-Credentials', value: 'true' },
+            { name: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
+            { name: 'Access-Control-Allow-Headers', value: requestedHeaders ?? 'authorization, content-type, x-csrf-token' }] : [])],
+        body: Buffer.from(JSON.stringify(body)).toString('base64')
       }, message.sessionId).catch(() => errors.push('WASM configuration override failed'));
     }
     if (message.method === 'Runtime.exceptionThrown') errors.push('Runtime.exceptionThrown');
@@ -118,7 +137,10 @@ try {
   });
   await call('Network.enable');
   const configureApi = id => sameOrigin ? Promise.resolve() :
-    call('Fetch.enable', { patterns: [{ urlPattern: site + '/' + configurationFile + '*' }] }, id);
+    call('Fetch.enable', { patterns: [
+      { urlPattern: site + '/' + configurationFile + '*' },
+      ...(bellCheckOnly ? [{ urlPattern: api + '/api/v1/notifications*' }] : [])
+    ] }, id);
   await configureApi();
   await call('Runtime.enable');
   await call('Page.enable');
@@ -320,6 +342,11 @@ try {
   }
   for (const account of selectedRoles) {
     const role = account.replace(/2$/, '');
+    if (bellCheckOnly) {
+      bellNotices = [{ id: '77000000-0000-4000-8000-000000000001', title: 'Thông báo kiểm thử',
+        message: 'Kiểm tra chấm đỏ', actionPath: null, isRead: false, createdAt: new Date().toISOString(), sourceType: 'TEST' }];
+      notificationWrites = 0;
+    }
     await call('Network.clearBrowserCookies');
     await call('Storage.clearDataForOrigin', { origin: site, storageTypes: 'local_storage,session_storage' });
     await navigate('/login');
@@ -336,6 +363,54 @@ try {
     let token;
     if (role !== 'Ẩn danh') {
       await submitLogin(account);
+      if (bellCheckOnly) {
+        const dot = 'Boolean(document.querySelector(".notification-badge"))';
+        const clickBell = () => evaluate('document.querySelector(".notification-trigger").click()');
+        if (!await waitFor(dot)) {
+          await clickBell();
+          await delay(250);
+          await snapshot('notification-dot-' + role.toLowerCase() + '-failure');
+          throw Error(role + ' missing initial dot, panel ' + await evaluate('document.querySelector(".notification-panel")?.innerText') + ', responses ' + JSON.stringify(apiStatuses.filter(([path]) => path.includes('notifications')).map(([path,status]) => [path,status])));
+        }
+        const geometry = await evaluate(`(() => {
+          const dot = document.querySelector('.notification-badge');
+          const rect = dot.getBoundingClientRect();
+          const trigger = dot.closest('button').getBoundingClientRect();
+          return { text: dot.textContent, width: rect.width, height: rect.height,
+            inside: rect.top >= trigger.top && rect.right <= trigger.right };
+        })()`);
+        if (geometry.text.trim() || geometry.width !== geometry.height || !geometry.inside)
+          throw Error(role + ' dot geometry invalid ' + JSON.stringify(geometry));
+        await clickBell();
+        if (!await waitFor('!'+dot+' && document.querySelector(".notification-panel")')) throw Error(role + ' opening did not clear dot');
+        await clickBell();
+        if (!await waitFor('!'+dot+' && !document.querySelector(".notification-panel")')) throw Error(role + ' closing restored dot');
+        if (!await evaluate('document.querySelector(".notification-trigger").getAttribute("aria-label").includes("1 chưa đọc")'))
+          throw Error(role + ' opening changed unread state');
+        const checkReload = process.env.PROPFLOW_NOTIFICATION_DOT_RELOAD === '1';
+        if (checkReload) {
+          const previousDocument = await evaluate('performance.timeOrigin');
+          await call('Page.reload');
+          if (!await waitFor('performance.timeOrigin !== '+previousDocument+' && document.querySelector(".notification-trigger")', 210)) {
+            await snapshot('notification-dot-reload-failure');
+            throw Error(role+' reload failed '+await evaluate('JSON.stringify({path:location.pathname,text:document.body.innerText.slice(-1200),timeOrigin:performance.timeOrigin})'));
+          }
+        }
+        await delay(750);
+        if (await evaluate(dot)) throw Error(role+' reload restored old dot');
+        bellNotices = [{ ...bellNotices[0], id: '77000000-0000-4000-8000-000000000002', createdAt: new Date().toISOString() }, ...bellNotices];
+        await clickBell();
+        if (!await waitFor(dot)) throw Error(role+' a new notification did not restore dot');
+        await clickBell();
+        if (!await waitFor('!'+dot)) throw Error(role+' next click did not clear new dot');
+        if (notificationWrites) throw Error(role+' opening sent mark-read requests');
+        const result = { role, status: 'PASS', geometry, openingClearsDot: true, closingKeepsDotHidden: true,
+          reloadKeepsDotHidden: checkReload ? true : null, newNoticeRestoresDot: true, notificationWrites };
+        uiEvidence.push(result);
+        await writeFile(join(root, 'notification-dot-browser.json'), JSON.stringify(uiEvidence, null, 2));
+        console.log('Notification dot verified for', role);
+        continue;
+      }
       if (themeCheckOnly) {
         try {
           const toggle = role === 'RESIDENT' ? '#theme-toggle-btn' : '.app-theme-button';
