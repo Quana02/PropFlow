@@ -4,7 +4,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -27,6 +31,11 @@ using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Modules.Apartments.Domain.ApartmentUnits;
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.Apartments.Infrastructure.Persistence;
+using PropFlow.Modules.Communication.Presentation;
+using PropFlow.Modules.Communication.Infrastructure.Persistence;
+using PropFlow.Modules.Communication.Contracts;
+using PropFlow.Modules.Administration.Contracts;
+using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Infrastructure;
@@ -47,11 +56,17 @@ public sealed record RegistrationResidentSeed(
 // Real HTTP handlers and PostgreSQL. Only outbound email is captured, exclusively in this test host.
 public sealed class AuthTestMail : IAuthEmail
 {
+    private int recoveryDeliveries;
+    private int registrationDeliveries;
+    public int RecoveryDeliveries => Volatile.Read(ref recoveryDeliveries);
+    public int RegistrationDeliveries => Volatile.Read(ref registrationDeliveries);
     public ConcurrentDictionary<string, string> Codes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool FailNext { get; set; }
     public Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct)
     {
         if (FailNext) { FailNext = false; throw new InvalidOperationException("Test delivery failure"); }
+        if (recovery) Interlocked.Increment(ref recoveryDeliveries);
+        else Interlocked.Increment(ref registrationDeliveries);
         Codes[email] = code; return Task.CompletedTask;
     }
     public Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct)
@@ -68,16 +83,16 @@ public sealed class AuthTestClock : TimeProvider
     public DateTimeOffset? Current { get; set; }
     public override DateTimeOffset GetUtcNow() => Current ?? DateTimeOffset.UtcNow.Add(Offset);
 }
-public sealed class AuthFlowFactory(string connection) : PropFlowApiFactory
+public sealed class AuthFlowFactory(string connection, Action<IServiceCollection>? configureFixtureServices = null) : PropFlowApiFactory(connection)
 {
     public AuthTestMail Mail { get; } = new();
     public AuthTestClock Clock { get; } = new();
+    internal AuthTestAvatarStorage Avatars { get; } = new();
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["ConnectionStrings:PropFlowDatabase"] = connection,
             ["Authentication:RateLimits:auth-login:PermitLimit"] = "1000",
             ["Authentication:RateLimits:auth-entry:PermitLimit"] = "1000"
         }));
@@ -85,8 +100,10 @@ public sealed class AuthFlowFactory(string connection) : PropFlowApiFactory
         {
             services.RemoveAll<IAuthEmail>(); services.AddSingleton<IAuthEmail>(Mail);
             services.RemoveAll<TimeProvider>(); services.AddSingleton<TimeProvider>(Clock);
+            services.RemoveAll<IAccountAvatarStorage>(); services.AddSingleton<IAccountAvatarStorage>(Avatars);
             services.RemoveAll<IServiceRequestEvidenceStorage>();
             services.AddScoped<IServiceRequestEvidenceStorage, LocalServiceRequestEvidenceStorage>();
+            configureFixtureServices?.Invoke(services);
         });
     }
 }
@@ -96,6 +113,7 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
     private string databaseName = "";
     private string adminConnection = "";
     public AuthFlowFactory Factory { get; private set; } = null!;
+    public Action<IServiceCollection>? ConfigureFixtureServices { get; init; }
     public async Task InitializeAsync()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
@@ -110,11 +128,12 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
         await using (var admin = new NpgsqlConnection(adminConnection))
         {
             await admin.OpenAsync();
-            await using var command = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin);
-            await command.ExecuteNonQueryAsync();
+            await TestDatabaseSafety.CreateAsync(admin, databaseName);
         }
         configured.Database = databaseName;
-        Factory = new AuthFlowFactory(configured.ConnectionString);
+        await TestDatabaseSafety.VerifyFixtureAsync(configured.ConnectionString, databaseName, TestDatabaseSafety.ProcessOwner,
+            TestDatabaseConfiguration.GetConnectionString());
+        Factory = new AuthFlowFactory(configured.ConnectionString, ConfigureFixtureServices);
         using var scope = Factory.Services.CreateScope();
         var services = scope.ServiceProvider;
         foreach (var context in new DbContext[] { services.GetRequiredService<AuthenticationDbContext>(), services.GetRequiredService<PropertyAssetsDbContext>(), services.GetRequiredService<ApartmentsDbContext>(), services.GetRequiredService<ResidentsDbContext>(), services.GetRequiredService<AdministrationDbContext>() })
@@ -134,12 +153,11 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
     public async Task DisposeAsync()
     {
         if (Factory != null) await Factory.DisposeAsync();
-        if (!databaseName.StartsWith("propflow_fe01_test_", StringComparison.Ordinal) || databaseName.Length != 51) return;
+        if (Factory is null) return;
         NpgsqlConnection.ClearAllPools();
         await using var admin = new NpgsqlConnection(adminConnection);
         await admin.OpenAsync();
-        await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin);
-        await command.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(admin, databaseName);
     }
     public Task<RegistrationResidentSeed> SeedResidentAsync(string email) =>
         SeedRegistrationResidentAsync(email, activeResidency: true);
@@ -276,8 +294,9 @@ public sealed class AuthDatabaseFixture : IAsyncLifetime
 }
 
 [Trait("Feature", "FE-01")]
-public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : IClassFixture<AuthDatabaseFixture>
+public sealed partial class AuthenticationFlowTests(AuthDatabaseFixture database, Xunit.Abstractions.ITestOutputHelper output) : IClassFixture<AuthDatabaseFixture>
 {
+    private AuthDatabaseFixture Database => database;
     private const string Password = "A secure passphrase 123!";
     private HttpClient Client() => database.Factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), HandleCookies = true });
     private static async Task<HttpResponseMessage> Post(HttpClient client, string path, object body, bool csrf = false)
@@ -285,6 +304,241 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/auth/" + path) { Content = JsonContent.Create(body) };
         if (csrf) { var token = await client.GetFromJsonAsync<CsrfResponse>("api/v1/auth/csrf"); request.Headers.Add("X-CSRF-TOKEN", token!.Token); }
         return await client.SendAsync(request);
+    }
+
+    [Fact]
+    public async Task Logout_closes_live_websockets_for_the_current_session_and_preserves_the_other_device()
+    {
+        await using (var scope = database.Factory.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<CommunicationDbContext>().Database.MigrateAsync();
+
+        using var first = Client();
+        using var second = Client();
+        var email = $"hub-session-{Guid.NewGuid():N}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var (username, beforeRotation) = await RegisterActivateAndLoginAsync(first, email);
+        using var rotate = await Post(first, "refresh", new { }, true);
+        Assert.Equal(HttpStatusCode.OK, rotate.StatusCode);
+        var rotated = (await rotate.Content.ReadFromJsonAsync<SessionResponse>())!;
+        using var login = await Post(second, "login", new LoginRequest(username, Password), true);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var otherDevice = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
+
+        HubConnection Connect(string hub, string jwt) => AuthenticationTestSessions.ConnectWebSocket(database.Factory, hub, jwt);
+        await using var resident = Connect("resident-notifications", beforeRotation.AccessToken);
+        await using var alias = Connect("notifications", rotated.AccessToken);
+        await using var announcement = Connect("announcements", rotated.AccessToken);
+        await using var requests = Connect("service-requests", rotated.AccessToken);
+        await using var support = Connect("support-chat", rotated.AccessToken);
+        await using var emergency = Connect("emergency-calls", rotated.AccessToken);
+        await using var other = Connect("notifications", otherDevice.AccessToken);
+        HubConnection[] revoked = [resident, alias, announcement, requests, support, emergency];
+        var closed = revoked.Select(AuthenticationTestSessions.WhenClosed).ToArray();
+
+        var received = System.Threading.Channels.Channel.CreateUnbounded<string>();
+        var denied = System.Threading.Channels.Channel.CreateUnbounded<string>();
+        using var otherSubscription = other.On<string>("SessionTestMarker", marker => received.Writer.TryWrite(marker));
+        using var residentSubscription = resident.On<string>("SessionTestMarker", marker => denied.Writer.TryWrite(marker));
+        foreach (var connection in revoked) await connection.StartAsync();
+        await other.StartAsync();
+        await support.InvokeAsync("Heartbeat");
+        await emergency.InvokeAsync("Heartbeat");
+        Assert.All(revoked, connection => Assert.Equal(HubConnectionState.Connected, connection.State));
+        Assert.All(closed, task => Assert.False(task.IsCompleted));
+
+        var hub = database.Factory.Services.GetRequiredService<IHubContext<ResidentNotificationHub>>();
+        var recipient = rotated.User.Id.ToString();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await hub.Clients.User(recipient).SendAsync("SessionTestMarker", "before", timeout.Token);
+        Assert.Equal("before", await denied.Reader.ReadAsync(timeout.Token));
+        Assert.Equal("before", await received.Reader.ReadAsync(timeout.Token));
+
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        using var logout = await Post(first, "logout", new { }, true);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        await Task.WhenAll(closed).WaitAsync(TimeSpan.FromSeconds(2));
+        output.WriteLine($"Logout HTTP và đóng {closed.Length} WebSocket cùng phiên: {elapsed.Elapsed.TotalMilliseconds:F1} ms.");
+
+        await hub.Clients.User(recipient).SendAsync("SessionTestMarker", "after", timeout.Token);
+        Assert.Equal("after", await received.Reader.ReadAsync(timeout.Token));
+        Assert.False(denied.Reader.TryRead(out _));
+        Assert.Equal(HubConnectionState.Connected, other.State);
+    }
+
+    [Fact]
+    public async Task Session_binding_upgrade_revokes_legacy_rows_and_preserves_their_history()
+    {
+        using var client = Client();
+        var (username, _) = await ActivatedAccount(client);
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        var user = await db.UserAccounts.AsNoTracking().SingleAsync(user => user.Username == username);
+        var migrator = db.GetService<IMigrator>();
+        var tokenId = Guid.NewGuid();
+        var legacyHash = $"synthetic-legacy-{tokenId:N}";
+
+        await migrator.MigrateAsync("20261113075102_AddAccountAvatar");
+        try
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO auth.refresh_tokens (id, user_id, token_hash, expires_at)
+                VALUES ({tokenId}, {user.Id}, {legacyHash}, {DateTimeOffset.UtcNow.AddDays(1)})
+                """);
+        }
+        finally
+        {
+            await migrator.MigrateAsync();
+        }
+
+        var record = await db.RefreshTokens.AsNoTracking().SingleAsync(token => token.Id == tokenId);
+        Assert.Equal(user.Id, record.UserId);
+        Assert.Equal(legacyHash, record.TokenHash);
+        Assert.Null(record.SessionId);
+        Assert.Null(record.AccessFingerprint);
+        Assert.NotNull(record.RevokedAt);
+        Assert.Equal("session_binding_upgrade", record.RevokedReason);
+    }
+
+    [Fact]
+    public async Task Revocation_during_connected_emergency_call_removes_signaling_access_and_preserves_call_history()
+    {
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var communication = services.GetRequiredService<CommunicationDbContext>();
+        await communication.Database.MigrateAsync();
+        var auth = services.GetRequiredService<AuthenticationDbContext>();
+        var administration = services.GetRequiredService<AdministrationDbContext>();
+        var now = DateTimeOffset.UtcNow;
+        var manager = new UserAccount($"manager_call_{Guid.NewGuid():N}", "fixture", "Quản lý thử", now,
+            status: AccountStatus.ACTIVE);
+        auth.UserAccounts.Add(manager);
+        await auth.SaveChangesAsync();
+        var role = await administration.Roles.SingleAsync(item => item.Code == "MANAGER");
+        administration.UserRoleAssignments.Add(new UserRoleAssignment(manager.Id, role.Id, now));
+        await administration.SaveChangesAsync();
+        var access = (await services.GetRequiredService<IAccountAccess>().GetAsync(manager.Id, default))!;
+        var managerSession = await AuthenticationTestSessions.IssueAsync(database.Factory.Services,
+            new AccountResponse(manager.Id, manager.Username, manager.DisplayName, manager.Email, null, "ACTIVE",
+                manager.EmailVerified, access.Role, access.Permissions), now);
+        using var managerApi = Client();
+        managerApi.DefaultRequestHeaders.Authorization = new("Bearer", managerSession.AccessToken);
+
+        using var browser = Client();
+        var email = $"active-call-{Guid.NewGuid():N}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var (_, residentSession) = await RegisterActivateAndLoginAsync(browser, email);
+        browser.DefaultRequestHeaders.Authorization = new("Bearer", residentSession.AccessToken);
+        await using var residentHub = AuthenticationTestSessions.ConnectWebSocket(database.Factory,
+            "emergency-calls", residentSession.AccessToken, negotiate: true);
+        await using var managerHub = AuthenticationTestSessions.ConnectWebSocket(database.Factory,
+            "emergency-calls", managerSession.AccessToken, negotiate: true);
+        var disconnected = AuthenticationTestSessions.WhenClosed(residentHub);
+        await residentHub.StartAsync();
+        await managerHub.StartAsync();
+        await Task.WhenAll(residentHub.InvokeAsync("Heartbeat"), managerHub.InvokeAsync("Heartbeat"));
+        Assert.NotNull(residentHub.ConnectionId);
+
+        const string path = "api/v1/emergency-calls";
+        var start = new StartEmergencyCall(Guid.NewGuid(), residentHub.ConnectionId);
+        using var denied = await managerApi.PostAsJsonAsync(path, start);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.False(await communication.EmergencyCalls.AnyAsync(call => call.ClientRequestId == start.ClientRequestId));
+        using var accepted = await browser.PostAsJsonAsync(path, start);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        var call = (await accepted.Content.ReadFromJsonAsync<EmergencyCallView>())!;
+        await residentHub.InvokeAsync("MediaConnected", call.Id, call.Revision);
+        await managerHub.InvokeAsync("MediaConnected", call.Id, call.Revision);
+
+        var activePath = path + "/active?connectionId=" + Uri.EscapeDataString(managerHub.ConnectionId!);
+        var connected = (await managerApi.GetFromJsonAsync<EmergencyActiveCall>(activePath))!.Call!;
+        Assert.Equal("CONNECTED", connected.Status);
+        Assert.True(connected.ResidentOnline);
+
+        using var logout = await Post(browser, "logout", new { }, true);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+        await disconnected.WaitAsync(TimeSpan.FromSeconds(2));
+        using var expiredMutation = await browser.PostAsync($"{path}/{call.Id}/end", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, expiredMutation.StatusCode);
+
+        var stopAt = DateTime.UtcNow.AddSeconds(3);
+        EmergencyCallView? afterLogout;
+        do
+        {
+            afterLogout = (await managerApi.GetFromJsonAsync<EmergencyActiveCall>(activePath))!.Call;
+            if (afterLogout?.ResidentOnline != true) break;
+            await Task.Delay(40);
+        } while (DateTime.UtcNow < stopAt);
+        Assert.NotNull(afterLogout);
+        Assert.False(afterLogout.ResidentOnline);
+        Assert.Equal(call.Id, afterLogout.Id);
+        var signal = new EmergencySignal(call.Id, call.Revision, "ice", """{"candidate":"test-candidate"}""");
+        await Assert.ThrowsAsync<HubException>(() => managerHub.InvokeAsync("Signal", signal));
+        using var ended = await managerApi.PostAsync($"{path}/{call.Id}/end", null);
+        Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
+        Assert.Equal("ENDED", (await communication.EmergencyCalls.AsNoTracking().SingleAsync(item => item.Id == call.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Broadcast_crossing_256_connections_drops_a_revoked_session_even_when_invalidation_is_missed()
+    {
+        using var browser = Client();
+        var email = $"batch-revoke-{Guid.NewGuid():N}@example.invalid";
+        await database.SeedResidentAsync(email);
+        var (username, revokedSession) = await RegisterActivateAndLoginAsync(browser, email);
+        using var otherBrowser = Client();
+        using var login = await Post(otherBrowser, "login", new LoginRequest(username, Password), true);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var current = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
+        var connections = Enumerable.Range(0, 257).Select(index => AuthenticationTestSessions.ConnectWebSocket(
+            database.Factory, "notifications", index == 0 ? revokedSession.AccessToken : current.AccessToken)).ToArray();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(35));
+        try
+        {
+            var received = connections.Select(connection =>
+            {
+                var events = System.Threading.Channels.Channel.CreateUnbounded<string>();
+                connection.On<string>("BatchAuditEvent", value => events.Writer.TryWrite(value));
+                return events;
+            }).ToArray();
+            var publisher = database.Factory.Services.GetRequiredService<IHubContext<ResidentNotificationHub>>();
+            foreach (var batch in connections.Take(255).Chunk(32))
+                await Task.WhenAll(batch.Select(connection => connection.StartAsync(timeout.Token)));
+            await VerifyDelivery(255);
+            await connections[255].StartAsync(timeout.Token);
+            await VerifyDelivery(256);
+            await connections[256].StartAsync(timeout.Token);
+            await VerifyDelivery(257);
+
+            var close = AuthenticationTestSessions.WhenClosed(connections[0]);
+            var sid = Guid.Parse(new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler()
+                .ReadJwtToken(revokedSession.AccessToken).Claims.Single(claim => claim.Type == "sid").Value);
+            await using (var scope = database.Factory.Services.CreateAsyncScope())
+            {
+                var store = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+                var token = await store.RefreshTokens.SingleAsync(item => item.SessionId == sid && item.RevokedAt == null, timeout.Token);
+                token.Revoke("audit_missed_event", DateTimeOffset.UtcNow);
+                await store.SaveChangesAsync(timeout.Token);
+            }
+            // The authoritative write deliberately bypasses the post-commit transport notification.
+            await publisher.Clients.All.SendAsync("BatchAuditEvent", "after", timeout.Token);
+            await close.WaitAsync(TimeSpan.FromSeconds(2), timeout.Token);
+            var currentRecipients = await Task.WhenAll(received.Skip(1).Select(queue => queue.Reader.ReadAsync(timeout.Token).AsTask()));
+            Assert.All(currentRecipients, message => Assert.Equal("after", message));
+            Assert.False(received[0].Reader.TryRead(out _));
+            output.WriteLine("255, 256 and 257 sockets / 2 sessions. The active session received 256 events after revocation.");
+
+            async Task VerifyDelivery(int count)
+            {
+                var marker = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                await publisher.Clients.All.SendAsync("BatchAuditEvent", marker, timeout.Token);
+                var messages = await Task.WhenAll(received.Take(count).Select(queue => queue.Reader.ReadAsync(timeout.Token).AsTask()));
+                Assert.All(messages, message => Assert.Equal(marker, message));
+            }
+        }
+        finally
+        {
+            await Task.WhenAll(connections.Select(connection => connection.DisposeAsync().AsTask()));
+        }
     }
 
     [Fact]
@@ -296,7 +550,7 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         var (_, session) = await RegisterActivateAndLoginAsync(client, email);
         var accessToken = Uri.EscapeDataString(session.AccessToken);
 
-        foreach (var hub in new[] { "support-chat", "announcements" })
+        foreach (var hub in new[] { "service-requests", "announcements", "resident-notifications", "notifications", "support-chat", "emergency-calls" })
         {
             using var negotiation = await client.PostAsync($"/hubs/{hub}/negotiate?negotiateVersion=1&access_token={accessToken}", null);
             Assert.Equal(HttpStatusCode.OK, negotiation.StatusCode);
@@ -304,6 +558,38 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
 
         using var profile = await client.GetAsync($"api/v1/auth/me?access_token={accessToken}");
         Assert.Equal(HttpStatusCode.Unauthorized, profile.StatusCode);
+    }
+
+    [Fact]
+    public void All_seven_SignalR_paths_keep_their_endpoint_authorization()
+    {
+        var expected = new (string Route, string Type, string? Role, string? Policy)[]
+        {
+            ("/hubs/maintenance", "MaintenanceHub", null, "maintenance.view"),
+            ("/hubs/service-requests", "ServiceRequestHub", "MANAGER,STAFF,RESIDENT", null),
+            ("/hubs/announcements", "AnnouncementHub", null, "announcements.access"),
+            ("/hubs/resident-notifications", "ResidentNotificationHub", null, null),
+            ("/hubs/notifications", "ResidentNotificationHub", null, null),
+            ("/hubs/support-chat", "SupportChatHub", null, "support-chat.use"),
+            ("/hubs/emergency-calls", "EmergencyCallHub", null, "support-chat.use")
+        };
+        var endpoints = database.Factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.Metadata.GetMetadata<HubMetadata>() is not null &&
+                endpoint.RoutePattern.RawText?.EndsWith("/negotiate", StringComparison.Ordinal) == false)
+            .ToDictionary(endpoint => endpoint.RoutePattern.RawText!, StringComparer.Ordinal);
+
+        Assert.Equal(expected.Select(row => row.Route).Order(StringComparer.Ordinal), endpoints.Keys.Order(StringComparer.Ordinal));
+        foreach (var row in expected)
+        {
+            var endpoint = endpoints[row.Route];
+            Assert.Equal(row.Type, endpoint.Metadata.GetMetadata<HubMetadata>()!.HubType.Name);
+            Assert.Null(endpoint.Metadata.GetMetadata<IAllowAnonymous>());
+            var rules = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
+            Assert.NotEmpty(rules);
+            if (row.Role is not null) Assert.Contains(rules, rule => rule.Roles == row.Role);
+            if (row.Policy is not null) Assert.Contains(rules, rule => rule.Policy == row.Policy);
+        }
     }
 
     private async Task<RegisterRequest> RegistrationRequestAsync(string username, string displayName, string email, string password = Password)
@@ -346,7 +632,7 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         const string phone = "0363602027";
         const string identityType = "CCCD";
         const string identityNumber = "064204010555";
-        await database.SeedRegistrationResidentAsync(email, phone, identityType, identityNumber, currentOwnership: true);
+        var seed = await database.SeedRegistrationResidentAsync(email, phone, identityType, identityNumber, currentOwnership: true);
 
         using var wrongPhone = await Post(client, "register", new
         {
@@ -366,8 +652,28 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         Assert.False(database.Factory.Mail.Codes.ContainsKey(email));
 
         using var scope = database.Factory.Services.CreateScope();
-        Assert.False(await scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>().UserAccounts
-            .AnyAsync(x => x.Username == "wrong_phone_" + token));
+        var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        var residents = scope.ServiceProvider.GetRequiredService<ResidentsDbContext>();
+        var username = "wrong_phone_" + token;
+        Assert.False(await auth.UserAccounts.AnyAsync(row => row.Username == username));
+        Assert.False(await auth.ResidentVerifications.AnyAsync(row => row.ResidentId == seed.ResidentId));
+        var deliveries = database.Factory.Mail.RegistrationDeliveries;
+        var valid = new RegisterRequest(username, "Cư dân đủ điều kiện", email, Password, phone, identityType, identityNumber);
+        using var accepted = await Post(client, "register", valid);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        var challenge = (await accepted.Content.ReadFromJsonAsync<ChallengeResponse>())!;
+        Assert.NotEqual(Guid.Empty, challenge.ChallengeId);
+        var pending = await auth.ResidentVerifications.AsNoTracking().SingleAsync(row => row.Id == challenge.ChallengeId);
+        Assert.Equal(seed.ResidentId, pending.ResidentId);
+        Assert.Equal("PENDING", pending.Status.ToString());
+        Assert.Null(pending.UserId);
+        Assert.Null(await residents.Residents.Where(row => row.Id == seed.ResidentId).Select(row => row.UserId).SingleAsync());
+        Assert.False(await auth.UserAccounts.AnyAsync(row => row.Username == username));
+        Assert.Equal(deliveries + 1, database.Factory.Mail.RegistrationDeliveries);
+        using var duplicate = await Post(client, "register", valid);
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        Assert.Equal(1, await auth.ResidentVerifications.CountAsync(row => row.ResidentId == seed.ResidentId));
+        Assert.Equal(deliveries + 1, database.Factory.Mail.RegistrationDeliveries);
     }
 
     [Theory, Trait("UseCase", "FE-01.1")]
@@ -577,7 +883,7 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         }
         var manager = new AccountResponse(user.Id, user.Username, user.DisplayName, user.Email, null, "ACTIVE", true,
             "MANAGER", [SystemPermissionCodes.ManageOperations, SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange]);
-        var token = database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(manager, DateTimeOffset.UtcNow).AccessToken;
+        var token = (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, manager, DateTimeOffset.UtcNow)).AccessToken;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await client.GetAsync("api/v1/residents?pageIndex=1&pageSize=20");
@@ -644,9 +950,22 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         client.DefaultRequestHeaders.Authorization = null;
         var refresh = await Post(client, "refresh", new { }, true);
         Assert.Equal(HttpStatusCode.OK, refresh.StatusCode);
-        Assert.NotEqual(session.AccessToken, (await refresh.Content.ReadFromJsonAsync<SessionResponse>())!.AccessToken);
+        var rotated = (await refresh.Content.ReadFromJsonAsync<SessionResponse>())!;
+        Assert.NotEqual(session.AccessToken, rotated.AccessToken);
+        using var otherDevice = Client();
+        using var otherLogin = await Post(otherDevice, "login", new LoginRequest(account.Username, Password), true);
+        otherLogin.EnsureSuccessStatusCode();
+        var otherSession = (await otherLogin.Content.ReadFromJsonAsync<SessionResponse>())!;
+
         Assert.Equal(HttpStatusCode.NoContent, (await Post(client, "logout", new { }, true)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { }, true)).StatusCode);
+        foreach (var stale in new[] { session.AccessToken, rotated.AccessToken })
+        {
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", stale);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("api/v1/auth/me")).StatusCode);
+        }
+        otherDevice.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", otherSession.AccessToken);
+        Assert.Equal(HttpStatusCode.OK, (await otherDevice.GetAsync("api/v1/auth/me")).StatusCode);
     }
 
     [Fact, Trait("UseCase", "FE-01.1/FE-01.2/FE-01.3")]
@@ -807,18 +1126,88 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
     [Fact, Trait("UseCase", "FE-01.4/FE-01.5")]
     public async Task Recovery_proof_is_single_use_and_password_changes_revoke_sessions()
     {
-        using var client = Client(); var account = await ActivatedAccount(client);
-        Assert.Equal(HttpStatusCode.OK, (await Post(client, "login", new LoginRequest(account.Username, Password), true)).StatusCode);
-        var forgot = await Post(client, "password/forgot", new ForgotPasswordRequest(account.Email));
-        var challenge = (await forgot.Content.ReadFromJsonAsync<ChallengeResponse>())!;
-        var verify = await Post(client, "password/verify", new VerifyChallengeRequest(challenge.ChallengeId, database.Factory.Mail.Codes[account.Email]));
-        Assert.Equal(HttpStatusCode.OK, verify.StatusCode);
-        var proof = (await verify.Content.ReadFromJsonAsync<ResetProofResponse>())!;
-        var newPassword = "New secure passphrase 456!";
+        using var client = Client();
+        using var secondDevice = Client();
+        using var other = Client();
+        var account = await ActivatedAccount(client);
+        var otherAccount = await ActivatedAccount(other);
+        var current = await SignIn(client, account.Username);
+        var independent = await SignIn(secondDevice, account.Username);
+        var unrelated = await SignIn(other, otherAccount.Username);
+        using var scope = database.Factory.Services.CreateScope();
+        var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        var before = await ReadAccountSecurity(auth, current.User.Id);
+        var otherBefore = await ReadAccountSecurity(auth, unrelated.User.Id);
+        var challenge = await RecoveryChallenge(client, account.Email);
+        var otherChallenge = await RecoveryChallenge(other, otherAccount.Email);
+        var otp = database.Factory.Mail.Codes[account.Email];
+        var wrong = otp == "111111" ? "222222" : "111111";
+        using var wrongOtp = await Post(client, "password/verify", new VerifyChallengeRequest(challenge.ChallengeId, wrong));
+        Assert.Equal(HttpStatusCode.BadRequest, wrongOtp.StatusCode);
+        var failed = await auth.PasswordResetTokens.AsNoTracking().SingleAsync(row => row.Id == challenge.ChallengeId);
+        Assert.Equal(1, failed.AttemptCount);
+        Assert.Null(failed.VerifiedAt);
+        Assert.True(failed.ProofHash is null);
+        try
+        {
+            database.Factory.Clock.Offset = TimeSpan.FromMinutes(6);
+            using var expired = await Post(other, "password/verify",
+                new VerifyChallengeRequest(otherChallenge.ChallengeId, database.Factory.Mail.Codes[otherAccount.Email]));
+            Assert.Equal(HttpStatusCode.BadRequest, expired.StatusCode);
+            var expiredRow = await auth.PasswordResetTokens.AsNoTracking().SingleAsync(row => row.Id == otherChallenge.ChallengeId);
+            Assert.Equal(0, expiredRow.AttemptCount);
+            Assert.True(expiredRow.ProofHash is null);
+        }
+        finally { database.Factory.Clock.Offset = TimeSpan.Zero; }
+        var proof = await VerifyRecovery(client, challenge.ChallengeId, otp);
+        await VerifyRecovery(other, otherChallenge.ChallengeId, database.Factory.Mail.Codes[otherAccount.Email]);
+        using var replayOtp = await Post(client, "password/verify", new VerifyChallengeRequest(challenge.ChallengeId, otp));
+        Assert.Equal(HttpStatusCode.BadRequest, replayOtp.StatusCode);
+        var verified = await auth.PasswordResetTokens.AsNoTracking().SingleAsync(row => row.Id == challenge.ChallengeId);
+        Assert.Equal(current.User.Id, verified.UserId);
+        Assert.Equal(1, verified.AttemptCount);
+        Assert.NotNull(verified.VerifiedAt);
+        Assert.True(verified.ProofHash is not null);
+        const string newPassword = "New secure passphrase 456!";
         var resetRequest = new ResetPasswordRequest(proof.ChallengeId, proof.Proof, newPassword);
-        Assert.Equal(HttpStatusCode.NoContent, (await Post(client, "password/reset", resetRequest, true)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "password/reset", resetRequest, true)).StatusCode);
+        foreach (var invalid in new[] { resetRequest with { Proof = "tampered-" + proof.Proof }, resetRequest with { ChallengeId = otherChallenge.ChallengeId } })
+        {
+            using var denied = await Post(client, "password/reset", invalid, true);
+            Assert.Equal(HttpStatusCode.BadRequest, denied.StatusCode);
+        }
+        try
+        {
+            database.Factory.Clock.Offset = TimeSpan.FromMinutes(6);
+            using var expiredProof = await Post(client, "password/reset", resetRequest, true);
+            Assert.Equal(HttpStatusCode.BadRequest, expiredProof.StatusCode);
+        }
+        finally { database.Factory.Clock.Offset = TimeSpan.Zero; }
+        AssertSameSecurity(before, await ReadAccountSecurity(auth, current.User.Id));
+        AssertSameSecurity(otherBefore, await ReadAccountSecurity(auth, unrelated.User.Id));
+        Assert.False(await auth.PasswordResetTokens.AnyAsync(row =>
+            (row.Id == challenge.ChallengeId || row.Id == otherChallenge.ChallengeId) && row.UsedAt != null));
+        using var concurrent = Client();
+        var outcomes = await Task.WhenAll(Post(client, "password/reset", resetRequest, true), Post(concurrent, "password/reset", resetRequest, true));
+        Assert.Single(outcomes, response => response.StatusCode == HttpStatusCode.NoContent);
+        Assert.Single(outcomes, response => response.StatusCode == HttpStatusCode.BadRequest);
+        foreach (var response in outcomes) response.Dispose();
+        var after = await ReadAccountSecurity(auth, current.User.Id);
+        Assert.True(before.PasswordHash != after.PasswordHash);
+        Assert.Equal(AccountStatus.ACTIVE, after.Status);
+        Assert.Equal(before.Refresh.Length, after.Refresh.Length);
+        Assert.All(after.Refresh, row => Assert.Equal("password_reset", row.RevokedReason));
+        var consumed = await auth.PasswordResetTokens.AsNoTracking().SingleAsync(row => row.Id == challenge.ChallengeId);
+        Assert.NotNull(consumed.UsedAt);
+        using var replayProof = await Post(client, "password/reset", resetRequest, true);
+        Assert.Equal(HttpStatusCode.BadRequest, replayProof.StatusCode);
+        AssertSameSecurity(after, await ReadAccountSecurity(auth, current.User.Id));
+        AssertSameSecurity(otherBefore, await ReadAccountSecurity(auth, unrelated.User.Id));
+        Assert.Equal(consumed.UsedAt, await auth.PasswordResetTokens.Where(row => row.Id == consumed.Id).Select(row => row.UsedAt).SingleAsync());
+        foreach (var priorSession in new[] { current, independent })
+            Assert.Equal(HttpStatusCode.Unauthorized, await BearerStatus(priorSession.AccessToken));
+        Assert.Equal(HttpStatusCode.OK, await BearerStatus(unrelated.AccessToken));
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { }, true)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Post(secondDevice, "refresh", new { }, true)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "login", new LoginRequest(account.Username, Password), true)).StatusCode);
         var loggedIn = await Post(client, "login", new LoginRequest(account.Username, newPassword), true);
         var session = (await loggedIn.Content.ReadFromJsonAsync<SessionResponse>())!;
@@ -994,11 +1383,31 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
     public async Task Rotation_rejects_replay_and_logout_preserves_other_devices()
     {
         using var client = Client(); var account = await ActivatedAccount(client);
-        var login = await Post(client, "login", new LoginRequest(account.Username, Password), true);
+        using var login = await Post(client, "login", new LoginRequest(account.Username, Password), true);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var session = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
         var oldCookie = login.Headers.GetValues("Set-Cookie").Single(x => x.StartsWith("__Secure-PropFlow.Refresh=")).Split(';')[0];
         using var device = Client();
         Assert.Equal(HttpStatusCode.OK, (await Post(device, "login", new LoginRequest(account.Username, Password), true)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Post(client, "refresh", new { }, true)).StatusCode);
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        async Task<(Guid Id, Guid? SessionId, Guid? Successor, DateTimeOffset? RevokedAt)[]> TokenState()
+        {
+            var rows = await store.RefreshTokens.AsNoTracking().Where(row => row.UserId == session.User.Id)
+                .OrderBy(row => row.Id).Select(row => new { row.Id, row.SessionId, row.ReplacedByTokenId, row.RevokedAt }).ToArrayAsync();
+            return rows.Select(row => (row.Id, row.SessionId, row.ReplacedByTokenId, row.RevokedAt)).ToArray();
+        }
+        var initial = await TokenState();
+        using var deniedRefresh = await Post(client, "refresh", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, deniedRefresh.StatusCode);
+        Assert.Equal(initial, await TokenState());
+        using var allowedRefresh = await Post(client, "refresh", new { }, true);
+        Assert.Equal(HttpStatusCode.OK, allowedRefresh.StatusCode);
+        var rotated = await TokenState();
+        var successorId = Assert.Single(rotated, row => row.Successor.HasValue).Successor;
+        var successor = Assert.Single(rotated, row => row.Id == successorId);
+        Assert.Null(successor.RevokedAt);
+        Assert.Equal(initial.Length + 1, rotated.Length);
         using var replay = database.Factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new("https://localhost"), HandleCookies = false });
         var csrf = await replay.GetAsync("api/v1/auth/csrf");
         var token = (await csrf.Content.ReadFromJsonAsync<CsrfResponse>())!.Token;
@@ -1006,9 +1415,78 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         request.Headers.Add("Cookie", oldCookie + "; " + csrf.Headers.GetValues("Set-Cookie").Single(x => x.StartsWith("__Secure-PropFlow.Csrf=")).Split(';')[0]);
         request.Headers.Add("X-CSRF-TOKEN", token);
         Assert.Equal(HttpStatusCode.Unauthorized, (await replay.SendAsync(request)).StatusCode);
+        Assert.Equal(rotated, await TokenState());
+        using var deniedLogout = await Post(client, "logout", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, deniedLogout.StatusCode);
+        Assert.Equal(rotated, await TokenState());
         Assert.Equal(HttpStatusCode.NoContent, (await Post(client, "logout", new { }, true)).StatusCode);
+        var loggedOut = await TokenState();
+        Assert.All(loggedOut.Where(row => row.SessionId == successor.SessionId), row => Assert.NotNull(row.RevokedAt));
+        Assert.Equal(rotated.Where(row => row.SessionId != successor.SessionId),
+            loggedOut.Where(row => row.SessionId != successor.SessionId));
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { }, true)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Post(device, "refresh", new { }, true)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Concurrent_refresh_and_logout_cannot_leave_an_active_successor_for_the_logged_out_session()
+    {
+        using var browser = Client();
+        var account = await ActivatedAccount(browser);
+        using var login = await Post(browser, "login", new LoginRequest(account.Username, Password), true);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var initial = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
+        var refreshCookie = login.Headers.GetValues("Set-Cookie").Single(value =>
+            value.StartsWith("__Secure-PropFlow.Refresh=", StringComparison.Ordinal)).Split(';')[0];
+
+        using var second = Client();
+        using var unrelatedLogin = await Post(second, "login", new LoginRequest(account.Username, Password), true);
+        Assert.Equal(HttpStatusCode.OK, unrelatedLogin.StatusCode);
+        using var parallel = database.Factory.CreateClient(new WebApplicationFactoryClientOptions
+            { BaseAddress = new("https://localhost"), HandleCookies = false });
+        using var csrf = await parallel.GetAsync("api/v1/auth/csrf");
+        var protection = (await csrf.Content.ReadFromJsonAsync<CsrfResponse>())!;
+        var csrfCookie = csrf.Headers.GetValues("Set-Cookie").Single(value =>
+            value.StartsWith("__Secure-PropFlow.Csrf=", StringComparison.Ordinal)).Split(';')[0];
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waiting = 0;
+
+        async Task<HttpResponseMessage> UseSameCookie(string action)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/auth/" + action);
+            request.Headers.Add("Cookie", refreshCookie + "; " + csrfCookie);
+            request.Headers.Add("X-CSRF-TOKEN", protection.Token);
+            if (Interlocked.Increment(ref waiting) == 3) ready.SetResult();
+            await start.Task;
+            return await parallel.SendAsync(request);
+        }
+
+        var firstRefresh = UseSameCookie("refresh");
+        var secondRefresh = UseSameCookie("refresh");
+        var logout = UseSameCookie("logout");
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        start.SetResult();
+        using var loggedOut = await logout;
+        using var refreshA = await firstRefresh;
+        using var refreshB = await secondRefresh;
+        Assert.Equal(HttpStatusCode.NoContent, loggedOut.StatusCode);
+        var results = new[] { refreshA, refreshB };
+        Assert.All(results, result => Assert.Contains(result.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Unauthorized }));
+        Assert.InRange(results.Count(result => result.StatusCode == HttpStatusCode.OK), 0, 1);
+
+        async Task RejectBearer(string bearer)
+        {
+            using var profile = new HttpRequestMessage(HttpMethod.Get, "api/v1/auth/me");
+            profile.Headers.Authorization = new("Bearer", bearer);
+            using var response = await parallel.SendAsync(profile);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+        await RejectBearer(initial.AccessToken);
+        foreach (var rotated in results.Where(result => result.StatusCode == HttpStatusCode.OK))
+            await RejectBearer((await rotated.Content.ReadFromJsonAsync<SessionResponse>())!.AccessToken);
+        using var otherRefresh = await Post(second, "refresh", new { }, true);
+        Assert.Equal(HttpStatusCode.OK, otherRefresh.StatusCode);
     }
 
     [Fact, Trait("UseCase", "FE-01.3")]
@@ -1020,7 +1498,15 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
         var registered = await Post(client, "register", await RegistrationRequestAsync(username, "Kiểm thử hết hạn", email));
         var first = (await registered.Content.ReadFromJsonAsync<ChallengeResponse>())!;
         var firstCode = database.Factory.Mail.Codes[email];
+        using var scope = database.Factory.Services.CreateScope();
+        var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        var deliveries = database.Factory.Mail.RegistrationDeliveries;
+        using var wrong = await Post(client, "registration/resend", new ResumeRegistrationRequest(username, "incorrect password"));
+        Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await Post(client, "registration/resend", new ResumeRegistrationRequest(username, Password))).StatusCode);
+        Assert.Equal(deliveries, database.Factory.Mail.RegistrationDeliveries);
+        Assert.Equal(1, await auth.ResidentVerifications.CountAsync(row => row.RegistrationUsername == username));
+        Assert.Equal("PENDING", (await auth.ResidentVerifications.AsNoTracking().SingleAsync(row => row.Id == first.ChallengeId)).Status.ToString());
         try
         {
             database.Factory.Clock.Offset = TimeSpan.FromSeconds(61);
@@ -1028,12 +1514,16 @@ public sealed class AuthenticationFlowTests(AuthDatabaseFixture database) : ICla
             Assert.Equal(HttpStatusCode.OK, resent.StatusCode);
             var second = (await resent.Content.ReadFromJsonAsync<ChallengeResponse>())!;
             Assert.NotEqual(first.ChallengeId, second.ChallengeId);
+            var generations = await auth.ResidentVerifications.AsNoTracking().Where(row => row.RegistrationUsername == username).ToArrayAsync();
+            Assert.Equal(2, generations.Length);
+            Assert.Equal("CANCELLED", generations.Single(row => row.Id == first.ChallengeId).Status.ToString());
+            Assert.Equal("PENDING", generations.Single(row => row.Id == second.ChallengeId).Status.ToString());
+            Assert.Equal(deliveries + 1, database.Factory.Mail.RegistrationDeliveries);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "registration/verify", new VerifyChallengeRequest(first.ChallengeId, firstCode))).StatusCode);
             database.Factory.Clock.Offset = TimeSpan.FromMinutes(7);
             Assert.Equal(HttpStatusCode.BadRequest, (await Post(client, "registration/verify", new VerifyChallengeRequest(second.ChallengeId, database.Factory.Mail.Codes[email]))).StatusCode);
-            using var scope = database.Factory.Services.CreateScope();
-            Assert.False(await scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>().UserAccounts
-                .AnyAsync(x => x.Username == username || x.Email == email.ToUpperInvariant()));
+            Assert.False(await auth.UserAccounts.AnyAsync(x => x.Username == username || x.Email == email.ToUpperInvariant()));
+            Assert.Equal("EXPIRED", (await auth.ResidentVerifications.AsNoTracking().SingleAsync(row => row.Id == second.ChallengeId)).Status.ToString());
         }
         finally { database.Factory.Clock.Offset = TimeSpan.Zero; }
     }

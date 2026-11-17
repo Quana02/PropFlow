@@ -52,6 +52,12 @@ public sealed class AdministrationActivityTests
         }
     }
 
+    private sealed class Sessions : IAccountSessionRevocation
+    {
+        public Task<T> WithAccountLockAsync<T>(Guid userId, Func<Task<T>> operation, CancellationToken ct) => operation();
+        public Task RevokeAsync(Guid userId, string reason, CancellationToken ct) => Task.CompletedTask;
+    }
+
     private static void Authenticate(AdministrationController controller, Guid actorId) =>
         controller.ControllerContext = new ControllerContext
         {
@@ -68,7 +74,7 @@ public sealed class AdministrationActivityTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         await db.Database.EnsureCreatedAsync();
         var transaction = new Transaction();
-        var controller = new AdministrationController(db, new Directory(), null!, transaction);
+        var controller = new AdministrationController(db, new Directory(), null!, transaction, new Sessions());
         Authenticate(controller, Guid.NewGuid());
 
         await controller.Create(new CreateInternalAccountRequest("staff01", "Nhân viên", "staff01@example.test", "Password123!", SystemRoleCodes.Staff, null), default);
@@ -85,7 +91,7 @@ public sealed class AdministrationActivityTests
         await using var db = new AdministrationDbContext(new DbContextOptionsBuilder<AdministrationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         await db.Database.EnsureCreatedAsync();
-        var controller = new AdministrationController(db, new Directory { RejectCreateAsConflict = true }, null!, new Transaction());
+        var controller = new AdministrationController(db, new Directory { RejectCreateAsConflict = true }, null!, new Transaction(), new Sessions());
         Authenticate(controller, Guid.NewGuid());
 
         var response = await controller.Create(
@@ -106,7 +112,7 @@ public sealed class AdministrationActivityTests
         await using var db = new AdministrationDbContext(new DbContextOptionsBuilder<AdministrationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
         await db.Database.EnsureCreatedAsync();
-        var controller = new AdministrationController(db, new Directory(), null!, new Transaction());
+        var controller = new AdministrationController(db, new Directory(), null!, new Transaction(), new Sessions());
         Authenticate(controller, Guid.NewGuid());
 
         var invalidStatus = Assert.IsType<ObjectResult>(await controller.ChangeStatus(
@@ -140,7 +146,7 @@ public sealed class AdministrationActivityTests
         await db.SaveChangesAsync();
         var controller = new AdministrationController(db,
             new Directory(new InternalAccountRecord(userId, "staff01", "Nhân viên", "staff01@example.test", "ACTIVE")),
-            null!, new Transaction());
+            null!, new Transaction(), new Sessions());
 
         var rolesResponse = await controller.Roles(default);
         var roles = Assert.IsType<RoleAccessResponse[]>(Assert.IsType<OkObjectResult>(rolesResponse.Result).Value);
@@ -170,7 +176,7 @@ public sealed class AdministrationActivityTests
         var controller = new AdministrationController(db, new Directory(
             new InternalAccountRecord(managerId, "manager1", "Quản lý", "manager@example.test", "ACTIVE"),
             new InternalAccountRecord(staffId, "staff1", "Nhân viên", "staff@example.test", "ACTIVE")),
-            null!, new Transaction());
+            null!, new Transaction(), new Sessions());
 
         var response = await controller.List("ALL", null, null, 1, 20, default);
         var result = Assert.IsType<PagedInternalAccountsResponse>(Assert.IsType<OkObjectResult>(response.Result).Value);
@@ -196,7 +202,7 @@ public sealed class AdministrationActivityTests
         var directory = new Directory(
             new(actorId, "admin01", "Quản trị viên", "admin@example.test", "ACTIVE"),
             new(targetId, "manager1", "Quản lý 1", "manager@example.test", "DISABLED"));
-        var controller = new AdministrationController(db, directory, null!, new Transaction());
+        var controller = new AdministrationController(db, directory, null!, new Transaction(), new Sessions());
 
         var response = await controller.Activity(page: 1, pageSize: 2, ct: default);
         var page = Assert.IsType<PagedAdministrationActivitiesResponse>(Assert.IsType<OkObjectResult>(response.Result).Value);
@@ -222,7 +228,7 @@ public sealed class AdministrationActivityTests
         db.AuditLogs.Add(new AuditLog("internal_account_created", "InternalAccount", DateTimeOffset.UtcNow, entityId: Guid.NewGuid(), newValues: "{\"Username\":\"staff01\",\"Role\":\"STAFF\"}"));
         db.AuditLogs.Add(new AuditLog("internal_account_role_changed", "InternalAccount", DateTimeOffset.UtcNow, entityId: Guid.NewGuid(), newValues: "{}"));
         await db.SaveChangesAsync();
-        var controller = new AdministrationController(db, new Directory(), null!, new Transaction());
+        var controller = new AdministrationController(db, new Directory(), null!, new Transaction(), new Sessions());
 
         var response = await controller.Activity("internal_account_created", 1, 20, default);
         var page = Assert.IsType<PagedAdministrationActivitiesResponse>(Assert.IsType<OkObjectResult>(response.Result).Value);

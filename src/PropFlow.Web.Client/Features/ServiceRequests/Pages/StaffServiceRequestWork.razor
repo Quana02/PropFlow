@@ -379,7 +379,7 @@ else
     {
         detail = value;
         var latestResult = LatestWorkResult();
-        var latestRework = Activities.FirstOrDefault(x => x.ActivityType == "REWORK_REQUESTED");
+        var latestRework = Activities.FirstOrDefault(x => x.IsFromCurrentAssignment && x.ActivityType == "REWORK_REQUESTED");
         var hasPendingResult = latestResult is not null && (latestRework is null || latestResult.CreatedAt > latestRework.CreatedAt);
         currentStep = value.Status switch
         {
@@ -393,7 +393,7 @@ else
     }
 
     private PropFlow.Modules.ServiceRequests.Contracts.StaffServiceRequestActivityItem? LatestWorkResult() =>
-        Activities.Where(x => x.ActivityType == "WORK_RESULT_ADDED").OrderByDescending(x => x.CreatedAt).FirstOrDefault();
+        Activities.FirstOrDefault(x => x.IsFromCurrentAssignment && x.ActivityType == "WORK_RESULT_ADDED");
     private static string ActivityLabel(string type) => type switch { "ASSIGNED" => "Được phân công", "STATUS_CHANGED" => "Thay đổi trạng thái", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Hoàn thành công việc", "REWORK_REQUESTED" => "Yêu cầu xử lý lại", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng yêu cầu", _ => type };
     private static string FormatBytes(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{bytes / 1024d:0.##} KB";
 }

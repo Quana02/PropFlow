@@ -309,6 +309,8 @@ Table administration.user_role_assignments {
 // Authorization is role/permission based; there is no per-building access scope.
 
 Table auth.refresh_tokens {
+  session_id uuid
+  access_fingerprint varchar(64)
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > auth.users.id]
   token_hash text [not null, unique]

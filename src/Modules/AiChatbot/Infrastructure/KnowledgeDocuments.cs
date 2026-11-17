@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.AiChatbot.Application;
@@ -20,8 +21,9 @@ public sealed class KnowledgeDocuments(AiChatbotDbContext db, IChatAi? ai = null
             equals new { Id = r.DocumentId, r.Number }
         select new VisibleRevision { Document = d, Revision = r };
 
-    private static KnowledgeDocumentSummary Summary(VisibleRevision row) => new(row.Document.Id, row.Revision.Title,
-        row.Revision.Audience, row.Revision.Number, row.Document.PublishedRevision, row.Document.Token, row.Document.UpdatedAt);
+    private static Expression<Func<VisibleRevision, KnowledgeDocumentSummary>> Summary(bool manage) => row =>
+        new(row.Document.Id, row.Revision.Title, row.Revision.Audience, row.Revision.Number, row.Document.PublishedRevision,
+            manage ? row.Document.Token : Guid.Empty, manage ? row.Document.UpdatedAt : row.Revision.CreatedAt);
 
     public async Task<KnowledgeDocumentPage> ListAsync(bool manage, string? search, int page, CancellationToken ct)
     {
@@ -33,17 +35,15 @@ public sealed class KnowledgeDocuments(AiChatbotDbContext db, IChatAi? ai = null
             query = query.Where(x => x.Revision.Title.ToLower().Contains(term));
         }
         var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.Document.UpdatedAt).ThenBy(x => x.Document.Id).Skip((page - 1) * 12).Take(12)
-            .Select(x => new KnowledgeDocumentSummary(x.Document.Id, x.Revision.Title, x.Revision.Audience, x.Revision.Number,
-                x.Document.PublishedRevision, x.Document.Token, x.Document.UpdatedAt)).ToArrayAsync(ct);
+        var items = await query.OrderByDescending(x => manage ? x.Document.UpdatedAt : x.Revision.CreatedAt)
+            .ThenBy(x => x.Document.Id).Skip((page - 1) * 12).Take(12).Select(Summary(manage)).ToArrayAsync(ct);
         return new(items, total, page, 12);
     }
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid id, bool manage, CancellationToken ct)
     {
-        var row = await Visible(manage).SingleOrDefaultAsync(x => x.Document.Id == id, ct);
-        if (row is null) return null;
-        var summary = Summary(row);
+        var summary = await Visible(manage).Where(x => x.Document.Id == id).Select(Summary(manage)).SingleOrDefaultAsync(ct);
+        if (summary is null) return null;
         var revisions = db.Revisions.AsNoTracking().Where(x => x.DocumentId == id);
         // Staff never receives draft text or draft history, even when guessing an ID.
         if (!manage) revisions = revisions.Where(x => x.Number == summary.Revision);

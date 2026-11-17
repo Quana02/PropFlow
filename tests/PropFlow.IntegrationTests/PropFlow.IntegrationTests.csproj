@@ -37,4 +37,8 @@
     <ProjectReference Include="..\..\src\Modules\Communication\PropFlow.Modules.Communication.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/TestDatabaseSafety.cs" Link="TestDatabaseSafety.cs" />
+    <Using Include="PropFlow.Testing" />
+  </ItemGroup>
 </Project>

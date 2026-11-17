@@ -38,8 +38,25 @@ public sealed class ServiceRequestCostNoticeDispatcher(ServiceRequestsDbContext 
                     }
                     else
                     {
-                        await delivery.PublishAssignmentAsync(item, change.SenderUserId, change.RecipientUserId!.Value,
-                            "SERVICE_REQUEST", $"/staff/service-requests/{Uri.EscapeDataString(change.RequestNumber)}", ct);
+                        var recipient = change.RecipientUserId
+                            ?? throw new InvalidOperationException("Assignment notice has no recipient.");
+                        // Lock the active assignment so a concurrent reassignment cannot end it during delivery.
+                        var activeAssignment = await db.ServiceRequestAssignments.FromSqlInterpolated($"""
+                            SELECT * FROM service_requests.service_request_assignments
+                            WHERE service_request_id = {item.SourceId} AND staff_user_id = {recipient}
+                              AND status IN ('ASSIGNED', 'IN_PROGRESS')
+                            FOR UPDATE
+                            """).AsNoTracking().SingleOrDefaultAsync(ct);
+                        if (activeAssignment is not null && (change.AssignmentId is { } id
+                                ? activeAssignment.Id == id
+                                : activeAssignment.AssignedAt == item.CreatedAt &&
+                                  !await db.ServiceRequestAssignments.AnyAsync(assignment =>
+                                      assignment.ServiceRequestId == item.SourceId &&
+                                      assignment.StaffUserId == recipient &&
+                                      assignment.AssignedAt == item.CreatedAt &&
+                                      assignment.Id != activeAssignment.Id, ct)))
+                            await delivery.PublishAssignmentAsync(item, change.SenderUserId, recipient,
+                                "SERVICE_REQUEST", $"/staff/service-requests/{Uri.EscapeDataString(change.RequestNumber)}", ct);
                     }
                     item.Delivered(clock.GetUtcNow());
                     continue;

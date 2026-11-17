@@ -36,6 +36,7 @@ public static class AuthRegistration
         services.AddSingleton<IAuthEmail>(sp => sp.GetRequiredService<AuthEmailQueue>());
         services.AddHostedService(sp => sp.GetRequiredService<AuthEmailQueue>());
         services.AddScoped<IAuthStore, AuthStore>();
+        services.AddScoped<IAccountSessionRevocation, AccountSessionRevocation>();
         services.AddScoped<IInternalAccountDirectory, InternalAccountDirectory>();
         services.AddScoped<IAuditActorLookup, InternalAccountDirectory>();
         services.AddScoped<IPrivilegedActionOtp, PrivilegedActionOtp>();
@@ -72,6 +73,7 @@ public static class AuthRegistration
             options.Cookie.SameSite = policy.CrossSiteCookie ? SameSiteMode.None : SameSiteMode.Strict;
         });
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+        services.AddScoped<IAccessSessionReader, AccessSessionReader>();
         services.AddScoped<AccessTokenStateValidator>();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme).Configure<AuthSecrets, AuthPolicy>((options, crypto, policy) =>
         {

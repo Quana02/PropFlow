@@ -9,7 +9,9 @@ const [browser, fixtureDirectory, screenshotDirectory] = process.argv.slice(2);
 assert.ok(browser && fixtureDirectory, 'Usage: node scripts/test-confirmation-dialog.mjs <Chrome executable> <rendered fixture directory> [screenshot directory]');
 
 const source = new URL('../src/PropFlow.Web.Client/Shared/Feedback/', import.meta.url);
-const stylesheet = await readFile(new URL('../src/PropFlow.Web.Client/obj/Debug/net8.0/scopedcss/Shared/Feedback/PropFlowConfirmationDialog.razor.rz.scp.css', import.meta.url), 'utf8');
+const styledFixture = process.env.PROPFLOW_DIALOG_SCOPED_CSS ??
+    new URL('../src/PropFlow.Web.Client/obj/Debug/net8.0/scopedcss/Shared/Feedback/PropFlowConfirmationDialog.razor.rz.scp.css', import.meta.url);
+const stylesheet = await readFile(styledFixture, 'utf8');
 const module = await readFile(new URL('PropFlowConfirmationDialog.razor.js', source), 'utf8');
 const tones = ['confirm', 'danger', 'info', 'decision'];
 const markup = await Promise.all(tones.map(tone => readFile(join(fixtureDirectory, tone + '.html'), 'utf8')));
@@ -182,10 +184,11 @@ try {
         document.body.append(shell);
         shell.append(document.querySelector('[data-tone=confirm]'));
     `);
+    await evaluate('document.documentElement.dataset.theme = "light"');
     await open('confirm');
-    assert.equal((await evaluate('snapshot()')).surface, 'rgb(255, 255, 255)', 'The internal shell controls its own light theme');
-    await evaluate('dialog.parentElement.classList.add("app-shell-dark")');
-    assert.equal((await evaluate('snapshot()')).surface, 'rgb(19, 34, 56)', 'An open dialog follows the shell theme toggle');
+    assert.equal((await evaluate('snapshot()')).surface, 'rgb(255, 255, 255)', 'The internal dialog uses the light document theme');
+    await evaluate('document.documentElement.dataset.theme = "dark"');
+    assert.equal((await evaluate('snapshot()')).surface, 'rgb(19, 34, 56)', 'An open dialog follows the document theme');
     await evaluate('handle.close()');
     console.log('PASS: 4 variants × 5 viewport widths × 2 themes, keyboard focus, backdrop, Escape, and focus return. Chrome PID ' + processHandle.pid);
 } finally {

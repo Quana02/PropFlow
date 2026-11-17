@@ -28,8 +28,7 @@ public sealed class AdditionalCostConsentService(ServiceRequestsDbContext db, IR
         if (input.Amount <= 0 || input.Amount >= 1000000000000000000m || input.Amount != decimal.Round(input.Amount) ||
             string.IsNullOrWhiteSpace(input.Note) || input.Note.Trim().Length > 1000)
             throw new ServiceRequestCostFailure(400, "invalid_additional_cost", "Nhập số tiền VND nguyên dương và lý do phát sinh tối đa 1000 ký tự.");
-        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
-        await LockAsync(id, ct);
+        await using var tx = await db.BeginWorkflowMutationAsync(id, ct);
         var request = await db.ServiceRequests.Include(x => x.Assignments).Include(x => x.Activities)
             .SingleOrDefaultAsync(x => x.Id == id && x.Assignments.Any(a => a.StaffUserId == staffId && (a.Status == PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments.AssignmentStatus.ASSIGNED || a.Status == PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments.AssignmentStatus.IN_PROGRESS)), ct);
         if (request is null) throw Missing();
@@ -37,8 +36,8 @@ public sealed class AdditionalCostConsentService(ServiceRequestsDbContext db, IR
             throw new ServiceRequestCostFailure(400, "common_area_not_chargeable", "Công việc tại khu vực chung của chung cư không thu phí cư dân.");
         var assignment = request.Assignments.SingleOrDefault(a => a.StaffUserId == staffId && a.IsActive);
         if (assignment is null) throw Missing();
-        var result = request.Activities.Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED).MaxBy(x => x.CreatedAt);
-        var rework = request.Activities.Where(x => x.ActivityType == ServiceActivityType.REWORK_REQUESTED).MaxBy(x => x.CreatedAt);
+        var result = request.Activities.Where(x => x.AssignmentId == assignment.Id && x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED).MaxBy(x => x.CreatedAt);
+        var rework = request.Activities.Where(x => x.AssignmentId == assignment.Id && x.ActivityType == ServiceActivityType.REWORK_REQUESTED).MaxBy(x => x.CreatedAt);
         if (request.Status != ServiceRequestStatus.IN_PROGRESS || assignment.Status != AssignmentStatus.IN_PROGRESS || request.AdditionalCostProposalId != input.ExpectedProposalId ||
             result is not null && (rework is null || result.CreatedAt > rework.CreatedAt)) throw Conflict();
         if (request.BaseServiceCost + input.Amount >= 1000000000000000000m)
@@ -63,8 +62,7 @@ public sealed class AdditionalCostConsentService(ServiceRequestsDbContext db, IR
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
         var residence = await residences.FindActiveAsync(userId, today, ct);
         if (residence is null) throw new ServiceRequestCostFailure(403, "active_residence_not_found", "Tài khoản chưa được liên kết với căn hộ đang cư trú.");
-        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
-        await LockAsync(id, ct);
+        await using var tx = await db.BeginWorkflowMutationAsync(id, ct);
         var request = await db.ServiceRequests.Include(x => x.Assignments)
             .SingleOrDefaultAsync(x => x.Id == id && x.ResidentId == residence.ResidentId, ct);
         if (request is null) throw Missing();
@@ -89,8 +87,6 @@ public sealed class AdditionalCostConsentService(ServiceRequestsDbContext db, IR
     public static AdditionalCostConsentView? View(ServiceRequest request) => request.AdditionalCostProposalId is { } id
         ? new(id, request.ProposedAdditionalCost, request.AdditionalCostNote, request.AdditionalCostConsentStatus,
             request.AdditionalCostProposedAt, request.AdditionalCostRespondedAt) : null;
-    private Task LockAsync(Guid id, CancellationToken ct) => db.Database.IsNpgsql()
-        ? db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({id.ToString()}, 5))", ct) : Task.CompletedTask;
     private async Task SaveAsync(CancellationToken ct)
     {
         try { await db.SaveChangesAsync(ct); }

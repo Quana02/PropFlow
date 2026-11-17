@@ -130,7 +130,7 @@
 .page-jump-actions .page-jump-submit { background: #075eb4; border-color: #075eb4; color: #fff; }
 .page-jump-actions .page-jump-submit:hover:not(:disabled) { background: #074e95; }
 
-.table-footer:is(.app-shell-dark *, html.dark :not(.app-shell *), html[data-theme="dark"] :not(.app-shell *)) {
+:where(html[data-theme="dark"]) .table-footer {
     --app-surface: #17283e;
     --app-text: #eff6ff;
     --app-muted: #b1c5db;
@@ -139,7 +139,7 @@
     color-scheme: dark;
 }
 
-.table-footer:is(.app-shell-dark *, html.dark :not(.app-shell *), html[data-theme="dark"] :not(.app-shell *)) .page-jump-error {
+:where(html[data-theme="dark"]) .table-footer .page-jump-error {
     color: #ffadb6;
 }
 

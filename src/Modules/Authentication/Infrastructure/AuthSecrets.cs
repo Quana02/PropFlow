@@ -84,7 +84,7 @@ public sealed class AuthSecrets : IAuthSecrets, IDisposable
         if (separator <= 0) return false;
         return IsOtpBoundTo(hash, binding) && MatchesOtp(code, hash[(separator + 1)..]);
     }
-    public SessionResponse Issue(AccountResponse user, DateTimeOffset now)
+    public SessionResponse Issue(AccountResponse user, DateTimeOffset now, Guid? sessionId = null)
     {
         var expires = now.AddMinutes(policy.AccessMinutes);
         var claims = new List<Claim>
@@ -92,6 +92,7 @@ public sealed class AuthSecrets : IAuthSecrets, IDisposable
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()), new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new("name", user.DisplayName), new("role", user.Role)
         };
+        if (sessionId is Guid sid) claims.Add(new Claim("sid", sid.ToString()));
         claims.AddRange(user.Permissions.Select(x => new Claim("permission", x)));
         if (user.Email is { } accountEmail) claims.Add(new Claim("email", accountEmail));
         var jwt = new JwtSecurityToken(policy.Issuer, policy.Audience, claims, now.UtcDateTime, expires.UtcDateTime,

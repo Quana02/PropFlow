@@ -24,10 +24,12 @@ public sealed class ComplaintCommunicationPostgresTests
         var configuration = new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString()) { Database = "postgres" };
         await using var admin = new NpgsqlConnection(configuration.ConnectionString);
         await admin.OpenAsync();
-        await using (var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", admin)) await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(admin, database);
         try
         {
             configuration.Database = database;
+            await TestDatabaseSafety.VerifyFixtureAsync(configuration.ConnectionString, database, TestDatabaseSafety.ProcessOwner,
+                TestDatabaseConfiguration.GetConnectionString());
             await using var connection = new NpgsqlConnection(configuration.ConnectionString);
             var complaintOptions = new DbContextOptionsBuilder<ComplaintsDbContext>().UseNpgsql(connection).Options;
             var communicationOptions = new DbContextOptionsBuilder<CommunicationDbContext>().UseNpgsql(connection).Options;
@@ -105,13 +107,13 @@ public sealed class ComplaintCommunicationPostgresTests
         finally
         {
             NpgsqlConnection.ClearAllPools();
-            await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE)", admin);
-            await drop.ExecuteNonQueryAsync();
+            await TestDatabaseSafety.DropAsync(admin, database);
         }
     }
 
     private sealed class RealtimeProbe(string connectionString) : IFinanceNotificationRealtime
     {
+        public Task ReadStateChangedAsync(Guid recipientUserId, CancellationToken ct) => Task.CompletedTask;
         public List<(Guid Recipient, FinanceNotificationUpdate Notice, bool Committed)> Deliveries { get; } = [];
 
         public async Task CreatedAsync(Guid recipientUserId, FinanceNotificationUpdate notice, CancellationToken ct)

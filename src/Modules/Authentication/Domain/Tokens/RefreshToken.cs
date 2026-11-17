@@ -16,7 +16,9 @@ public class RefreshToken
         DateTimeOffset now,
         string? deviceName = null,
         string? ipAddress = null,
-        string? userAgent = null)
+        string? userAgent = null,
+        Guid? sessionId = null,
+        string? accessFingerprint = null)
     {
         if (userId == Guid.Empty)
         {
@@ -26,6 +28,8 @@ public class RefreshToken
         ArgumentException.ThrowIfNullOrWhiteSpace(tokenHash);
 
         Id = Guid.NewGuid();
+        SessionId = sessionId ?? Id;
+        AccessFingerprint = accessFingerprint;
         UserId = userId;
         TokenHash = tokenHash;
         ExpiresAt = expiresAt;
@@ -40,6 +44,8 @@ public class RefreshToken
 
     public Guid Id { get; private set; }
     public Guid UserId { get; private set; }
+    public Guid? SessionId { get; private set; }
+    public string? AccessFingerprint { get; private set; }
     public string TokenHash { get; private set; } = null!;
     public string? DeviceName { get; private set; }
     public string? IpAddress { get; private set; }

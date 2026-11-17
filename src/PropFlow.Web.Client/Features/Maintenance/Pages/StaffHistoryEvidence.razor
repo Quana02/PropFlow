@@ -1,0 +1,54 @@
+@using PropFlow.Web.Client.Features.Maintenance.Models
+@using PropFlow.Web.Client.Features.Maintenance.Services
+@inject IMaintenanceApiClient Api
+@implements IDisposable
+
+@if (imageUrl is not null)
+{
+    <img src="@imageUrl" alt="@Attachment.OriginalFileName" class="smt-history-evidence" />
+}
+else
+{
+    <button type="button" class="smt-detail-btn" disabled="@loading" @onclick="LoadAsync">
+        @(loading ? "Đang tải ảnh…" : $"Xem ảnh {Attachment.OriginalFileName}")
+    </button>
+    @if (error is not null)
+    {
+        <p role="status">@error</p>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid TaskId { get; set; }
+    [Parameter, EditorRequired] public Guid ResultId { get; set; }
+    [Parameter, EditorRequired] public MaintenanceResultAttachmentModel Attachment { get; set; } = default!;
+
+    private readonly CancellationTokenSource cancellation = new();
+    private string? imageUrl;
+    private string? error;
+    private bool loading;
+
+    private async Task LoadAsync()
+    {
+        var token = cancellation.Token;
+        loading = true;
+        error = null;
+        try
+        {
+            var response = await Api.MyResultAttachmentAsync(TaskId, ResultId, Attachment.Id, token);
+            if (token.IsCancellationRequested) return;
+            if (response.IsSuccess && response.Data is { } bytes)
+                imageUrl = $"data:{Attachment.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            else
+                error = response.Message ?? "Không thể tải ảnh minh chứng.";
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally { loading = false; }
+    }
+
+    public void Dispose()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+}

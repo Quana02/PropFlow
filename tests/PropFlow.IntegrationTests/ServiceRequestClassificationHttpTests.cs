@@ -127,7 +127,15 @@ public sealed class ServiceRequestClassificationHttpTests(AuthDatabaseFixture da
             services.AddScoped<IResidentResidenceSource>(_ => new SubmissionResidence(actor, new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())))));
         using var resident = Client(factory, "RESIDENT", "", actor);
         const string path = "/api/v1/resident/service-requests/draft-check";
-        using var checkedDraft = await resident.PostAsJsonAsync(path, new CheckResidentServiceRequestDraft("Tôi muốn đăng ký người viếng thăm"));
+        var draft = new CheckResidentServiceRequestDraft("Tôi muốn đăng ký người viếng thăm");
+        using var outsider = Client(factory, "RESIDENT", "", Guid.NewGuid());
+        using var denied = await outsider.PostAsJsonAsync(path, draft);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        using var manager = Client(factory, "MANAGER", "MANAGE_OPERATIONS", Guid.NewGuid());
+        using var wrongRole = await manager.PostAsJsonAsync(path, draft);
+        Assert.Equal(HttpStatusCode.Forbidden, wrongRole.StatusCode);
+        Assert.Equal(0, provider.Calls);
+        using var checkedDraft = await resident.PostAsJsonAsync(path, draft);
         var review = await Read<ResidentServiceRequestDraftReview>(checkedDraft);
         Assert.True(review.Available);
         Assert.Contains(review.MissingInformation, x => x.Code == "visitor_name");
@@ -135,12 +143,6 @@ public sealed class ServiceRequestClassificationHttpTests(AuthDatabaseFixture da
         Assert.Null(review.PreferredDate);
         Assert.Null(review.PreferredTimeCode);
         Assert.DoesNotContain(review.MissingInformation, x => x.Code == "vehicle_plate");
-        using var outsider = Client(factory, "RESIDENT", "", Guid.NewGuid());
-        using var denied = await outsider.PostAsJsonAsync(path, new CheckResidentServiceRequestDraft("Tôi muốn đăng ký xe"));
-        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
-        using var manager = Client(factory, "MANAGER", "MANAGE_OPERATIONS", Guid.NewGuid());
-        using var wrongRole = await manager.PostAsJsonAsync(path, new CheckResidentServiceRequestDraft("Tôi muốn đăng ký xe"));
-        Assert.Equal(HttpStatusCode.Forbidden, wrongRole.StatusCode);
         Assert.Equal(1, provider.Calls);
         provider.Status = HttpStatusCode.TooManyRequests;
         using var unavailable = await resident.PostAsJsonAsync(path, new CheckResidentServiceRequestDraft("Tôi muốn đăng ký xe"));
@@ -168,7 +170,17 @@ public sealed class ServiceRequestClassificationHttpTests(AuthDatabaseFixture da
 
         using var client = Client(factory, "RESIDENT", "", userId);
         const string description = "Vòi nước trong bếp bị rò từ sáng nay, nhờ kiểm tra giúp tôi.";
-        using var submitted = await client.PostAsJsonAsync("/api/v1/resident/service-requests", new { description });
+        const string path = "/api/v1/resident/service-requests";
+        await using var snapshot = factory.Services.CreateAsyncScope();
+        var requests = snapshot.ServiceProvider.GetRequiredService<ServiceRequestsDbContext>();
+        var classifications = snapshot.ServiceProvider.GetRequiredService<AiClassificationDbContext>();
+        var countBefore = await requests.ServiceRequests.CountAsync();
+        using var otherResident = Client(factory, "RESIDENT", "", Guid.NewGuid());
+        using var deniedSubmission = await otherResident.PostAsJsonAsync(path, new { description });
+        Assert.Equal(HttpStatusCode.Forbidden, deniedSubmission.StatusCode);
+        Assert.Equal(countBefore, await requests.ServiceRequests.CountAsync());
+        Assert.Equal(0, provider.Calls);
+        using var submitted = await client.PostAsJsonAsync(path, new { description });
         Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
         var created = await Read<ResidentServiceRequestCreatedResponse>(submitted);
         using (var scope = factory.Services.CreateScope())
@@ -184,8 +196,15 @@ public sealed class ServiceRequestClassificationHttpTests(AuthDatabaseFixture da
         }
         Assert.Equal(0, provider.Calls);
         using var manager = Client(factory, "MANAGER", "MANAGE_OPERATIONS", Guid.NewGuid());
-        using var analyzed = await manager.PostAsync($"/api/v1/manager/service-requests/{created.Id}/classification", null);
+        var classificationPath = $"/api/v1/manager/service-requests/{created.Id}/classification";
+        var classificationsBefore = await classifications.AiRequestClassifications.CountAsync();
+        using var deniedClassification = await client.PostAsync(classificationPath, null);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedClassification.StatusCode);
+        Assert.Equal(0, provider.Calls);
+        Assert.Equal(classificationsBefore, await classifications.AiRequestClassifications.CountAsync());
+        using var analyzed = await manager.PostAsync(classificationPath, null);
         Assert.Equal("SUCCESS", (await View(analyzed)).Suggestion!.Status);
+        Assert.Equal(classificationsBefore + 1, await classifications.AiRequestClassifications.CountAsync());
     }
 
     private sealed class SubmissionResidence(Guid userId, ActiveResidentResidence residence) : IResidentResidenceSource

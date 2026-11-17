@@ -1,14 +1,9 @@
-window.currentTheme = document.documentElement.classList.contains("dark") ? "dark" : "light";
 window.currentScreen = "login"; // "login" | "register" | "forgot"
 
 window.syncPublicTheme = function() {
-    const isDark = document.documentElement.classList.contains("dark");
-    window.currentTheme = isDark ? "dark" : "light";
-    const body = document.getElementById("app-body") || document.body;
+    const isDark = document.documentElement.dataset.theme === "dark";
     const themeIcon = document.getElementById("theme-icon");
     const themeLabel = document.getElementById("theme-label");
-    body.style.backgroundColor = isDark ? "#06090e" : "#f8f9ff";
-    body.style.color = isDark ? "#e2e8f0" : "#0f172a";
     if (themeIcon) themeIcon.textContent = isDark ? "☀️" : "🌙";
     if (themeLabel) themeLabel.textContent = isDark ? "CHẾ ĐỘ SÁNG" : "CHẾ ĐỘ TỐI";
 };
@@ -253,7 +248,7 @@ window.initLandingPage = function() {
     });
 
     // If initial theme is already dark due to previous navigation
-    if (window.currentTheme === "dark") {
+    if (document.documentElement.dataset.theme === "dark") {
         window.updateThreeJsTheme("dark");
     }
 };
@@ -283,49 +278,17 @@ window.updateThreeJsTheme = function(theme) {
     }
 };
 
-// --- THEME TOGGLE (LIGHT / DARK) ---
-window.toggleTheme = function() {
-    const html = document.documentElement;
-    const body = document.getElementById("app-body") || document.body;
-    const themeIcon = document.getElementById("theme-icon");
-    const themeLabel = document.getElementById("theme-label");
-    const ambientLight = document.getElementById("ambient-light-glows");
-    const ambientDark = document.getElementById("ambient-dark-glows");
-
-    const nextTheme = html.classList.contains("dark") ? "light" : "dark";
-    const isDark = nextTheme === "dark";
-    window.currentTheme = nextTheme;
-    html.classList.toggle("dark", isDark);
-    html.classList.toggle("light", !isDark);
-    html.dataset.theme = nextTheme;
-    try { localStorage.setItem("propflow-theme", nextTheme); } catch { }
+window.addEventListener("propflow:themechange", () => {
     window.syncPublicTheme();
-
-    if (isDark) {
-        body.style.backgroundColor = "#06090e";
-        body.style.color = "#e2e8f0";
-
-        if (themeIcon) themeIcon.textContent = "☀️";
-        if (themeLabel) themeLabel.textContent = "CHẾ ĐỘ SÁNG";
-
-        if (ambientLight) ambientLight.classList.replace("opacity-100", "opacity-0");
-        if (ambientDark) ambientDark.classList.replace("opacity-0", "opacity-100");
-
-        window.updateThreeJsTheme?.("dark");
-    } else {
-        body.style.backgroundColor = "#f8f9ff";
-        body.style.color = "#0f172a";
-
-        if (themeIcon) themeIcon.textContent = "🌙";
-        if (themeLabel) themeLabel.textContent = "CHẾ ĐỘ TỐI";
-
-        if (ambientDark) ambientDark.classList.replace("opacity-100", "opacity-0");
-        if (ambientLight) ambientLight.classList.replace("opacity-0", "opacity-100");
-
-        window.updateThreeJsTheme?.("light");
+    const isDark = document.documentElement.dataset.theme === "dark";
+    for (const [id, visible] of [["ambient-light-glows", !isDark], ["ambient-dark-glows", isDark]]) {
+        const element = document.getElementById(id);
+        element?.classList.toggle("opacity-100", visible);
+        element?.classList.toggle("opacity-0", !visible);
     }
+    window.updateThreeJsTheme?.(isDark ? "dark" : "light");
     window.propflowUpdateTheme?.(isDark);
-};
+});
 
 window.focusOtpInput = function(index) {
     document.getElementById(`otp-digit-${index}`)?.focus();

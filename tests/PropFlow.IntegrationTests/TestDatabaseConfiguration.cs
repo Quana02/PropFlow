@@ -1,12 +1,11 @@
 using Microsoft.Extensions.Configuration;
-using Npgsql;
 
 namespace PropFlow.IntegrationTests;
 
 internal static class TestDatabaseConfiguration
 {
     private const string ApiUserSecretsId = "adbac45b-651b-498f-a797-12585846625f";
-    private const string TestDatabase = "propflow_test";
+    private const string TestDatabase = TestDatabaseSafety.DedicatedName;
 
     public static string GetExpectedDatabaseName()
     {
@@ -27,16 +26,9 @@ internal static class TestDatabaseConfiguration
             .AddEnvironmentVariables()
             .Build();
 
-        var dedicatedTestConnection = configuration.GetConnectionString("PropFlowTestDatabase");
-        var sourceConnection = dedicatedTestConnection ?? configuration.GetConnectionString("PropFlowDatabase")
-            ?? throw new InvalidOperationException(
-                "Configure ConnectionStrings:PropFlowTestDatabase hoặc ConnectionStrings:PropFlowDatabase trong API User Secrets/environment.");
-
-        var builder = new NpgsqlConnectionStringBuilder(sourceConnection)
-        {
-            Database = GetExpectedDatabaseName()
-        };
-
+        var builder = TestDatabaseSafety.Dedicated(configuration.GetConnectionString("PropFlowTestDatabase"));
+        TestDatabaseSafety.RequireName(builder.Database, GetExpectedDatabaseName());
+        TestDatabaseSafety.RejectApplicationDatabase(builder, configuration.GetConnectionString("PropFlowDatabase"));
         return builder.ConnectionString;
     }
 }

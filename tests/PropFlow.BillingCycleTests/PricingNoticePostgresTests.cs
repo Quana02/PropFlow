@@ -82,7 +82,8 @@ public sealed partial class BillingCyclePostgresTests
         }
         Assert.Equal(4, await c.Notifications.CountAsync());
         Assert.Equal(4, realtime.Created.Count);
-        var controller = new PropFlow.Modules.Communication.Presentation.ResidentNotificationsController(c) {
+        var controller = new PropFlow.Modules.Communication.Presentation.ResidentNotificationsController(c, realtime,
+            NullLogger<PropFlow.Modules.Communication.Presentation.ResidentNotificationsController>.Instance) {
             ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext {
                 User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
                     [new System.Security.Claims.Claim("sub", first.Id.ToString())], "test")) } }
@@ -161,6 +162,7 @@ public sealed partial class BillingCyclePostgresTests
     }
     private sealed class CapturePricingRealtime : IFinanceNotificationRealtime
     {
+        public Task ReadStateChangedAsync(Guid recipientUserId, CancellationToken ct) => Task.CompletedTask;
         public List<FinanceNotificationUpdate> Created { get; } = [];
         public Task CreatedAsync(Guid recipientUserId, FinanceNotificationUpdate notice, CancellationToken ct) {
             Created.Add(notice); return Task.CompletedTask;

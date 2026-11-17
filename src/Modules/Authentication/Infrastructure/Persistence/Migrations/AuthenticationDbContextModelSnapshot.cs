@@ -263,6 +263,11 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AccessFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("access_fingerprint");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -301,6 +306,10 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("token_hash");
 
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
                     b.Property<string>("UserAgent")
                         .HasColumnType("text")
                         .HasColumnName("user_agent");
@@ -319,6 +328,9 @@ namespace PropFlow.Modules.Authentication.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "SessionId")
+                        .HasFilter("revoked_at IS NULL AND session_id IS NOT NULL");
 
                     b.ToTable("refresh_tokens", "auth");
                 });

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
@@ -36,7 +37,7 @@ public sealed class InternalAccountManagementHttpTests(AuthDatabaseFixture datab
         var account = new AccountResponse(user.Id, user.Username, user.DisplayName, null, null, "ACTIVE", true, role,
             businessRole.RolePermissions.Select(x => x.Permission.Code).ToArray());
         var client = database.Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secrets.Issue(account, DateTimeOffset.UtcNow).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(scope.ServiceProvider, account, DateTimeOffset.UtcNow)).AccessToken);
         return client;
     }
 
@@ -63,6 +64,58 @@ public sealed class InternalAccountManagementHttpTests(AuthDatabaseFixture datab
         var session = (await login.Content.ReadFromJsonAsync<SessionResponse>())!;
         client.DefaultRequestHeaders.Authorization = new("Bearer", session.AccessToken);
         return (client, session);
+    }
+
+    [Theory]
+    [InlineData("role")]
+    [InlineData("status")]
+    public async Task Security_change_revokes_all_target_sessions_without_revival_after_restoring_access(string action)
+    {
+        using var admin = await ClientAsync("ADMIN");
+        var account = await CreateAsync(admin, Request());
+        var (deviceA, session) = await LoginAsync(account.Username);
+        var (deviceB, _) = await LoginAsync(account.Username);
+        using var first = deviceA;
+        using var second = deviceB;
+        await using var maintenance = AuthenticationTestSessions.ConnectWebSocket(database.Factory, "maintenance", session.AccessToken);
+        var closed = AuthenticationTestSessions.WhenClosed(maintenance);
+        await maintenance.StartAsync();
+        await maintenance.InvokeAsync("JoinMaintenanceUpdates");
+        const string me = "api/v1/auth/me";
+        var path = $"{Path}/{account.Id}/{action}";
+        object change = action == "role" ? new ChangeRoleRequest("MANAGER") : new ChangeStatusRequest("DISABLED");
+        object restore = action == "role" ? new ChangeRoleRequest("STAFF") : new ChangeStatusRequest("ACTIVE");
+
+        using var denied = await first.PutAsJsonAsync(path, change);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        using var unchanged = await admin.GetAsync($"{Path}/{account.Id}");
+        var target = (await unchanged.Content.ReadFromJsonAsync<InternalAccountProfileResponse>())!;
+        Assert.Equal("STAFF", target.Role);
+        Assert.Equal("ACTIVE", target.Status);
+        using var firstStillValid = await first.GetAsync(me);
+        using var secondStillValid = await second.GetAsync(me);
+        Assert.Equal(HttpStatusCode.OK, firstStillValid.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondStillValid.StatusCode);
+
+        using var committed = await admin.PutAsJsonAsync(path, change);
+        Assert.Equal(HttpStatusCode.NoContent, committed.StatusCode);
+        await closed.WaitAsync(TimeSpan.FromSeconds(2));
+        using var restored = await admin.PutAsJsonAsync(path, restore);
+        Assert.Equal(HttpStatusCode.NoContent, restored.StatusCode);
+        foreach (var device in new[] { first, second })
+        {
+            using var revokedBearer = await device.GetAsync(me);
+            Assert.Equal(HttpStatusCode.Unauthorized, revokedBearer.StatusCode);
+            device.DefaultRequestHeaders.Authorization = null;
+            using var revokedRefresh = await device.PostAsync("api/v1/auth/refresh", null);
+            Assert.Equal(HttpStatusCode.Unauthorized, revokedRefresh.StatusCode);
+        }
+
+        var (fresh, freshSession) = await LoginAsync(account.Username);
+        using var newDevice = fresh;
+        Assert.Equal("STAFF", freshSession.User.Role);
+        using var newSession = await newDevice.GetAsync(me);
+        Assert.Equal(HttpStatusCode.OK, newSession.StatusCode);
     }
 
     [Theory]
@@ -129,10 +182,22 @@ public sealed class InternalAccountManagementHttpTests(AuthDatabaseFixture datab
         using var admin = await ClientAsync("ADMIN");
         var account = await CreateAsync(admin, Request());
         using var actor = await ClientAsync(role);
-        using var read = await actor.GetAsync($"{Path}/{account.Id}");
-        using var write = await actor.PutAsJsonAsync($"{Path}/{account.Id}/profile", new UpdateInternalAccountProfileRequest("Forbidden", null));
+        var resource = $"{Path}/{account.Id}";
+        var before = await admin.GetFromJsonAsync<InternalAccountProfileResponse>(resource);
+        var payload = new UpdateInternalAccountProfileRequest("Hồ sơ kiểm thử", null);
+        using var read = await actor.GetAsync(resource);
+        using var write = await actor.PutAsJsonAsync(resource + "/profile", payload);
         Assert.Equal(HttpStatusCode.Forbidden, read.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, write.StatusCode);
+        Assert.Equal(before, await admin.GetFromJsonAsync<InternalAccountProfileResponse>(resource));
+        var activity = await admin.GetFromJsonAsync<PagedAdministrationActivitiesResponse>(
+            "api/v1/administration/system-activity?action=internal_account_profile_updated");
+        Assert.DoesNotContain(activity!.Items, item => item.TargetAccountId == account.Id && item.Outcome == "SUCCESS");
+
+        using var accepted = await admin.PutAsJsonAsync(resource + "/profile", payload);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        Assert.Equal(before! with { DisplayName = payload.DisplayName, PhoneNumber = payload.PhoneNumber },
+            await admin.GetFromJsonAsync<InternalAccountProfileResponse>(resource));
     }
 
     [Fact]
@@ -221,8 +286,19 @@ public sealed class InternalAccountManagementHttpTests(AuthDatabaseFixture datab
     public async Task Create_enforces_actor_matrix(string role, HttpStatusCode expected)
     {
         using var client = await ClientAsync(role);
-        using var result = await client.PostAsJsonAsync(Path, Request());
+        var payload = Request();
+        using var result = await client.PostAsJsonAsync(Path, payload);
         Assert.Equal(expected, result.StatusCode);
+        if (expected == HttpStatusCode.Created) return;
+
+        using var admin = await ClientAsync("ADMIN");
+        var after = await admin.GetFromJsonAsync<PagedInternalAccountsResponse>($"{Path}?role=STAFF&search={payload.Username}");
+        Assert.Empty(after!.Items);
+        using var scope = database.Factory.Services.CreateScope();
+        var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        Assert.False(await auth.UserAccounts.AnyAsync(user => user.Username == payload.Username || user.Email == payload.Email.ToUpper()));
+        var created = await CreateAsync(admin, payload);
+        Assert.Equal(payload.Username, created.Username);
     }
 
     [Theory]
