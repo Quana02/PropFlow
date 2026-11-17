@@ -25,8 +25,13 @@ public sealed class MaintenanceController(MaintenanceService service) : Controll
     [HttpPost("my-tasks/{taskId:guid}/start")][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public Task<ActionResult<MaintenanceTaskDto>> StartMyTask(Guid taskId, CancellationToken ct) => Execute(() => service.StartMyTaskAsync(taskId, Actor(), ct));
     [HttpPost("my-tasks/{taskId:guid}/progress")][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public Task<ActionResult<MaintenanceTaskDto>> UpdateMyTaskProgress(Guid taskId, UpdateMaintenanceProgressCommand command, CancellationToken ct) => Execute(() => service.UpdateMyTaskProgressAsync(taskId, command, Actor(), ct));
     [HttpPost("my-tasks/{taskId:guid}/result")][RequestSizeLimit(26 * 1024 * 1024)][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public Task<ActionResult<MaintenanceTaskDto>> SubmitMyTaskResult(Guid taskId, [FromForm] SubmitMaintenanceResultForm form, CancellationToken ct) => Execute(() => service.SubmitMyTaskResultWithEvidenceAsync(taskId, form.ToCommand(), Actor(), form.EvidenceImages.Select(file => new MaintenanceEvidenceUpload(file.FileName, file.ContentType, file.Length, _ => System.Threading.Tasks.Task.FromResult<Stream>(file.OpenReadStream()))).ToArray(), ct));
-    [HttpGet("my-tasks/{taskId:guid}/results/{resultId:guid}/attachments/{attachmentId:guid}")][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public async Task<IActionResult> MyResultAttachment(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct) { var evidence = await service.MyResultAttachmentAsync(taskId, resultId, attachmentId, Actor(), ct); return File(evidence.Content, evidence.ContentType, evidence.OriginalFileName); }
-    [HttpGet("my-tasks/{taskId:guid}/activities")][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public Task<IReadOnlyList<MaintenanceTaskActivityDto>> MyTaskActivities(Guid taskId, CancellationToken ct) => service.MyTaskActivitiesAsync(taskId, Actor(), ct);
+    [HttpGet("my-tasks/{taskId:guid}/results/{resultId:guid}/attachments/{attachmentId:guid}")]
+    [Authorize(Policy = MaintenanceAuthorizationPolicies.Work)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public Task<IActionResult> MyResultAttachment(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct) =>
+        DownloadAttachment(() => service.MyResultAttachmentAsync(taskId, resultId, attachmentId, Actor(), ct));
+
+    [HttpGet("my-tasks/{taskId:guid}/activities")][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public Task<ActionResult<IReadOnlyList<MaintenanceTaskActivityDto>>> MyTaskActivities(Guid taskId, CancellationToken ct) => Execute(() => service.MyTaskActivitiesAsync(taskId, Actor(), ct));
     [HttpGet("my-history")][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public Task<MaintenanceHistoryListDto> MyHistory([FromQuery] MaintenanceHistoryQuery query, CancellationToken ct) => service.MyHistoryAsync(query, Actor(), ct);
     [HttpGet("my-history/{taskId:guid}")][Authorize(Policy = MaintenanceAuthorizationPolicies.Work)] public Task<ActionResult<MaintenanceHistoryDetailDto>> MyHistoryDetail(Guid taskId, CancellationToken ct) => Execute(() => service.MyHistoryDetailAsync(taskId, Actor(), ct));
     [HttpGet("history")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<MaintenanceHistoryListDto> History([FromQuery] MaintenanceHistoryQuery query, CancellationToken ct) => service.HistoryAsync(query, ct);
@@ -35,11 +40,32 @@ public sealed class MaintenanceController(MaintenanceService service) : Controll
     [HttpPost("tasks/{taskId:guid}/assignment")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<ActionResult<MaintenanceTaskDto>> AssignTask(Guid taskId, AssignMaintenanceTaskCommand command, CancellationToken ct) => Execute(() => service.AssignTaskAsync(taskId, command, Actor(), ct));
     [HttpPost("tasks/{taskId:guid}/cancel")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<ActionResult<MaintenanceTaskDto>> CancelTask(Guid taskId, CancellationToken ct) => Execute(() => service.CancelTaskAsync(taskId, Actor(), ct));
     [HttpPost("tasks/{taskId:guid}/results/{resultId:guid}/review")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<ActionResult<MaintenanceTaskDto>> ReviewResult(Guid taskId, Guid resultId, ReviewMaintenanceResultCommand command, CancellationToken ct) => Execute(() => service.ReviewResultAsync(taskId, resultId, command, Actor(), ct));
-    [HttpGet("tasks/{taskId:guid}/results/{resultId:guid}/attachments/{attachmentId:guid}")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public async Task<IActionResult> ResultAttachment(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct) { var evidence = await service.ResultAttachmentAsync(taskId, resultId, attachmentId, ct); return File(evidence.Content, evidence.ContentType, evidence.OriginalFileName); }
+    [HttpGet("tasks/{taskId:guid}/results/{resultId:guid}/attachments/{attachmentId:guid}")]
+    [Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public Task<IActionResult> ResultAttachment(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct) =>
+        DownloadAttachment(() => service.ResultAttachmentAsync(taskId, resultId, attachmentId, ct));
     [HttpPatch("tasks/{taskId:guid}/asset")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<ActionResult<MaintenanceTaskDto>> AssociateTaskAsset(Guid taskId, AssociateMaintenanceTaskAssetCommand command, CancellationToken ct) => Execute(() => service.AssociateTaskAssetAsync(taskId, command, ct));
     [HttpPut("schedules/{id:guid}")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<ActionResult<ScheduleDto>> UpdateSchedule(Guid id, UpdateScheduleCommand command, CancellationToken ct) => Execute(() => service.UpdateScheduleAsync(id, command, Actor(), ct));
     [HttpPatch("schedules/{id:guid}/status")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<ActionResult<ScheduleDto>> ScheduleStatus(Guid id, ScheduleStatusCommand command, CancellationToken ct) => Execute(() => service.SetScheduleStatusAsync(id, command.Action, Actor(), ct));
     [HttpPost("schedules/{id:guid}/extend")][Authorize(Policy = MaintenanceAuthorizationPolicies.Manage)] public Task<ActionResult<ScheduleDto>> ExtendSchedule(Guid id, ExtendScheduleCommand command, CancellationToken ct) => Execute(() => service.ExtendScheduleAsync(id, command, Actor(), ct));
+
+    private async Task<IActionResult> DownloadAttachment(Func<Task<MaintenanceEvidenceDownload>> download)
+    {
+        try
+        {
+            var evidence = await download();
+            return File(evidence.Content, evidence.ContentType, evidence.OriginalFileName);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return StatusCode(403, Problem(403, "forbidden", "Bạn không có quyền xem ảnh minh chứng của công việc này."));
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or FileNotFoundException)
+        {
+            return NotFound(Problem(404, "not_found", "Không tìm thấy ảnh minh chứng."));
+        }
+    }
 
     private Guid Actor() => Guid.Parse(User.FindFirst("sub")!.Value);
     private async Task<ActionResult<T>> Execute<T>(Func<Task<T>> action, bool created = false)

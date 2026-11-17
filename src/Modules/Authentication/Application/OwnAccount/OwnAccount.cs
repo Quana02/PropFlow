@@ -52,5 +52,6 @@ public sealed partial class AuthUseCases
             return true;
         }, ct);
         if (!success) throw new AuthFailure(400, "password_change_failed", "Không thể đổi mật khẩu. Kiểm tra mật khẩu hiện tại hoặc thử lại sau.");
+        await RecheckConnectionsAsync(id);
     }
 }

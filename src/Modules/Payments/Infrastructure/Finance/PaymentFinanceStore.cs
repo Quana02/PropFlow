@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using PropFlow.Modules.Billing.Contracts;
 using PropFlow.Modules.Payments.Application.Finance;
 using PropFlow.Modules.Payments.Domain.Payments;
@@ -30,7 +31,13 @@ public sealed class PaymentFinanceStore(PaymentsDbContext db, IInvoiceFinancialS
         db.Payments.Add(payment);
         db.PaymentStatusHistory.Add(new PaymentStatusHistory(payment.Id, PaymentStatus.PENDING, actorId, now, null, "Cư dân gửi xác nhận đã thanh toán, chờ kế toán kiểm tra"));
         db.PaymentOperations.Add(new PaymentOperation(key, payment.Id, "SUBMIT", hash, now));
-        await db.SaveChangesAsync(ct);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException error) when (error.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_payments_reference_number" })
+        {
+            db.ChangeTracker.Clear();
+            return new(MutationOutcome.DuplicateReference);
+        }
         await tx.CommitAsync(ct);
         return new(MutationOutcome.Success, await FindAsync(payment.Id, ct));
     }

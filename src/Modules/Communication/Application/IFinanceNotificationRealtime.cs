@@ -6,4 +6,5 @@ public sealed record FinanceNotificationUpdate(Guid Id, string Title, string Mes
 public interface IFinanceNotificationRealtime
 {
     Task CreatedAsync(Guid recipientUserId, FinanceNotificationUpdate notice, CancellationToken ct);
+    Task ReadStateChangedAsync(Guid recipientUserId, CancellationToken ct);
 }

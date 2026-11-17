@@ -63,12 +63,25 @@ public sealed partial class AuthController(AuthUseCases auth, IAntiforgery antif
         if (string.IsNullOrEmpty(raw)) throw new AuthFailure(401, "session_expired", "Phiên đăng nhập đã hết hạn.");
         // A rejected stale cookie may race a successful rotation in another tab.
         // Do not overwrite that newer cookie with an expiry response.
-        var result = await auth.RefreshAsync(raw, ct); SetSession(result); return Ok(result.Response);
+        var result = await auth.RefreshAsync(raw, ct, RequestedSession()); SetSession(result); return Ok(result.Response);
     }
 
     [HttpPost("logout"), AllowAnonymous, EnableRateLimiting("auth-session"), ProducesResponseType(204)]
     public async Task<IActionResult> Logout(CancellationToken ct)
-    { await CheckCsrfAsync(); await auth.LogoutAsync(Request.Cookies[RefreshCookie], ct); ClearCookie(); return NoContent(); }
+    {
+        await CheckCsrfAsync();
+        if (!await auth.LogoutAsync(Request.Cookies[RefreshCookie], ct, RequestedSession()))
+            throw new AuthFailure(409, "session_changed", "Phiên của trình duyệt đã thay đổi.");
+        ClearCookie();
+        return NoContent();
+    }
+
+    private Guid? RequestedSession()
+    {
+        if (!Request.Headers.TryGetValue("X-PropFlow-Session", out var value)) return null;
+        if (Guid.TryParse(value.ToString(), out var sessionId) && sessionId != Guid.Empty) return sessionId;
+        throw new AuthFailure(400, "invalid_session", "Định danh phiên không hợp lệ.");
+    }
 
     [HttpPost("password/forgot"), AllowAnonymous, EnableRateLimiting("auth-entry")]
     public async Task<ActionResult<ChallengeResponse>> Forgot(ForgotPasswordRequest request, CancellationToken ct)

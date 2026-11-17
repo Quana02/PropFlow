@@ -122,6 +122,7 @@
                 Notices.Receive(notice);
                 await Notices.ReloadAsync();
             }));
+            connection.On("NotificationReadStateChanged", () => InvokeAsync(Notices.ReloadAsync));
             connection.Reconnected += _ => InvokeAsync(Notices.ReloadAsync);
             await ConnectionFactory.StartAsync(connection, cancellation.Token);
             await Notices.ReloadAsync();

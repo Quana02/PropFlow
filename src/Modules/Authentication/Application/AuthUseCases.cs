@@ -9,7 +9,8 @@ namespace PropFlow.Modules.Authentication.Application;
 
 // FE-01 shared orchestration dependencies; implementations are grouped by user goal.
 public sealed partial class AuthUseCases(IAuthStore store, IAuthSecrets secrets, IAuthEmail email,
-    IResidentOnboarding residents, IResidentAccountScope residentAccounts, IAccountAccess access, AuthPolicy policy, TimeProvider clock)
+    IResidentOnboarding residents, IResidentAccountScope residentAccounts, IAccountAccess access, AuthPolicy policy, TimeProvider clock,
+    IAccountSessionInvalidation? invalidation = null)
     : IInternalAccountProfiles
 {
     private DateTimeOffset Now => clock.GetUtcNow();
@@ -38,6 +39,8 @@ public sealed partial class AuthUseCases(IAuthStore store, IAuthSecrets secrets,
     {
         foreach (var session in await store.SessionsAsync(userId, ct)) session.Revoke(reason, Now);
     }
+    private Task RecheckConnectionsAsync(Guid userId) =>
+        invalidation?.RecheckAsync(userId, CancellationToken.None) ?? Task.CompletedTask;
     private void CheckSendRate(IEnumerable<DateTimeOffset> dates)
     {
         var recent = dates.Where(x => x > Now.AddHours(-1)).ToArray();

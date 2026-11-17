@@ -31,7 +31,7 @@
     white-space: normal;
 }
 
-.notification-panel:is(.app-shell-dark *, html.dark :not(.app-shell *), html[data-theme="dark"] :not(.app-shell *)) {
+:where(html[data-theme="dark"]) .notification-panel {
     --notice-surface: #132238;
     --notice-text: var(--app-text, #edf6ff);
     --notice-muted: var(--app-muted, #b5c9dd);

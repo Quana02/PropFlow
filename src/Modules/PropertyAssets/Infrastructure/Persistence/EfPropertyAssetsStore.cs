@@ -198,6 +198,25 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetRead
         return result;
     }
 
+    public Task<T> WithFacilityStatusLockAsync<T>(Guid id, Func<CancellationToken, Task<T>> action, CancellationToken ct) =>
+        WithStatusLockAsync($"SELECT id FROM property_assets.facilities WHERE id = {id} FOR UPDATE", action, ct);
+
+    public Task<T> WithEquipmentStatusLockAsync<T>(Guid id, Func<CancellationToken, Task<T>> action, CancellationToken ct) =>
+        WithStatusLockAsync($"SELECT id FROM property_assets.equipment WHERE id = {id} FOR UPDATE", action, ct);
+
+    private async Task<T> WithStatusLockAsync<T>(FormattableString lockSql, Func<CancellationToken, Task<T>> action, CancellationToken ct)
+    {
+        if (!db.Database.IsNpgsql())
+            return await action(ct);
+
+        // A maintenance write to this asset uses the same PostgreSQL row lock.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(lockSql, ct);
+        var result = await action(ct);
+        await transaction.CommitAsync(ct);
+        return result;
+    }
+
     public void Detach(object entity) => db.Entry(entity).State = EntityState.Detached;
 
     private IQueryable<Facility> VisibleFacilities(AssetReadScope scope)

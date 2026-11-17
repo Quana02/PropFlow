@@ -9,15 +9,20 @@ namespace PropFlow.Modules.Administration.Infrastructure;
 
 public sealed class AccountAccessService(AdministrationDbContext db) : IAccountAccess
 {
-    public async Task<AccountAccess?> GetAsync(Guid userId, CancellationToken ct)
-    {
-        var role = await db.UserRoleAssignments.AsNoTracking().Where(x => x.UserId == userId && x.Role.IsActive)
-            .Select(x => new { x.RoleId, x.Role.Code }).SingleOrDefaultAsync(ct);
-        if (role == null) return null;
-        var permissions = await db.RolePermissions.Where(x => x.RoleId == role.RoleId && x.Permission.IsActive)
-            .Select(x => x.Permission.Code).Distinct().ToArrayAsync(ct);
-        return new AccountAccess(role.Code, permissions);
-    }
+    public async Task<AccountAccess?> GetAsync(Guid userId, CancellationToken ct) =>
+        (await GetManyAsync([userId], ct)).GetValueOrDefault(userId);
+
+    public async Task<IReadOnlyDictionary<Guid, AccountAccess>> GetManyAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct) =>
+        await db.UserRoleAssignments.AsNoTracking().AsSingleQuery()
+            .Where(x => userIds.Contains(x.UserId) && x.Role.IsActive)
+            .Select(x => new
+            {
+                x.UserId,
+                Role = x.Role.Code,
+                Permissions = x.Role.RolePermissions.Where(grant => grant.Permission.IsActive)
+                    .Select(grant => grant.Permission.Code).ToArray()
+            })
+            .ToDictionaryAsync(x => x.UserId, x => new AccountAccess(x.Role, x.Permissions), ct);
 
     public async Task GrantResidentAsync(Guid userId, DateTimeOffset now, CancellationToken ct)
     {

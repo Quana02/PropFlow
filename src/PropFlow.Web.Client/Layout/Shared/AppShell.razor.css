@@ -3,7 +3,7 @@
     --theme-ease: cubic-bezier(0.22, 1, 0.36, 1);
     --app-surface: rgba(255, 255, 255, 0.86);
     --app-text: #17243a;
-    --app-muted: #64748b;
+    --app-muted: var(--pf-muted);
     --app-line: rgba(71, 126, 176, 0.16);
     --app-accent: #0284c7;
     --admin-surface: var(--app-surface);
@@ -34,17 +34,21 @@
     box-sizing: border-box;
 }
 
-.app-shell-dark {
-  --app-surface: rgba(19, 28, 43, 0.88);
-  --app-pill-surface: rgba(30, 41, 59, 0.96);
+:where(html[data-theme="dark"]) .app-shell {
+  --app-surface: var(--pf-menu-surface);
+  --app-pill-surface: #17263a;
   --app-pill-shadow: 0 0.25rem 0.9rem rgba(0, 0, 0, 0.35);
-  --app-text: #edf6ff;
-  --app-muted: #a9bbcc;
-  --app-line: rgba(180, 215, 245, 0.13);
-  --app-accent: #38bdf8;
-  --app-on-accent: #082f49;
-  background: #0b111b;
+  --app-text: var(--pf-text);
+  --app-muted: var(--pf-muted);
+  --app-line: var(--pf-line);
+  --app-accent: var(--pf-accent);
+  --app-on-accent: #041e2a;
+  background: var(--pf-canvas);
 }
+
+.app-theme-button .app-theme-sun,
+:where(html[data-theme="dark"]) .app-theme-button .app-theme-moon { display: none; }
+:where(html[data-theme="dark"]) .app-theme-button .app-theme-sun { display: block; }
 
 .app-aurora {
     position: fixed;
@@ -71,11 +75,11 @@
     animation-delay: -9s;
 }
 
-.app-shell-dark .app-aurora-one {
+:where(html[data-theme="dark"]) .app-shell .app-aurora-one {
     background: radial-gradient(circle, rgba(0, 185, 219, 0.23), transparent 70%);
 }
 
-.app-shell-dark .app-aurora-two {
+:where(html[data-theme="dark"]) .app-shell .app-aurora-two {
     background: radial-gradient(circle, rgba(95, 91, 239, 0.2), transparent 70%);
 }
 
@@ -497,6 +501,14 @@
 @media (max-width: 42rem) {
     .app-header {
         margin: 0.5rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .app-header-actions {
+        margin-left: auto;
+        justify-content: flex-end;
+        gap: 0.5rem;
     }
 
     .app-workspace {
@@ -525,6 +537,21 @@
 
     .app-page-heading {
         margin: 0.5rem;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.5rem 0.75rem;
+    }
+
+    .app-page-heading > .app-local-time {
+        grid-column: 2;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        margin-left: 0;
+        gap: 0.35rem 0.75rem;
+    }
+
+    .app-local-time-date span {
+        white-space: normal;
     }
 
     .app-page-body {
@@ -534,6 +561,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    --theme-duration: 0ms;
+  }
+
   .app-aurora {
     animation: none;
   }
@@ -559,7 +590,7 @@
   white-space: nowrap;
 }
 
-.app-shell-dark .app-page-heading .app-status-badge {
+:where(html[data-theme="dark"]) .app-shell .app-page-heading .app-status-badge {
   background: rgba(52, 211, 153, 0.16);
   color: #34d399;
 }
@@ -572,7 +603,7 @@
   animation: app-status-pulse 1.8s ease-in-out infinite;
 }
 
-.app-shell-dark .app-status-dot {
+:where(html[data-theme="dark"]) .app-shell .app-status-dot {
   background: #34d399;
 }
 

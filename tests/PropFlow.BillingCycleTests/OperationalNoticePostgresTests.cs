@@ -12,12 +12,14 @@ using PropFlow.Modules.PropertyAssets.Domain.Buildings;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
 using Equipment = PropFlow.Modules.PropertyAssets.Domain.Equipment.Equipment;
 using PropFlow.Modules.Maintenance.Infrastructure.Persistence;
+using PropFlow.Modules.Maintenance.Domain.MaintenanceAssignments;
 using PropFlow.Modules.Maintenance.Domain.MaintenanceTasks;
 using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 using PropFlow.Modules.Authentication.Domain.Users;
 using PropFlow.Modules.Administration.Infrastructure.Persistence;
 using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
 using PropFlow.Modules.Communication.Application;
+using PropFlow.Shared.Messaging;
 
 namespace PropFlow.BillingCycleTests;
 public sealed partial class BillingCyclePostgresTests
@@ -167,8 +169,16 @@ public sealed partial class BillingCyclePostgresTests
         Assert.Contains("Hồ bơi cư dân", created.Message);
         Assert.Contains("Tầng 5", created.Message);
         Assert.Equal(6, await communication.Notifications.CountAsync());
+        using var blocked = await manager.PatchAsync(statusPath, JsonContent.Create(new { status = "ACTIVE" }));
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+        await dispatcher.DispatchAssetsAsync(default);
+        Assert.Equal(6, await communication.Notifications.CountAsync());
+
+        var routineEquipment = new Equipment("EQ-ROUTINE", "Thiết bị vận hành", now);
+        assets.Add(routineEquipment);
+        await assets.SaveChangesAsync();
         var expectedCount = 6;
-        foreach (var target in new[] { ("facilities", facility.Id), ("equipments", equipment.Id) }) {
+        foreach (var target in new[] { ("facilities", facility.Id), ("equipments", routineEquipment.Id) }) {
             foreach (var status in new[] { "OUT_OF_SERVICE", "ACTIVE" }) {
                 var pushed = new TaskCompletionSource<FinanceNotificationUpdate>(TaskCreationOptions.RunContinuationsAsynchronously);
                 using var changeSubscription = secondHub.On<FinanceNotificationUpdate>("FinanceNotificationCreated", n => pushed.TrySetResult(n));
@@ -189,6 +199,36 @@ public sealed partial class BillingCyclePostgresTests
                 Assert.Equal(expectedCount, await communication.Notifications.CountAsync());
             }
         }
+
+        var staff = new UserAccount("staff-reassigned", "test", "Nhân viên kiểm thử", now, status: AccountStatus.ACTIVE);
+        auth.Add(staff);
+        await auth.SaveChangesAsync();
+        var staffRoleId = await administration.Roles.Where(role => role.Code == "STAFF").Select(role => role.Id).SingleAsync();
+        administration.Add(new UserRoleAssignment(staff.Id, staffRoleId, now));
+        await administration.SaveChangesAsync();
+
+        var recentTask = new MaintenanceTask("WORK-REASSIGNED", "Công việc kiểm thử outbox", actor, now.AddMinutes(-5));
+        recentTask.MarkAssigned(now.AddMinutes(-4));
+        var oldAssignment = new MaintenanceAssignment(recentTask.Id, staff.Id, actor, now.AddMinutes(-4));
+        oldAssignment.Reassign(now.AddMinutes(-3));
+        var newAssignment = new MaintenanceAssignment(recentTask.Id, staff.Id, actor, now.AddMinutes(-2));
+        OutboxEvent AssignmentNotice(MaintenanceAssignment assignment, bool legacy = false) =>
+            new(MaintenanceAssignmentNotice.EventName, recentTask.Id,
+                System.Text.Json.JsonSerializer.Serialize(new MaintenanceAssignmentNotice(actor, staff.Id, legacy ? null : assignment.Id)),
+                assignment.AssignedAt);
+        var obsolete = AssignmentNotice(oldAssignment);
+        var obsoleteLegacy = AssignmentNotice(oldAssignment, legacy: true);
+        var valid = AssignmentNotice(newAssignment);
+        maintenance.AddRange(recentTask, oldAssignment, newAssignment, obsolete, obsoleteLegacy, valid);
+        await maintenance.SaveChangesAsync();
+
+        var assignmentDispatcher = scope.ServiceProvider.GetRequiredService<PropFlow.Api.Composition.OperationalNoticeDispatcher>();
+        await assignmentDispatcher.DispatchMaintenanceAsync(default);
+        var assignedNotice = Assert.Single(await communication.Notifications
+            .Where(notice => notice.SourceId == recentTask.Id && notice.RecipientUserId == staff.Id).ToArrayAsync());
+        Assert.Equal(valid.Id, assignedNotice.SourceEventId);
+        Assert.Equal(3, await maintenance.ResidentEvents.AsNoTracking()
+            .CountAsync(item => item.SourceId == recentTask.Id && item.Status == "Delivered"));
     }
     private sealed class FailSecondOperationalDelivery(IFinanceNotificationStore inner) : IFinanceNotificationStore
     {

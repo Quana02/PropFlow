@@ -24,13 +24,15 @@ public sealed partial class AuthUseCases
             user.RecordLoginSuccess(ip, Now);
             var token = secrets.NewToken();
             var expires = Now.AddDays(policy.RefreshDays);
-            store.Add(new RefreshToken(user.Id, secrets.HashToken(token), expires, Now, ipAddress: ip));
-            return new SessionIssue(secrets.Issue(response, Now), token, expires);
+            var refresh = new RefreshToken(user.Id, secrets.HashToken(token), expires, Now, ipAddress: ip,
+                accessFingerprint: SessionAccess.Fingerprint(response.Role, response.Permissions));
+            store.Add(refresh);
+            return new SessionIssue(secrets.Issue(response, Now, refresh.SessionId), token, expires);
         }, ct);
         return session ?? throw InvalidCredentials();
     }
 
-    public async Task<SessionIssue> RefreshAsync(string token, CancellationToken ct)
+    public async Task<SessionIssue> RefreshAsync(string token, CancellationToken ct, Guid? expectedSessionId = null)
     {
         var hash = secrets.HashToken(token);
         var candidate = await store.RefreshAsync(hash, ct);
@@ -39,31 +41,47 @@ public sealed partial class AuthUseCases
         {
             var old = (await store.RefreshAsync(hash, ct))!;
             var user = (await store.UserAsync(old.UserId, ct))!;
-            if (!old.IsActiveAt(Now) || user.Status != AccountStatus.ACTIVE || user.IsLockedOutAt(Now)) return null;
-            var account = await AccountAsync(user, ct);
+            if (old.SessionId is not Guid sessionId || (expectedSessionId is Guid expected && sessionId != expected)
+                || !old.IsActiveAt(Now)
+                || user.Status != AccountStatus.ACTIVE || user.IsLockedOutAt(Now)) return null;
+            AccountResponse account;
+            try { account = await AccountAsync(user, ct); }
+            catch (AuthFailure failure) when (failure.Code == "access_unavailable")
+            {
+                old.Revoke("access_changed", Now);
+                return null;
+            }
+            var fingerprint = SessionAccess.Fingerprint(account.Role, account.Permissions);
+            if (old.AccessFingerprint != fingerprint)
+            {
+                old.Revoke("access_changed", Now);
+                return null;
+            }
             var raw = secrets.NewToken();
-            var replacement = new RefreshToken(user.Id, secrets.HashToken(raw), old.ExpiresAt, Now);
+            var replacement = new RefreshToken(user.Id, secrets.HashToken(raw), old.ExpiresAt, Now,
+                sessionId: sessionId, accessFingerprint: fingerprint);
             store.Add(replacement);
             old.Revoke("rotation", Now, replacement.Id);
-            return new SessionIssue(secrets.Issue(account, Now), raw, old.ExpiresAt);
+            return new SessionIssue(secrets.Issue(account, Now, sessionId), raw, old.ExpiresAt);
         }, ct);
         return result ?? throw InvalidCredentials();
     }
 
     // FE-01.7: revoke the whole current rotation chain, never unrelated devices.
-    public async Task LogoutAsync(string? token, CancellationToken ct)
+    public async Task<bool> LogoutAsync(string? token, CancellationToken ct, Guid? expectedSessionId = null)
     {
-        if (string.IsNullOrEmpty(token)) return;
+        if (string.IsNullOrEmpty(token)) return true;
         var candidate = await store.RefreshAsync(secrets.HashToken(token), ct);
-        if (candidate == null) return;
+        if (candidate?.SessionId is not Guid sessionId) return true;
+        if (expectedSessionId is Guid expected && sessionId != expected) return false;
         await store.SerializedAsync("user:" + candidate.UserId, async () =>
         {
-            var current = await store.RefreshAsync(secrets.HashToken(token), ct);
-            // Follow only this session's rotation chain; also handles a concurrent refresh in another tab.
-            while (current?.ReplacedByTokenId is Guid next)
-                current = await store.RefreshByIdAsync(next, ct);
-            if (current is { IsRevoked: false }) current.Revoke("logout", Now);
+            // Find the live leaf after acquiring the same lock as rotation, including when the cookie is stale.
+            var current = await store.CurrentRefreshAsync(candidate.UserId, sessionId, ct);
+            current?.Revoke("logout", Now);
             return true;
         }, ct);
+        invalidation?.Invalidate(candidate.UserId, sessionId);
+        return true;
     }
 }

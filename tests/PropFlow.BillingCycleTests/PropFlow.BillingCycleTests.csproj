@@ -15,4 +15,8 @@
     <ProjectReference Include="../../src/PropFlow.Api/PropFlow.Api.csproj" />
     <ProjectReference Include="../../src/PropFlow.Web.Client/PropFlow.Web.Client.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/TestDatabaseSafety.cs" Link="TestDatabaseSafety.cs" />
+    <Using Include="PropFlow.Testing" />
+  </ItemGroup>
 </Project>

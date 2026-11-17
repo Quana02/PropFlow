@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using PropFlow.Modules.Administration.Contracts;
-using PropFlow.Modules.Authentication.Contracts;
+using PropFlow.Modules.Authentication.Application;
 using PropFlow.Modules.Authentication.Infrastructure;
 
 namespace PropFlow.UnitTests;
@@ -18,7 +18,7 @@ public sealed class AccessTokenStateValidatorTests
         var userId = Guid.NewGuid();
         var permissions = new[] { "administration.view-system-overview" };
         var validator = new AccessTokenStateValidator(
-            new Accounts(new InternalAccountRecord(userId, "admin", "Admin", "admin@example.com", status)),
+            new Sessions(status == "ACTIVE" ? new("admin@example.com", SessionAccess.Fingerprint(currentRole, permissions)) : null),
             new Access(new AccountAccess(currentRole, permissions)));
 
         var principal = Principal(userId, tokenRole, permissions);
@@ -31,7 +31,7 @@ public sealed class AccessTokenStateValidatorTests
     {
         var userId = Guid.NewGuid();
         var validator = new AccessTokenStateValidator(
-            new Accounts(new InternalAccountRecord(userId, "admin", "Admin", "admin@example.com", "ACTIVE")),
+            new Sessions(new("admin@example.com", SessionAccess.Fingerprint("ADMIN", ["administration.manage-internal-accounts"]))),
             new Access(new AccountAccess("ADMIN", ["administration.view-system-overview"])));
 
         var principal = Principal(userId, "ADMIN", ["administration.manage-internal-accounts"]);
@@ -44,29 +44,21 @@ public sealed class AccessTokenStateValidatorTests
     {
         var id = Guid.NewGuid();
         var validator = new AccessTokenStateValidator(
-            new Accounts(new InternalAccountRecord(id, "admin", "Admin", "new@example.com", "ACTIVE")),
+            new Sessions(new("new@example.com", SessionAccess.Fingerprint("ADMIN", []))),
             new Access(new AccountAccess("ADMIN", [])));
         Assert.False(await validator.IsCurrentAsync(Principal(id, "ADMIN", []), CancellationToken.None));
     }
 
     private static ClaimsPrincipal Principal(Guid userId, string role, IEnumerable<string> permissions)
     {
-        var claims = new List<Claim> { new("sub", userId.ToString()), new("role", role), new("email", "admin@example.com") };
+        var claims = new List<Claim> { new("sub", userId.ToString()), new("sid", Guid.NewGuid().ToString()), new("role", role), new("email", "admin@example.com") };
         claims.AddRange(permissions.Select(permission => new Claim("permission", permission)));
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
     }
 
-    private sealed class Accounts(InternalAccountRecord account) : IInternalAccountDirectory
+    private sealed class Sessions(AccessSessionState? session) : IAccessSessionReader
     {
-        public Task<IReadOnlyList<InternalAccountRecord>> GetAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<InternalAccountRecord>>(userIds.Contains(account.Id) ? [account] : []);
-
-        public Task<PagedInternalAccountRecords> SearchAsync(IReadOnlyCollection<Guid> userIds, string? search, string? status, int page, int pageSize, CancellationToken ct) =>
-            throw new NotSupportedException();
-        public Task<InternalAccountRecord> CreateAsync(CreateInternalAccount request, Guid actorUserId, CancellationToken ct) =>
-            throw new NotSupportedException();
-        public Task<InternalAccountRecord?> SetStatusAsync(Guid userId, string status, Guid actorUserId, CancellationToken ct) =>
-            throw new NotSupportedException();
+        public Task<AccessSessionState?> FindAsync(Guid userId, Guid sessionId, CancellationToken ct) => Task.FromResult(session);
     }
 
     private sealed class Access(AccountAccess access) : IAccountAccess

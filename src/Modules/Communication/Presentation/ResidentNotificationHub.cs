@@ -11,4 +11,7 @@ public sealed class FinanceNotificationRealtime(IHubContext<ResidentNotification
 {
     public Task CreatedAsync(Guid recipientUserId, FinanceNotificationUpdate notice, CancellationToken ct) =>
         hub.Clients.User(recipientUserId.ToString()).SendAsync("FinanceNotificationCreated", notice, ct);
+
+    public Task ReadStateChangedAsync(Guid recipientUserId, CancellationToken ct) =>
+        hub.Clients.User(recipientUserId.ToString()).SendAsync("NotificationReadStateChanged", ct);
 }

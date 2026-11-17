@@ -343,7 +343,14 @@ builder.Services.AddHostedService<MaintenanceScheduleActivationWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Apartments.Application.IApartmentStatisticsReader, PropFlow.Modules.Apartments.Infrastructure.Persistence.EfApartmentStatisticsReader>();
 
 // Add services to the container.
-builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRealtimeSessionValidation, RealtimeSessionValidation>();
+builder.Services.AddSingleton<SessionConnections>();
+builder.Services.AddSingleton<PropFlow.Modules.Authentication.Contracts.IAccountSessionInvalidation>(services =>
+    services.GetRequiredService<SessionConnections>());
+builder.Services.AddSingleton<SessionHubFilter>();
+builder.Services.AddSignalR(options => options.AddFilter<SessionHubFilter>());
+builder.Services.AddSingleton(typeof(HubLifetimeManager<>), typeof(SessionHubLifetimeManager<>));
+builder.Services.AddHostedService<SessionConnectionReconciliation>();
 builder.Services.AddControllers()
     .AddApplicationPart(typeof(PropFlow.Modules.AiChatbot.Presentation.KnowledgeDocumentsController).Assembly)
     .AddApplicationPart(typeof(PropFlow.Modules.Administration.Presentation.AdministrationController).Assembly)
@@ -646,7 +653,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
-app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance");
+app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.AnnouncementHub>("/hubs/announcements", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true)

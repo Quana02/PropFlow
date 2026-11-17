@@ -78,13 +78,25 @@ public sealed partial class OwnEmailChangeHttpTests(AuthDatabaseFixture database
             var recovery = await Post(client, "password/forgot", new ForgotPasswordRequest(account.Email!));
             var reset = (await recovery.Content.ReadFromJsonAsync<ChallengeResponse>())!;
             var oldCode = database.Factory.Mail.Codes[account.Email!];
+            using var anonymous = Client();
+            await using var scope = database.Factory.Services.CreateAsyncScope();
+            var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+            var pendingBefore = await auth.PrivilegedActionChallenges.CountAsync(item => item.UserId == account.Id);
+            using var deniedRequest = await Post(anonymous, "email/change", new ChangeEmailRequest(target, Password));
+            Assert.Equal(HttpStatusCode.Unauthorized, deniedRequest.StatusCode);
+            Assert.False(database.Factory.Mail.Codes.ContainsKey(target));
+            Assert.Equal(pendingBefore, await auth.PrivilegedActionChallenges.CountAsync(item => item.UserId == account.Id));
             var challenge = await Request(client, target);
+            Assert.Equal(pendingBefore + 1, await auth.PrivilegedActionChallenges.CountAsync(item => item.UserId == account.Id));
             // Only the new mailbox receives the email-change code.
             Assert.Equal(oldCode, database.Factory.Mail.Codes[account.Email!]);
             Assert.Equal(account.Email, (await client.GetFromJsonAsync<AccountResponse>("api/v1/auth/me"))!.Email);
 
-            var verify = await Post(client, "email/verify", new VerifyEmailChangeRequest(challenge.ChallengeId, target,
-                database.Factory.Mail.Codes[target]));
+            var request = new VerifyEmailChangeRequest(challenge.ChallengeId, target, database.Factory.Mail.Codes[target]);
+            using var deniedVerification = await Post(anonymous, "email/verify", request);
+            Assert.Equal(HttpStatusCode.Unauthorized, deniedVerification.StatusCode);
+            Assert.Equal(account.Email, await auth.UserAccounts.Where(user => user.Id == account.Id).Select(user => user.Email).SingleAsync());
+            using var verify = await Post(client, "email/verify", request);
             Assert.Equal(HttpStatusCode.NoContent, verify.StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("api/v1/auth/me")).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await Post(client, "refresh", new { })).StatusCode);

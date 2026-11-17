@@ -284,7 +284,7 @@ public sealed class ResidentOnboardingHttpTests(AuthDatabaseFixture database) : 
         }
         using var client = database.Factory.CreateClient();
         var account = await CreateManagerAccountAsync();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, account, DateTimeOffset.UtcNow)).AccessToken);
 
         using var response = await client.GetAsync($"api/v1/residents/apartments/{apartmentId}/eligible-household-heads");
         var body = await response.Content.ReadAsStringAsync();
@@ -323,7 +323,7 @@ public sealed class ResidentOnboardingHttpTests(AuthDatabaseFixture database) : 
         };
         using var client = database.Factory.CreateClient();
         var account = await CreateManagerAccountAsync();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, account, DateTimeOffset.UtcNow)).AccessToken);
 
         using var response = await client.PostAsJsonAsync("api/v1/residents", payload);
 
@@ -401,7 +401,7 @@ public sealed class ResidentOnboardingHttpTests(AuthDatabaseFixture database) : 
         using var client = database.Factory.CreateClient();
         var account = await CreateManagerAccountAsync();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",
-            database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken);
+            (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, account, DateTimeOffset.UtcNow)).AccessToken);
         return await client.PostAsJsonAsync($"api/v1/residents/{residentId}/residencies", request);
     }
 
@@ -417,7 +417,7 @@ public sealed class ResidentOnboardingHttpTests(AuthDatabaseFixture database) : 
     {
         using var client = database.Factory.CreateClient();
         var account = await CreateManagerAccountAsync();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, account, DateTimeOffset.UtcNow)).AccessToken);
         return await client.PostAsJsonAsync("api/v1/residents", request);
     }
 
@@ -425,7 +425,7 @@ public sealed class ResidentOnboardingHttpTests(AuthDatabaseFixture database) : 
     {
         using var client = database.Factory.CreateClient();
         var account = await CreateManagerAccountAsync();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, account, DateTimeOffset.UtcNow)).AccessToken);
         return Assert.IsType<ApartmentDetailResponse>(await client.GetFromJsonAsync<ApartmentDetailResponse>($"api/v1/apartments/{apartmentId}"));
     }
 

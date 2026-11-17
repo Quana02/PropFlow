@@ -206,6 +206,7 @@
                                             <div class="relative inline-block text-left status-dropdown-container @(OpenStatusDropdownId == item.Id ? "is-open" : null)">
                                             <button @onclick="() => ToggleStatusDropdown(item.Id)"
                                                     class="pf-management-row-action"
+                                                    disabled="@(item.Status == MasterDataStatus.UNDER_MAINTENANCE)"
                                                     title="Đổi trạng thái" aria-label="Đổi trạng thái"
                                                     aria-haspopup="menu"
                                                     aria-expanded="@(OpenStatusDropdownId == item.Id)">

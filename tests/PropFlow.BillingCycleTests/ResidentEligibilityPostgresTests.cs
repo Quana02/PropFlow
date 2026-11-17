@@ -26,9 +26,11 @@ public sealed class ResidentEligibilityPostgresTests : IAsyncLifetime
     private readonly string name = "propflow_cycle_test_" + Guid.NewGuid().ToString("N");
     private string connection = "", admin = "";
     public async Task InitializeAsync() {
-        var b = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("PROPFLOW_TEST_DATABASE") ?? throw new InvalidOperationException("Missing test connection")) { Database = "postgres", Pooling = false }; admin = b.ConnectionString;
+        var b = TestDatabaseSafety.Dedicated();
+        b.Database = "postgres"; b.Pooling = false; admin = b.ConnectionString;
         await using var c = new NpgsqlConnection(admin); await c.OpenAsync();
-        await using var cmd = new NpgsqlCommand($"CREATE DATABASE {name}", c); await cmd.ExecuteNonQueryAsync(); b.Database = name; connection = b.ConnectionString;
+        await TestDatabaseSafety.CreateAsync(c, name); b.Database = name; connection = b.ConnectionString;
+        await TestDatabaseSafety.VerifyFixtureAsync(connection, name, TestDatabaseSafety.ProcessOwner);
         await using var a = Apartments(); await a.Database.MigrateAsync();
         await using var auth = Accounts();
         await auth.GetService<IMigrator>().MigrateAsync("20260914101250_CorrectAuthenticationEmailOtpVerification");
@@ -36,7 +38,7 @@ public sealed class ResidentEligibilityPostgresTests : IAsyncLifetime
         await r.GetService<IMigrator>().MigrateAsync("20260914063807_InitialResidents");
         await auth.Database.MigrateAsync(); await r.Database.MigrateAsync();
     }
-    public async Task DisposeAsync() { if(admin.Length == 0) return; await using var c = new NpgsqlConnection(admin); await c.OpenAsync(); await using var cmd = new NpgsqlCommand($"DROP DATABASE IF EXISTS {name} WITH (FORCE)", c); await cmd.ExecuteNonQueryAsync(); }
+    public async Task DisposeAsync() { if(connection.Length == 0) return; await using var c = new NpgsqlConnection(admin); await c.OpenAsync(); await TestDatabaseSafety.DropAsync(c, name); }
     private ApartmentsDbContext Apartments() => new(new DbContextOptionsBuilder<ApartmentsDbContext>().UseNpgsql(connection, x => x.MigrationsHistoryTable("__EFMigrationsHistory", "apartments")).Options);
     private ResidentsDbContext Residents() => new(new DbContextOptionsBuilder<ResidentsDbContext>().UseNpgsql(connection, x => x.MigrationsHistoryTable("__EFMigrationsHistory", "residents")).Options);
     private AuthenticationDbContext Accounts() => new(new DbContextOptionsBuilder<AuthenticationDbContext>().UseNpgsql(connection, x => x.MigrationsHistoryTable("__EFMigrationsHistory", "auth")).Options);

@@ -6,7 +6,8 @@ using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 
 namespace PropFlow.Modules.Authentication.Infrastructure;
 
-public sealed class InternalAccountDirectory(AuthenticationDbContext db, IAuthSecrets secrets) : IInternalAccountDirectory, IAuditActorLookup
+public sealed class InternalAccountDirectory(
+    AuthenticationDbContext db, IAuthSecrets secrets, IAccountSessionRevocation sessions) : IInternalAccountDirectory, IAuditActorLookup
 {
     public async Task<IReadOnlyList<Guid>> FindIdsAsync(string search, CancellationToken ct)
     {
@@ -68,7 +69,8 @@ public sealed class InternalAccountDirectory(AuthenticationDbContext db, IAuthSe
         return new(account.Id, account.Username, account.DisplayName, account.Email, account.Status.ToString());
     }
 
-    public async Task<InternalAccountRecord?> SetStatusAsync(Guid userId, string status, Guid actorUserId, CancellationToken ct)
+    public Task<InternalAccountRecord?> SetStatusAsync(Guid userId, string status, Guid actorUserId, CancellationToken ct) =>
+        sessions.WithAccountLockAsync<InternalAccountRecord?>(userId, async () =>
     {
         var account = await db.UserAccounts.SingleOrDefaultAsync(x => x.Id == userId, ct);
         if (account is null) return null;
@@ -80,7 +82,8 @@ public sealed class InternalAccountDirectory(AuthenticationDbContext db, IAuthSe
             case "DISABLED": account.Disable(actorUserId, now); break;
             default: throw new ArgumentException("Trạng thái tài khoản không được hỗ trợ.", nameof(status));
         }
-        await db.SaveChangesAsync(ct);
-        return new(account.Id, account.Username, account.DisplayName, account.Email, account.Status.ToString());
-    }
+        if (account.Status != AccountStatus.ACTIVE)
+            await sessions.RevokeAsync(userId, "account_unavailable", ct);
+        return new InternalAccountRecord(account.Id, account.Username, account.DisplayName, account.Email, account.Status.ToString());
+    }, ct);
 }

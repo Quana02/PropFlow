@@ -7,7 +7,6 @@ export function initialize(canvas, toggle) {
     const context = canvas.getContext("2d", { alpha: true });
     if (!context) return { dispose() {} };
 
-    const shell = canvas.closest(".app-shell");
     const preferenceKey = "propflow-app-ambient-motion";
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -35,7 +34,7 @@ export function initialize(canvas, toggle) {
     };
 
     function currentThemeIsDark() {
-        return shell?.classList.contains("app-shell-dark") ?? false;
+        return document.documentElement.dataset.theme === "dark";
     }
 
     function updatePointerPosition(x, y) {
@@ -314,13 +313,8 @@ export function initialize(canvas, toggle) {
         syncAnimation();
     }
 
-    const themeObserver = new MutationObserver(() => drawScene(false));
-    if (shell) {
-        themeObserver.observe(shell, {
-            attributes: true,
-            attributeFilter: ["class"]
-        });
-    }
+    const onThemeChange = () => drawScene(false);
+    window.addEventListener("propflow:themechange", onThemeChange);
 
     window.addEventListener("resize", resizeCanvas, { passive: true });
     window.addEventListener("mousemove", onMouseMove, { passive: true });
@@ -340,7 +334,7 @@ export function initialize(canvas, toggle) {
             if (disposed) return;
             disposed = true;
             cancelAnimationFrame(frame);
-            themeObserver.disconnect();
+            window.removeEventListener("propflow:themechange", onThemeChange);
             window.removeEventListener("resize", resizeCanvas);
             window.removeEventListener("mousemove", onMouseMove);
             window.removeEventListener("touchmove", onTouchMove);

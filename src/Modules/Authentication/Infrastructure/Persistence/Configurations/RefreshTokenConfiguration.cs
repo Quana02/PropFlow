@@ -18,6 +18,9 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
             .HasColumnName("user_id")
             .IsRequired();
 
+        builder.Property(rt => rt.SessionId).HasColumnName("session_id");
+        builder.Property(rt => rt.AccessFingerprint).HasColumnName("access_fingerprint").HasMaxLength(64);
+
         builder.Property(rt => rt.TokenHash)
             .HasColumnName("token_hash")
             .IsRequired();
@@ -57,6 +60,8 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
             .IsUnique();
 
         builder.HasIndex(rt => rt.UserId);
+        builder.HasIndex(rt => new { rt.UserId, rt.SessionId })
+            .HasFilter("revoked_at IS NULL AND session_id IS NOT NULL");
         builder.HasIndex(rt => rt.ExpiresAt);
 
         // Within-module relationships

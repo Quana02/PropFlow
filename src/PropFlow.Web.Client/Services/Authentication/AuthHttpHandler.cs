@@ -31,6 +31,11 @@ public sealed class AuthHttpHandler(AuthSession session, NavigationManager navig
         using (replay)
         {
             var response = await base.SendAsync(request, ct);
+            if (session.Version != version)
+            {
+                response.Dispose();
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            }
             if (response.StatusCode != HttpStatusCode.Unauthorized) return response;
             if (replay == null || session.Version != version || session.Revocation != SessionRevocationState.None) return response;
             var refreshed = await session.RefreshAsync(token);
@@ -52,10 +57,15 @@ public sealed class AuthHttpHandler(AuthSession session, NavigationManager navig
                 }
                 response.Dispose();
                 response = await base.SendAsync(replay, ct);
-                if (response.StatusCode != HttpStatusCode.Unauthorized || session.Version != version) return response;
+                if (session.Version != version)
+                {
+                    response.Dispose();
+                    return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                }
+                if (response.StatusCode != HttpStatusCode.Unauthorized) return response;
                 session.Clear("Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.");
             }
-            navigation.NavigateTo("/login");
+            if (session.User is null) navigation.NavigateTo("/login");
             return response;
         }
     }
