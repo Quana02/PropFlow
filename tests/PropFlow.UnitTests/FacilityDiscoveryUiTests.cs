@@ -29,6 +29,21 @@ public sealed class FacilityDiscoveryUiTests
     private static FacilityRecommendationView Result() => new([new(Card(),[new(new(2026,11,21),new(8,0),new(17,0))],"Phù hợp hoạt động cuối tuần cho trẻ em.","Ngày 21/11 · khung tiếp theo 08:00–17:00")],
         "GEMINI","Thông tin lấy từ hồ sơ BQL, không phải xác nhận tiếp nhận trẻ.","Bé bao nhiêu tuổi? Có người giám hộ đi cùng không?",DateTimeOffset.UtcNow);
     [Fact]
+    public async Task Notification_link_opens_the_requested_facility_without_asking_the_resident_to_describe_a_need()
+    {
+        using var handler=new Responses();using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};var capture=new Capture();
+        await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
+            .AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+        await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
+        await renderer.Dispatcher.InvokeAsync(async()=>{
+            var root=await renderer.RenderComponentAsync<ResidentFacilities>(ParameterView.Empty);var page=capture.Resident!;var id=Guid.NewGuid();
+            page.SuggestedFacility=id;await Invoke(page,"OnParametersSetAsync");Refresh(page);
+            Assert.Equal(id,handler.RequestedFacility);
+            var html=WebUtility.HtmlDecode(root.ToHtmlString());Assert.Contains("LỊCH TIỆN ÍCH HÔM NAY",html);Assert.Contains("08:00",html);
+            Assert.DoesNotContain("Bạn thích vận động",html);Assert.Null(handler.Need);
+        });
+    }
+    [Fact]
     public async Task Clarification_is_a_conversation_not_an_empty_recommendation_and_later_turns_keep_context()
     {
         using var handler=new Responses {View=new([],"CLARIFY","Cần hiểu thêm","Bạn thích hoạt động gì và muốn đi lúc nào?",DateTimeOffset.UtcNow)};
@@ -164,12 +179,13 @@ public sealed class FacilityDiscoveryUiTests
     }
     private sealed class Responses:HttpMessageHandler
     {
-        public readonly FacilityGuideView Guide=FacilityDiscoveryTests.Guide();public string? Need;public SaveFacilityGuide? Saved;public FacilityRecommendationView? View;
+        public readonly FacilityGuideView Guide=FacilityDiscoveryTests.Guide();public string? Need;public SaveFacilityGuide? Saved;public FacilityRecommendationView? View;public Guid? RequestedFacility;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
         {
             object payload;
             if(request.Method==HttpMethod.Put){Saved=await request.Content!.ReadFromJsonAsync<SaveFacilityGuide>(cancellationToken:ct);return new(HttpStatusCode.NoContent);}
             if(request.Method==HttpMethod.Post){using var data=JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));Need=data.RootElement.GetProperty("need").GetString();payload=View??Result();}
+            else if(request.RequestUri!.AbsolutePath.EndsWith("/today")){RequestedFacility=Guid.Parse(request.RequestUri.Query.Split('=')[1]);payload=Result() with{Mode="TODAY",FollowUp=null};}
             else if(request.RequestUri!.AbsolutePath.EndsWith("facility-guides"))payload=new PropFlow.Modules.PropertyAssets.Contracts.FacilityGuidesManagement([Guide],[new(Guide.ResponsibleStaffId!.Value,Guide.ResponsibleName!)],new(2026,11,16));
             else payload=new ResidentFacilityCatalogue([Card()],new(2026,11,16));
             return new(HttpStatusCode.OK){Content=JsonContent.Create(payload,payload.GetType())};

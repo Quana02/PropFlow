@@ -37,8 +37,10 @@
 
         <form class="assistant-composer" @onsubmit="Recommend" @onsubmit:preventDefault>
             <label class="assistant-sr-only" for="facility-need">Nhập nhu cầu hoặc bổ sung câu trả lời</label>
-            <textarea id="facility-need" data-enter-submit enterkeyhint="send" title="Enter để gửi · Ctrl+Enter để xuống dòng" @bind="need" @bind:event="oninput" maxlength="1200" rows="2" disabled="@(busy || listening)" placeholder="Hoặc nhập điều bạn cần ở đây…"></textarea>
-            <button type="submit" disabled="@(busy || listening || need.Trim().Length < 2 || catalogue?.Facilities.Length is not > 0)" aria-label="Gửi nhu cầu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4 11 16-7-7 16-2-7-7-2Zm7 2 9-9"/></svg></button>
+            <div class="pf-chat-composer">
+                <textarea id="facility-need" data-enter-submit enterkeyhint="send" title="Enter để gửi · Ctrl+Enter để xuống dòng" @bind="need" @bind:event="oninput" maxlength="1200" rows="1" disabled="@(busy || listening)" placeholder="Hoặc nhập điều bạn cần ở đây…"></textarea>
+                <button type="submit" class="pf-chat-send" disabled="@(busy || listening || need.Trim().Length < 2 || catalogue?.Facilities.Length is not > 0)" aria-label="Gửi nhu cầu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 2 7 12l-5-2 20-8Zm0 0-8 20-2-5 10-15ZM7 12l5 5" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+            </div>
         </form>
         <div class="assistant-shortcuts"><span>Thử nói</span><button type="button" disabled="@(busy || listening)" @onclick='() => Example("Tôi muốn đi dạo thư giãn")'>Đi dạo thư giãn</button><button type="button" disabled="@(busy || listening)" @onclick='() => Example("Tôi muốn tập thể lực ở phòng gym")'>Tập luyện</button><button type="button" disabled="@(busy || listening)" @onclick='() => Example("Tôi cần một nơi đọc sách yên tĩnh")'>Đọc sách yên tĩnh</button></div>
         @if(catalogue is not null && catalogue.Facilities.Length > 0){<p class="assistant-source"><i></i>@catalogue.Facilities.Length tiện ích có thông tin từ Ban quản lý <span>·</span> Nói hoặc nhập để bắt đầu</p>}

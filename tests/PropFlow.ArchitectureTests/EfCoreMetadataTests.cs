@@ -912,7 +912,7 @@ public class EfCoreMetadataTests
 
         Assert.Equal("ai_recommendation", model.GetDefaultSchema());
         Assert.Equal(new[] {
-            "ai_recommendation_reviews", "ai_request_recommendations", "facility_recommendation_runs",
+            "ai_recommendation_reviews", "ai_request_recommendations", "facility_recommendation_runs", "facility_weekend_notice_runs",
             "utility_ai_attempts", "utility_insight_reviews", "utility_insights", "utility_notification_outbox"
         }, model.GetEntityTypes().Select(entity => entity.GetTableName()).Order().ToArray());
         Assert.All(model.GetEntityTypes(), entity => Assert.Equal("ai_recommendation", entity.GetSchema()));

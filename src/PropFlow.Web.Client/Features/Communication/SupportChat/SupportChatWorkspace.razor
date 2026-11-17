@@ -175,11 +175,11 @@
                         </div>
                     }
                     <label class="support-sr" for="support-message">Nội dung tin nhắn</label>
-                    <div class="support-compose-row">
+                    <div class="support-compose-row pf-chat-composer">
                         <textarea id="support-message" data-enter-submit value="@text" @oninput="Input" rows="1" maxlength="4000"
                                   readonly="@busy" enterkeyhint="send" aria-describedby="support-compose-hint"
                                   placeholder="@(ForManager ? "Nhập tin nhắn…" : "Bạn cần Ban quản lý hỗ trợ điều gì?")"></textarea>
-                        <button type="submit" class="support-send" aria-label="Gửi tin nhắn" title="Gửi tin nhắn"
+                        <button type="submit" class="support-send pf-chat-send" aria-label="Gửi tin nhắn" title="Gửi tin nhắn"
                                 disabled="@(busy || string.IsNullOrWhiteSpace(text))">
                             @if (sending)
                             {
