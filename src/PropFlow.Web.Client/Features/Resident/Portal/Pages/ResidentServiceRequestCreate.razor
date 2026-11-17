@@ -21,13 +21,14 @@
 
 @code {
     private ResidentServiceRequestDialog? dialog;
+    [SupplyParameterFromQuery(Name = "description")] public string? Description { get; set; }
 
     protected override void OnAfterRender(bool firstRender)
     {
         if (firstRender) OpenForm();
     }
 
-    private void OpenForm() => dialog?.Open("OTHER", "Yêu cầu dịch vụ");
+    private void OpenForm() => dialog?.Open("OTHER", "Yêu cầu dịch vụ", Description);
 
     private void RequestCreated(ResidentServiceRequestCreatedResponse request) =>
         Navigation.NavigateTo($"/resident/service-requests/{request.Id}");

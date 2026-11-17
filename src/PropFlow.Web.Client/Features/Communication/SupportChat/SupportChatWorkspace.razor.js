@@ -24,16 +24,3 @@ export function visibleMessages(thread) {
         return row.height > 0 && Math.min(row.bottom, bottom) - Math.max(row.top, top) >= Math.min(row.height / 2, 40);
     }).map(element => element.dataset.messageId);
 }
-
-export function bindComposer(workspace) {
-    // Scope the listener to this workspace. Removing the workspace also removes the listener.
-    workspace?.addEventListener("keydown", event => {
-        const input = event.target;
-        if (!input.matches(".support-compose textarea") || event.key !== "Enter" ||
-            event.shiftKey || event.ctrlKey || event.altKey || event.metaKey ||
-            event.isComposing || event.keyCode === 229) return;
-
-        event.preventDefault();
-        if (!event.repeat && !input.readOnly && input.value.trim()) input.form.requestSubmit();
-    });
-}

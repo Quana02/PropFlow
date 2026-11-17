@@ -43,10 +43,12 @@
     private Task Load() => NoticeState.ReloadAsync();
     private Task Read(Guid id) => NoticeState.ReadAsync(id);
     private static bool IsComplaint(ResidentNotice? notice) => notice?.SourceType == "COMPLAINT";
-    private static bool IsManagement(ResidentNotice? notice) => IsComplaint(notice) || notice?.SourceType is "PRICING" or "ASSET_STATUS" or "MAINTENANCE";
+    private static bool IsManagement(ResidentNotice? notice) => IsComplaint(notice) || notice?.SourceType is "PRICING" or "ASSET_STATUS" or "MAINTENANCE" or "UTILITY_CONSUMPTION";
     private static (string Path, string Label)? GetAction(ResidentNotice? notice)
     {
         if (notice?.ActionPath is not { } path) return null;
+        if (notice.SourceType == "UTILITY_CONSUMPTION" && path == "/resident/utilities")
+            return (path, "Xem phân tích điện nước");
         if (notice.SourceType == "SERVICE_REQUEST" && path.StartsWith("/resident/service-requests/", StringComparison.Ordinal))
             return (path, "Xem yêu cầu và xác nhận chi phí");
         if (IsComplaint(notice) && path.StartsWith("/resident/complaints/", StringComparison.Ordinal))
