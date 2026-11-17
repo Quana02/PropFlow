@@ -21,6 +21,10 @@ using PropFlow.Modules.AiRecommendation.Infrastructure.Persistence;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.PropertyAssets.Domain.Facilities;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
+using PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery;
+using PropFlow.Modules.Communication.Infrastructure;
+using PropFlow.Modules.Communication.Infrastructure.Persistence;
+using PropFlow.Modules.Communication.Domain.Notifications;
 
 namespace PropFlow.IntegrationTests;
 
@@ -38,7 +42,7 @@ public sealed class FacilityDiscoveryHttpTests : IAsyncLifetime
         connection.Database = "postgres"; adminConnection = connection.ConnectionString;
         databaseName = "propflow_facility_test_" + Guid.NewGuid().ToString("N");
         await using (var admin = new NpgsqlConnection(adminConnection))
-        { await admin.OpenAsync(); await using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin); await create.ExecuteNonQueryAsync(); }
+        { await admin.OpenAsync(); await TestDatabaseSafety.CreateAsync(admin,databaseName); }
         connection.Database = databaseName; factory = new(connection.ConnectionString, resident);
         using var scope = factory.Services.CreateScope();
         var audit = scope.ServiceProvider.GetRequiredService<PropFlow.Modules.Administration.Infrastructure.Persistence.AdministrationDbContext>();
@@ -63,7 +67,7 @@ public sealed class FacilityDiscoveryHttpTests : IAsyncLifetime
         if (factory is not null) await factory.DisposeAsync();
         if (!databaseName.StartsWith("propflow_facility_test_", StringComparison.Ordinal)) return;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE \"{databaseName}\" WITH (FORCE)", admin); await drop.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(admin,databaseName);
     }
     [Fact]
     public async Task Upgrade_retains_rules_as_draft_and_removes_old_counting_tables()
@@ -76,17 +80,62 @@ public sealed class FacilityDiscoveryHttpTests : IAsyncLifetime
         await db.Database.OpenConnectionAsync(); Assert.Equal(true, await command.ExecuteScalarAsync());
     }
     [Fact]
+    public async Task Weekend_workers_share_a_lease_and_notifications_are_idempotent_and_use_the_right_facility_link()
+    {
+        using var scope=factory.Services.CreateScope();var connection=scope.ServiceProvider.GetRequiredService<AiRecommendationDbContext>().Database.GetConnectionString()!;
+        await using(var communication=new CommunicationDbContext(new DbContextOptionsBuilder<CommunicationDbContext>().UseNpgsql(connection,x=>x.MigrationsHistoryTable("__EFMigrationsHistory","communication")).Options))
+            await communication.Database.MigrateAsync();
+        var assets=scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>();
+        foreach(var index in new[]{1,2})
+        {
+            var asset=new Facility("WEEKEND-"+index,"Thư viện "+index,DateTimeOffset.UtcNow,locationDescription:"Tầng 1");assets.Facilities.Add(asset);
+            var guide=new FacilityGuide(asset.Id);guide.Change(new(true,"Không gian đọc sách","GENERAL",null,null,"GUARDIAN_REQUIRED","","Nội quy",[new(6,new(8,0),new(22,0))],[],Staff.Id,"Quầy hỗ trợ",null),manager,DateTimeOffset.UtcNow);
+            assets.FacilityGuides.Add(guide);
+        }
+        await assets.SaveChangesAsync();
+        var clock=(Clock)scope.ServiceProvider.GetRequiredService<TimeProvider>();clock.Instant=new(2026,11,21,8,0,0,TimeSpan.Zero);
+        var delivery=new WeekendDelivery(connection,resident);
+        async Task Dispatch()
+        {
+            await using var db=new AiRecommendationDbContext(new DbContextOptionsBuilder<AiRecommendationDbContext>().UseNpgsql(connection,x=>x.MigrationsHistoryTable("__EFMigrationsHistory","ai_recommendation")).Options);
+            using var sourceScope=factory.Services.CreateScope();var guides=sourceScope.ServiceProvider.GetRequiredService<IFacilityGuideSource>();
+            await new FacilityWeekendNotices(db,guides,new Zone(),clock,new(),delivery).DispatchAsync(default);
+        }
+        await Task.WhenAll(Dispatch(),Dispatch());await Dispatch();
+        clock.Instant=clock.Instant.AddHours(4);await Dispatch();
+        await using var verify=new CommunicationDbContext(new DbContextOptionsBuilder<CommunicationDbContext>().UseNpgsql(connection).Options);
+        var notifications=await verify.Notifications.Where(x=>x.SourceType==FacilityWeekendNotice.SourceType).ToArrayAsync();
+        Assert.Equal(2,notifications.Length);Assert.Equal(2,notifications.Select(x=>x.SourceId).Distinct().Count());
+        Assert.All(notifications,item=>{Assert.Equal(NotificationType.ANNOUNCEMENT,item.Type);Assert.Equal($"/resident/facilities?facility={item.SourceId:D}",item.ActionPath);Assert.Equal(resident,item.RecipientUserId);});
+        using var owner=Client("RESIDENT",resident);
+        var opened=await owner.GetFromJsonAsync<FacilityRecommendationView>($"/api/v1/resident/facility-recommendations/today?facilityId={notifications[0].SourceId:D}");
+        Assert.Equal(notifications[0].SourceId,Assert.Single(opened!.Suggestions).Facility.Id);Assert.Equal("TODAY",opened.Mode);Assert.NotNull(opened.SpeechId);
+    }
+    private sealed class WeekendDelivery(string connection,Guid recipient):IFacilityWeekendNoticeDelivery
+    {
+        public async Task<int> DeliverAsync(FacilityWeekendNotice notice,CancellationToken ct)
+        {
+            await using var db=new CommunicationDbContext(new DbContextOptionsBuilder<CommunicationDbContext>().UseNpgsql(connection).Options);
+            var publisher=new FinanceNoticePublisher(db);
+            await publisher.PublishAsync(new(notice.EventId,recipient,null,notice.Title,notice.Message,"",FacilityWeekendNotice.SourceType,notice.FacilityId,notice.ActionPath),ct);
+            return 1;
+        }
+    }
+    [Fact]
     public async Task Manager_publishes_real_facts_resident_gets_grounded_suggestions_and_staff_cannot_manage()
     {
         const string guides = "/api/v1/facility-guides";
         const string discover = "/api/v1/resident/facility-recommendations";
         using var anonymous = factory.CreateClient();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(discover)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(discover+"/today")).StatusCode);
         using var staff = Client("STAFF", Staff.Id);
         Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(guides)).StatusCode);
         using var owner = Client("RESIDENT", resident);
         using var stranger = Client("RESIDENT", Guid.NewGuid());
         Assert.Equal(HttpStatusCode.Forbidden, (await stranger.GetAsync(discover)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.GetAsync(discover+"/today")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await staff.GetAsync(discover+"/today")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await staff.PostAsJsonAsync(discover+"/speech",new FacilitySpeechRequest())).StatusCode);
         Assert.Empty((await owner.GetFromJsonAsync<ResidentFacilityCatalogue>(discover))!.Facilities);
         using var management = Client("MANAGER", manager);
@@ -124,13 +173,13 @@ public sealed class FacilityDiscoveryHttpTests : IAsyncLifetime
         var client=factory.CreateClient(new WebApplicationFactoryClientOptions{BaseAddress=new("https://localhost")});
         client.DefaultRequestHeaders.Add("X-Test-Role",role);client.DefaultRequestHeaders.Add("X-Test-User",user.ToString());return client;
     }
-    private sealed class Factory(string connection,Guid resident):PropFlowApiFactory
+    private sealed class Factory(string connection,Guid resident):PropFlowApiFactory(connection)
     {
         public Staff Staff {get;}=new();
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
-            builder.ConfigureAppConfiguration((_,config)=>config.AddInMemoryCollection(new Dictionary<string,string?>{["ConnectionStrings:PropFlowDatabase"]=connection}));
+            builder.ConfigureAppConfiguration((_,config)=>config.AddInMemoryCollection(new Dictionary<string,string?>{["FacilityRecommendations:WeekendNotice:Enabled"]="false"}));
             builder.ConfigureTestServices(services=>{
                 services.AddAuthentication(o=>{o.DefaultAuthenticateScheme=o.DefaultChallengeScheme=o.DefaultForbidScheme="FacilityTest";})
                     .AddScheme<AuthenticationSchemeOptions,TestAuthentication>("FacilityTest",_=>{});
@@ -159,7 +208,7 @@ public sealed class FacilityDiscoveryHttpTests : IAsyncLifetime
     {
         public Task<byte[]?> GenerateAsync(string text,CancellationToken ct)=>Task.FromResult<byte[]?>([82,73,70,70]);
     }
-    private sealed class Clock:TimeProvider{public override DateTimeOffset GetUtcNow()=>new(2026,11,16,10,0,0,TimeSpan.Zero);}
+    private sealed class Clock:TimeProvider{public DateTimeOffset Instant=new(2026,11,16,10,0,0,TimeSpan.Zero);public override DateTimeOffset GetUtcNow()=>Instant;}
     private sealed class Zone:ICurrentBuildingTimeZone{public Task<string> GetAsync(CancellationToken ct)=>Task.FromResult("UTC");}
     private sealed class TestAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options,ILoggerFactory logger,UrlEncoder encoder):AuthenticationHandler<AuthenticationSchemeOptions>(options,logger,encoder)
     {

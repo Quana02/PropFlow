@@ -167,6 +167,14 @@ builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.Utility
 builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Infrastructure.UtilityConsumption.UtilityInsights>();
 builder.Services.AddControllers().AddApplicationPart(typeof(PropFlow.Modules.AiRecommendation.Presentation.UtilityConsumptionController).Assembly);
 builder.Services.AddHostedService<PropFlow.Modules.AiRecommendation.Infrastructure.UtilityConsumption.UtilityNoticeWorker>();
+builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityWeekendNoticeOptions>()
+    .BindConfiguration("FacilityRecommendations:WeekendNotice")
+    .Validate(x => x.PollSeconds is >= 30 and <= 300 && x.StartsAt <= x.EndsAt, "Giờ hoặc chu kỳ nhắc tiện ích cuối tuần không hợp lệ.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityWeekendNoticeOptions>>().Value);
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.IFacilityWeekendNoticeDelivery, FacilityWeekendNoticeDelivery>();
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilityWeekendNotices>();
+builder.Services.AddHostedService<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilityWeekendNoticeWorker>();
 builder.Services.AddScoped<ManagerServiceRequestClassification>();
 builder.Services.AddScoped<ManagerServiceRequestRecommendation>();
 builder.Services.AddScoped<IAssignedServiceRequestRecommendationSource, AssignedServiceRequestRecommendationSource>();

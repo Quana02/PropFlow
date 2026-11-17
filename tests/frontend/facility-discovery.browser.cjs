@@ -5,8 +5,10 @@ const { once } = require('node:events');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const root = path.resolve(__dirname, '../..');
 const greetingOnly = process.argv.includes('--greeting-only');
-const css = fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/obj/Fe10Verification/net8.0/scopedcss/projectbundle/PropFlow.Web.Client.bundle.scp.css'), 'utf8')
-  + '\n' + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/Layout/Shared/AppShell.razor.css'), 'utf8');
+const css = fs.readFileSync(path.join(root, 'src/PropFlow.Web/wwwroot/app.css'), 'utf8') + '\n'
+  + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/obj/Fe10Verification/net8.0/scopedcss/projectbundle/PropFlow.Web.Client.bundle.scp.css'), 'utf8')
+  + '\n' + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/Layout/Shared/AppShell.razor.css'), 'utf8')
+  + '\n' + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/css/chat-composer.css'), 'utf8');
 const pages = Object.fromEntries((greetingOnly ? ['welcome'] : ['welcome', 'resident', 'manager']).map(role => {
   if(greetingOnly)return [role,'<!doctype html><html lang="vi"><head><meta charset="utf-8"><base href="/"></head><body>Greeting playback test</body></html>'];
   const file = path.join(os.tmpdir(), `propflow-facility-${role}.html`);
@@ -69,10 +71,10 @@ function send(method, params = {}, sessionId) {
       for (const width of [1366, 820, 390, 320]) {
         await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false }, session);
         for (const dark of [false, true]) {
-          await evaluate(`document.documentElement.classList.toggle('dark',${dark});document.querySelector('.app-shell').classList.toggle('app-shell-dark',${dark})`); await wait(750);
+          await evaluate(`document.documentElement.classList.toggle('dark',${dark});document.documentElement.dataset.theme='${dark?'dark':'light'}';document.querySelector('.app-shell').classList.toggle('app-shell-dark',${dark})`); await wait(750);
           const result = await evaluate(`(()=>{const root=document.querySelector(${JSON.stringify(selector)}),bounds=root.getBoundingClientRect(),fields=[...root.querySelectorAll('input:not([type=checkbox]),textarea,select')];return {overflow:document.documentElement.scrollWidth>innerWidth+1,fieldsFit:fields.every(c=>{const r=c.getBoundingClientRect();return r.left>=bounds.left-1&&r.right<=bounds.right+1}),color:getComputedStyle(root).color,hasContent:root.innerText.includes(${JSON.stringify(role === 'resident' ? 'Nhân viên phụ trách' : role === 'welcome' ? 'Chạm để nói' : 'Giờ mở và đóng cửa')})};})()`);
           result.role = role; result.width = width; result.dark = dark;
-          result.passed = !result.overflow && result.fieldsFit && result.hasContent && (dark ? result.color === 'rgb(237, 246, 255)' : result.color === (role !== 'manager' ? 'rgb(20, 39, 66)' : 'rgb(23, 36, 58)')); checks.push(result);
+          result.passed = !result.overflow && result.fieldsFit && result.hasContent && (dark ? result.color === (role==='manager'?'rgb(241, 247, 255)':'rgb(237, 246, 255)') : result.color === (role !== 'manager' ? 'rgb(20, 39, 66)' : 'rgb(23, 36, 58)')); checks.push(result);
           if (width === 1366 || width === 390) {
             const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, session);
             fs.writeFileSync(path.join(os.tmpdir(), `propflow-facility-${role}-${width}-${dark ? 'dark' : 'light'}.png`), Buffer.from(shot.data, 'base64'));
