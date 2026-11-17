@@ -57,7 +57,7 @@
     cursor: pointer;
     white-space: nowrap;
 }
-.fe07-workspace-tabs button.is-selected { background: var(--admin-accent); box-shadow: 0 .18rem .45rem rgba(0,0,0,.15); color: #fff; }
+.fe07-workspace-tabs button.is-selected { background: var(--pf-action-bg); box-shadow: 0 .18rem .45rem rgba(0,0,0,.15); color: var(--pf-action-text); }
 .fe07-workspace-tabs .material-symbols-outlined { font-size: 1rem; }
 
 /* Summary chips */
@@ -104,9 +104,9 @@
     border: 0;
     border-radius: .65rem;
     padding: .48rem .82rem;
-    background: var(--admin-accent);
+    background: var(--pf-action-bg);
     box-shadow: 0 .3rem .75rem rgba(2,132,199,.22);
-    color: #fff;
+    color: var(--pf-action-text);
     font-size: .73rem;
     font-weight: 750;
     white-space: nowrap;
@@ -224,9 +224,9 @@
     white-space: nowrap;
 }
 .fe07-view-switcher button.is-selected {
-    background: var(--admin-accent);
+    background: var(--pf-action-bg);
     box-shadow: 0 .18rem .45rem rgba(0,0,0,.15);
-    color: #fff;
+    color: var(--pf-action-text);
 }
 
 .fe07-icon-button {
@@ -306,7 +306,7 @@
 }
 .fe07-day-strip button.is-selected strong,
 .fe07-day-strip button.is-selected span { color: var(--admin-accent); }
-.fe07-day-strip button.is-selected i  { background: var(--admin-accent); color: #fff; }
+.fe07-day-strip button.is-selected i  { background: var(--pf-action-bg); color: var(--pf-action-text); }
 
 /* ── Filter / search row ── */
 .fe07-filter-row {
@@ -712,7 +712,7 @@
 .fe07-stepper > div > strong { font-size: .63rem; font-weight: 700; line-height: 1.25; }
 .fe07-stepper > div.is-complete, .fe07-stepper > div.is-current { color: var(--admin-accent); }
 .fe07-stepper > div.is-complete::after { background: rgba(2,132,199,.45); }
-.fe07-stepper > div.is-complete > span, .fe07-stepper > div.is-current > span { border-color: var(--admin-accent); background: var(--admin-accent); color: #fff; }
+.fe07-stepper > div.is-complete > span, .fe07-stepper > div.is-current > span { border-color: var(--admin-accent); background: var(--pf-action-bg); color: var(--pf-action-text); }
 .fe07-progress-milestones { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .55rem .8rem; margin-top: .85rem; padding-top: .75rem; border-top: 1px solid var(--admin-line); }
 .fe07-progress-milestones div { display: grid; gap: .15rem; }
 .fe07-progress-milestones span, .fe07-progress-summary dt { color: var(--admin-muted); font-size: .63rem; font-weight: 700; }
@@ -772,7 +772,7 @@
 .fe07-dialog footer { display: flex; justify-content: flex-end; gap: .5rem; padding: .8rem 1.1rem; border-top: 1px solid var(--admin-line); }
 .fe07-dialog footer button { padding: .5rem .8rem; border-radius: .6rem; font-size: .72rem; font-weight: 750; cursor: pointer; }
 .fe07-secondary { border: 1px solid var(--admin-line); background: transparent; color: inherit; }
-.fe07-primary   { border: 1px solid var(--admin-accent); background: var(--admin-accent); color: #fff; }
+.fe07-primary   { border: 1px solid var(--admin-accent); background: var(--pf-action-bg); color: var(--pf-action-text); }
 .fe07-primary:hover:not(:disabled) { filter: brightness(1.1); }
 .fe07-dialog button:disabled { cursor: not-allowed; opacity: .6; }
 .fe07-form-grid ::deep .validation-message { color: #f43f5e; font-size: .62rem; }

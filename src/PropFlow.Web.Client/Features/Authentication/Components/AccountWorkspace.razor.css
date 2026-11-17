@@ -1,14 +1,14 @@
 .account-page {
-    --account-accent: var(--app-accent, #0284c7);
+    --account-accent: var(--pf-info);
     --account-accent-hover: color-mix(in srgb, var(--account-accent) 80%, #075985);
-    --account-ink: color-mix(in srgb, var(--app-text, #17243a) 20%, var(--account-accent));
-    --account-success: color-mix(in srgb, var(--app-text, #24334b) 35%, var(--feedback-success, #15803d));
+    --account-ink: color-mix(in srgb, var(--app-text, var(--pf-text)) 20%, var(--account-accent));
+    --account-success: color-mix(in srgb, var(--app-text, var(--pf-text)) 35%, var(--feedback-success, #15803d));
     --account-soft: color-mix(in srgb, var(--account-accent) 9%, transparent);
-    --account-button-text: var(--app-on-accent, #fff);
-    --account-line: var(--app-line, #e5e7ef);
-    --account-muted: var(--app-muted, #697386);
+    --account-button-text: var(--pf-action-text);
+    --account-line: var(--app-line, var(--pf-line));
+    --account-muted: var(--app-muted, var(--pf-muted));
     container: account-page / inline-size;
-    color: var(--app-text, #24334b);
+    color: var(--app-text, var(--pf-text));
     font-size: 14px;
     line-height: 1.5;
 }
@@ -19,7 +19,7 @@
 .account-heading p { margin: 0; color: var(--account-muted); font-size: 14px; }
 .account-grid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); align-items: start; gap: 24px; }
 .account-sidebar, .account-main { display: grid; gap: 24px; min-width: 0; }
-.account-card { min-width: 0; border: 1px solid var(--account-line); border-radius: 16px; background: var(--app-surface, #fff); box-shadow: 0 4px 20px rgba(24, 32, 56, .035); backdrop-filter: blur(8px); overflow: hidden; }
+.account-card { min-width: 0; border: 1px solid var(--account-line); border-radius: 16px; background: var(--app-surface, var(--pf-menu-surface)); box-shadow: 0 4px 20px rgba(24, 32, 56, .035); backdrop-filter: blur(8px); overflow: hidden; }
 .account-page h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.015em; line-height: 1.4; }
 .account-page .material-symbols-outlined { flex-shrink: 0; font-size: 20px; font-weight: 400; line-height: 1; }
 .profile-overview { padding: 32px 24px 24px; text-align: center; }
@@ -31,7 +31,7 @@
 .role-badge { color: var(--account-ink); background: var(--account-soft); border-color: color-mix(in srgb, var(--account-accent) 12%, transparent); }
 .profile-health { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--account-line); }
 .positive-badge { color: var(--account-success); background: rgba(34,139,101,.08); }
-.pending-badge { color: color-mix(in srgb, var(--app-text, #17243a) 35%, var(--feedback-warning, #a16b16)); background: rgba(181,125,31,.1); }
+.pending-badge { color: color-mix(in srgb, var(--app-text, var(--pf-text)) 35%, var(--feedback-warning, #a16b16)); background: rgba(181,125,31,.1); }
 .neutral-badge { color: var(--account-muted); background: rgba(128,140,160,.1); }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .card-heading { display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin-bottom: 0; padding: 24px; }
@@ -61,7 +61,7 @@
 .account-field ::deep input:disabled { opacity: .6; }
 .field-hint { margin: 8px 0 0; color: var(--account-muted); font-size: 12px; }
 .resident-note { margin-top: 20px; }
-.account-field ::deep .validation-message { margin-top: 6px; color: color-mix(in srgb, var(--app-text, #17243a) 25%, var(--feedback-error, #be4354)); font-size: 12px; }
+.account-field ::deep .validation-message { margin-top: 6px; color: color-mix(in srgb, var(--app-text, var(--pf-text)) 25%, var(--feedback-error, #be4354)); font-size: 12px; }
 .form-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 16px 24px; background: rgba(128,140,160,.035); border-top: 1px solid var(--account-line); }
 .form-footer > p { margin: 0; color: var(--account-muted); font-size: 12px; }
 .account-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 8px; min-height: 40px; padding: 9px 14px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 600; line-height: 1.5; text-decoration: none; cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s; }
@@ -85,7 +85,7 @@
 .account-session-footer > div:first-child { color: var(--account-muted); }
 .account-session-footer p { margin: 0; font-size: 12px; }
 .logout-button { color: var(--account-muted); background: transparent; border-color: var(--account-line); }
-.logout-button:hover:not(:disabled) { color: var(--app-text, #24334b); background: rgba(128,140,160,.08); }
+.logout-button:hover:not(:disabled) { color: var(--app-text, var(--pf-text)); background: rgba(128,140,160,.08); }
 .account-state { display: grid; justify-items: center; gap: 16px; padding: 48px 24px; text-align: center; }
 .account-state p { margin: 0; color: var(--account-muted); }
 .account-state .state-icon { color: var(--account-muted); font-size: 32px; }

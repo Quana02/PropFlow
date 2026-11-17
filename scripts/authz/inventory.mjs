@@ -6,6 +6,7 @@ const roles = ['ADMIN', 'MANAGER', 'STAFF', 'ACCOUNTANT', 'RESIDENT'];
 const [admin, manager, staff, accountant, resident] = roles;
 const policies = {
   'AssetPermissions.ViewPolicy': [manager, staff],
+  'property-assets.view': [manager, staff],
   'PropertyAssetsAuthorizationPolicies.View': [manager, staff],
   'PropertyAssetsAuthorizationPolicies.Manage': [manager],
   'MaintenanceAuthorizationPolicies.View': [manager, staff],
@@ -95,6 +96,12 @@ for (const file of files.filter(path => path.endsWith('.razor'))) {
   }
 }
 const endpoints = [];
+if (process.argv.includes('--theme')) {
+  routes.sort((left, right) => left.path.localeCompare(right.path));
+  writeFileSync(join(root, 'theme-routes.json'), JSON.stringify(routes, null, 2));
+  console.log('Theme route inventory:', routes.length);
+  process.exit(0);
+}
 const controllers = new Map();
 for (const file of files.filter(path => /Controller.*\.cs$/.test(path))) {
   const source = readFileSync(file, 'utf8');

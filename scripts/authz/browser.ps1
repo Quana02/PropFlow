@@ -111,7 +111,8 @@ try {
         throw 'Có cổng kiểm thử đang được sử dụng.'
     }
     $fixtureConnection = Get-PropFlowFixtureConnection $auditDatabase
-    node scripts/authz/inventory.mjs
+    if ($Scope -eq 'Theme') { node scripts/authz/inventory.mjs --theme }
+    else { node scripts/authz/inventory.mjs }
     if ($LASTEXITCODE -ne 0) { throw 'Inventory không khớp ma trận kỳ vọng.' }
     $env:PROPFLOW_AUTHZ_SCOPE = $Scope
     if ($Scope -eq 'Proxy') {

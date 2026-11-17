@@ -9,7 +9,7 @@ h1,h2,p { margin:0; } h1 { font-size:1.1rem; } h2 { font-size:1rem; }
 .audit-count { margin-left:auto; color:var(--admin-muted,#64748b); font-size:.75rem; }
 input { width:100%; min-width:0; min-height:2.7rem; padding:.65rem .75rem; border:1px solid var(--admin-line,#dce8f1); border-radius:.65rem; color:var(--admin-text,#17243a); background:var(--admin-surface,#fff); font:inherit; box-sizing:border-box; }
 input:focus-visible,button:focus-visible,summary:focus-visible { outline:2px solid #0284c7; outline-offset:2px; }
-.filter-error { padding:.5rem 0 1rem; color:#b91c1c; font-size:.8rem; }
+.filter-error { padding:.5rem 0 1rem; color:var(--pf-danger); font-size:.8rem; }
 button { min-height:2.3rem; padding:.5rem .85rem; border:1px solid transparent; border-radius:.6rem; background:#0284c7; color:#fff; font:inherit; font-size:.8rem; cursor:pointer; }
 button.secondary { background:transparent; color:var(--admin-text,#17243a); border-color:var(--admin-line,#dce8f1); }
 button:disabled { opacity:.5; cursor:default; }
@@ -22,7 +22,7 @@ th { font-size:.7rem; font-weight:700; color:var(--admin-muted,#64748b); backgro
 th,td { padding:.9rem 1rem; border-bottom:1px solid var(--admin-line,#dce8f1); vertical-align:middle; }
 time { white-space:nowrap; } small { display:block; margin-top:.2rem; font-size:.7rem; color:var(--admin-muted,#64748b); }
 .result { display:inline-block; padding:.35rem .6rem; border-radius:999px; white-space:nowrap; font-size:.7rem; font-weight:600; }
-.success { background:rgba(16,185,129,.12); color:#047857; } .failed { background:rgba(239,68,68,.12); color:#b91c1c; } .denied { background:rgba(245,158,11,.13); color:#b45309; }
+.success { background:rgba(16,185,129,.12); color:var(--pf-success); } .failed { background:rgba(239,68,68,.12); color:var(--pf-danger); } .denied { background:rgba(245,158,11,.13); color:var(--pf-warning); }
 .detail-button { color:#0284c7; background:transparent; padding:.35rem; }
 .detail-button .material-symbols-outlined { font-size:1.2rem; }
 footer { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; padding:1rem 1.2rem; color:var(--admin-muted,#64748b); font-size:.75rem; }

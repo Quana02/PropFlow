@@ -4,10 +4,13 @@ import { once } from 'node:events';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { auditThemeRoutes } from './theme-routes.mjs';
 
 const root = resolve('artifacts/authz');
 const readJson = async path => JSON.parse(await readFile(path, 'utf8'));
-const routes = await readJson(join(root, 'routes.json'));
+const scope = process.env.PROPFLOW_AUTHZ_SCOPE ?? 'Full';
+const themeCheckOnly = scope === 'Theme';
+const routes = await readJson(join(root, themeCheckOnly ? 'theme-routes.json' : 'routes.json'));
 const fixture = await readJson(join(root, 'browser-resources.json'));
 const profile = await mkdtemp(join(root, 'chrome-'));
 const sameOrigin = process.env.PROPFLOW_AUTHZ_SAME_ORIGIN === '1';
@@ -22,17 +25,16 @@ const browser = spawn(process.env.PROPFLOW_AUTHZ_CHROME ?? 'C:/Program Files/Goo
 const exited = once(browser, 'exit');
 console.log('Chrome PID', browser.pid);
 const supplemental = process.env.PROPFLOW_AUTHZ_SUPPLEMENTAL === '1';
-const scope = process.env.PROPFLOW_AUTHZ_SCOPE ?? 'Full';
 const sessionCheckOnly = scope === 'Session';
 const maintenanceCheckOnly = scope === 'Maintenance';
-const themeCheckOnly = scope === 'Theme';
+const scanThemeRoutes = themeCheckOnly && process.env.PROPFLOW_THEME_ROUTE_SCAN === '1';
 const routeEvidence = supplemental ? await readJson(join(root, 'browser-matrix.json')) : [];
 const apiEvidence = supplemental ? await readJson(join(root, 'api-matrix.json')) : [];
 const credentialEvidence = [];
 const horizontalEvidence = [];
 const uiEvidence = [];
 const themeFailures = [];
-const endpointList = await readJson(join(root, 'endpoints.json'));
+const endpointList = themeCheckOnly ? [] : await readJson(join(root, 'endpoints.json'));
 const conventionalDenied = 'Bạn không có quyền truy cập trang này.';
 const dynamic = {
   '/apartments/{Id:guid}': fixture.apartmentId,
@@ -75,7 +77,7 @@ try {
   let port;
   for (let i = 0; i < 100 && !port; i++) {
     try { port = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0].trim(); }
-    catch (e) { if (e.code !== 'ENOENT') throw e; }
+    catch (e) { if (!['ENOENT', 'EBUSY'].includes(e.code)) throw e; }
     if (!port) await delay(100);
   }
   const [tab] = await (await fetch('http://127.0.0.1:' + port + '/json/list')).json();
@@ -309,7 +311,7 @@ try {
   ];
   const selectedRoles = sessionCheckOnly || maintenanceCheckOnly
     ? ['STAFF'] : process.env.PROPFLOW_AUTHZ_BROWSER_ROLES?.split(',') ??
-      (themeCheckOnly ? Object.keys(homes) : [...allRoles, 'STAFF2', 'RESIDENT2']);
+      (themeCheckOnly ? [...(scanThemeRoutes ? ['Ẩn danh'] : []), ...Object.keys(homes)] : [...allRoles, 'STAFF2', 'RESIDENT2']);
   if (themeCheckOnly) {
     await call('Emulation.setEmulatedMedia', { features: [
       { name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'reduce' }
@@ -327,6 +329,10 @@ try {
       await evaluate('document.querySelector(".public-theme-toggle").click()');
       if (!await waitFor('document.documentElement.dataset.theme === "dark"')) throw Error('Login did not switch to dark');
     }
+    if (scanThemeRoutes && role === 'Ẩn danh') {
+      themeFailures.push(...await auditThemeRoutes({ role, routes, dynamic, call, evaluate, waitFor, navigate, root }));
+      continue;
+    }
     let token;
     if (role !== 'Ẩn danh') {
       await submitLogin(account);
@@ -335,7 +341,14 @@ try {
           const toggle = role === 'RESIDENT' ? '#theme-toggle-btn' : '.app-theme-button';
           const logout = role === 'RESIDENT' ? '.profile-logout' : '.app-profile-options button';
           const [secondary, selector] = roleThemeRoutes[role];
-          const samples = roleThemeSamples[role];
+          const samples = role === 'RESIDENT' ? roleThemeSamples[role] : [...roleThemeSamples[role], '.app-badge'];
+          if (scanThemeRoutes) {
+            if (!await waitFor('document.documentElement.dataset.theme === "dark"'))
+              themeFailures.push(role + ' mất chế độ tối sau khi đăng nhập');
+            themeFailures.push(...await auditThemeRoutes({ role, routes, dynamic, call, evaluate, waitFor, navigate, root }));
+            await evaluate('if (document.documentElement.dataset.theme !== "dark") window.propFlowTheme.toggle()');
+            await navigate(redirectHome[role]);
+          }
           await verifyTheme(role, 'dark', samples, 'dark');
           await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false });
           await verifyTheme(role, 'dark', samples, 'dark-mobile');

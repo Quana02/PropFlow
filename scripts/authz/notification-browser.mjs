@@ -171,7 +171,8 @@ try {
     tab.sockets.clear();
     return call('Page.navigate', { url: path === 'about:blank' ? path : origin + path }, tab.sessionId);
   }
-  const badge = tab => evaluate(tab, 'Number(document.querySelector(".notification-badge")?.textContent ?? 0)');
+  const badge = tab => evaluate(tab, 'Number(document.querySelector(".notification-trigger")?.getAttribute("aria-label")?.match(/\\d+/)?.[0] ?? 0)');
+  const hasDot = tab => evaluate(tab, 'Boolean(document.querySelector(".notification-badge"))');
   const framesFor = (tab, id) => tab.notices.filter(notice => notice.id === id);
   const menuItems = tab => evaluate(tab, 'document.querySelectorAll(".notification-item").length');
   const click = (tab, selector) => evaluate(tab, 'document.querySelector(' + JSON.stringify(selector) + ').click()');
@@ -293,6 +294,7 @@ try {
     'STAFF A tabs did not receive the exact assignment on WebSocket');
   await until(async () => (await badge(staffA)) === initialA + 1 && (await badge(staffATab2)) === initialA + 1,
     'STAFF A notification badges did not update');
+  assert.equal(await hasDot(staffA), true);
   const assignBadgeObservedAt = performance.now();
   assert.equal(framesFor(staffB, noticeId).length, 0);
   assert.equal(framesFor(manager, noticeId).length, 0);
@@ -310,6 +312,8 @@ try {
 
   await click(staffA, '.notification-trigger');
   await until(async () => (await menuItems(staffA)) === initialA + 1, 'STAFF A bell did not show the assignment');
+  assert.equal(await hasDot(staffA), false);
+  assert.equal(await badge(staffA), initialA + 1);
   await snapshot(staffA, 'final-staff-assignment-bell');
   const readStartedAt = performance.now();
   await click(staffA, '.notification-item.unread');
@@ -346,6 +350,7 @@ try {
   staffA.token = disconnectedToken;
   await navigate(staffA, '/my-maintenance');
   await socketsReady(staffA);
+  await until(() => hasDot(staffA), 'A notification received while offline did not restore the dot');
   await click(staffA, '.notification-trigger');
   await until(async () => {
     const records = (await notifications(staffA)).data;

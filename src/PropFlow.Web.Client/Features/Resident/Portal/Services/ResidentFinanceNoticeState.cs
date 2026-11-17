@@ -1,12 +1,17 @@
+using System.Text.Json;
+using Microsoft.JSInterop;
 using PropFlow.Web.Client.Features.Finance.Services;
+using PropFlow.Web.Client.Services.Authentication;
 
 namespace PropFlow.Web.Client.Features.Resident.Portal.Services;
 
 // Shares the existing notification API between the toolbar, dashboard and billing view.
-public sealed class ResidentFinanceNoticeState(FinanceCycleApi api)
+public sealed class ResidentFinanceNoticeState(FinanceCycleApi api, AuthSession? session = null, IJSRuntime? js = null)
 {
     public ResidentNotice[] Items { get; private set; } = [];
     public int UnreadCount => unreadCount ?? Items.Count(x => !x.IsRead);
+    public bool HasNewNotices => UnreadCount > 0 &&
+        (!inboxAcknowledged || Items.Any(x => !x.IsRead && !acknowledged.Contains(x.Id)));
     public bool Loading { get; private set; }
     public string? Error { get; private set; }
     public event Action? Changed;
@@ -14,10 +19,28 @@ public sealed class ResidentFinanceNoticeState(FinanceCycleApi api)
     private int receivedVersion;
     private int? unreadCount;
     private bool reloadPending;
+    private readonly HashSet<Guid> acknowledged = [];
+    private readonly HashSet<Guid> receivedAfterOpening = [];
+    private bool feedLoaded;
+    private bool inboxAcknowledged;
+    private bool acknowledgeInitialFeed;
+    private string? acknowledgementKey;
     private const string Path = "api/v1/notifications";
+
+    public void AcknowledgeInbox()
+    {
+        inboxAcknowledged = true;
+        acknowledgeInitialFeed = !feedLoaded;
+        receivedAfterOpening.Clear();
+        acknowledged.UnionWith(Items.Select(item => item.Id));
+        SaveAcknowledgement();
+        Changed?.Invoke();
+    }
+
     public void Receive(ResidentNotice notice)
     {
         receivedVersion++;
+        if (acknowledgeInitialFeed) receivedAfterOpening.Add(notice.Id);
         if (unreadCount.HasValue && !notice.IsRead && Items.All(x => x.Id != notice.Id)) unreadCount++;
         Items = Items.Where(x => x.Id != notice.Id).Append(notice).OrderByDescending(x => x.CreatedAt).Take(100).ToArray();
         Error = null;
@@ -25,7 +48,34 @@ public sealed class ResidentFinanceNoticeState(FinanceCycleApi api)
     }
     public void Reset()
     {
-        generation++; Items = []; unreadCount = null; reloadPending = false; Error = null; Loading = false; Changed?.Invoke();
+        generation++; Items = []; unreadCount = null; reloadPending = false; Error = null; Loading = false;
+        feedLoaded = false;
+        acknowledgeInitialFeed = false;
+        receivedAfterOpening.Clear();
+        acknowledged.Clear();
+        inboxAcknowledged = false;
+        acknowledgementKey = session?.User is { } user ? $"propflow:notification-inbox:{user.Id:N}" : null;
+        if (acknowledgementKey is { } key && js is IJSInProcessRuntime browser)
+        {
+            try
+            {
+                var stored = browser.Invoke<string?>("sessionStorage.getItem", key);
+                if (stored is not null && JsonSerializer.Deserialize<Guid[]>(stored) is { } ids)
+                {
+                    acknowledged.UnionWith(ids);
+                    inboxAcknowledged = true;
+                }
+            }
+            catch (Exception error) when (error is JSException or JsonException) { /* Storage is optional. */ }
+        }
+        Changed?.Invoke();
+    }
+
+    private void SaveAcknowledgement()
+    {
+        if (acknowledgementKey is not { } key || js is not IJSInProcessRuntime browser) return;
+        try { browser.InvokeVoid("sessionStorage.setItem", key, JsonSerializer.Serialize(acknowledged)); }
+        catch (JSException) { /* Keep the indicator usable when browser storage is disabled. */ }
     }
     public async Task ReloadAsync()
     {
@@ -40,6 +90,15 @@ public sealed class ResidentFinanceNoticeState(FinanceCycleApi api)
             if (requestGeneration == generation) {
                 if (result.IsSuccess) {
                     var snapshot = result.Data ?? [];
+                    if (acknowledgeInitialFeed)
+                    {
+                        // The first response completes the opening action. Later realtime arrivals stay new.
+                        acknowledged.UnionWith(snapshot.Where(item => !receivedAfterOpening.Contains(item.Id)).Select(item => item.Id));
+                        acknowledgeInitialFeed = false;
+                        receivedAfterOpening.Clear();
+                        SaveAcknowledgement();
+                    }
+                    feedLoaded = true;
                     Items = requestVersion == receivedVersion ? snapshot : snapshot.Concat(Items.Where(x => !snapshot.Any(y => y.Id == x.Id)))
                         .OrderByDescending(x => x.CreatedAt).Take(100).ToArray();
                 }
