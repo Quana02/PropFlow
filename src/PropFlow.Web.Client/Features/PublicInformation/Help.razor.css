@@ -5,7 +5,7 @@
 .help-search input::placeholder { color: var(--pf-muted); }
 .help-categories { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .65rem; }
 .help-button { border: 1px solid var(--pf-line); border-radius: .65rem; background: var(--pf-menu-surface); color: var(--pf-text); padding: .45rem .7rem; font-size: .875rem; cursor: pointer; }
-.help-button:hover, .help-button[aria-pressed="true"] { background: color-mix(in srgb, var(--pf-accent) 10%, var(--pf-menu-surface)); color: var(--pf-accent); border-color: var(--pf-accent); }
+.help-button:hover, .help-button[aria-pressed="true"] { background: color-mix(in srgb, var(--pf-accent) 10%, var(--pf-menu-surface)); color: var(--pf-info); border-color: var(--pf-accent); }
 .help-faq :is(input, button, summary):focus-visible { outline: 2px solid var(--pf-accent); outline-offset: 3px; }
 .help-count { color: var(--pf-muted); font-size: .875rem; }
 .help-group { margin-top: 1rem; }

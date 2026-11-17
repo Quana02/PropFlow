@@ -13,9 +13,9 @@
     <button type="button" class="notification-trigger" aria-label="@BellLabel" aria-expanded="@open"
             aria-controls="@(open ? panelId : null)" @ref="trigger" @onclick="ToggleAsync">
         <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
-        @if (Notices.UnreadCount > 0)
+        @if (Notices.HasNewNotices)
         {
-            <span class="notification-badge" aria-hidden="true">@(Notices.UnreadCount > 99 ? "99+" : Notices.UnreadCount.ToString())</span>
+            <span class="notification-badge" aria-hidden="true"></span>
         }
     </button>
     @if (open)
@@ -136,6 +136,7 @@
 
     private async Task ToggleAsync()
     {
+        Notices.AcknowledgeInbox();
         open = !open;
         if (open) await Notices.ReloadAsync();
     }

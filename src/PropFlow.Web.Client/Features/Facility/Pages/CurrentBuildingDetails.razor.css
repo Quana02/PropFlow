@@ -5,7 +5,7 @@
 h1,h2,p,dl,dd { margin:0; }
 h1 { margin-top:.24rem; font-size:clamp(1.35rem,2vw,1.65rem); }
 .page-header p,.section-header p { margin-top:.25rem; color:var(--admin-muted,#64748b); font-size:.78rem; }
-.primary-action { display:inline-flex; align-items:center; gap:.45rem; padding:.7rem 1rem; border:1px solid #0284c7; border-radius:.75rem; background:#0284c7; color:#fff; font-size:.78rem; font-weight:750; white-space:nowrap; }
+.primary-action { display:inline-flex; align-items:center; gap:.45rem; padding:.7rem 1rem; border:1px solid #0284c7; border-radius:.75rem; background:var(--pf-action-bg); color:var(--pf-action-text); font-size:.78rem; font-weight:750; white-space:nowrap; }
 .primary-action .material-symbols-outlined { font-size:1rem; }
 .feedback { display:flex; align-items:center; gap:.65rem; padding:.8rem 1rem; border:1px solid; border-radius:.85rem; font-size:.75rem; }
 

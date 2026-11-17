@@ -1,9 +1,9 @@
 .page-heading { margin: 2rem 3.5rem 1.5rem 0; }
-.back-link { display: inline-flex; margin-bottom: 1.1rem; color: #64748b; font-size: .72rem; font-weight: 700; text-decoration: none; }
+.back-link { display: inline-flex; margin-bottom: 1.1rem; color: var(--pf-muted); font-size: .72rem; font-weight: 700; text-decoration: none; }
 .back-link:hover { color: #0284c7; }
 .eyebrow { margin: 0 0 .45rem; color: #0284c7; font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .page-heading h1 { margin: 0; color: #0f172a; font: 700 clamp(1.75rem, 3.5vw, 2.5rem)/1.15 var(--pf-font); letter-spacing: -.025em; }
-.page-heading > div > p:last-child { margin: .6rem 0 0; color: #64748b; font-size: .85rem; }
+.page-heading > div > p:last-child { margin: .6rem 0 0; color: var(--pf-muted); font-size: .85rem; }
 .create-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(18rem, .85fr); gap: 1.25rem; margin-right: 3.5rem; }
 .form-card, .guidance-card { border: 1px solid rgba(255, 255, 255, .85); border-radius: 1.5rem; background: rgba(255, 255, 255, .74); box-shadow: 0 16px 36px -6px rgba(15, 23, 42, .06), inset 0 0 15px rgba(255, 255, 255, .55); backdrop-filter: blur(24px); }
 .form-card { padding: 1.5rem; }
@@ -30,7 +30,7 @@
 .guidance-card li { display: grid; grid-template-columns: 2rem 1fr; gap: .75rem; }
 .guidance-card li > span { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: .7rem; color: #0369a1; background: #e0f2fe; font-size: .65rem; font-weight: 800; }
 .guidance-card strong { color: #334155; font-size: .75rem; }
-.guidance-card li p { margin: .3rem 0 0; color: #64748b; font-size: .68rem; line-height: 1.6; }
+.guidance-card li p { margin: .3rem 0 0; color: var(--pf-muted); font-size: .68rem; line-height: 1.6; }
 html.dark .page-heading h1, html.dark .card-heading h2, html.dark .guidance-card h2, html.dark .guidance-card strong, html[data-theme="dark"] .page-heading h1, html[data-theme="dark"] .card-heading h2, html[data-theme="dark"] .guidance-card h2, html[data-theme="dark"] .guidance-card strong { color: #f8fafc; }
 html.dark .form-card, html.dark .guidance-card, html[data-theme="dark"] .form-card, html[data-theme="dark"] .guidance-card { border-color: rgba(0, 242, 255, .2); background: rgba(13, 20, 36, .75); box-shadow: 0 20px 50px -10px rgba(0, 0, 0, .7), inset 0 0 20px rgba(0, 242, 255, .08); }
 html.dark .field-group label, html[data-theme="dark"] .field-group label { color: #cbd5e1; }
