@@ -15,6 +15,7 @@ $auditDatabase = 'propflow_phase11_' + [guid]::NewGuid().ToString('N')
 $auditProcesses = @()
 $auditDatabaseStarted = $false
 $auditSsl = @()
+$originalStartupHooks = $env:DOTNET_STARTUP_HOOKS
 
 function Wait-ForAuditHosts {
     for ($attempt = 0; $attempt -lt 25; $attempt++) {
@@ -172,6 +173,9 @@ try {
     $env:AiChatbot__Gemini__Enabled = 'false'
     $env:AiClassification__Gemini__Enabled = 'false'
     $env:AiRecommendation__Gemini__Enabled = 'false'
+    if ($ChromeNotifications -and $env:PROPFLOW_NOTIFICATION_GROUP -eq 'AiAuthorization') {
+        $env:DOTNET_STARTUP_HOOKS = (Resolve-Path -LiteralPath $auditFixture).Path
+    }
     $env:Logging__LogLevel__Default = 'Error'
     $env:DOTNET_ENVIRONMENT = if ($UseRelease) { 'Production' } else { 'Testing' }
     $env:ASPNETCORE_ENVIRONMENT = $env:DOTNET_ENVIRONMENT
@@ -245,6 +249,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Chrome matrix exit code khác 0.' }
     }
 } finally {
+    $env:DOTNET_STARTUP_HOOKS = $originalStartupHooks
     foreach ($auditProcess in $auditProcesses) {
         if (!$auditProcess.HasExited) { Stop-Process -Id $auditProcess.Id -ErrorAction Stop }
         $auditProcess.WaitForExit()

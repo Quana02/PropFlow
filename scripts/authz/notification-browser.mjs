@@ -15,6 +15,7 @@ const scenarios = {
   ServiceRequests: 'service-requests',
   Operations: 'operations',
   PropertyOperations: 'property-operations',
+  AiAuthorization: 'ai-authorization',
   Finance: 'finance',
   Communication: 'communication',
   ReadState: 'read-state',
