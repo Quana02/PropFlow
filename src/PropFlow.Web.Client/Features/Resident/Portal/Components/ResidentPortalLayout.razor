@@ -34,7 +34,8 @@
             </footer>
 
             <ResidentNavigation />
-            @if (!Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/contact-management", StringComparison.OrdinalIgnoreCase))
+            @if (!Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/contact-management", StringComparison.OrdinalIgnoreCase)
+                && !Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.StartsWith("/resident/facilities", StringComparison.OrdinalIgnoreCase))
             { <PropFlow.Web.Client.Features.AiChatbot.Components.ResidentChatWidget /> }
         </div>
     </CascadingValue>

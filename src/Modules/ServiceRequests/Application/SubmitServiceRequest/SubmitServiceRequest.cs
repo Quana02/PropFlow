@@ -168,7 +168,7 @@ public sealed class SubmitServiceRequestHandler(
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
 
-    private static string CreateTitle(string description)
+      private static string CreateTitle(string description)
     {
         var summary = string.Join(" ", description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (summary.Length <= 120) return summary;

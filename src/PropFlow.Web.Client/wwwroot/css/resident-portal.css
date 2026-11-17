@@ -522,3 +522,7 @@ html.dark .resident-clock-compact small,html.dark .resident-clock-compact>span,h
 @media(max-width:760px){.resident-header-actions{flex-wrap:wrap;justify-content:flex-end;flex:1}.resident-context-strip{order:4;flex-basis:100%;justify-content:flex-end}.resident-portal:has(.resident-clock-stage) .resident-header{top:.5rem}.resident-weather{padding:.4rem .6rem}.resident-clock-compact>span{display:none}.resident-clock-docked .resident-clock-compact{padding:.4rem .6rem}.resident-weather small{display:none}.resident-weather>.weather-copy{grid-template-columns:1fr}.resident-weather em{max-width:10rem}.resident-context-strip .resident-weather{max-width:calc(100% - 6rem)}.resident-clock-compact strong{font-size:1.1rem}.resident-weather em a{display:none}}
 @media(prefers-reduced-motion:reduce){.resident-clock-stage,.resident-clock-compact{transition:none}}
 @media(max-width:760px){.resident-header{--resident-header-control-height:3rem;--resident-header-control-radius:.85rem}}
+
+/* Voice facility assistant is a resident service, alongside requests and billing. */
+.resident-service-grid .facility-ai-service{grid-column:1/-1;flex-direction:row;gap:.7rem;background:linear-gradient(120deg,rgba(14,165,233,.09),rgba(139,92,246,.09));border:1px solid rgba(14,165,233,.2)}
+.facility-ai-service .service-icon{margin:0}.facility-ai-service small{color:#0369a1;font-size:.75rem}:is(html.dark,html[data-theme='dark']) .facility-ai-service small{color:#67e8f9}

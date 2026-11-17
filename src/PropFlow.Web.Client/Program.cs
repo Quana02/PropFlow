@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
-using PropFlow.Modules.Authentication.Contracts;
 using PropFlow.Web.Client.Services.Api;
 using PropFlow.Web.Client.Services.Authentication;
 using PropFlow.Web.Client.Features.Authentication.Services;
@@ -23,26 +22,7 @@ if (apiBase.Scheme != Uri.UriSchemeHttps) throw new InvalidOperationException("A
 builder.Services.AddScoped(sp => new ApiClient(new HttpClient { BaseAddress = apiBase }, sp.GetRequiredService<ILogger<ApiClient>>()));
 builder.Services.AddScoped<AuthSession>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<AuthSession>());
-builder.Services.AddAuthorizationCore(options => options.AddPolicy(AssetPermissions.ViewPolicy,
-    policy => policy.RequireAssertion(context => AssetPermissions.CanView(context.User))));
-builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddAuthorizationCore(options =>
-{
-    options.AddPolicy("finance.manage",
-        policy => policy.RequireRole("ACCOUNTANT").RequireClaim("permission", "MANAGE_FINANCE"));
-    options.AddPolicy(ResidentAccountPolicies.Read,
-        policy => policy.RequireRole("MANAGER").RequireClaim("permission", ResidentAccountPolicies.Read));
-    options.AddPolicy(ResidentAccountPolicies.RequestEmailChange,
-        policy => policy.RequireRole("MANAGER").RequireClaim("permission", ResidentAccountPolicies.RequestEmailChange));
-    options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read,
-        policy => policy.RequireAssertion(context => PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.CanRead(context.User)));
-    options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Manage,
-        policy => policy.RequireAssertion(context => PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.CanManage(context.User)));
-    options.AddPolicy(PropFlow.Modules.Communication.Contracts.SupportChatPolicies.Manager,
-        policy => policy.RequireAssertion(context => PropFlow.Modules.Communication.Contracts.SupportChatPolicies.IsManager(context.User)));
-    options.AddPolicy(PropFlow.Modules.Communication.Contracts.SupportChatPolicies.Resident,
-        policy => policy.RequireAssertion(context => PropFlow.Modules.Communication.Contracts.SupportChatPolicies.IsResident(context.User)));
-});
+builder.Services.AddClientAuthorization();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.KnowledgeApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.ResidentChatApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatApi>();
@@ -56,6 +36,7 @@ builder.Services.AddScoped(sp =>
     return new AuthenticatedApiClient(new HttpClient(handler) { BaseAddress = apiBase }, sp.GetRequiredService<ILogger<ApiClient>>());
 });
 builder.Services.AddScoped<AuthenticationService>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.UtilityInsights.Services.UtilityInsightsApi>();
 builder.Services.AddScoped<PropFlow.Web.Client.Shared.Feedback.ToastService>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Complaints.Services.ComplaintApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.Services.AnnouncementApiClient>();
@@ -64,6 +45,7 @@ builder.Services.AddScoped<OnboardingState>();
 
 builder.Services.AddScoped<IBuildingApiClient, BuildingApiClient>();
 builder.Services.AddScoped<IFacilityApiClient, FacilityApiClient>();
+builder.Services.AddScoped<FacilityRecommendationsApi>();
 builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
 builder.Services.AddScoped<IMaintenanceApiClient, MaintenanceApiClient>();

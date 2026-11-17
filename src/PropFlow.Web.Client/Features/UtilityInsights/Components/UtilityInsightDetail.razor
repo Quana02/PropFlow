@@ -1,0 +1,52 @@
+@using System.Globalization
+@using PropFlow.Web.Client.Features.UtilityInsights.Services
+
+<section class="utility-detail" aria-label="Phân tích tiêu thụ điện nước">
+    <header><div><small>PHÂN TÍCH ĐIỆN NƯỚC</small><h2>Căn hộ @Data.UnitNumber · @Data.Month.ToString("MM/yyyy")</h2></div><span class="utility-pill">@(Data.IsFinal ? "Kỳ đã chốt" : "Số liệu đang nhập")</span></header>
+    <p class="utility-caution">Đây là gợi ý kiểm tra từ số liệu theo tháng, chưa phải kết luận rò rỉ hay thiết bị hỏng. Chưa điều chỉnh theo mùa vụ và số người ở.</p>
+    <div class="utility-signals">
+        @foreach (var signal in new[] { Data.Analysis.Electricity, Data.Analysis.Water })
+        {
+            <article class="utility-signal @signal.Severity.ToLowerInvariant()">
+                <div><h3>@(signal.Utility == "ELECTRICITY" ? "Điện" : "Nước")</h3><span>@UtilityInsightsApi.SeverityLabel(signal.Severity)</span></div>
+                <strong>@Number(signal.Current) <small>@signal.Unit</small></strong>
+                <dl><div><dt>Mức tham chiếu kỳ này</dt><dd>@Number(signal.Reference) @signal.Unit</dd></div><div><dt>Thay đổi</dt><dd>@(signal.ChangePercent is { } p ? p.ToString("+0.#;-0.#;0", Vi) + "%" : "Chưa có mốc so sánh")</dd></div><div><dt>Kỳ tham chiếu hợp lệ</dt><dd>@signal.HistoryCount</dd></div></dl>
+                <p>@signal.Reason</p>
+                <small>@(signal.Method.Contains("fallback") ? "Mô hình thống kê dự phòng" : signal.Severity == "INSUFFICIENT" ? "Đang tích lũy dữ liệu" : "ML.NET và đối chiếu thống kê")</small>
+                <figure class="utility-chart" aria-label="@(signal.Utility == "ELECTRICITY" ? "Lịch sử điện" : "Lịch sử nước")">
+                    <figcaption>Lịch sử các kỳ được phép xem · @signal.Unit</figcaption>
+                    <div class="utility-bars">
+                        @foreach (var point in Data.Analysis.History.TakeLast(13))
+                        {
+                            var value = signal.Utility == "ELECTRICITY" ? point.Electricity : point.Water;
+                            var comparable = signal.Utility == "ELECTRICITY" ? point.ElectricityComparable : point.WaterComparable;
+                            <div class="utility-bar-column" title="@($"{point.Month:MM/yyyy}: {Number(value)} {signal.Unit}" + (!comparable ? " · chưa đủ dữ liệu để đối chiếu" : ""))">
+                                <div class="utility-bar-track"><span class="@(point.Month == Data.Month ? "current" : "") @(!comparable ? "incomplete" : "")" style="height:@Height(value, signal.Utility)"></span></div><small>@point.Month.ToString("MM/yy")</small>
+                            </div>
+                        }
+                    </div>
+                </figure>
+            </article>
+        }
+    </div>
+    <details><summary>Xem số liệu lịch sử</summary><div class="utility-table-wrap"><table><thead><tr><th>Kỳ</th><th>Điện (kWh)</th><th>Nước (m³)</th></tr></thead><tbody>@foreach (var row in Data.Analysis.History) { <tr><td>@row.Month.ToString("MM/yyyy")</td><td>@Number(row.Electricity)</td><td>@Number(row.Water)</td></tr> }</tbody></table></div></details>
+    <section class="utility-explanation"><h3>Giải thích và xác minh</h3>
+        @if (Data.AiExplanation is not null) { <p>@Data.AiExplanation</p><small>Gemini giải thích từ kết quả đã tính; BQL cần kiểm chứng.</small> }
+        else { <p>@(Data.AiMode == "NOT_CONFIGURED" ? "Dịch vụ AI chưa được cấu hình. Bạn vẫn xem được kết quả đối chiếu thống kê." : Data.AiMode == "FALLBACK" ? "AI tạm chưa trả lời được. Số liệu và kết quả thống kê phía trên vẫn sử dụng được." : "Các căn cứ thống kê được hiển thị phía trên. BQL có thể yêu cầu AI diễn giải thêm.")</p> }
+        <p>@UtilityInsightsApi.ReviewLabel(Data.Review) @if (Data.ReviewedAt is { } at) { <span>· @at.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span> }</p>
+        @if (Data.ReviewNote is not null) { <p>Ghi chú BQL: @Data.ReviewNote</p> }
+    </section>
+    @ChildContent
+</section>
+
+@code {
+    [Parameter, EditorRequired] public UtilityInsightView Data { get; set; } = default!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private static readonly CultureInfo Vi = CultureInfo.GetCultureInfo("vi-VN");
+    private static string Number(decimal? number) => number?.ToString("N1", Vi) ?? "—";
+    private string Height(decimal? value, string utility)
+    {
+        var max = Data.Analysis.History.Select(p => utility == "ELECTRICITY" ? p.Electricity : p.Water).Where(x => x.HasValue).Select(x => x!.Value).DefaultIfEmpty(1).Max();
+        return (value is null ? 0 : max <= 0 ? 0 : Math.Clamp(value.Value / max * 100, 0, 100)).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+    }
+}
