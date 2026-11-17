@@ -1,0 +1,40 @@
+@using PropFlow.Web.Client.Features.Facility.Services
+<section class="facility-recommendations" aria-label="Tiện ích phù hợp nhu cầu">
+    <header class="recommendation-heading"><div><span>ĐƯỢC CHỌN CHO BẠN</span><h2>@(Data.Suggestions.Length == 0 ? "Mình cùng tìm cách khác nhé" : $"{Data.Suggestions.Length} lựa chọn đáng để thử")</h2></div><span class="recommendation-mode">@(Data.Mode == "GEMINI" ? "✦ AI gợi ý" : "Tra cứu từ BQL")</span></header>
+    @if(Data.Suggestions.Length == 0){<p class="recommendation-empty">@Data.Message</p>}
+    @if(Data.Mode is "FALLBACK" or "CATALOGUE"){<p class="recommendation-fallback">AI chưa sẵn sàng. Các lựa chọn này được tra cứu từ thông tin BQL.</p>}
+    @if(Data.Suggestions.Length > 1)
+    {
+        <div class="recommendation-choices" aria-label="Chọn tiện ích muốn xem">@for(var index = 0; index < Data.Suggestions.Length; index++){var choice = index;<button type="button" class="@(selectedIndex == choice ? "selected" : "")" aria-pressed="@(selectedIndex == choice)" @onclick="() => selectedIndex = choice" title="@Data.Suggestions[choice].Facility.Name"><span>@(choice+1)</span>@Data.Suggestions[choice].Facility.Name</button>}</div>
+    }
+    <div class="recommendation-grid">
+        @foreach(var item in Data.Suggestions.Skip(selectedIndex).Take(1))
+        {
+            var facility = item.Facility;
+            var first = item.OpeningTimes.FirstOrDefault();
+            <article class="discovery-card" @key="facility.Id">
+                <div class="recommendation-cover"><span class="recommendation-art" aria-hidden="true"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m32 9 6 17 17 6-17 6-6 17-6-17-17-6 17-6 6-17Z"/><circle cx="32" cy="32" r="26" stroke-dasharray="2 7"/></svg></span><span class="recommendation-rank">Lựa chọn @(Array.IndexOf(Data.Suggestions,item)+1)</span><span class="recommendation-audience">@FacilityRecommendationsApi.Audience(facility.Audience)</span></div>
+                <div class="recommendation-body">
+                    <header><p class="recommendation-location">@facility.Location</p><h3>@facility.Name</h3></header>
+                    @if(first is not null)
+                    {
+                        @if(item.Availability.Length>0){<p class="recommendation-contact" role="status">@item.Availability</p>}
+                        <div class="recommendation-schedule"><span>@FacilityRecommendationsApi.Weekday((int)first.Date.DayOfWeek) · @first.Date.ToString("dd/MM/yyyy")</span><div><p><small>MỞ CỬA</small><strong>@first.OpensAt.ToString("HH:mm")</strong></p><i>→</i><p><small>ĐÓNG CỬA</small><strong>@first.ClosesAt.ToString("HH:mm")</strong></p></div></div>
+                    }
+                    <div class="recommendation-meta"><span>Độ tuổi</span><strong>@FacilityRecommendationsApi.Age(facility.MinimumAge,facility.MaximumAge)</strong></div>
+                    <div class="recommendation-person"><span class="recommendation-avatar" aria-hidden="true">@(facility.ResponsibleName.FirstOrDefault())</span><div><small>Người phụ trách</small><strong>@facility.ResponsibleName</strong></div></div>
+                    <p class="recommendation-contact">@facility.ContactDetails</p>
+                    @if(Data.ForChildren || facility.Audience=="CHILDREN"){<p class="recommendation-condition">@FacilityRecommendationsApi.ChildPolicy(facility.ChildPolicy)</p>}
+                    <details class="recommendation-details"><summary>Xem thêm về tiện ích <span aria-hidden="true">+</span></summary><p>@facility.Description</p><p>@item.Reason</p>@if(!string.IsNullOrWhiteSpace(facility.SupervisionNote)){<p>@facility.SupervisionNote</p>}@if(!string.IsNullOrWhiteSpace(facility.Rules)){<h4>Điều kiện sử dụng</h4><p>@facility.Rules</p>}@if(item.OpeningTimes.Length > 1){<h4>Các ngày mở cửa tiếp theo</h4>@foreach(var time in item.OpeningTimes.Skip(1)){<p>@FacilityRecommendationsApi.Weekday((int)time.Date.DayOfWeek) · @time.Date.ToString("dd/MM/yyyy") · @time.OpensAt.ToString("HH:mm")–@time.ClosesAt.ToString("HH:mm")</p>}}</details>
+                    <a href="/resident/contact-management" class="recommendation-cta">Hỏi BQL về tiện ích này <span aria-hidden="true">↗</span></a>
+                </div>
+            </article>
+        }
+    </div>
+</section>
+@code {
+    [Parameter, EditorRequired] public FacilityRecommendationView Data { get; set; } = default!;
+    private int selectedIndex;
+    private FacilityRecommendationView? previous;
+    protected override void OnParametersSet() { if(!ReferenceEquals(previous,Data)){ selectedIndex=0; previous=Data; } }
+}

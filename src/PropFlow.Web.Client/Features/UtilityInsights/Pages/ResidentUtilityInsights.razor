@@ -1,0 +1,45 @@
+@page "/resident/utilities"
+@attribute [Authorize(Roles = "RESIDENT")]
+@layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
+@using PropFlow.Web.Client.Features.UtilityInsights.Services
+@using PropFlow.Web.Client.Features.UtilityInsights.Components
+@inject UtilityInsightsApi Api
+@implements IDisposable
+
+<PageTitle>Điện nước của tôi — PropFlow</PageTitle>
+<main class="resident-utilities">
+    <a href="/resident/billing">← Hóa đơn của tôi</a><h1>Theo dõi điện và nước</h1>
+    <p>Chỉ hiển thị kỳ đã phát hành thuộc quyền xem của bạn. Dữ liệu của hộ khác không được dùng làm lịch sử riêng cho bạn.</p>
+    <button type="button" disabled="@loading" @onclick="Load">Cập nhật phân tích</button>
+    @if (loading) { <p role="status">Đang tải các kỳ điện, nước của bạn…</p> }
+    else if (error is not null) { <p role="alert">@error</p><button type="button" @onclick="Load">Thử lại</button> }
+    else if (items.Length == 0) { <section class="glass-panel empty"><h2>Chưa có kỳ điện nước được phép xem</h2><p>Dữ liệu sẽ xuất hiện khi hóa đơn kỳ sử dụng được phát hành cho tài khoản của bạn.</p></section> }
+    else
+    {
+        <nav class="utility-periods" aria-label="Chọn căn hộ và kỳ điện nước">@foreach (var item in items) { <button type="button" aria-pressed="@(selected?.Id == item.Id)" @onclick="() => selected = item">@item.UnitNumber · @item.Month.ToString("MM/yyyy")</button> }</nav>
+        @if (selected is not null)
+        {
+            <UtilityInsightDetail Data="selected">
+                @if (selected.Review == "PENDING" && (selected.Analysis.Electricity.Severity is "WATCH" or "HIGH" || selected.Analysis.Water.Severity is "WATCH" or "HIGH")) { <p>BQL chưa xác minh cảnh báo này. Bạn có thể cung cấp thông tin về thay đổi sinh hoạt hoặc đề nghị kiểm tra.</p> }
+                <div class="utility-help"><a href="@RequestLink(selected)">Yêu cầu kiểm tra điện/nước</a><a href="/resident/contact-management">Liên hệ BQL</a></div>
+            </UtilityInsightDetail>
+        }
+    }
+</main>
+@code {
+    private UtilityInsightView[] items = [];
+    private UtilityInsightView? selected;
+    private string? error;
+    private bool loading, disposed;
+    private readonly CancellationTokenSource lifetime = new();
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load()
+    {
+        loading = true; error = null;
+        try { var result = await Api.ResidentAsync(lifetime.Token); if (!disposed) { items = result.Data ?? []; selected = items.FirstOrDefault(); error = result.IsSuccess ? null : result.Message; } }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { if (!disposed) loading = false; }
+    }
+    private static string RequestLink(UtilityInsightView item) => "/resident/service-requests/new?description=" + Uri.EscapeDataString($"Tôi muốn BQL kiểm tra điện/nước căn hộ {item.UnitNumber}, kỳ {item.Month:MM/yyyy}. Tôi đã xem kết quả đối chiếu tiêu thụ trên PropFlow. ");
+    public void Dispose() { disposed = true; lifetime.Cancel(); lifetime.Dispose(); }
+}

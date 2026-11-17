@@ -874,7 +874,8 @@ public class ModuleBoundaryTests
 
         foreach (var pr in projectReferences)
         {
-            Assert.DoesNotContain("Modules", pr, StringComparison.OrdinalIgnoreCase);
+            Assert.True(!pr!.Contains("Modules", StringComparison.OrdinalIgnoreCase) || pr.EndsWith(".Contracts.csproj", StringComparison.Ordinal),
+                $"AiRecommendation may consume public contracts, but not another module implementation: {pr}");
         }
     }
 

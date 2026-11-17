@@ -21,6 +21,7 @@ public class PropertyAssetsDbContext : DbContext
         AssetStatusEvents.Capture(this); return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
     public DbSet<Facility> Facilities => Set<Facility>();
+    public DbSet<FacilityGuide> FacilityGuides => Set<FacilityGuide>();
     public DbSet<FacilityType> FacilityTypes => Set<FacilityType>();
     public DbSet<EquipmentEntity> Equipment => Set<EquipmentEntity>();
     public DbSet<PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType> EquipmentTypes => Set<PropFlow.Modules.PropertyAssets.Domain.Equipment.EquipmentType>();
