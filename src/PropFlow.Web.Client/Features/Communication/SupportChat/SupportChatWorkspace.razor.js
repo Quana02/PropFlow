@@ -14,8 +14,6 @@ export function copyMessageText(text) {
     return navigator.clipboard.writeText(text);
 }
 
-}
-
 export function visibleMessages(thread) {
     if (!thread || document.visibilityState !== "visible" || !document.hasFocus()) return [];
     const bounds = thread.getBoundingClientRect();
