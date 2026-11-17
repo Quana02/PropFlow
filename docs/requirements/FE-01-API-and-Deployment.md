@@ -52,15 +52,15 @@ The email OTP challenge is bound to the matched Resident fingerprint. Activation
 
 ## Session behavior
 
-- RS256 access JWT: sub, jti, name, role, permission; default 15 minutes, memory only in WASM.
+- RS256 access JWT contains sub, sid, jti, name, role, permission and the account email when present. The default is 15 minutes and WASM keeps the token in memory. The API checks the current account, effective permissions and active refresh family after validating the JWT.
 - Refresh token: random 256 bits, database SHA-256 hash only, cookie `__Secure-PropFlow.Refresh`, Secure, HttpOnly, Path `/api/v1/auth`, SameSite=Strict by default. Seven-day absolute expiry is preserved across rotation.
 - CSRF: GET csrf, then X-CSRF-TOKEN header on cookie operations. Use credentials=include. The token is requested under the same Bearer identity as the following operation.
 - Browser reload bootstraps through refresh; no localStorage/sessionStorage bearer or password/OTP persistence.
 - Direct client routes are public Web-host shell endpoints with prerender disabled. Web routing removes copied server authorization metadata only for client components; their `[Authorize]` attributes remain on the component types for WASM AuthorizeRouteView. Protected API endpoints independently enforce Bearer authentication and account scope. Ten HTTP route tests cover direct navigation without rendering protected data.
 - Concurrent 401s within one WASM instance share a refresh and retry at most once. 403 never refreshes. Buffered JSON requests are replayable; large/streaming bodies are not automatically retried.
-- Tabs have independent memory/refresh locks. A stale refresh returns 401 without deleting a newer cookie issued concurrently in another tab. The losing tab may require login; cross-tab coordination is not implemented.
-- Logout clears local auth immediately and requests revocation of the current rotation chain. Other device sessions remain. HTTP 204 confirms logout and the Login page stays silent. If the outcome is unconfirmed, Login offers retry below the form. The tab defers login, refresh and password reset completion until revocation is confirmed, because login replaces the refresh cookie and password reset clears it. The tab keeps a boolean pending marker in session storage so reloading it does not restore the old cookie. The marker contains no account identifier, access token, refresh cookie or credentials.
-- Password change/reset revokes all refresh tokens. Existing JWTs remain valid until normal expiry; this implementation does not claim immediate JWT revocation.
+- A stale refresh returns 401 and preserves a newer cookie issued concurrently in another tab. WASM retries this case once. Tabs with an established session can send `X-PropFlow-Session` on refresh and logout to match the cookie to their SID. A mismatched logout returns 409 `session_changed` and preserves the cookie.
+- Logout clears local auth and revokes the whole current refresh family. HTTP 204 confirms revocation. Same-session tabs receive the SID through BroadcastChannel or a storage event. A login on another device continues. If the outcome is unconfirmed, Login offers retry and defers login, refresh and password reset completion. Session storage keeps a pending marker and its SID, with credentials held only in the existing token/cookie locations.
+- Password change/reset, email change, disabling or locking the account, and business role changes revoke all sessions for the target account. Bearer access and SignalR check the persisted session state. Re-enabling an account requires a new login. [Hardening rollout](../deployment/authorization-hardening-runbook.md)
 - OTP: six digits, five minutes, five attempts; resend after 60 seconds, five/hour/account; old challenges are cancelled. Recovery proof is separately random, hashed, one-use, and expires after five minutes.
 
 ## Required environment configuration
@@ -81,7 +81,7 @@ Configure API secrets with environment variables or a deployment secret provider
 
 AuthPolicy exposes AccessMinutes, RefreshDays, OtpMinutes, OtpAttempts, ResendSeconds, SendsPerHour, LockoutFailures and LockoutMinutes. Rate policy overrides are under `Authentication:RateLimits:{auth-login|auth-entry|auth-session}:{PermitLimit|WindowMinutes}`. Defaults follow the approved interpretations. Changing these values is a policy change, not a UI assumption.
 
-Client `Api:BaseUrl` must be HTTPS. Default `/` requires a same-origin reverse proxy forwarding `/api/v1/*` to PropFlow.Api. The Web host does not proxy or authenticate on the browser's behalf. Development uses the existing configured HTTPS API origin. Client configuration is public; it must never contain secrets. Run the HTTPS launch profiles for both hosts.
+Client `Api:BaseUrl` must be HTTPS. Default `/` requires a same-origin reverse proxy forwarding `/api/v1/*` and `/hubs/*` to PropFlow.Api. The Web host does not proxy or authenticate on the browser's behalf. Development uses the existing configured HTTPS API origin. Client configuration is public and holds only public settings. Run the HTTPS launch profiles for both hosts.
 
 The API's committed `appsettings.json` intentionally contains no application database connection or credentials. Startup validates that `ConnectionStrings__PropFlowDatabase` is supplied. Testing has a separate local `propflow_test` configuration; it must never be copied into an application deployment.
 

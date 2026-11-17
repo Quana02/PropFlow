@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using System.Text.Json;
 using PropFlow.Api.Composition;
 using PropFlow.Modules.Administration.Domain.Roles;
 using PropFlow.Modules.Administration.Domain.UserRoleAssignments;
@@ -27,6 +28,7 @@ using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
 using PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
+using PropFlow.Shared.Messaging;
 using AccountStatus = PropFlow.Modules.Authentication.Domain.Users.AccountStatus;
 
 namespace PropFlow.IntegrationTests;
@@ -41,8 +43,10 @@ public sealed class CostConsentDatabaseFixture : IAsyncLifetime
         if (source.Database != "propflow_test") throw new InvalidOperationException("Unexpected test database source.");
         source.Database = "postgres"; adminConnection = source.ConnectionString;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin); await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(admin, databaseName);
         source.Database = databaseName; connection = source.ConnectionString;
+        await TestDatabaseSafety.VerifyFixtureAsync(connection, databaseName, TestDatabaseSafety.ProcessOwner,
+            TestDatabaseConfiguration.GetConnectionString());
         await using var db = CreateDb(); await db.Database.MigrateAsync();
     }
     public ServiceRequestsDbContext CreateDb() => new(new DbContextOptionsBuilder<ServiceRequestsDbContext>()
@@ -51,7 +55,7 @@ public sealed class CostConsentDatabaseFixture : IAsyncLifetime
     {
         if (!databaseName.StartsWith("propflow_fe05_cost_", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(adminConnection)) return;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin); await drop.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(admin, databaseName);
     }
 }
 
@@ -102,8 +106,11 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         accounts.AddRange(owner, manager, inactiveManager, assignee, otherStaff);
         await accounts.SaveChangesAsync();
         var managerRole = await administration.Roles.SingleAsync(role => role.Code == SystemRoleCodes.Manager);
+        var staffRole = await administration.Roles.SingleAsync(role => role.Code == SystemRoleCodes.Staff);
         administration.UserRoleAssignments.AddRange(new UserRoleAssignment(manager.Id, managerRole.Id, now),
-            new UserRoleAssignment(inactiveManager.Id, managerRole.Id, now));
+            new UserRoleAssignment(inactiveManager.Id, managerRole.Id, now),
+            new UserRoleAssignment(assignee.Id, staffRole.Id, now),
+            new UserRoleAssignment(otherStaff.Id, staffRole.Id, now));
         await administration.SaveChangesAsync();
         var resident = new Resident("CD-" + Guid.NewGuid().ToString("N")[..12], owner.DisplayName, now, owner.Id);
         residents.Residents.Add(resident);
@@ -166,6 +173,136 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         Assert.Equal($"/staff/service-requests/{request.RequestNumber}", assignment.ActionPath);
         Assert.Contains(manager.DisplayName, assignment.Message);
         Assert.False(assignment.IsRead);
+
+        // The worker was offline while this request changed twice. Only the current
+        // assignment may create another notice, even if the same person is assigned again.
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(request.Id, manager.Id, otherStaff.Id, null, DateTimeOffset.UtcNow, default));
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(request.Id, manager.Id, assignee.Id, null, DateTimeOffset.UtcNow, default));
+        await dispatcher.DispatchAsync(default);
+        await dispatcher.DispatchAsync(default);
+        var delivered = await communication.Notifications.AsNoTracking().Where(row => row.SourceId == request.Id).ToArrayAsync();
+        Assert.DoesNotContain(delivered, row => row.RecipientUserId == otherStaff.Id);
+        Assert.Equal(2, delivered.Count(row => row.RecipientUserId == assignee.Id));
+        Assert.Equal(3, delivered.Length);
+
+        // Requeue a failed delivery from B, then replace A's current envelope with a
+        // pre-upgrade payload. An old envelope for the same recipient must stay stale.
+        var retryAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(request.Id, manager.Id, otherStaff.Id, null, retryAt, default));
+        var failed = await db.ResidentEvents.SingleAsync(row => row.SourceId == request.Id && row.Status == "Pending");
+        failed.Failed("FixtureTransientFailure", retryAt);
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(request.Id, manager.Id, assignee.Id, null, retryAt.AddTicks(10), default));
+        var modern = await db.ResidentEvents.SingleAsync(row => row.SourceId == request.Id && row.Status == "Pending" && row.Id != failed.Id);
+        db.ResidentEvents.Remove(modern);
+        OutboxEvent Legacy(DateTimeOffset timestamp) => new(ServiceRequestWorkflowNotice.Assigned, request.Id,
+            JsonSerializer.Serialize(new { SenderUserId = manager.Id, RecipientUserId = assignee.Id, request.RequestNumber }), timestamp);
+        var legacyCurrent = Legacy(modern.CreatedAt);
+        var legacyStale = Legacy(modern.CreatedAt.AddTicks(-10));
+        db.ResidentEvents.AddRange(legacyStale, legacyCurrent);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        await dispatcher.DispatchAsync(default);
+        await dispatcher.DispatchAsync(default);
+        var afterLegacy = await communication.Notifications.AsNoTracking().Where(row => row.SourceId == request.Id).ToArrayAsync();
+        Assert.Equal(4, afterLegacy.Length);
+        Assert.Contains(afterLegacy, row => row.Id == assignment.Id);
+        Assert.Equal(3, afterLegacy.Count(row => row.RecipientUserId == assignee.Id));
+        Assert.Equal("Delivered", (await db.ResidentEvents.SingleAsync(row => row.Id == failed.Id)).Status);
+
+        await VerifyReassignmentDuringDispatch(db, dispatcher, request.Id, manager.Id, assignee.Id, otherStaff.Id);
+        await dispatcher.DispatchAsync(default);
+        await dispatcher.DispatchAsync(default);
+        var afterContention = await communication.Notifications.AsNoTracking().Where(row => row.SourceId == request.Id).ToArrayAsync();
+        Assert.Equal(5, afterContention.Length);
+        Assert.DoesNotContain(afterContention, row => row.RecipientUserId == otherStaff.Id);
+        Assert.All(afterLegacy, old => Assert.Contains(afterContention, row => row.Id == old.Id));
+
+        var sharedTimestamp = DateTimeOffset.UtcNow;
+        foreach (var staff in new[] { otherStaff.Id, assignee.Id, otherStaff.Id, assignee.Id })
+            Assert.Equal(ManagerServiceRequestOutcome.Success,
+                await store.AssignAsync(request.Id, manager.Id, staff, null, sharedTimestamp, default));
+        var ambiguousLegacy = Legacy(sharedTimestamp);
+        db.ResidentEvents.Add(ambiguousLegacy);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        await dispatcher.DispatchAsync(default);
+        Assert.Equal("Delivered", (await db.ResidentEvents.SingleAsync(row => row.Id == ambiguousLegacy.Id)).Status);
+        Assert.Equal(6, await communication.Notifications.CountAsync(row => row.SourceId == request.Id));
+
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(request.Id, manager.Id, otherStaff.Id, null, DateTimeOffset.UtcNow, default));
+        otherStaff.Disable(manager.Id, DateTimeOffset.UtcNow);
+        await accounts.SaveChangesAsync();
+        await dispatcher.DispatchAsync(default);
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(request.Id, manager.Id, assignee.Id, null, DateTimeOffset.UtcNow, default));
+        administration.UserRoleAssignments.Remove(await administration.UserRoleAssignments.SingleAsync(row => row.UserId == assignee.Id));
+        await administration.SaveChangesAsync();
+        await dispatcher.DispatchAsync(default);
+        Assert.Equal(6, await communication.Notifications.CountAsync(row => row.SourceId == request.Id));
+
+        var identity = new Setup(Guid.Empty, owner.Id, resident.Id, assignee.Id, Guid.Empty);
+        var replacedProposal = await Seed(identity: identity);
+        var resolvedProposal = await Seed(identity: identity);
+        await Service(db, replacedProposal).ProposeAsync(assignee.Id, replacedProposal.Id,
+            new(70000, "Báo giá mới", replacedProposal.Proposal), default);
+        Assert.Equal("OK", await Respond(resolvedProposal, false));
+        await dispatcher.DispatchAsync(default);
+        await dispatcher.DispatchAsync(default);
+        var activeProposal = Assert.Single(await communication.Notifications.AsNoTracking()
+            .Where(row => row.SourceId == replacedProposal.Id).ToArrayAsync());
+        Assert.Equal(owner.Id, activeProposal.RecipientUserId);
+        Assert.Contains("Báo giá mới", activeProposal.Message);
+        Assert.False(await communication.Notifications.AnyAsync(row => row.SourceId == resolvedProposal.Id));
+        Assert.False(await db.ResidentEvents.AnyAsync(row =>
+            (row.SourceId == replacedProposal.Id || row.SourceId == resolvedProposal.Id) && row.Status != "Delivered"));
+    }
+
+    private async Task VerifyReassignmentDuringDispatch(ServiceRequestsDbContext worker, ServiceRequestCostNoticeDispatcher dispatcher,
+        Guid requestId, Guid manager, Guid currentStaff, Guid temporaryStaff)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var ct = deadline.Token;
+        await using var writer = database.CreateDb();
+        var store = new ManagerServiceRequestStore(writer);
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(requestId, manager, temporaryStaff, null, DateTimeOffset.UtcNow, ct));
+        await using var transaction = await writer.Database.BeginTransactionAsync(ct);
+        Assert.Equal(ManagerServiceRequestOutcome.Success,
+            await store.AssignAsync(requestId, manager, currentStaff, null, DateTimeOffset.UtcNow, ct));
+
+        worker.ChangeTracker.Clear();
+        await worker.Database.OpenConnectionAsync(ct);
+        var workerPid = ((NpgsqlConnection)worker.Database.GetDbConnection()).ProcessID;
+        var writerPid = ((NpgsqlConnection)writer.Database.GetDbConnection()).ProcessID;
+        var dispatch = dispatcher.DispatchAsync(ct);
+        try
+        {
+            await using var observer = new NpgsqlConnection(worker.Database.GetConnectionString());
+            await observer.OpenAsync(ct);
+            await using var observe = new NpgsqlCommand("SELECT @writer = ANY(pg_blocking_pids(@worker))", observer);
+            observe.Parameters.AddWithValue("writer", writerPid);
+            observe.Parameters.AddWithValue("worker", workerPid);
+            while (!dispatch.IsCompleted && (bool)(await observe.ExecuteScalarAsync(ct))! == false)
+                await Task.Delay(25, ct);
+            Assert.False(dispatch.IsCompleted, "Dispatch should wait for the transaction changing its candidate assignment.");
+            await transaction.CommitAsync(ct);
+            await dispatch;
+        }
+        finally
+        {
+            if (!dispatch.IsCompleted)
+            {
+                await deadline.CancelAsync();
+                try { await dispatch; }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+            }
+            await worker.Database.CloseConnectionAsync();
+        }
     }
 
     [Fact]
@@ -223,10 +360,10 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         catch (ServiceRequestCostFailure error) { return error.Status.ToString(); }
     }
     private static AdditionalCostConsentService Service(ServiceRequestsDbContext db, Setup setup) => new(db, new Scope(setup), new Scope(setup), TimeProvider.System);
-    private async Task<Setup> Seed(bool propose = true, string? serviceArea = null)
+    private async Task<Setup> Seed(bool propose = true, string? serviceArea = null, Setup? identity = null)
     {
         await using var db = database.CreateDb(); var now = DateTimeOffset.UtcNow;
-        var setup = new Setup(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.Empty);
+        var setup = identity ?? new Setup(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.Empty);
         var request = new ServiceRequest("YC-" + Guid.NewGuid().ToString("N")[..20], setup.Resident, Guid.NewGuid(), "Sửa thiết bị", "Kiểm tra và đề xuất chi phí", now,
             serviceAreaCode: serviceArea, submittedByUserId: setup.Owner);
         request.MarkUnderReview(now); request.MarkAssigned(now); request.MarkInProgress(now);

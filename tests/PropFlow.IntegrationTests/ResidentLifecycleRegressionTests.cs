@@ -218,7 +218,7 @@ public sealed class ResidentLifecycleRegressionTests(AuthDatabaseFixture databas
         await access.SaveChangesAsync();
         var account = new AccountResponse(user.Id, user.Username, user.DisplayName, null, null, "ACTIVE", true, "MANAGER", role.RolePermissions.Select(x => x.Permission.Code).ToArray());
         var client = database.Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", scope.ServiceProvider.GetRequiredService<IAuthSecrets>().Issue(account, database.Factory.Clock.GetUtcNow()).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(scope.ServiceProvider, account, database.Factory.Clock.GetUtcNow())).AccessToken);
         return client;
     }
 }

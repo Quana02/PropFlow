@@ -15,7 +15,7 @@
     background: var(--composer-surface);
     border-top: 1px solid var(--composer-line);
 }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-compose {
+:where(html[data-theme="dark"]) .support-compose {
     --composer-surface: #162535;
     --composer-field: #203445;
     --composer-line: #365267;
@@ -132,7 +132,7 @@
 .support-selection button:hover:not(:disabled) { background: #0284c726; }
 .support-selection button.danger { color: #bf3147; background: #bf314719; }
 .support-selection button.danger:hover:not(:disabled) { background: #bf31472c; }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-selection button.danger { color: #fca5a5; }
+:where(html[data-theme="dark"]) .support-selection button.danger { color: #fca5a5; }
 .support-selection button.support-selection-cancel { padding-inline: .6rem; border-radius: .4rem; background: transparent; font-weight: 650; }
 .support-selection button.support-selection-cancel:hover:not(:disabled) { background: #0284c726; }
 .support-selection .material-symbols-outlined { font-size: 1.1rem; line-height: 1; }
@@ -237,7 +237,7 @@
     background: var(--app-soft, #eaf6fc);
 }
 .support-message-menu .danger { color: #bf3147; }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-message-menu .danger { color: #fca5a5; }
+:where(html[data-theme="dark"]) .support-message-menu .danger { color: #fca5a5; }
 .support-message-menu hr { margin: .25rem .35rem; border: 0; border-top: 1px solid var(--app-line, #d4e5ef); }
 .support-details-preview {
     display: flex;
@@ -296,4 +296,4 @@
 .support-send-status.failed { color: #ad3e51; }
 .support-receipt { margin-top: .2rem; text-align: end; }
 .support-bubble .recalled { color: #547488; font-style: italic; }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-send-status.failed { color: #fca5a5; }
+:where(html[data-theme="dark"]) .support-send-status.failed { color: #fca5a5; }

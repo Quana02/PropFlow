@@ -297,15 +297,17 @@ public sealed class ClientAuthenticationTests
 
     private sealed class RevocationStorage : IJSInProcessRuntime
     {
-        public string? Marker { get; private set; }
+        private readonly Dictionary<string, string> storage = new();
+        public string? Marker => storage.GetValueOrDefault("propflow:logout-unconfirmed");
         public TValue Invoke<TValue>(string identifier, params object?[]? args)
         {
-            Assert.Equal("propflow:logout-unconfirmed", args![0]);
+            if (identifier == "import") throw new JSException("Test runtime has no browser modules.");
+            Assert.Contains(Assert.IsType<string>(args![0]), new[] { "propflow:logout-unconfirmed", "propflow:logout-session" });
             switch (identifier)
             {
-                case "sessionStorage.getItem": return (TValue)(object?)Marker!;
-                case "sessionStorage.setItem": Marker = Assert.IsType<string>(args[1]); break;
-                case "sessionStorage.removeItem": Marker = null; break;
+                case "sessionStorage.getItem": return (TValue)(object?)storage.GetValueOrDefault(Assert.IsType<string>(args[0]))!;
+                case "sessionStorage.setItem": storage[Assert.IsType<string>(args[0])] = Assert.IsType<string>(args[1]); break;
+                case "sessionStorage.removeItem": storage.Remove(Assert.IsType<string>(args[0])); break;
                 default: throw new InvalidOperationException(identifier);
             }
             return default!;

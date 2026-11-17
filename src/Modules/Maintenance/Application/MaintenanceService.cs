@@ -171,32 +171,32 @@ public sealed class MaintenanceService(
         if (command.ServiceRequestId == Guid.Empty)
             throw new ArgumentException("Yêu cầu dịch vụ liên quan không hợp lệ.", nameof(command.ServiceRequestId));
 
-        var task = await db.MaintenanceTasks.Include(item => item.Schedule).Include(item => item.Assignments)
-            .SingleOrDefaultAsync(item => item.Id == taskId, ct)
-            ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
-        var request = await GetLinkableServiceRequestAsync(command.ServiceRequestId, ct);
-        task.LinkServiceRequest(request.Id, timeProvider.GetUtcNow());
-        db.MaintenanceTaskActivities.Add(ServiceRequestLinkedActivity(task.Id, request, actor, timeProvider.GetUtcNow()));
-        await db.SaveChangesAsync(ct);
+        var task = await WithTaskLockAsync(taskId, async token =>
+        {
+            var current = await db.MaintenanceTasks.Include(item => item.Schedule).Include(item => item.Assignments)
+                .SingleOrDefaultAsync(item => item.Id == taskId, token)
+                ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
+            var request = await GetLinkableServiceRequestAsync(command.ServiceRequestId, token);
+            var now = timeProvider.GetUtcNow();
+            current.LinkServiceRequest(request.Id, now);
+            db.MaintenanceTaskActivities.Add(ServiceRequestLinkedActivity(current.Id, request, actor, now));
+            await db.SaveChangesAsync(token);
+            return current;
+        }, ct);
         await NotifyVisibleAssigneesAsync(task, ct);
         return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await LatestResultAsync(task.Id, ct), ct);
     }
 
     public async Task<Page<MaintenanceTaskDto>> MyTasksAsync(MyMaintenanceTaskQuery query, Guid staffUserId, CancellationToken ct)
     {
-        var source = db.MaintenanceTasks.AsNoTracking().Include(task => task.Schedule).Include(task => task.Assignments).AsQueryable();
-        if (query.CompletedOnly)
-        {
-            source = source.Where(task => task.Assignments.Any(assignment => assignment.StaffUserId == staffUserId) &&
-                task.Status == MaintenanceTaskStatus.CLOSED);
-        }
-        else
-        {
-            source = source.Where(task => task.Assignments.Any(assignment => assignment.StaffUserId == staffUserId &&
-                (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS ||
-                 (task.Status == MaintenanceTaskStatus.COMPLETED && assignment.Status == AssignmentStatus.COMPLETED))) &&
-                task.Status != MaintenanceTaskStatus.CLOSED && task.Status != MaintenanceTaskStatus.CANCELLED);
-        }
+        var includeClosed = query.CompletedOnly || query.IncludeCompleted;
+        var includeActive = !query.CompletedOnly;
+        var source = db.MaintenanceTasks.AsNoTracking().Include(task => task.Schedule).Include(task => task.Assignments)
+            .Where(task => task.Assignments.Any(assignment => assignment.StaffUserId == staffUserId &&
+                ((includeClosed && task.Status == MaintenanceTaskStatus.CLOSED && assignment.Status == AssignmentStatus.COMPLETED) ||
+                 (includeActive && task.Status != MaintenanceTaskStatus.CLOSED && task.Status != MaintenanceTaskStatus.CANCELLED &&
+                  (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS ||
+                   (task.Status == MaintenanceTaskStatus.COMPLETED && assignment.Status == AssignmentStatus.COMPLETED))))));
         if (!string.IsNullOrWhiteSpace(query.SearchKeyword))
         {
             var key = query.SearchKeyword.Trim().ToLower();
@@ -212,13 +212,15 @@ public sealed class MaintenanceService(
         var total = await source.CountAsync(ct);
         var page = Math.Max(1, query.PageIndex);
         var size = Math.Clamp(query.PageSize, 1, 100);
-        var tasks = await source.OrderBy(task => task.DueAt == null).ThenBy(task => task.DueAt).ThenByDescending(task => task.CreatedAt)
+        var tasks = await source.OrderBy(task => task.DueAt == null).ThenBy(task => task.DueAt).ThenByDescending(task => task.CreatedAt).ThenBy(task => task.Id)
             .Skip((page - 1) * size).Take(size).ToListAsync(ct);
-        var staff = await staffDirectory.GetActiveStaffAsync(staffUserId, ct);
         var items = new List<MaintenanceTaskDto>(tasks.Count);
         foreach (var task in tasks)
         {
-            items.Add(await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), null, ct));
+            var current = task.Assignments.Any(assignment => assignment.StaffUserId == staffUserId && assignment.IsActive);
+            items.Add(current
+                ? await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), null, ct)
+                : HistoricalTaskSummary(task));
         }
         return new(items, total, page, size);
     }
@@ -230,26 +232,57 @@ public sealed class MaintenanceService(
                 (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS ||
                  ((task.Status == MaintenanceTaskStatus.COMPLETED || task.Status == MaintenanceTaskStatus.CLOSED) && assignment.Status == AssignmentStatus.COMPLETED))), ct)
             ?? throw new KeyNotFoundException("Không tìm thấy công việc được phân công cho bạn.");
-        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await LatestResultAsync(task.Id, ct), ct);
+        var current = task.Assignments.Any(assignment => assignment.StaffUserId == staffUserId && assignment.IsActive);
+        var results = StaffResults(staffUserId, allowHandover: current).Where(item => item.MaintenanceTaskId == id);
+        var result = await results.OrderByDescending(item => item.AttemptNo).FirstOrDefaultAsync(ct);
+        var visibleResult = result is null ? null : await ToStaffResultDtoAsync(result, task.Assignments, staffUserId, current, ct);
+        if (!current && visibleResult is not null)
+            visibleResult = visibleResult with { AttemptNo = await results.CountAsync(ct) };
+        if (current)
+            return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), visibleResult, ct);
+
+        var team = task.Assignments.Where(assignment => assignment.Status == AssignmentStatus.COMPLETED &&
+            assignment.CompletedAt != null && assignment.CompletedAt == task.CompletedAt).ToArray();
+        var staff = await HistoricalStaffByIdAsync(team.Select(assignment => assignment.StaffUserId), ct);
+        return HistoricalTaskSummary(task, visibleResult, ProjectAssignees(team, staff));
     }
+
+    private MaintenanceTaskDto HistoricalTaskSummary(MaintenanceTask task, MaintenanceResultDto? result = null,
+        IReadOnlyList<AssignableMaintenanceStaffDto>? team = null) =>
+        ToDto(task, task.Schedule, team, latestResult: result) with
+        {
+            Description = null,
+            SourceServiceRequestId = null,
+            AssignedAt = null
+        };
 
     public async Task<MaintenanceTaskDto> StartMyTaskAsync(Guid taskId, Guid staffUserId, CancellationToken ct)
     {
-        var (task, assignment) = await CurrentAssignedTaskAsync(taskId, staffUserId, ct);
-        if (task.Status != MaintenanceTaskStatus.ASSIGNED) throw new InvalidOperationException("Không thể bắt đầu công việc ở trạng thái hiện tại.");
-        var now = timeProvider.GetUtcNow(); task.Start(now); assignment.Start(now);
-        db.MaintenanceTaskActivities.Add(new(task.Id, MaintenanceActivityType.STATUS_CHANGED, now, assignment.Id, MaintenanceTaskStatus.ASSIGNED, MaintenanceTaskStatus.IN_PROGRESS, "Bắt đầu công việc", staffUserId));
-        await db.SaveChangesAsync(ct);
+        var task = await WithTaskLockAsync(taskId, async token =>
+        {
+            var (assignedTask, assignment) = await CurrentAssignedTaskAsync(taskId, staffUserId, token);
+            if (assignedTask.Status != MaintenanceTaskStatus.ASSIGNED) throw new InvalidOperationException("Không thể bắt đầu công việc ở trạng thái hiện tại.");
+            var now = timeProvider.GetUtcNow();
+            assignedTask.Start(now);
+            assignment.Start(now);
+            db.MaintenanceTaskActivities.Add(new(taskId, MaintenanceActivityType.STATUS_CHANGED, now, assignment.Id, MaintenanceTaskStatus.ASSIGNED, MaintenanceTaskStatus.IN_PROGRESS, "Bắt đầu công việc", staffUserId));
+            await db.SaveChangesAsync(token);
+            return assignedTask;
+        }, ct);
         await NotifyVisibleAssigneesAsync(task, ct);
         return await MyTaskAsync(taskId, staffUserId, ct);
     }
     public async Task<MaintenanceTaskDto> UpdateMyTaskProgressAsync(Guid taskId, UpdateMaintenanceProgressCommand command, Guid staffUserId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(command.Content)) throw new ArgumentException("Vui lòng nhập nội dung cập nhật tiến độ.");
-        var (task, assignment) = await CurrentAssignedTaskAsync(taskId, staffUserId, ct);
-        if (task.Status != MaintenanceTaskStatus.IN_PROGRESS) throw new InvalidOperationException("Chỉ có thể cập nhật tiến độ khi công việc đang thực hiện.");
-        db.MaintenanceTaskActivities.Add(new(task.Id, MaintenanceActivityType.PROGRESS_UPDATED, timeProvider.GetUtcNow(), assignment.Id, detail: command.Content, performedBy: staffUserId));
-        await db.SaveChangesAsync(ct);
+        var task = await WithTaskLockAsync(taskId, async token =>
+        {
+            var (assignedTask, assignment) = await CurrentAssignedTaskAsync(taskId, staffUserId, token);
+            if (assignedTask.Status != MaintenanceTaskStatus.IN_PROGRESS) throw new InvalidOperationException("Chỉ có thể cập nhật tiến độ khi công việc đang thực hiện.");
+            db.MaintenanceTaskActivities.Add(new(taskId, MaintenanceActivityType.PROGRESS_UPDATED, timeProvider.GetUtcNow(), assignment.Id, detail: command.Content, performedBy: staffUserId));
+            await db.SaveChangesAsync(token);
+            return assignedTask;
+        }, ct);
         await NotifyVisibleAssigneesAsync(task, ct);
         return await MyTaskAsync(taskId, staffUserId, ct);
     }
@@ -268,45 +301,43 @@ public sealed class MaintenanceService(
         if (requireEvidence && evidenceStorage is null)
             throw new InvalidOperationException("Hạ tầng lưu ảnh minh chứng chưa sẵn sàng.");
 
-        var (task, assignment) = await CurrentAssignedTaskAsync(taskId, staffUserId, ct);
-        if (task.Status != MaintenanceTaskStatus.IN_PROGRESS)
-            throw new InvalidOperationException("Công việc không còn ở trạng thái có thể hoàn thành.");
-
-        var now = timeProvider.GetUtcNow();
-        var attemptNo = (await db.MaintenanceResults
-            .Where(result => result.MaintenanceTaskId == taskId)
-            .Select(result => (int?)result.AttemptNo)
-            .MaxAsync(ct) ?? 0) + 1;
-        var result = new MaintenanceResult(task.Id, attemptNo, staffUserId, command.Summary, now,
-            command.WorkPerformed, command.IssueFound, command.PartsOrResourcesUsed, command.Recommendation);
-
-        db.MaintenanceResults.Add(result);
         var stored = new List<StoredMaintenanceEvidence>();
-        await using var transaction = requireEvidence ? await db.Database.BeginTransactionAsync(ct) : null;
+        var writeSaved = false;
+        MaintenanceTask task;
         try
         {
-            if (requireEvidence)
+            task = await WithTaskLockAsync(taskId, async token =>
             {
+                var (assignedTask, assignment) = await CurrentAssignedTaskAsync(taskId, staffUserId, token);
+                if (assignedTask.Status != MaintenanceTaskStatus.IN_PROGRESS)
+                    throw new InvalidOperationException("Công việc không còn ở trạng thái có thể hoàn thành.");
+
+                var now = timeProvider.GetUtcNow();
+                var attemptNo = (await db.MaintenanceResults.Where(item => item.MaintenanceTaskId == taskId)
+                    .Select(item => (int?)item.AttemptNo).MaxAsync(token) ?? 0) + 1;
+                var result = new MaintenanceResult(taskId, attemptNo, staffUserId, command.Summary, now,
+                    command.WorkPerformed, command.IssueFound, command.PartsOrResourcesUsed, command.Recommendation);
+                db.MaintenanceResults.Add(result);
                 foreach (var upload in evidenceImages)
                 {
-                    var saved = await evidenceStorage!.StoreAsync(result.Id, upload, ct);
+                    var saved = await evidenceStorage!.StoreAsync(result.Id, upload, token);
                     stored.Add(saved);
                     db.MaintenanceResultAttachments.Add(new MaintenanceResultAttachment(result.Id, saved.StorageKey, saved.OriginalFileName, saved.ContentType, saved.SizeBytes, staffUserId, now));
                 }
-            }
-            task.Complete(now);
-            foreach (var activeAssignment in task.Assignments.Where(item => item.IsActive))
-                activeAssignment.Complete(now);
-        db.MaintenanceTaskActivities.Add(new MaintenanceTaskActivity(task.Id, MaintenanceActivityType.RESULT_SUBMITTED, now,
-            assignment.Id, MaintenanceTaskStatus.IN_PROGRESS, MaintenanceTaskStatus.COMPLETED,
-            "Đã gửi kết quả để Manager nghiệm thu.", staffUserId));
-        await db.SaveChangesAsync(ct);
-            if (transaction is not null) await transaction.CommitAsync(ct);
+                assignedTask.Complete(now);
+                foreach (var activeAssignment in assignedTask.Assignments.Where(item => item.IsActive))
+                    activeAssignment.Complete(now);
+                db.MaintenanceTaskActivities.Add(new(taskId, MaintenanceActivityType.RESULT_SUBMITTED, now,
+                    assignment.Id, MaintenanceTaskStatus.IN_PROGRESS, MaintenanceTaskStatus.COMPLETED,
+                    "Đã gửi kết quả để Manager nghiệm thu.", staffUserId));
+                await db.SaveChangesAsync(token);
+                writeSaved = true;
+                return assignedTask;
+            }, ct);
         }
         catch
         {
-            if (transaction is not null) await transaction.RollbackAsync(ct);
-            if (evidenceStorage is not null)
+            if (!writeSaved && evidenceStorage is not null)
                 foreach (var saved in stored)
                     try { await evidenceStorage.DeleteAsync(saved.StorageKey, CancellationToken.None); }
                     catch { /* Preserve the original failure; orphan cleanup is retriable operational work. */ }
@@ -317,8 +348,25 @@ public sealed class MaintenanceService(
     }
     public async Task<IReadOnlyList<MaintenanceTaskActivityDto>> MyTaskActivitiesAsync(Guid taskId, Guid staffUserId, CancellationToken ct)
     {
-        await CurrentAssignedTaskAsync(taskId, staffUserId, ct);
-        return await db.MaintenanceTaskActivities.AsNoTracking().Where(x => x.MaintenanceTaskId == taskId).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+        var assignments = db.MaintenanceAssignments.AsNoTracking().Where(assignment =>
+            assignment.MaintenanceTaskId == taskId && assignment.StaffUserId == staffUserId);
+        var active = assignments.Where(assignment =>
+            assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS);
+        var finished = assignments.Where(assignment => assignment.Status == AssignmentStatus.COMPLETED
+            && (assignment.MaintenanceTask!.Status == MaintenanceTaskStatus.COMPLETED ||
+                assignment.MaintenanceTask.Status == MaintenanceTaskStatus.CLOSED));
+        if (!await active.AnyAsync(ct) && !await finished.AnyAsync(ct))
+        {
+            if (!await db.MaintenanceTasks.AsNoTracking().AnyAsync(task => task.Id == taskId, ct))
+                throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
+            throw new UnauthorizedAccessException("Bạn không còn được phân công công việc này.");
+        }
+
+        var historicalActivities = StaffHistoryActivities(staffUserId);
+        return await db.MaintenanceTaskActivities.AsNoTracking()
+            .Where(activity => activity.MaintenanceTaskId == taskId && (active.Any()
+                || (finished.Any() && historicalActivities.Any(item => item.Id == activity.Id))))
+            .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
             .Select(x => new MaintenanceTaskActivityDto(x.Id, x.ActivityType, x.Detail, x.CreatedAt, x.PerformedBy)).ToListAsync(ct);
     }
 
@@ -333,9 +381,10 @@ public sealed class MaintenanceService(
         if (evidenceStorage is null) throw new InvalidOperationException("Hạ tầng lưu ảnh minh chứng chưa sẵn sàng.");
         if (staffUserId.HasValue && !await db.MaintenanceAssignments.AsNoTracking().AnyAsync(item => item.MaintenanceTaskId == taskId && item.StaffUserId == staffUserId.Value, ct))
             throw new UnauthorizedAccessException("Bạn không có quyền xem ảnh minh chứng của công việc này.");
+        var results = staffUserId is { } staff ? StaffResults(staff, allowHandover: true) : db.MaintenanceResults.AsNoTracking();
         var attachment = await db.MaintenanceResultAttachments.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == attachmentId && item.MaintenanceResultId == resultId &&
-                db.MaintenanceResults.Any(result => result.Id == resultId && result.MaintenanceTaskId == taskId), ct)
+                results.Any(result => result.Id == resultId && result.MaintenanceTaskId == taskId), ct)
             ?? throw new KeyNotFoundException("Không tìm thấy ảnh minh chứng.");
         return new(await evidenceStorage.OpenReadAsync(attachment.StorageKey, ct), attachment.ContentType, attachment.OriginalFileName);
     }
@@ -346,7 +395,10 @@ public sealed class MaintenanceService(
         return (task, assignment);
     }
 
-    public async Task<MaintenanceHistoryListDto> HistoryAsync(MaintenanceHistoryQuery query, CancellationToken ct)
+    public Task<MaintenanceHistoryListDto> HistoryAsync(MaintenanceHistoryQuery query, CancellationToken ct) =>
+        HistoryAsync(query, historicalStaff: null, ct);
+
+    private async Task<MaintenanceHistoryListDto> HistoryAsync(MaintenanceHistoryQuery query, Guid? historicalStaff, CancellationToken ct)
     {
         EnsureValidRange(query.From, query.To);
         var tasks = db.MaintenanceTasks.AsNoTracking().AsQueryable();
@@ -365,7 +417,10 @@ public sealed class MaintenanceService(
         {
             task.Id,
             task.Status,
-            HistoryAt = db.MaintenanceTaskActivities.Where(activity => activity.MaintenanceTaskId == task.Id)
+            HistoryAt = historicalStaff.HasValue
+                ? db.MaintenanceAssignments.Where(assignment => assignment.MaintenanceTaskId == task.Id && assignment.StaffUserId == historicalStaff.Value)
+                    .Max(assignment => (DateTimeOffset?)(assignment.EndedAt ?? assignment.AssignedAt)) ?? task.CreatedAt
+                : db.MaintenanceTaskActivities.Where(activity => activity.MaintenanceTaskId == task.Id)
                 .OrderByDescending(activity => activity.CreatedAt)
                 .Select(activity => (DateTimeOffset?)activity.CreatedAt)
                 .FirstOrDefault() ?? task.ClosedAt ?? task.CompletedAt ?? task.UpdatedAt
@@ -394,47 +449,111 @@ public sealed class MaintenanceService(
         var historyAtByTask = selected.ToDictionary(record => record.Id, record => record.HistoryAt);
         var pageTasks = await db.MaintenanceTasks.AsNoTracking().Include(task => task.Schedule).Include(task => task.Assignments)
             .Where(task => ids.Contains(task.Id)).ToListAsync(ct);
-        var latestResults = await db.MaintenanceResults.AsNoTracking().Where(result => ids.Contains(result.MaintenanceTaskId))
+        var visibleResults = historicalStaff is { } staff ? StaffResults(staff) : db.MaintenanceResults.AsNoTracking();
+        var latestResults = await visibleResults.Where(result => ids.Contains(result.MaintenanceTaskId))
             .OrderByDescending(result => result.AttemptNo).ToListAsync(ct);
-        var staffById = await HistoricalStaffByIdAsync(pageTasks.SelectMany(task => task.Assignments).Select(assignment => assignment.StaffUserId), ct);
+        var staffById = await HistoricalStaffByIdAsync(pageTasks.SelectMany(task => task.Assignments)
+            .Where(assignment => historicalStaff is null || assignment.StaffUserId == historicalStaff).Select(assignment => assignment.StaffUserId), ct);
         var byTask = pageTasks.ToDictionary(task => task.Id);
         var resultByTask = latestResults.GroupBy(result => result.MaintenanceTaskId).ToDictionary(group => group.Key, group => group.First());
-        var items = selected.Select(record => ToHistoryItem(byTask[record.Id], historyAtByTask[record.Id], resultByTask.GetValueOrDefault(record.Id), staffById)).ToArray();
+        var items = selected.Select(record => ToHistoryItem(byTask[record.Id], historyAtByTask[record.Id], resultByTask.GetValueOrDefault(record.Id), staffById, historicalStaff)).ToArray();
         return new(new(items, total, page, size), summary);
     }
 
     public Task<MaintenanceHistoryListDto> MyHistoryAsync(MaintenanceHistoryQuery query, Guid staffUserId, CancellationToken ct) =>
-        HistoryAsync(query with { StaffUserId = staffUserId }, ct);
+        HistoryAsync(query with { StaffUserId = staffUserId }, staffUserId, ct);
 
-    public async Task<MaintenanceHistoryDetailDto> HistoryDetailAsync(Guid taskId, CancellationToken ct)
+    public Task<MaintenanceHistoryDetailDto> HistoryDetailAsync(Guid taskId, CancellationToken ct) =>
+        HistoryDetailAsync(taskId, historicalStaff: null, ct);
+
+    private async Task<MaintenanceHistoryDetailDto> HistoryDetailAsync(Guid taskId, Guid? historicalStaff, CancellationToken ct)
     {
         var task = await db.MaintenanceTasks.AsNoTracking().Include(item => item.Schedule).Include(item => item.Assignments)
-            .SingleOrDefaultAsync(item => item.Id == taskId, ct) ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
-        var activities = await db.MaintenanceTaskActivities.AsNoTracking().Where(activity => activity.MaintenanceTaskId == taskId)
+            .SingleOrDefaultAsync(item => item.Id == taskId && (historicalStaff == null ||
+                item.Assignments.Any(assignment => assignment.StaffUserId == historicalStaff)), ct)
+            ?? throw new KeyNotFoundException("Không tìm thấy lịch sử bảo trì.");
+        var visibleActivities = historicalStaff is { } actor ? StaffHistoryActivities(actor) : db.MaintenanceTaskActivities.AsNoTracking();
+        var activities = await visibleActivities.Where(activity => activity.MaintenanceTaskId == taskId)
             .OrderBy(activity => activity.CreatedAt).ThenBy(activity => activity.Id).ToListAsync(ct);
-        var results = await db.MaintenanceResults.AsNoTracking().Where(result => result.MaintenanceTaskId == taskId)
+        var visibleResults = historicalStaff is { } staff ? StaffResults(staff) : db.MaintenanceResults.AsNoTracking();
+        var results = await visibleResults.Where(result => result.MaintenanceTaskId == taskId)
             .OrderBy(result => result.AttemptNo).ToListAsync(ct);
-        var staffById = await HistoricalStaffByIdAsync(task.Assignments.Select(assignment => assignment.StaffUserId), ct);
-        var historyAt = activities.LastOrDefault()?.CreatedAt ?? task.ClosedAt ?? task.CompletedAt ?? task.UpdatedAt;
+        var participation = task.Assignments.Where(assignment => historicalStaff is null || assignment.StaffUserId == historicalStaff).ToArray();
+        var staffById = await HistoricalStaffByIdAsync(participation.Select(assignment => assignment.StaffUserId), ct);
+        var historyAt = historicalStaff is null
+            ? activities.LastOrDefault()?.CreatedAt ?? task.ClosedAt ?? task.CompletedAt ?? task.UpdatedAt
+            : participation.Max(assignment => assignment.EndedAt ?? assignment.AssignedAt);
         var latest = results.LastOrDefault();
-        var item = ToHistoryItem(task, historyAt, latest, staffById);
-        var assignments = task.Assignments.OrderBy(assignment => assignment.AssignedAt).ThenBy(assignment => assignment.Id)
+        var item = ToHistoryItem(task, historyAt, latest, staffById, historicalStaff);
+        var assignments = participation.OrderBy(assignment => assignment.AssignedAt).ThenBy(assignment => assignment.Id)
             .Select(assignment => ToHistoryAssignment(assignment, staffById.GetValueOrDefault(assignment.StaffUserId))).ToArray();
-        var timeline = BuildTimeline(task, activities, results);
+        var timeline = BuildTimeline(task, activities, results, includeCreation: historicalStaff is null);
         var resultDtos = new List<MaintenanceResultDto>(results.Count);
-        foreach (var itemResult in results) resultDtos.Add(await ToDtoAsync(itemResult, ct));
+        foreach (var itemResult in results)
+        {
+            var resultDto = historicalStaff is { } user
+                ? (await ToStaffResultDtoAsync(itemResult, participation, user, current: false, ct)) with { AttemptNo = resultDtos.Count + 1 }
+                : await ToDtoAsync(itemResult, ct);
+            resultDtos.Add(resultDto);
+        }
         return new(item, assignments, resultDtos, timeline);
     }
 
-    public async Task<MaintenanceHistoryDetailDto> MyHistoryDetailAsync(Guid taskId, Guid staffUserId, CancellationToken ct)
+    public Task<MaintenanceHistoryDetailDto> MyHistoryDetailAsync(Guid taskId, Guid staffUserId, CancellationToken ct) =>
+        HistoryDetailAsync(taskId, staffUserId, ct);
+
+    private IQueryable<MaintenanceResult> StaffResults(Guid staffUserId, bool allowHandover = false) =>
+        db.MaintenanceResults.AsNoTracking().Where(result => db.MaintenanceAssignments.Any(assignment =>
+            assignment.MaintenanceTaskId == result.MaintenanceTaskId && assignment.StaffUserId == staffUserId &&
+            ((allowHandover && (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS)) ||
+             (assignment.AssignedAt != default &&
+              (assignment.AssignedAt < result.SubmittedAt ||
+               (assignment.AssignedAt == result.SubmittedAt && result.SubmittedBy == staffUserId)) &&
+              ((assignment.EndedAt == null && (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS)) ||
+               assignment.EndedAt > result.SubmittedAt ||
+               (assignment.Status == AssignmentStatus.COMPLETED && assignment.CompletedAt == result.SubmittedAt))))));
+
+    private IQueryable<MaintenanceTaskActivity> StaffHistoryActivities(Guid staffUserId) =>
+        db.MaintenanceTaskActivities.AsNoTracking().Where(activity => db.MaintenanceAssignments.Any(assignment =>
+            assignment.MaintenanceTaskId == activity.MaintenanceTaskId && assignment.StaffUserId == staffUserId &&
+            assignment.AssignedAt != default &&
+            (assignment.AssignedAt < activity.CreatedAt ||
+             (assignment.AssignedAt == activity.CreatedAt && assignment.Id == activity.AssignmentId)) &&
+            ((assignment.EndedAt == null && (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS)) ||
+             assignment.EndedAt > activity.CreatedAt ||
+             (assignment.Status == AssignmentStatus.COMPLETED &&
+              ((assignment.CompletedAt == activity.CreatedAt &&
+                (assignment.Id == activity.AssignmentId || activity.ActivityType == MaintenanceActivityType.RESULT_SUBMITTED)) ||
+               (assignment.CompletedAt < activity.CreatedAt && activity.ActivityType == MaintenanceActivityType.CLOSED))))));
+
+    private async Task<MaintenanceResultDto> ToStaffResultDtoAsync(MaintenanceResult result,
+        IEnumerable<MaintenanceAssignment> assignments, Guid staffUserId, bool current, CancellationToken ct)
     {
-        var participated = await db.MaintenanceAssignments.AsNoTracking()
-            .AnyAsync(assignment => assignment.MaintenanceTaskId == taskId && assignment.StaffUserId == staffUserId, ct);
-        if (!participated) throw new KeyNotFoundException("Không tìm thấy lịch sử bảo trì của bạn.");
-        return await HistoryDetailAsync(taskId, ct);
+        var dto = await ToDtoAsync(result, ct);
+        return current || CanReadReview(result, assignments, staffUserId) ? dto : dto with
+        {
+            ResultStatus = MaintenanceResultStatus.SUBMITTED,
+            ReviewedAt = null,
+            ReviewedBy = null,
+            ReviewNote = null
+        };
     }
 
+    private static bool CanReadReview(MaintenanceResult result, IEnumerable<MaintenanceAssignment> assignments, Guid staffUserId) =>
+        result.ReviewedAt is not { } reviewedAt || assignments.Any(assignment =>
+            assignment.StaffUserId == staffUserId && assignment.AssignedAt != default && assignment.AssignedAt < reviewedAt &&
+            ((assignment.EndedAt == null && assignment.IsActive) || reviewedAt < assignment.EndedAt ||
+             (assignment.Status == AssignmentStatus.COMPLETED && assignment.CompletedAt == result.SubmittedAt)));
+
     public async Task<MaintenanceTaskDto> ReviewResultAsync(Guid taskId, Guid resultId, ReviewMaintenanceResultCommand command, Guid actor, CancellationToken ct)
+    {
+        var (task, result) = await WithTaskLockAsync(taskId, token => ReviewResultCoreAsync(taskId, resultId, command, actor, token), ct);
+        await NotifyVisibleAssigneesAsync(task, ct);
+        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await ToDtoAsync(result, ct), ct);
+    }
+
+    private async Task<(MaintenanceTask Task, MaintenanceResult Result)> ReviewResultCoreAsync(
+        Guid taskId, Guid resultId, ReviewMaintenanceResultCommand command, Guid actor, CancellationToken ct)
     {
         var task = await db.MaintenanceTasks.Include(task => task.Schedule).Include(task => task.Assignments)
             .SingleOrDefaultAsync(task => task.Id == taskId, ct) ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
@@ -483,27 +602,40 @@ public sealed class MaintenanceService(
         }
 
         await db.SaveChangesAsync(ct);
-        await NotifyVisibleAssigneesAsync(task, ct);
-        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await ToDtoAsync(result, ct), ct);
+        return (task, result);
     }
 
     public async Task<MaintenanceTaskDto> CancelTaskAsync(Guid taskId, Guid actor, CancellationToken ct)
+    {
+        var (task, recipients) = await WithTaskLockAsync(taskId, token => CancelTaskCoreAsync(taskId, actor, token), ct);
+        await notifier.NotifyTaskUpdatedAsync(taskId, recipients, ct);
+        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await LatestResultAsync(task.Id, ct), ct);
+    }
+
+    private async Task<(MaintenanceTask Task, Guid[] Recipients)> CancelTaskCoreAsync(Guid taskId, Guid actor, CancellationToken ct)
     {
         var task = await db.MaintenanceTasks.Include(item => item.Assignments).Include(item => item.Schedule)
             .SingleOrDefaultAsync(item => item.Id == taskId, ct) ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
         var now = timeProvider.GetUtcNow();
         var previousStatus = task.Status;
+        var activeAssignments = task.Assignments.Where(assignment => assignment.IsActive).ToArray();
         task.Cancel(now);
-        foreach (var assignment in task.Assignments.Where(assignment => assignment.IsActive)) assignment.Cancel(now);
+        foreach (var assignment in activeAssignments) assignment.Cancel(now);
         db.MaintenanceTaskActivities.Add(new MaintenanceTaskActivity(task.Id, MaintenanceActivityType.STATUS_CHANGED, now, fromStatus: previousStatus, toStatus: MaintenanceTaskStatus.CANCELLED, detail: "Công việc đã được Manager hủy.", performedBy: actor));
         if (task.IsEmergency && !await HasOverlappingActiveMaintenanceAsync(null, task.Id, task.FacilityId, task.EquipmentId, ct))
             await assets.MarkUnavailableAsync(task.FacilityId, task.EquipmentId, actor, ct);
         await db.SaveChangesAsync(ct);
-        await NotifyVisibleAssigneesAsync(task, ct);
-        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await LatestResultAsync(task.Id, ct), ct);
+        return (task, activeAssignments.Select(assignment => assignment.StaffUserId).Distinct().ToArray());
     }
 
     public async Task<MaintenanceTaskDto> AssignTaskAsync(Guid taskId, AssignMaintenanceTaskCommand command, Guid actor, CancellationToken ct)
+    {
+        var (task, recipients) = await WithTaskLockAsync(taskId, token => AssignTaskCoreAsync(taskId, command, actor, token), ct);
+        await notifier.NotifyTaskUpdatedAsync(taskId, recipients, ct);
+        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await LatestResultAsync(task.Id, ct), ct);
+    }
+
+    private async Task<(MaintenanceTask Task, Guid[] Recipients)> AssignTaskCoreAsync(Guid taskId, AssignMaintenanceTaskCommand command, Guid actor, CancellationToken ct)
     {
         var requestedStaffIds = (command.StaffUserIds ?? [])
             .Append(command.StaffUserId ?? Guid.Empty)
@@ -522,7 +654,7 @@ public sealed class MaintenanceService(
             ?? throw new KeyNotFoundException("Không tìm thấy công việc bảo trì.");
         if (task.Status is not (MaintenanceTaskStatus.OPEN or MaintenanceTaskStatus.ASSIGNED or MaintenanceTaskStatus.IN_PROGRESS))
             throw new InvalidOperationException("Chỉ có thể phân công lại công việc đang mở hoặc đang xử lý.");
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var activeAssignments = task.Assignments.Where(assignment => assignment.IsActive).ToArray();
         var activeStaffIds = activeAssignments.Select(assignment => assignment.StaffUserId).ToHashSet();
         var assignmentsToRemove = activeAssignments.Where(assignment => !requestedStaffIds.Contains(assignment.StaffUserId)).ToArray();
@@ -537,9 +669,9 @@ public sealed class MaintenanceService(
             .Select(staffUserId => new MaintenanceAssignment(task.Id, staffUserId, actor, now))
             .ToArray();
         db.MaintenanceAssignments.AddRange(newAssignments);
-        foreach (var staffUserId in staffIdsToAdd)
+        foreach (var assignment in newAssignments)
         {
-            var notice = new MaintenanceAssignmentNotice(actor, staffUserId);
+            var notice = new MaintenanceAssignmentNotice(actor, assignment.StaffUserId, assignment.Id);
             db.ResidentEvents.Add(new OutboxEvent(MaintenanceAssignmentNotice.EventName, task.Id,
                 JsonSerializer.Serialize(notice), now));
         }
@@ -561,8 +693,7 @@ public sealed class MaintenanceService(
         }
 
         await db.SaveChangesAsync(ct);
-        await notifier.NotifyTaskUpdatedAsync(taskId, activeStaffIds.Union(requestedStaffIds).ToArray(), ct);
-        return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await LatestResultAsync(task.Id, ct), ct);
+        return (task, activeStaffIds.Union(requestedStaffIds).ToArray());
     }
 
     public async Task<MaintenanceTaskDto> AssociateTaskAssetAsync(Guid taskId, AssociateMaintenanceTaskAssetCommand command, CancellationToken ct)
@@ -907,6 +1038,9 @@ public sealed class MaintenanceService(
             new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localMonthEnd, zone)));
     }
 
+    private Task<T> WithTaskLockAsync<T>(Guid taskId, Func<CancellationToken, Task<T>> action, CancellationToken ct) =>
+        WithAdvisoryLockAsync(MaintenanceTaskLock.Scope(taskId), action, ct);
+
     private async Task<T> WithAdvisoryLockAsync<T>(string scope, Func<CancellationToken, Task<T>> action, CancellationToken ct)
     {
         if (!db.Database.IsNpgsql()) return await action(ct);
@@ -1117,14 +1251,18 @@ public sealed class MaintenanceService(
         if (assignments.Length == 0 && task.Status is MaintenanceTaskStatus.COMPLETED or MaintenanceTaskStatus.CLOSED)
             assignments = task.Assignments.Where(assignment => assignment.Status is AssignmentStatus.COMPLETED or AssignmentStatus.ASSIGNED or AssignmentStatus.IN_PROGRESS).ToArray();
 
-        return assignments
+        return ProjectAssignees(assignments, staffById);
+    }
+
+    private static IReadOnlyList<AssignableMaintenanceStaffDto> ProjectAssignees(
+        IEnumerable<MaintenanceAssignment> assignments, IReadOnlyDictionary<Guid, MaintenanceStaffRecord> staffById) =>
+        assignments
             .OrderBy(assignment => assignment.AssignedAt)
             .ThenBy(assignment => assignment.Id)
             .Select(assignment => staffById.TryGetValue(assignment.StaffUserId, out var staff)
                 ? new AssignableMaintenanceStaffDto(staff.UserId, staff.Username, staff.DisplayName)
                 : new AssignableMaintenanceStaffDto(assignment.StaffUserId, string.Empty, "Nhân viên không còn hoạt động"))
             .ToArray();
-    }
 
     private static MaintenanceResultDto ToDto(MaintenanceResult result) => new(
         result.Id, result.AttemptNo, result.SubmittedBy, result.Summary, result.WorkPerformed, result.IssueFound,
@@ -1143,29 +1281,34 @@ public sealed class MaintenanceService(
         (await staffDirectory.GetHistoricalStaffAsync(userIds.Where(id => id != Guid.Empty).Distinct().ToArray(), ct))
             .ToDictionary(staff => staff.UserId);
 
-    private static MaintenanceHistoryItemDto ToHistoryItem(MaintenanceTask task, DateTimeOffset historyAt, MaintenanceResult? latestResult, IReadOnlyDictionary<Guid, MaintenanceStaffRecord> staffById)
+    private static MaintenanceHistoryItemDto ToHistoryItem(MaintenanceTask task, DateTimeOffset historyAt, MaintenanceResult? latestResult,
+        IReadOnlyDictionary<Guid, MaintenanceStaffRecord> staffById, Guid? historicalStaff)
     {
-        var participants = task.Assignments.OrderBy(assignment => assignment.AssignedAt).ThenBy(assignment => assignment.Id)
+        var visibleAssignments = task.Assignments.Where(assignment => historicalStaff is null || assignment.StaffUserId == historicalStaff).ToArray();
+        var participants = visibleAssignments.OrderBy(assignment => assignment.AssignedAt).ThenBy(assignment => assignment.Id)
             .Select(assignment => assignment.StaffUserId).Distinct()
             .Select(userId => staffById.TryGetValue(userId, out var staff)
                 ? new HistoryParticipantDto(userId, staff.Username, staff.DisplayName)
                 : new HistoryParticipantDto(userId, null, null))
             .ToArray();
-        return new(task.Id, task.TaskNumber, task.Title, task.Description, task.PriorityCode, task.Status, task.FacilityId, task.EquipmentId,
-            task.Schedule?.ScheduleCode, task.Schedule?.Title, task.PlannedStartAt, task.DueAt, task.StartedAt, task.CompletedAt, task.ClosedAt, historyAt, participants,
-            latestResult?.Summary, latestResult?.ResultStatus);
+        return new(task.Id, task.TaskNumber, task.Title, historicalStaff is null ? task.Description : null, task.PriorityCode, task.Status, task.FacilityId, task.EquipmentId,
+            task.Schedule?.ScheduleCode, task.Schedule?.Title, task.PlannedStartAt, task.DueAt,
+            historicalStaff is null ? task.StartedAt : visibleAssignments.Min(assignment => assignment.StartedAt),
+            historicalStaff is null ? task.CompletedAt : visibleAssignments.Max(assignment => assignment.CompletedAt),
+            historicalStaff is null ? task.ClosedAt : null, historyAt, participants, latestResult?.Summary,
+            latestResult is null || historicalStaff is { } staffUserId && !CanReadReview(latestResult, visibleAssignments, staffUserId)
+                ? null : latestResult.ResultStatus);
     }
 
     private static MaintenanceAssignmentHistoryDto ToHistoryAssignment(MaintenanceAssignment assignment, MaintenanceStaffRecord? staff) => new(
         assignment.Id, assignment.StaffUserId, staff?.Username, staff?.DisplayName, assignment.Status,
         assignment.AssignedAt, assignment.StartedAt, assignment.CompletedAt, assignment.EndedAt, assignment.AssignmentNote);
 
-    private static IReadOnlyList<MaintenanceHistoryTimelineEventDto> BuildTimeline(MaintenanceTask task, IReadOnlyList<MaintenanceTaskActivity> activities, IReadOnlyList<MaintenanceResult> results)
+    private static IReadOnlyList<MaintenanceHistoryTimelineEventDto> BuildTimeline(MaintenanceTask task, IReadOnlyList<MaintenanceTaskActivity> activities,
+        IReadOnlyList<MaintenanceResult> results, bool includeCreation)
     {
-        var timeline = new List<MaintenanceHistoryTimelineEventDto>
-        {
-            new(task.Id, task.CreatedAt, "TASK_CREATED", Detail: null, PerformedBy: task.CreatedBy)
-        };
+        var timeline = new List<MaintenanceHistoryTimelineEventDto>();
+        if (includeCreation) timeline.Add(new(task.Id, task.CreatedAt, "TASK_CREATED", PerformedBy: task.CreatedBy));
         timeline.AddRange(activities.Select(activity => new MaintenanceHistoryTimelineEventDto(activity.Id, activity.CreatedAt, "ACTIVITY",
             activity.ActivityType, activity.FromStatus, activity.ToStatus, activity.Detail, activity.PerformedBy)));
         timeline.AddRange(results

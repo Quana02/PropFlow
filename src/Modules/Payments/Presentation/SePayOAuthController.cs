@@ -15,8 +15,9 @@ public sealed class SePayOAuthController(SePayOAuth oauth) : ControllerBase
     private Guid Actor => Guid.Parse(User.FindFirstValue("sub")!);
     [HttpGet("status"), EnableRateLimiting(PaymentSettingsRateLimitPolicies.Read)]
     public Task<ActionResult<SePayOAuthState>> State(CancellationToken ct) => Execute(() => oauth.StateAsync(ct));
-    [HttpPost("challenge/{action}"), EnableRateLimiting(PaymentSettingsRateLimitPolicies.Otp)]
-    public Task<ActionResult<PrivilegedActionChallengeResult>> Challenge(string action, CancellationToken ct) => Execute(() => oauth.ChallengeAsync(Actor, action.ToUpperInvariant(), ct));
+    [HttpPost("challenge/{operation}"), EnableRateLimiting(PaymentSettingsRateLimitPolicies.Otp)]
+    public Task<ActionResult<PrivilegedActionChallengeResult>> Challenge(string operation, CancellationToken ct) =>
+        Execute(() => oauth.ChallengeAsync(Actor, operation.ToUpperInvariant(), ct));
     [HttpPost("start")]
     public Task<ActionResult<SePayOAuthStart>> Start(SePayOAuthConfirm request, CancellationToken ct) => Execute(() => oauth.StartAsync(Actor, request, ct));
     [HttpPost("callback")]

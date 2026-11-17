@@ -46,6 +46,7 @@ public sealed class MyMaintenanceTaskFilterModel
     public MaintenanceTaskStatus? Status { get; set; }
     public string? PriorityCode { get; set; }
     public bool CompletedOnly { get; set; }
+    public bool IncludeCompleted { get; set; }
     public int PageIndex { get; set; } = 1;
     public int PageSize { get; set; } = 12;
 }

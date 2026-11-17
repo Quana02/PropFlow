@@ -23,7 +23,9 @@ public sealed class AdministrationController(
     AdministrationDbContext db,
     IInternalAccountDirectory accounts,
     ManageInternalAccountProfile profiles,
-    IAdministrationTransaction transaction) : ControllerBase
+    IAdministrationTransaction transaction,
+    IAccountSessionRevocation sessions,
+    IAccountSessionInvalidation? invalidation = null) : ControllerBase
 {
     private Guid ActorId => Guid.Parse(User.FindFirstValue("sub")!);
     private static readonly string[] InternalRoles = [SystemRoleCodes.Manager, SystemRoleCodes.Staff, SystemRoleCodes.Accountant];
@@ -134,6 +136,19 @@ public sealed class AdministrationController(
     {
         var target = SystemRoleCodes.Normalize(request.Role);
         if (!InternalRoles.Contains(target)) return Problem(400, "Vai trò mới phải là MANAGER, STAFF hoặc ACCOUNTANT.", "invalid_internal_role");
+        IActionResult? result = null;
+        await transaction.ExecuteAsync(async innerCt =>
+        {
+            result = await sessions.WithAccountLockAsync(userId,
+                () => ChangeRoleUnderLockAsync(userId, target, innerCt), innerCt);
+        }, ct);
+        if (result is NoContentResult && invalidation is not null)
+            await invalidation.RecheckAsync(userId, CancellationToken.None);
+        return result!;
+    }
+
+    private async Task<IActionResult> ChangeRoleUnderLockAsync(Guid userId, string target, CancellationToken ct)
+    {
         var assignment = await db.UserRoleAssignments.Include(x => x.Role).SingleOrDefaultAsync(x => x.UserId == userId, ct);
         if (assignment is null || !InternalRoles.Contains(assignment.Role.Code))
             return Problem(404, "Không tìm thấy tài khoản Ban quản lý cần đổi vai trò.", "internal_account_not_found");
@@ -142,9 +157,11 @@ public sealed class AdministrationController(
         if (assignment.RoleId == role.Id) return Problem(409, "Tài khoản đang có vai trò này.", "role_unchanged");
         var account = (await accounts.GetAsync([userId], ct)).SingleOrDefault();
         var oldRoleId = assignment.RoleId;
+        var oldRole = assignment.Role.Code;
         assignment.ChangeRole(role.Id, ActorId, DateTimeOffset.UtcNow);
         AddHistory(userId, AccessActionType.ROLE_CHANGED, oldRoleId, role.Id);
-        AddAudit("internal_account_role_changed", userId, new { account?.Username, OldRole = assignment.Role.Code, NewRole = target });
+        AddAudit("internal_account_role_changed", userId, new { account?.Username, OldRole = oldRole, NewRole = target });
+        await sessions.RevokeAsync(userId, "role_changed", ct);
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
@@ -177,6 +194,8 @@ public sealed class AdministrationController(
             await db.SaveChangesAsync(innerCt);
         }, ct);
         if (result is null) return Problem(404, "Tài khoản không còn tồn tại trong hệ thống xác thực.", "identity_account_not_found");
+        if (invalidation is not null)
+            await invalidation.RecheckAsync(userId, CancellationToken.None);
         return NoContent();
     }
 

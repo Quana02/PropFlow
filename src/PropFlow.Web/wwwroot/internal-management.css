@@ -114,13 +114,10 @@
 
 .pf-management-kpi-label { color: var(--pf-muted); font-size: .75rem; }
 .pf-management-kpi strong { font-size: 1.3rem; font-weight: 700; line-height: 1.25; }
-.app-page-body [data-tone="success"] { --pf-management-tone: #087c62; }
-.app-page-body [data-tone="warning"] { --pf-management-tone: #a95103; }
-.app-page-body [data-tone="danger"] { --pf-management-tone: #be294f; }
+.app-page-body [data-tone="success"] { --pf-management-tone: var(--pf-success); }
+.app-page-body [data-tone="warning"] { --pf-management-tone: var(--pf-warning); }
+.app-page-body [data-tone="danger"] { --pf-management-tone: var(--pf-danger); }
 .app-page-body [data-tone="neutral"] { --pf-management-tone: var(--pf-muted); }
-.app-shell-dark .app-page-body [data-tone="success"] { --pf-management-tone: #6ee7b7; }
-.app-shell-dark .app-page-body [data-tone="warning"] { --pf-management-tone: #fcd38d; }
-.app-shell-dark .app-page-body [data-tone="danger"] { --pf-management-tone: #fda4af; }
 
 .app-page-body .pf-management-list { min-height: 0; }
 

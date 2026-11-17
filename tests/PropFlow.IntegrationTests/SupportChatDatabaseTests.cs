@@ -19,8 +19,10 @@ public sealed class SupportChatDatabaseFixture : IAsyncLifetime
         if (source.Database != "propflow_test") throw new InvalidOperationException("Unexpected test database source.");
         source.Database = "postgres"; source.Pooling = false; adminConnection = source.ConnectionString;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin); await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(admin, name);
         source.Database = name; connection = source.ConnectionString;
+        await TestDatabaseSafety.VerifyFixtureAsync(connection, name, TestDatabaseSafety.ProcessOwner,
+            TestDatabaseConfiguration.GetConnectionString());
         await using var db = CreateDb(); await db.Database.MigrateAsync();
     }
     public CommunicationDbContext CreateDb() => new(new DbContextOptionsBuilder<CommunicationDbContext>()
@@ -29,7 +31,7 @@ public sealed class SupportChatDatabaseFixture : IAsyncLifetime
     {
         if (!name.StartsWith("propflow_fe13_chat_", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(adminConnection)) return;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", admin); await drop.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(admin, name);
     }
 }
 

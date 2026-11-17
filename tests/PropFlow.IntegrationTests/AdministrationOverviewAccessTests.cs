@@ -11,6 +11,7 @@ using PropFlow.Modules.Administration.Contracts;
 using PropFlow.Modules.Administration.Domain.Permissions;
 using PropFlow.Modules.Authentication.Application;
 using PropFlow.Modules.Authentication.Contracts;
+using PropFlow.Modules.Authentication.Infrastructure;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.Reporting.Application.AdministrationOverview;
 using PropFlow.Modules.Residents.Contracts;
@@ -20,6 +21,8 @@ namespace PropFlow.IntegrationTests;
 
 public sealed class AdministrationOverviewAccessTests
 {
+    private static readonly Guid SessionId = Guid.NewGuid();
+
     private sealed class OverviewFactory : PropFlowApiFactory
     {
         private readonly AccountResponse _account;
@@ -43,8 +46,18 @@ public sealed class AdministrationOverviewAccessTests
                 services.AddScoped<IServiceRequestOverviewSource, Requests>();
                 services.AddSingleton<IInternalAccountDirectory>(new Accounts(_account));
                 services.AddSingleton<IAccountAccess>(new Access(_account));
+                services.RemoveAll<IAccessSessionReader>();
+                services.AddSingleton<IAccessSessionReader>(new Session(_account));
             });
         }
+    }
+
+    private sealed class Session(AccountResponse account) : IAccessSessionReader
+    {
+        public Task<AccessSessionState?> FindAsync(Guid userId, Guid sessionId, CancellationToken ct) =>
+            Task.FromResult<AccessSessionState?>(account.Id == userId && sessionId == SessionId
+                ? new(account.Email, SessionAccess.Fingerprint(account.Role, account.Permissions))
+                : null);
     }
 
     private sealed class Accounts(AccountResponse account) : IInternalAccountDirectory
@@ -100,7 +113,7 @@ public sealed class AdministrationOverviewAccessTests
         var account = new AccountResponse(Guid.NewGuid(), "test", "Test", null, null, "ACTIVE", true, role, permissions);
         await using var factory = new OverviewFactory(account);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
-        var token = factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken;
+        var token = factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow, SessionId).AccessToken;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await client.GetAsync("/api/v1/reporting/administration-overview");
@@ -120,7 +133,7 @@ public sealed class AdministrationOverviewAccessTests
         var account = new AccountResponse(Guid.NewGuid(), "admin", "Admin", null, null, "ACTIVE", true, "ADMIN", []);
         await using var factory = new OverviewFactory(account);
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
-        var token = factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken;
+        var token = factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow, SessionId).AccessToken;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         using var response = await client.GetAsync("/api/v1/reporting/administration-overview");

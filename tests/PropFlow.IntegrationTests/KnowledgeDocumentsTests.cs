@@ -29,8 +29,10 @@ public sealed class KnowledgeDatabaseFixture : IAsyncLifetime
         if (source.Database != "propflow_test") throw new InvalidOperationException("Unexpected test database source.");
         source.Database = "postgres"; source.Pooling = false; adminConnection = source.ConnectionString;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin); await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(admin, name);
         source.Database = name; connection = source.ConnectionString;
+        await TestDatabaseSafety.VerifyFixtureAsync(connection, name, TestDatabaseSafety.ProcessOwner,
+            TestDatabaseConfiguration.GetConnectionString());
         await using var db = CreateDb(); await db.Database.MigrateAsync();
     }
     public AiChatbotDbContext CreateDb() => new(new DbContextOptionsBuilder<AiChatbotDbContext>()
@@ -39,7 +41,7 @@ public sealed class KnowledgeDatabaseFixture : IAsyncLifetime
     {
         if (!name.StartsWith("propflow_fe12_docs_", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(adminConnection)) return;
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", admin); await drop.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(admin, name);
     }
 }
 
@@ -55,8 +57,12 @@ public sealed class KnowledgeDocumentsTests(KnowledgeDatabaseFixture database) :
         Assert.Null(await service.GetAsync(id, false, default));
         var draft = (await service.GetAsync(id, true, default))!;
         await service.SetPublicationAsync(id, draft.Document.Token, true, actor, default);
+        var staffPublished = (await service.GetAsync(id, false, default))!.Document;
+        var staffListBeforeDraft = (await service.ListAsync(false, null, 1, default)).Items;
         draft = (await service.GetAsync(id, true, default))!;
         await service.SaveAsync(id, new("Nội bộ", "Chỉ cho nhân sự", "INTERNAL", draft.Document.Token), actor, default);
+        Assert.Equal(staffPublished, (await service.GetAsync(id, false, default))!.Document);
+        Assert.Equal(staffListBeforeDraft, (await service.ListAsync(false, null, 1, default)).Items);
         Assert.Equal("Công khai", (await service.GetAsync(id, false, default))!.Revision.Content);
         Assert.Equal("Công khai", (await service.FindResidentSourceAsync(id, default))!.Content);
         draft = (await service.GetAsync(id, true, default))!;

@@ -114,7 +114,7 @@
     color: var(--pf-text);
 }
 
-.app-shell-dark .resident-page {
+:where(html[data-theme="dark"]) .app-shell .resident-page {
     --pf-menu-surface: #131f31;
     --pf-list-heading: #17263a;
     --pf-line: var(--app-line);
@@ -136,17 +136,17 @@
 .resident-page .resident-row-action { color: var(--pf-accent); }
 .resident-page :is(td small, .result-count, .resident-muted, .resident-state) { color: var(--pf-muted); }
 
-.app-shell-dark .resident-status {
+:where(html[data-theme="dark"]) .app-shell .resident-status {
     background: #48341c;
     color: #fcd38d;
 }
 
-.app-shell-dark .resident-status.active {
+:where(html[data-theme="dark"]) .app-shell .resident-status.active {
     background: #143a35;
     color: #86efac;
 }
 
-.app-shell-dark .resident-status.inactive {
+:where(html[data-theme="dark"]) .app-shell .resident-status.inactive {
     background: var(--pf-list-heading);
     color: var(--app-muted);
 }

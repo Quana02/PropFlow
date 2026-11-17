@@ -20,6 +20,7 @@ public interface IMaintenanceApiClient
     Task<ApiResult<MaintenanceTaskModel>> UpdateMyTaskProgressAsync(Guid taskId, UpdateMaintenanceProgressModel model, CancellationToken ct = default);
     Task<ApiResult<MaintenanceTaskModel>> SubmitMyTaskResultAsync(Guid taskId, SubmitMaintenanceResultModel model, IReadOnlyList<IBrowserFile> evidenceImages, CancellationToken ct = default);
     Task<ApiResult<byte[]>> ResultAttachmentAsync(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct = default);
+    Task<ApiResult<byte[]>> MyResultAttachmentAsync(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct = default);
     Task<ApiResult<IReadOnlyList<MaintenanceTaskActivityModel>>> MyTaskActivitiesAsync(Guid taskId, CancellationToken ct = default);
     Task<ApiResult<MaintenanceHistoryListModel>> HistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default);
     Task<ApiResult<MaintenanceHistoryListModel>> MyHistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default);

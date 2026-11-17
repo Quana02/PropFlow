@@ -85,8 +85,18 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
     [InlineData("ADMIN", HttpStatusCode.Forbidden)]
     public async Task Create_obeys_actor_matrix(string role, HttpStatusCode expected)
     {
-        using var response = await (await ClientAsync(role)).PostAsJsonAsync("api/v1/apartments", ValidCreate(await SeedApartmentTypeAsync()));
+        using var actor = await ClientAsync(role);
+        var request = ValidCreate(await SeedApartmentTypeAsync());
+        using var response = await actor.PostAsJsonAsync("api/v1/apartments", request);
         Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.Created) return;
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>();
+        Assert.False(await db.ApartmentUnits.AnyAsync(unit => unit.UnitNumber == request.UnitNumber));
+        using var manager = await ClientAsync("MANAGER");
+        using var positive = await manager.PostAsJsonAsync("api/v1/apartments", request);
+        Assert.Equal(HttpStatusCode.Created, positive.StatusCode);
+        Assert.True(await db.ApartmentUnits.AnyAsync(unit => unit.UnitNumber == request.UnitNumber));
     }
 
     [Fact]
@@ -175,8 +185,18 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
     [InlineData("ADMIN", HttpStatusCode.Forbidden)]
     public async Task Apartment_type_create_obeys_actor_matrix(string role, HttpStatusCode expected)
     {
-        using var response = await (await ClientAsync(role)).PostAsJsonAsync("api/v1/apartment-unit-types", new CreateApartmentUnitTypeRequest("Matrix "+Guid.NewGuid().ToString("N")));
+        using var actor = await ClientAsync(role);
+        var payload = new CreateApartmentUnitTypeRequest("Matrix " + Guid.NewGuid().ToString("N"));
+        using var response = await actor.PostAsJsonAsync("api/v1/apartment-unit-types", payload);
         Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.Created) return;
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var types = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>().ApartmentUnitTypes;
+        Assert.False(await types.AnyAsync(type => type.Name == payload.Name));
+        using var manager = await ClientAsync("MANAGER");
+        using var positive = await manager.PostAsJsonAsync("api/v1/apartment-unit-types", payload);
+        Assert.Equal(HttpStatusCode.Created, positive.StatusCode);
+        Assert.True(await types.AnyAsync(type => type.Name == payload.Name));
     }
 
     [Theory]
@@ -187,11 +207,21 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
     [InlineData("ADMIN", HttpStatusCode.Forbidden)]
     public async Task Apartment_type_update_obeys_actor_matrix(string role, HttpStatusCode expected)
     {
-        var typeId = await SeedApartmentTypeAsync("TYPE-EDIT-" + Guid.NewGuid().ToString("N")[..8]);
-        using var response = await (await ClientAsync(role)).PutAsJsonAsync(
-            $"api/v1/apartment-unit-types/{typeId}",
-            new UpdateApartmentUnitTypeRequest("Renamed " + Guid.NewGuid().ToString("N")[..8]));
+        var original = "TYPE-EDIT-" + Guid.NewGuid().ToString("N")[..8];
+        var typeId = await SeedApartmentTypeAsync(original);
+        var path = $"api/v1/apartment-unit-types/{typeId}";
+        var payload = new UpdateApartmentUnitTypeRequest("Renamed " + Guid.NewGuid().ToString("N")[..8]);
+        using var actor = await ClientAsync(role);
+        using var response = await actor.PutAsJsonAsync(path, payload);
         Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.OK) return;
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var types = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>().ApartmentUnitTypes;
+        Assert.Equal(original, await types.Where(type => type.Id == typeId).Select(type => type.Name).SingleAsync());
+        using var manager = await ClientAsync("MANAGER");
+        using var positive = await manager.PutAsJsonAsync(path, payload);
+        Assert.Equal(HttpStatusCode.OK, positive.StatusCode);
+        Assert.Equal(payload.Name, await types.Where(type => type.Id == typeId).Select(type => type.Name).SingleAsync());
     }
 
     [Theory]
@@ -203,8 +233,18 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
     public async Task Apartment_type_delete_obeys_actor_matrix(string role, HttpStatusCode expected)
     {
         var typeId = await SeedApartmentTypeAsync("TYPE-DELETE-" + Guid.NewGuid().ToString("N")[..8]);
-        using var response = await (await ClientAsync(role)).DeleteAsync($"api/v1/apartment-unit-types/{typeId}");
+        var path = $"api/v1/apartment-unit-types/{typeId}";
+        using var actor = await ClientAsync(role);
+        using var response = await actor.DeleteAsync(path);
         Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.NoContent) return;
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var types = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>().ApartmentUnitTypes;
+        Assert.True(await types.AnyAsync(type => type.Id == typeId));
+        using var manager = await ClientAsync("MANAGER");
+        using var positive = await manager.DeleteAsync(path);
+        Assert.Equal(HttpStatusCode.NoContent, positive.StatusCode);
+        Assert.False(await types.AnyAsync(type => type.Id == typeId));
     }
 
     [Fact]
@@ -319,11 +359,27 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
         var apartment = await SeedApartmentAsync();
         var targetType = await SeedApartmentTypeAsync("DUPLEX-"+Guid.NewGuid().ToString("N")[..5]);
         var request = new UpdateApartmentRequest("UPDATED-" + Guid.NewGuid().ToString("N")[..6], 18, targetType, 123.5m, 3, 2, new DateOnly(2026, 8, 1), "updated");
-        using var response = await (await ClientAsync(role)).PutAsJsonAsync($"api/v1/apartments/{apartment}", request);
-        Assert.Equal(expected, response.StatusCode);
-        if (role != "MANAGER") return;
         await using var scope = database.Factory.Services.CreateAsyncScope();
-        var row = await scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>().ApartmentUnits.AsNoTracking().SingleAsync(x => x.Id == apartment);
+        var units = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>().ApartmentUnits.AsNoTracking();
+        var before = await units.Where(unit => unit.Id == apartment).Select(unit => new
+        {
+            unit.UnitNumber, unit.FloorNumber, unit.ApartmentUnitTypeId, unit.UsableAreaM2, unit.UpdatedAt
+        }).SingleAsync();
+        var path = $"api/v1/apartments/{apartment}";
+        using var actor = await ClientAsync(role);
+        using var response = await actor.PutAsJsonAsync(path, request);
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.Forbidden)
+        {
+            Assert.Equal(before, await units.Where(unit => unit.Id == apartment).Select(unit => new
+            {
+                unit.UnitNumber, unit.FloorNumber, unit.ApartmentUnitTypeId, unit.UsableAreaM2, unit.UpdatedAt
+            }).SingleAsync());
+            using var manager = await ClientAsync("MANAGER");
+            using var positive = await manager.PutAsJsonAsync(path, request);
+            Assert.Equal(HttpStatusCode.NoContent, positive.StatusCode);
+        }
+        var row = await units.SingleAsync(x => x.Id == apartment);
         Assert.Equal(targetType, row.ApartmentUnitTypeId);
         Assert.Equal(123.5m, row.UsableAreaM2);
         var detail = await (await ClientAsync("STAFF")).GetFromJsonAsync<ApartmentDetailResponse>($"api/v1/apartments/{apartment}");
@@ -340,8 +396,17 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
     public async Task Status_mutation_obeys_actor_matrix(string role, HttpStatusCode expected)
     {
         var apartment = await SeedApartmentAsync();
-        using var response = await (await ClientAsync(role)).PatchAsJsonAsync($"api/v1/apartments/{apartment}/status", new SetApartmentStatusRequest("INACTIVE"));
+        var path = $"api/v1/apartments/{apartment}";
+        var payload = new SetApartmentStatusRequest("INACTIVE");
+        using var actor = await ClientAsync(role);
+        using var response = await actor.PatchAsJsonAsync(path + "/status", payload);
         Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.NoContent) return;
+        using var manager = await ClientAsync("MANAGER");
+        Assert.Equal("ACTIVE", (await manager.GetFromJsonAsync<ApartmentDetailResponse>(path))!.Status);
+        using var positive = await manager.PatchAsJsonAsync(path + "/status", payload);
+        Assert.Equal(HttpStatusCode.NoContent, positive.StatusCode);
+        Assert.Equal("INACTIVE", (await manager.GetFromJsonAsync<ApartmentDetailResponse>(path))!.Status);
     }
 
     [Theory]
@@ -354,8 +419,19 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
     {
         var apartment = await SeedApartmentAsync();
         var resident = await SeedResidentAsync("Owner matrix");
-        using var response = await (await ClientAsync(role)).PostAsJsonAsync($"api/v1/apartments/{apartment}/owners", new ChangeApartmentOwnerRequest(resident.Id, Today));
+        var path = $"api/v1/apartments/{apartment}/owners";
+        var payload = new ChangeApartmentOwnerRequest(resident.Id, Today);
+        using var actor = await ClientAsync(role);
+        using var response = await actor.PostAsJsonAsync(path, payload);
         Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.NoContent) return;
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var owners = scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>().ApartmentOwnerships.AsNoTracking();
+        Assert.False(await owners.AnyAsync(owner => owner.ApartmentUnitId == apartment));
+        using var manager = await ClientAsync("MANAGER");
+        using var positive = await manager.PostAsJsonAsync(path, payload);
+        Assert.Equal(HttpStatusCode.NoContent, positive.StatusCode);
+        Assert.Equal(resident.Id, await owners.Where(owner => owner.ApartmentUnitId == apartment).Select(owner => owner.OwnerResidentId).SingleAsync());
     }
 
     [Fact]
@@ -657,7 +733,7 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
         var roleId = await admin.Roles.Where(x => x.Code == role).Select(x => x.Id).SingleAsync();
         if (!await admin.UserRoleAssignments.AnyAsync(x => x.UserId == user.Id && x.RoleId == roleId)) { admin.UserRoleAssignments.Add(new UserRoleAssignment(user.Id, roleId, DateTimeOffset.UtcNow)); await admin.SaveChangesAsync(); }
         var account = new AccountResponse(user.Id, user.Username, user.DisplayName, user.Email, user.PhoneNumber, "ACTIVE", true, role, permissions);
-        var client = database.Factory.CreateClient(); client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken); return client;
+        var client = database.Factory.CreateClient(); client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, account, DateTimeOffset.UtcNow)).AccessToken); return client;
     }
 
     private async Task<Guid> SeedApartmentAsync(string prefix = "AP-", int floor = 1, Guid? typeId = null)

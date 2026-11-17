@@ -44,6 +44,7 @@ public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintena
         if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
         if (!string.IsNullOrWhiteSpace(filter.PriorityCode)) query.Add($"priorityCode={Uri.EscapeDataString(filter.PriorityCode)}");
         if (filter.CompletedOnly) query.Add("completedOnly=true");
+        if (filter.IncludeCompleted) query.Add("includeCompleted=true");
         return api.SendAsync<Page<MaintenanceTaskModel>>(HttpMethod.Get, $"api/v1/maintenance/my-tasks?{string.Join("&", query)}", ct: ct);
     }
     public Task<ApiResult<MaintenanceTaskModel>> MyTaskAsync(Guid taskId, CancellationToken ct = default) =>
@@ -65,6 +66,8 @@ public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintena
     }
     public Task<ApiResult<byte[]>> ResultAttachmentAsync(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct = default) =>
         api.GetBytesAsync($"api/v1/maintenance/tasks/{taskId}/results/{resultId}/attachments/{attachmentId}", ct);
+    public Task<ApiResult<byte[]>> MyResultAttachmentAsync(Guid taskId, Guid resultId, Guid attachmentId, CancellationToken ct = default) =>
+        api.GetBytesAsync($"api/v1/maintenance/my-tasks/{taskId}/results/{resultId}/attachments/{attachmentId}", ct);
     public Task<ApiResult<IReadOnlyList<MaintenanceTaskActivityModel>>> MyTaskActivitiesAsync(Guid taskId, CancellationToken ct = default) => api.SendAsync<IReadOnlyList<MaintenanceTaskActivityModel>>(HttpMethod.Get, $"api/v1/maintenance/my-tasks/{taskId}/activities", ct: ct);
     public Task<ApiResult<MaintenanceHistoryListModel>> HistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default)
     {

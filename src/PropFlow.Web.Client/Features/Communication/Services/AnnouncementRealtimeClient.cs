@@ -159,6 +159,7 @@ public sealed class AnnouncementRealtimeClient : IAsyncDisposable
                 options.AccessTokenProvider = GetAccessTokenAsync)
             .WithAutomaticReconnect()
             .Build();
+        _session.ObserveTransport(connection);
 
         connection.On<Guid>(UpdatedEvent, DispatchAsync);
         connection.Reconnecting += exception => HandleReconnectingAsync(connection, exception);

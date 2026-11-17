@@ -32,7 +32,7 @@
 
 .pf-dialog--wide { width: min(100% - 2rem, 43rem); }
 
-.pf-dialog:is(.app-shell-dark *, html.dark :not(.app-shell *), html[data-theme="dark"] :not(.app-shell *)) {
+:where(html[data-theme="dark"]) .pf-dialog {
     color-scheme: dark;
     --dialog-surface: #132238;
     --dialog-ink: #edf5ff;
@@ -56,7 +56,7 @@
     --dialog-badge-ink: #a11f30;
 }
 
-.pf-dialog[data-tone="danger"]:is(.app-shell-dark *, html.dark :not(.app-shell *), html[data-theme="dark"] :not(.app-shell *)) {
+:where(html[data-theme="dark"]) .pf-dialog[data-tone="danger"] {
     --dialog-accent: #ffadb6;
     --dialog-accent-hover: #ffc4ca;
     --dialog-on-accent: #491620;
@@ -72,7 +72,7 @@
     animation: pf-dialog-fade 170ms ease-out;
 }
 
-.pf-dialog:is(.app-shell-dark *, html.dark :not(.app-shell *), html[data-theme="dark"] :not(.app-shell *))::backdrop {
+:where(html[data-theme="dark"]) .pf-dialog::backdrop {
     background: rgb(3 10 22 / 62%);
 }
 

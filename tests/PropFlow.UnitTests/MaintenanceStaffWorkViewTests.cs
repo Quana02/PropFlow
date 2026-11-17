@@ -63,6 +63,7 @@ public sealed class MaintenanceStaffWorkViewTests
         var service = Service(db, staffA, staffB);
 
         Assert.Empty((await service.MyTasksAsync(new(), staffA.UserId, default)).Items);
+        Assert.Empty((await service.MyTasksAsync(new(IncludeCompleted: true), staffA.UserId, default)).Items);
         Assert.Equal(task.Id, Assert.Single((await service.MyTasksAsync(new(), staffB.UserId, default)).Items).Id);
         await Assert.ThrowsAsync<KeyNotFoundException>(() => service.MyTaskAsync(task.Id, staffA.UserId, default));
         Assert.Equal(task.Id, (await service.MyTaskAsync(task.Id, staffB.UserId, default)).Id);
@@ -92,32 +93,44 @@ public sealed class MaintenanceStaffWorkViewTests
     }
 
     [Fact]
+    [Trait("UseCase", "FE-07.9")]
     public async Task MyTasksAsync_KeepsPendingAcceptanceWithStaffAndShowsOnlyClosedTasksAsCompleted()
     {
         await using var db = CreateDb();
         var staff = Staff("Nhân viên A");
+        var otherStaff = Staff("Nhân viên B");
         var assigned = AddTask(db, "MT-ASSIGNED", "Đã phân công");
         var inProgress = AddTask(db, "MT-IN-PROGRESS", "Đang thực hiện");
         var pendingAcceptance = AddTask(db, "MT-PENDING", "Chờ nghiệm thu");
         var closed = AddTask(db, "MT-CLOSED", "Đã đóng");
+        var other = AddTask(db, "MT-OTHER", "Công việc của nhân viên B");
         var assignedAssignment = Assign(db, assigned, staff.UserId);
         var progressAssignment = Assign(db, inProgress, staff.UserId);
         var pendingAssignment = Assign(db, pendingAcceptance, staff.UserId);
         var closedAssignment = Assign(db, closed, staff.UserId);
+        Assign(db, other, otherStaff.UserId);
         var now = DateTimeOffset.UtcNow;
         inProgress.MarkAssigned(now); progressAssignment.Start(now);
         pendingAcceptance.MarkAssigned(now); pendingAcceptance.Start(now); pendingAcceptance.Complete(now); pendingAssignment.Start(now); pendingAssignment.Complete(now);
         closed.MarkAssigned(now); closed.Start(now); closed.Complete(now); closed.Close(Guid.NewGuid(), now); closedAssignment.Start(now); closedAssignment.Complete(now);
         await db.SaveChangesAsync();
-        var service = Service(db, staff);
+        var service = Service(db, staff, otherStaff);
 
         var myTasks = await service.MyTasksAsync(new(PageSize: 10), staff.UserId, default);
         var completed = await service.MyTasksAsync(new(CompletedOnly: true, PageSize: 10), staff.UserId, default);
+        var all = await service.MyTasksAsync(new(IncludeCompleted: true, PageSize: 10), staff.UserId, default);
+        var closedFromAll = await service.MyTasksAsync(new(Status: MaintenanceTaskStatus.CLOSED, IncludeCompleted: true), staff.UserId, default);
+        var firstPage = await service.MyTasksAsync(new(PageSize: 2, IncludeCompleted: true), staff.UserId, default);
+        var secondPage = await service.MyTasksAsync(new(PageIndex: 2, PageSize: 2, IncludeCompleted: true), staff.UserId, default);
 
         Assert.Equal(new[] { assigned.Id, inProgress.Id, pendingAcceptance.Id }.OrderBy(id => id), myTasks.Items.Select(item => item.Id).OrderBy(id => id));
         Assert.DoesNotContain(myTasks.Items, item => item.Id == closed.Id);
         Assert.Equal(closed.Id, Assert.Single(completed.Items).Id);
         Assert.DoesNotContain(completed.Items, item => item.Id == pendingAcceptance.Id);
+        Assert.Equal(new[] { assigned.Id, inProgress.Id, pendingAcceptance.Id, closed.Id }.OrderBy(id => id), all.Items.Select(item => item.Id).OrderBy(id => id));
+        Assert.Equal(closed.Id, Assert.Single(closedFromAll.Items).Id);
+        Assert.Equal(4, firstPage.TotalCount);
+        Assert.Equal(all.Items.Select(item => item.Id), firstPage.Items.Concat(secondPage.Items).Select(item => item.Id));
         Assert.Equal(pendingAcceptance.Id, Assert.Single((await service.MyTasksAsync(new(Status: MaintenanceTaskStatus.COMPLETED), staff.UserId, default)).Items).Id);
     }
 
