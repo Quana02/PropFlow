@@ -12,6 +12,7 @@ public sealed class FacilityRecommendationsApi(AuthenticatedApiClient api)
     public Task<ApiResult<FacilityGuidesManagement>> ManagementAsync(CancellationToken ct)=>api.SendAsync<FacilityGuidesManagement>(HttpMethod.Get,"api/v1/facility-guides",ct:ct);
     public Task<ApiResult<EmptyResponse>> SaveAsync(Guid facility,SaveFacilityGuide request,CancellationToken ct)=>api.SendAsync<EmptyResponse>(HttpMethod.Put,$"api/v1/facility-guides/{facility}",request,ct:ct);
     public Task<ApiResult<ResidentFacilityCatalogue>> CatalogueAsync(CancellationToken ct)=>api.SendAsync<ResidentFacilityCatalogue>(HttpMethod.Get,"api/v1/resident/facility-recommendations",ct:ct);
+    public Task<ApiResult<FacilityRecommendationView>> TodayAsync(Guid facilityId,CancellationToken ct)=>api.SendAsync<FacilityRecommendationView>(HttpMethod.Get,$"api/v1/resident/facility-recommendations/today?facilityId={facilityId:D}",ct:ct);
     public Task<ApiResult<FacilityRecommendationView>> RecommendAsync(string need,DateOnly? preferredDate,CancellationToken ct)=>api.SendAsync<FacilityRecommendationView>(HttpMethod.Post,"api/v1/resident/facility-recommendations",new {need,preferredDate},ct:ct);
     public Task<ApiResult<FacilitySpeechAudio>> SpeechAsync(Guid? speechId,string kind,CancellationToken ct)=>api.SendAsync<FacilitySpeechAudio>(HttpMethod.Post,"api/v1/resident/facility-recommendations/speech",new {speechId,kind},ct:ct);
     public static string Weekday(int day)=>day==0?"Chủ nhật":"Thứ "+(day+1);

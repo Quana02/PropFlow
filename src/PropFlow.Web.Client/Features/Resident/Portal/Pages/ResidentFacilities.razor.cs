@@ -8,6 +8,8 @@ public partial class ResidentFacilities : IAsyncDisposable
 {
     [Inject] private FacilityRecommendationsApi Api { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "facility")] public Guid? SuggestedFacility { get; set; }
+    private Guid? loadedFacility;
     private const string Welcome = "Chào bạn, mình là trợ lý tiện ích PropFlow. Hôm nay bạn muốn làm gì? Mình sẽ cùng bạn tìm hoạt động và thời gian phù hợp nhé.";
     private ResidentFacilityCatalogue? catalogue;
     private FacilityRecommendationView? suggestions;
@@ -24,6 +26,8 @@ public partial class ResidentFacilities : IAsyncDisposable
     private string StatusText => busy ? "Đang tìm điều phù hợp với bạn…" : preparingSpeech ? (lastSpeechKind is "WELCOME" or "NEW_NEED" ? "Đang kết nối trợ lý…" : "Đang tạo giọng tiếng Việt…") : listening ? "Mình đang nghe bạn…" : speaking ? "PropFlow đang nói…" : "Mình ở đây để giúp bạn";
 
     protected override Task OnInitializedAsync() => Load();
+    protected override Task OnParametersSetAsync() => SuggestedFacility is { } id && loadedFacility != id && catalogue is not null
+        ? LoadSuggestedFacility(id) : Task.CompletedTask;
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -38,7 +42,7 @@ public partial class ResidentFacilities : IAsyncDisposable
             if (disposed) { await voice.InvokeVoidAsync("dispose"); await voice.DisposeAsync(); reference.Dispose(); return; }
             if (!voiceSupported) voiceNotice = "Bạn có thể nhập bên dưới. Micro cần trình duyệt hỗ trợ như Chrome/Edge trên HTTPS hoặc localhost.";
             if (!speechSupported) voiceNotice = "Trình duyệt chưa phát được âm thanh. Bạn vẫn có thể nhập hoặc nói để xem gợi ý.";
-            await Speak("WELCOME");
+            await Speak(suggestions?.Mode == "TODAY" ? "RESULT" : "WELCOME");
         }
         catch (JSException) { voiceNotice = "Giọng nói chưa sẵn sàng. Bạn vẫn có thể nhập để trò chuyện."; }
         catch (ObjectDisposedException) when (disposed) { }
@@ -56,6 +60,24 @@ public partial class ResidentFacilities : IAsyncDisposable
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         finally { if (!disposed) loading = false; }
+        if (!disposed && catalogue is not null && SuggestedFacility is { } id) await LoadSuggestedFacility(id);
+    }
+
+    private async Task LoadSuggestedFacility(Guid id)
+    {
+        loadedFacility = id; busy = true; error = null; ++voiceEpoch;
+        try
+        {
+            await CancelVoice();
+            var result = await Api.TodayAsync(id, lifetime.Token);
+            if (disposed) return;
+            if (!result.IsSuccess || result.Data is null) { error = result.Message ?? "Chưa tải được lịch tiện ích. Bạn thử lại nhé."; return; }
+            suggestions = result.Data; previousNeed = need = ""; lastSpokenNeed = null;
+            assistantText = FacilityAssistantReply.Create(suggestions);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { if (!disposed) busy = false; }
+        if (!disposed && suggestions is not null && voice is not null) await Speak("RESULT");
     }
 
     private async Task ToggleMicrophone()

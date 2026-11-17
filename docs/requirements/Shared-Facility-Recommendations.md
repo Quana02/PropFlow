@@ -52,12 +52,27 @@ Máy chủ tạo vé đọc ngẫu nhiên theo cư dân và phản hồi, hết 
 ## API
 
 - `GET /api/v1/facility-guides`: Manager đọc hồ sơ/danh mục người phụ trách.
+- `GET /api/v1/resident/facility-recommendations/today?facilityId={id}`: Resident có cư trú hiện hành xem lịch còn lại hôm nay của tiện ích được nhắc. Dữ liệu lấy lại từ hồ sơ đang xuất bản; lịch đã đóng/hết giờ trả danh sách rỗng và lời giải thích.
 - `PUT /api/v1/facility-guides/{id}`: Manager lưu và xuất bản/thu hồi hồ sơ.
 - `GET /api/v1/resident/facility-recommendations`: Resident đọc danh mục đã xuất bản.
 - `POST /api/v1/resident/facility-recommendations`: `{ "need": "Khu vực cuối tuần cho trẻ em", "preferredDate": null }`.
 - `POST /api/v1/resident/facility-recommendations/speech`: `{ "speechId": "vé từ phản hồi", "kind": "RESULT" }`; `WELCOME`/`NEW_NEED` là các câu cố định không cần vé. Trả audio WAV dạng base64; vẫn kiểm tra cư trú hiện hành trước khi phát.
 
 ## Chuyển đổi và kiểm thử
+
+### Lời nhắc tiện ích cuối tuần
+
+Theo yêu cầu ngày 17/11/2026: thông báo trong chuông cư dân vào **thứ Bảy và Chủ nhật**, bắt đầu **8h**, tiếp theo **12h, 16h, 20h**, theo múi giờ chung cư. Mỗi lượt giới thiệu **một tiện ích khác nhau**, không lặp cùng tiện ích trong một cuối tuần. Cuối tuần kế tiếp có thể giới thiệu lại.
+
+- Chọn từ hồ sơ đã xuất bản, cơ sở đang hoạt động, có người phụ trách và còn giờ sử dụng trong ngày; tôn trọng ngày nghỉ ngoại lệ. Lời mời chung ưu tiên cư dân nói chung, không suy đoán có con hoặc nhu cầu trông trẻ. Nếu hết lựa chọn chưa giới thiệu, bỏ qua lượt nhắc.
+- Tiêu đề thân thiện thay đổi theo ngày; nội dung có tên tiện ích và giờ mở–đóng từ BQL. Đây là thông báo theo lịch, tạo trực tiếp từ dữ liệu công bố, không phát sinh lượt gọi Gemini nền. Cư dân có thể mở trang để xem thông tin hoặc chủ động nói/nhập nhu cầu cho AI phân tích.
+- Gửi trong vòng 15 phút sau mỗi mốc; API cần hoạt động trong khoảng này. Nếu API ngừng chạy quá khoảng đó, bỏ qua lượt đã lỡ, không dồn thông báo cũ khi khởi động lại. Worker kiểm tra mỗi 60 giây.
+- Chỉ gửi đến tài khoản ACTIVE, giữ vai trò RESIDENT hiện hành, hồ sơ cư dân hoạt động và còn cư trú. Chỉ thông báo trong ứng dụng; không gửi email hoặc tự phát tiếng nói nền.
+- Nhãn chuông là **Gợi ý cuối tuần**, nguồn `FACILITY_WEEKEND`, loại `ANNOUNCEMENT`. Bấm mở `/resident/facilities?facility={id}` để xem đúng tiện ích, giờ, vị trí, người phụ trách và liên hệ; trang tải lại dữ liệu hiện hành khi mở.
+- Bảng `ai_recommendation.facility_weekend_notice_runs` lưu từng ngày/mốc, tiện ích và lease. Unique `(local_date, slot)` ngăn hai lượt cho cùng mốc; unique `(weekend_start, facility_id)` ngăn lặp trong cuối tuần. Communication dùng khóa sự kiện/recipient sẵn có để không tạo hai thông báo khi thử lại sau lỗi hoặc API khởi động lại.
+- Cấu hình máy chủ: `FacilityRecommendations:WeekendNotice:Enabled` (mặc định `true`), `StartsAt` (`08:00:00`), `EndsAt` (`20:00:00`), `PollSeconds` (`60`). Khoảng cách giữa các mốc là bốn giờ.
+
+Migration `AddFacilityWeekendNotices` chỉ thêm bảng theo dõi lời nhắc và các chỉ mục; không sửa dữ liệu cư dân, hóa đơn hoặc lịch tiện ích.
 
 Migration `ReplaceOccupancyWithFacilityGuides` bỏ bảng ghi số người và cấu hình dự báo cũ. Giữ lịch, nội quy, ngày đóng cửa và metadata chỉnh sửa để chuyển sang hồ sơ nháp; Manager bổ sung mô tả, đối tượng, người phụ trách, liên hệ rồi xuất bản lại. Các migration trước được giữ làm lịch sử cho database đã áp dụng.
 

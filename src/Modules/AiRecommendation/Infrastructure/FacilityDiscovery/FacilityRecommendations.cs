@@ -18,6 +18,16 @@ public sealed class FacilityRecommendations(AiRecommendationDbContext db,IFacili
     {if(!await access.ActiveAsync(actor,ct))throw new FacilityRecommendationFailure(403,"facility_resident_inactive","Cần có hồ sơ cư trú hiện hành để xem gợi ý tiện ích.");}
     public async Task<ResidentFacilityCatalogue> CatalogueAsync(Guid actor,CancellationToken ct)
     {await Check(actor,ct);return new((await source.ReadAsync(ct)).Guides.Select(FacilityNeedMatcher.Card).ToArray(),DateOnly.FromDateTime(await LocalNow(ct)));}
+    public async Task<FacilityRecommendationView> TodayAsync(Guid actor,Guid? facilityId,CancellationToken ct)
+    {
+        await Check(actor,ct);
+        var facts=await source.ReadAsync(ct);
+        if(facilityId is not null)facts=facts with {Guides=facts.Guides.Where(x=>x.FacilityId==facilityId).ToArray()};
+        var view=FacilityWeekendPlanner.View(facts,await LocalNow(ct),clock.GetUtcNow());
+        return facilityId is not null && view.Suggestions.Length==0
+            ? view with {Message="Hiện không còn lịch công bố phù hợp cho tiện ích được nhắc. Bạn có thể nói nhu cầu để tìm lựa chọn khác."}
+            : view;
+    }
     public async Task<FacilityRecommendationView> RecommendAsync(Guid actor,FacilityRecommendationRequest request,CancellationToken ct)
     {
         await Check(actor,ct);var now=await LocalNow(ct);var today=DateOnly.FromDateTime(now);
