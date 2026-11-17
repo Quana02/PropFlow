@@ -31,6 +31,8 @@ public sealed class ResidentChatWidgetTests
             var widget = capture.Widget!;
             await Invoke(widget, "Toggle"); Refresh(widget);
             Assert.Contains("Trợ lý tài liệu", WebUtility.HtmlDecode(root.ToHtmlString()));
+            if(Environment.GetEnvironmentVariable("PROPFLOW_CHAT_PREVIEW_DIR") is {Length:>0} directory)
+                await File.WriteAllTextAsync(Path.Combine(directory,"propflow-document-chat-welcome.html"),root.ToHtmlString());
             typeof(ResidentChatWidget).GetField("question", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(widget, "Chi phí phát sinh?");
             await Invoke(widget, "Send"); Refresh(widget);
             var html = root.ToHtmlString();

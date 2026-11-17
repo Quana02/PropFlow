@@ -12,6 +12,11 @@ public sealed class FacilityRecommendationController(FacilityRecommendations ser
     private Guid Actor => Guid.Parse(User.FindFirstValue("sub")!);
     [HttpGet, ProducesResponseType(typeof(ResidentFacilityCatalogue), 200)]
     public Task<IActionResult> Catalogue(CancellationToken ct) => Run(async () => Ok(await service.CatalogueAsync(Actor, ct)));
+    [HttpGet("today"), ProducesResponseType(typeof(FacilityRecommendationView), 200)]
+    public Task<IActionResult> Today([FromQuery] Guid? facilityId, CancellationToken ct) => Run(async () => {
+        var view = await service.TodayAsync(Actor, facilityId, ct);
+        return Ok(view with { SpeechId = speech.Prepare(Actor, view) });
+    });
     [HttpPost, ProducesResponseType(typeof(FacilityRecommendationView), 200), ProducesResponseType(429), ProducesResponseType(409)]
     public Task<IActionResult> Recommend(FacilityRecommendationRequest input, CancellationToken ct) => Run(async () => {
         var view = await service.RecommendAsync(Actor, input, ct);

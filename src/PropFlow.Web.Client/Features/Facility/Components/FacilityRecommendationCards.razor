@@ -1,6 +1,6 @@
 @using PropFlow.Web.Client.Features.Facility.Services
 <section class="facility-recommendations" aria-label="Tiện ích phù hợp nhu cầu">
-    <header class="recommendation-heading"><div><span>ĐƯỢC CHỌN CHO BẠN</span><h2>@(Data.Suggestions.Length == 0 ? "Mình cùng tìm cách khác nhé" : $"{Data.Suggestions.Length} lựa chọn đáng để thử")</h2></div><span class="recommendation-mode">@(Data.Mode == "GEMINI" ? "✦ AI gợi ý" : "Tra cứu từ BQL")</span></header>
+    <header class="recommendation-heading"><div><span>@(Data.Mode == "TODAY" ? "LỊCH TIỆN ÍCH HÔM NAY" : "ĐƯỢC CHỌN CHO BẠN")</span><h2>@(Data.Suggestions.Length == 0 ? "Mình cùng tìm cách khác nhé" : $"{Data.Suggestions.Length} lựa chọn đáng để thử")</h2></div><span class="recommendation-mode">@(Data.Mode == "TODAY" ? "Lịch do BQL công bố" : Data.Mode == "GEMINI" ? "✦ AI gợi ý" : "Tra cứu từ BQL")</span></header>
     @if(Data.Suggestions.Length == 0){<p class="recommendation-empty">@Data.Message</p>}
     @if(Data.Mode is "FALLBACK" or "CATALOGUE"){<p class="recommendation-fallback">AI chưa sẵn sàng. Các lựa chọn này được tra cứu từ thông tin BQL.</p>}
     @if(Data.Suggestions.Length > 1)

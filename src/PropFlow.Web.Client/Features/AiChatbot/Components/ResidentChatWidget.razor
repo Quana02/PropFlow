@@ -9,9 +9,12 @@
     @if (open)
     {
         <section class="rag-window" aria-labelledby="rag-heading">
-            <header><div><span class="rag-eyebrow">PROPFLOW COPILOT</span><h2 id="rag-heading">Trợ lý tài liệu</h2><small>@(configured ? "Đã cấu hình AI · Có dẫn nguồn" : "Tra cứu tài liệu chung cư")</small></div>
-                <button type="button" @onclick="Close" aria-label="Thu nhỏ trợ lý">⌄</button></header>
-            <div class="rag-notice">Trả lời từ tài liệu được Ban quản lý xuất bản cho cư dân. Không nhập mật khẩu, số tài khoản hoặc thông tin cá nhân.</div>
+            <header class="rag-header">
+                <span class="rag-assistant-avatar" aria-hidden="true">✦</span>
+                <div class="rag-header-copy"><span class="rag-eyebrow">HỎI PROPFLOW</span><h2 id="rag-heading">Trợ lý tài liệu</h2><small><i></i>@(configured ? "Sẵn sàng hỗ trợ · Có dẫn nguồn" : "Tra cứu tài liệu chung cư")</small></div>
+                <button type="button" @onclick="Close" aria-label="Thu nhỏ trợ lý"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+            </header>
+            <div class="rag-notice">Dựa trên tài liệu Ban quản lý. Không chia sẻ mật khẩu, số tài khoản hoặc thông tin cá nhân.</div>
             @if (error is not null) { <div class="rag-error" role="alert">@error</div> }
             @if (source is not null)
             {
@@ -23,8 +26,8 @@
                 <div class="rag-thread" role="log" aria-live="polite" aria-relevant="additions text">
                     @if (turns.Count == 0)
                     {
-                        <div class="rag-welcome"><span aria-hidden="true">✦</span><h3>Bạn muốn tìm hiểu điều gì?</h3><p>Hỏi về nội quy, quy trình dịch vụ hoặc cách sử dụng PropFlow. Hãy nêu đầy đủ nội dung trong mỗi câu hỏi.</p></div>
-                        <div class="rag-suggestions">@foreach (var suggestion in Suggestions) { <button type="button" disabled="@busy" @onclick="() => Suggest(suggestion)">@suggestion</button> }</div>
+                        <div class="rag-welcome"><span aria-hidden="true">✦</span><h3>Bạn muốn tìm hiểu điều gì?</h3><p>Mình có thể giúp bạn tra cứu nội quy và hướng dẫn sử dụng dịch vụ.</p></div>
+                        <div class="rag-suggestions">@foreach (var suggestion in Suggestions) { <button type="button" disabled="@busy" @onclick="() => Suggest(suggestion)"><span>@suggestion</span><span aria-hidden="true">↗</span></button> }</div>
                     }
                     @foreach (var turn in turns)
                     {
@@ -41,10 +44,12 @@
                 </div>
                 <form class="rag-input" @onsubmit="Send" @onsubmit:preventDefault>
                     <label class="rag-sr" for="rag-question">Câu hỏi cho trợ lý tài liệu</label>
-                    <textarea id="rag-question" data-enter-submit rows="1" enterkeyhint="send" aria-describedby="rag-compose-hint" @bind="question" @bind:event="oninput" maxlength="1000" required minlength="2" placeholder="Nhập câu hỏi của bạn…" disabled="@(busy || blocked)"></textarea>
-                    <button type="submit" disabled="@(busy || blocked || question.Trim().Length < 2)">Gửi</button>
+                    <div class="pf-chat-composer">
+                        <textarea id="rag-question" data-enter-submit rows="1" enterkeyhint="send" aria-describedby="rag-compose-hint" @bind="question" @bind:event="oninput" maxlength="1000" required minlength="2" placeholder="Hỏi PropFlow điều bạn cần…" disabled="@(busy || blocked)"></textarea>
+                        <button type="submit" class="pf-chat-send" aria-label="Gửi câu hỏi" title="Gửi câu hỏi" disabled="@(busy || blocked || question.Trim().Length < 2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 2 7 12l-5-2 20-8Zm0 0-8 20-2-5 10-15ZM7 12l5 5" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+                    </div>
+                    <small id="rag-compose-hint" class="rag-shortcuts">Enter để gửi · Ctrl+Enter để xuống dòng</small>
                 </form>
-                <small id="rag-compose-hint" class="rag-shortcuts">Enter để gửi · Ctrl+Enter để xuống dòng</small>
                 <nav class="rag-links" aria-label="Mở chức năng PropFlow"><a href="/resident/service-requests">Yêu cầu dịch vụ</a><a href="/resident/billing">Hóa đơn và thanh toán</a><a href="/resident/contact-management">Liên hệ BQL</a></nav>
             }
             <footer><span>AI có thể trả lời chưa chính xác. Hãy kiểm tra nguồn.</span><button type="button" disabled="@busy" @onclick="Clear">Xóa hội thoại</button></footer>
