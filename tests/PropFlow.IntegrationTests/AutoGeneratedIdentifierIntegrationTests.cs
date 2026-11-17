@@ -307,10 +307,11 @@ public sealed class IdentifierDatabaseFixture : IAsyncLifetime
         adminConnection = options.ConnectionString;
         await using var admin = new NpgsqlConnection(adminConnection);
         await admin.OpenAsync();
-        await using var create = new NpgsqlCommand($"CREATE DATABASE {name}", admin);
-        await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(admin, name);
         options.Database = name;
         ConnectionString = options.ConnectionString;
+        await TestDatabaseSafety.VerifyFixtureAsync(ConnectionString, name, TestDatabaseSafety.ProcessOwner,
+            TestDatabaseConfiguration.GetConnectionString());
         await using var assets = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseNpgsql(ConnectionString, x => x.MigrationsHistoryTable("__EFMigrationsHistory", "property_assets")).Options);
         await using var maintenance = new MaintenanceDbContext(new DbContextOptionsBuilder<MaintenanceDbContext>()
@@ -324,7 +325,6 @@ public sealed class IdentifierDatabaseFixture : IAsyncLifetime
         if (string.IsNullOrEmpty(ConnectionString)) return;
         await using var admin = new NpgsqlConnection(adminConnection);
         await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {name} WITH (FORCE)", admin);
-        await drop.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(admin, name);
     }
 }

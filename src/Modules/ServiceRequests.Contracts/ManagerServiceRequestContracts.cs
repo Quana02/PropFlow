@@ -51,7 +51,8 @@ public sealed record ManagerServiceRequestActivityItem(
     string? Detail,
     string? WorkResult,
     Guid? PerformedBy,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool IsFromCurrentAssignment = false);
 
 public sealed record ManagerServiceRequestAiInsight(
     string? ClassificationStatus,

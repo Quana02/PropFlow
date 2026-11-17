@@ -1,97 +1,33 @@
 (function (global) {
     "use strict";
 
-    const themeKey = "propflow-theme";
-
     let canvasState = null;
     let outsideClickBound = false;
 
     function currentTheme() {
-        return document.documentElement.classList.contains("dark") ||
-            document.documentElement.dataset.theme === "dark"
-            ? "dark"
-            : "light";
+        return document.documentElement.dataset.theme;
     }
 
-    function applyTheme(theme, persist) {
-        const isDark = theme === "dark";
-        const root = document.documentElement;
+    const themeButtons = "#theme-toggle-btn, [data-action='toggle-theme'], .theme-toggle-btn";
 
-        root.classList.toggle("dark", isDark);
-        root.classList.toggle("light", !isDark);
-        root.dataset.theme = isDark ? "dark" : "light";
-
-        const buttons = document.querySelectorAll(
-            "#theme-toggle-btn, [data-action='toggle-theme'], .theme-toggle-btn"
-        );
-
-        buttons.forEach(button => {
-            const label = isDark
-                ? "Chuyển sang giao diện sáng"
-                : "Chuyển sang giao diện tối";
-
+    function syncThemeButtons() {
+        const label = currentTheme() === "dark"
+            ? "Chuyển sang giao diện sáng"
+            : "Chuyển sang giao diện tối";
+        document.querySelectorAll(themeButtons).forEach(button => {
             button.title = label;
             button.setAttribute("aria-label", label);
-
-            const sun = button.querySelector(
-                ".theme-icon-sun, .lucide-sun"
-            );
-
-            const moon = button.querySelector(
-                ".theme-icon-moon, .lucide-moon"
-            );
-
-            if (sun && moon) {
-                sun.classList.toggle("hidden", isDark);
-                moon.classList.toggle("hidden", !isDark);
-            }
         });
-
-        if (persist) {
-            try {
-                localStorage.setItem(
-                    themeKey,
-                    isDark ? "dark" : "light"
-                );
-            } catch {
-                // localStorage có thể bị chặn
-            }
-        }
     }
 
+    window.addEventListener("propflow:themechange", syncThemeButtons);
+
     function initializeTheme() {
-        let theme;
-
-        try {
-            theme = localStorage.getItem(themeKey);
-        } catch {
-            // optional
-        }
-
-        if (theme !== "dark" && theme !== "light") {
-            theme = window.matchMedia(
-                "(prefers-color-scheme: dark)"
-            ).matches
-                ? "dark"
-                : "light";
-        }
-
-        applyTheme(theme, false);
-
-        document.querySelectorAll(
-            "#theme-toggle-btn, [data-action='toggle-theme'], .theme-toggle-btn"
-        ).forEach(btn => {
-
-            if (btn.dataset.bound === "true") {
-                return;
-            }
-
-            btn.dataset.bound = "true";
-
-            btn.addEventListener(
-                "click",
-                event => api.toggleTheme(event)
-            );
+        syncThemeButtons();
+        document.querySelectorAll(themeButtons).forEach(button => {
+            if (button.dataset.bound === "true") return;
+            button.dataset.bound = "true";
+            button.addEventListener("click", event => api.toggleTheme(event));
         });
     }
 
@@ -1344,12 +1280,7 @@
         toggleTheme(event) {
             event?.stopPropagation();
 
-            applyTheme(
-                currentTheme() === "dark"
-                    ? "light"
-                    : "dark",
-                true
-            );
+            window.propFlowTheme.toggle();
         },
 
         switchTab(tab, scroll = true) {

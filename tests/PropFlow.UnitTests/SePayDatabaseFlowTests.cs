@@ -27,6 +27,9 @@ public sealed class SePayDatabaseFlowTests
     public async Task RealDatabase_ConcurrentDeliveryPartialSettlementManualExcessAndCleanup()
     {
         var connection = Environment.GetEnvironmentVariable("PROPFLOW_PAYMENT_TEST_DATABASE")!;
+        var database = Environment.GetEnvironmentVariable("PROPFLOW_PAYMENT_TEST_DATABASE_NAME") ?? "";
+        var owner = Environment.GetEnvironmentVariable("PROPFLOW_FIXTURE_OWNER") ?? "";
+        await TestDatabaseSafety.VerifyFixtureAsync(connection, database, owner);
         var options = new DbContextOptionsBuilder<PaymentsDbContext>().UseNpgsql(connection).Options;
         await using var db = new PaymentsDbContext(options);
         var source = new Source();

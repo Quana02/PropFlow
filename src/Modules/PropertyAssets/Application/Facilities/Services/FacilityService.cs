@@ -123,18 +123,17 @@ public class FacilityService : IFacilityService
         if (command.Status == MasterDataStatus.UNDER_MAINTENANCE)
             throw new InvalidOperationException("Trạng thái đang bảo trì chỉ được cập nhật từ quy trình bảo trì.");
 
-        var facility = await _store.FacilityAsync(id, true, false, cancellationToken);
-
-        if (facility == null)
+        return await _store.WithFacilityStatusLockAsync(id, async ct =>
         {
-            throw new KeyNotFoundException("Không tìm thấy tiện ích.");
-        }
+            var facility = await _store.FacilityAsync(id, true, false, ct)
+                ?? throw new KeyNotFoundException("Không tìm thấy tiện ích.");
+            if (facility.Status == MasterDataStatus.UNDER_MAINTENANCE)
+                throw new InvalidOperationException("Tiện ích đang bảo trì. Hãy cập nhật trạng thái từ quy trình bảo trì.");
 
-        facility.SetStatus(command.Status, command.UpdatedBy, DateTimeOffset.UtcNow);
-
-        await _store.SaveAsync(cancellationToken);
-
-        return await MapToDtoAsync(facility, cancellationToken);
+            facility.SetStatus(command.Status, command.UpdatedBy, DateTimeOffset.UtcNow);
+            await _store.SaveAsync(ct);
+            return await MapToDtoAsync(facility, ct);
+        }, cancellationToken);
     }
 
     private Task<FacilityDto> MapToDtoAsync(Facility facility, CancellationToken cancellationToken)

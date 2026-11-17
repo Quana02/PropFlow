@@ -148,31 +148,32 @@ public class EquipmentService : IEquipmentService
         if (command.Status == EquipmentStatus.UNDER_MAINTENANCE)
             throw new InvalidOperationException("Trạng thái đang bảo trì chỉ được cập nhật từ quy trình bảo trì.");
 
-        var equipment = await _store.EquipmentAsync(id, true, cancellationToken);
-
-        if (equipment is null)
+        return await _store.WithEquipmentStatusLockAsync(id, async ct =>
         {
-            throw new KeyNotFoundException($"Không tìm thấy thiết bị với mã định danh ID = {id}.");
-        }
+            var equipment = await _store.EquipmentAsync(id, true, ct)
+                ?? throw new KeyNotFoundException($"Không tìm thấy thiết bị với mã định danh ID = {id}.");
+            if (equipment.Status == EquipmentStatus.UNDER_MAINTENANCE)
+                throw new InvalidOperationException("Thiết bị đang bảo trì. Hãy cập nhật trạng thái từ quy trình bảo trì.");
 
-        switch (command.Status)
-        {
-            case EquipmentStatus.ACTIVE:
-                equipment.MarkActive(command.UpdatedBy, DateTimeOffset.UtcNow);
-                break;
-            case EquipmentStatus.INACTIVE:
-                equipment.Deactivate(command.UpdatedBy, DateTimeOffset.UtcNow);
-                break;
-            case EquipmentStatus.OUT_OF_SERVICE:
-                equipment.MarkOutOfService(command.UpdatedBy, DateTimeOffset.UtcNow);
-                break;
-            default:
-                throw new ArgumentException($"Trạng thái không hợp lệ: {command.Status}");
-        }
+            var now = DateTimeOffset.UtcNow;
+            switch (command.Status)
+            {
+                case EquipmentStatus.ACTIVE:
+                    equipment.MarkActive(command.UpdatedBy, now);
+                    break;
+                case EquipmentStatus.INACTIVE:
+                    equipment.Deactivate(command.UpdatedBy, now);
+                    break;
+                case EquipmentStatus.OUT_OF_SERVICE:
+                    equipment.MarkOutOfService(command.UpdatedBy, now);
+                    break;
+                default:
+                    throw new ArgumentException($"Trạng thái không hợp lệ: {command.Status}");
+            }
 
-        await _store.SaveAsync(cancellationToken);
-
-        return MapToDto(equipment);
+            await _store.SaveAsync(ct);
+            return MapToDto(equipment);
+        }, cancellationToken);
     }
 
     private static EquipmentDto MapToDto(EquipmentEntity equipment)

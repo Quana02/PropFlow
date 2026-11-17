@@ -43,4 +43,8 @@
     <ProjectReference Include="..\..\src\Modules\Reporting\PropFlow.Modules.Reporting.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../Shared/TestDatabaseSafety.cs" Link="TestDatabaseSafety.cs" />
+    <Using Include="PropFlow.Testing" />
+  </ItemGroup>
 </Project>

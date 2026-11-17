@@ -65,7 +65,6 @@ public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : 
         var end = new DateTimeOffset(monthStart.AddDays(days), TimeSpan.FromHours(endOffset)).ToUniversalTime();
         var clock = database.Factory.Clock;
         var original = clock.Current;
-        using var client = await ClientAsync("MANAGER");
         await using var scope = database.Factory.Services.CreateAsyncScope();
         var propertyAssets = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>();
         var building = await propertyAssets.Buildings.SingleAsync();
@@ -73,6 +72,7 @@ public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : 
         clock.Current = start;
         try
         {
+            using var client = await ClientAsync("MANAGER");
             if (zoneId != originalZone)
             {
                 building.Update(building.Name, building.Address, zoneId, building.NumberOfFloors, building.Description, null, start);
@@ -131,8 +131,22 @@ public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : 
     public async Task Create_obeys_actor_matrix(string role, HttpStatusCode expected)
     {
         var apartmentId = await SeedApartmentAsync();
-        using var response = await (await ClientAsync(role)).PostAsJsonAsync("api/v1/residents", ValidCreate(apartmentId));
+        var payload = ValidCreate(apartmentId);
+        using var actor = await ClientAsync(role);
+        using var response = await actor.PostAsJsonAsync("api/v1/residents", payload);
         Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.Created) return;
+
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var residents = scope.ServiceProvider.GetRequiredService<ResidentsDbContext>();
+        Assert.False(await residents.Residents.AnyAsync(resident => resident.IdentityNumber == payload.IdentityNumber));
+        Assert.False(await residents.ResidentApartments.AnyAsync(residency => residency.ApartmentUnitId == apartmentId));
+        using var manager = await ClientAsync("MANAGER");
+        using var positive = await manager.PostAsJsonAsync("api/v1/residents", payload);
+        Assert.Equal(HttpStatusCode.Created, positive.StatusCode);
+        var created = await residents.Residents.SingleAsync(resident => resident.IdentityNumber == payload.IdentityNumber);
+        Assert.True(await residents.ResidentApartments.AnyAsync(residency =>
+            residency.ApartmentUnitId == apartmentId && residency.ResidentId == created.Id));
     }
 
     [Theory]
@@ -886,7 +900,7 @@ public sealed class ResidentManagementHttpTests(AuthDatabaseFixture database) : 
         }
         var account = new AccountResponse(user.Id, user.Username, user.DisplayName, user.Email, user.PhoneNumber, "ACTIVE", true, role, permissions);
         var client = database.Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", database.Factory.Services.GetRequiredService<IAuthSecrets>().Issue(account, DateTimeOffset.UtcNow).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(database.Factory.Services, account, DateTimeOffset.UtcNow)).AccessToken);
         return client;
     }
 

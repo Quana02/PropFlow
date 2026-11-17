@@ -13,10 +13,10 @@ public sealed class MaintenanceHubConnectionFactory(IConfiguration configuration
             ?? throw new InvalidOperationException("Thiếu cấu hình Api:BaseUrl.");
         var apiBase = new Uri(new Uri(navigation.BaseUri), configuredApiBase);
 
-        return new HubConnectionBuilder()
+        return session.ObserveTransport(new HubConnectionBuilder()
             .WithUrl(new Uri(apiBase, "hubs/maintenance"), options =>
-                options.AccessTokenProvider = () => Task.FromResult(session.AccessToken))
+                options.AccessTokenProvider = session.GetValidAccessTokenAsync)
             .WithAutomaticReconnect()
-            .Build();
+            .Build());
     }
 }

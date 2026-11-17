@@ -30,11 +30,12 @@ public sealed class Fe04PostgresQueryTests
         connection.Database = "postgres";
         await using var admin = new NpgsqlConnection(connection.ConnectionString);
         await admin.OpenAsync();
-        await using (var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", admin))
-            await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(admin, database);
         try
         {
             connection.Database = database;
+            await TestDatabaseSafety.VerifyFixtureAsync(connection.ConnectionString, database, TestDatabaseSafety.ProcessOwner,
+                TestDatabaseConfiguration.GetConnectionString());
             await using var assets = new PropertyAssetsDbContext(new DbContextOptionsBuilder<PropertyAssetsDbContext>().UseNpgsql(connection.ConnectionString).Options);
             await using var maintenance = new MaintenanceDbContext(new DbContextOptionsBuilder<MaintenanceDbContext>().UseNpgsql(connection.ConnectionString).Options);
             await using var requests = new ServiceRequestsDbContext(new DbContextOptionsBuilder<ServiceRequestsDbContext>().UseNpgsql(connection.ConnectionString).Options);
@@ -100,8 +101,7 @@ public sealed class Fe04PostgresQueryTests
             // Never target configured databases or names not generated above.
             Assert.Matches("^propflow_fe04_test_[0-9a-f]{32}$", database);
             NpgsqlConnection.ClearAllPools();
-            await using var drop = new NpgsqlCommand($"DROP DATABASE \"{database}\" WITH (FORCE)", admin);
-            await drop.ExecuteNonQueryAsync();
+            await TestDatabaseSafety.DropAsync(admin, database);
         }
     }
 

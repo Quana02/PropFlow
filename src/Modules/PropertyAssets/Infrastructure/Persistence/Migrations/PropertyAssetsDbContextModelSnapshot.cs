@@ -316,6 +316,99 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                     b.ToTable("facilities", "property_assets");
                 });
 
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityGuide", b =>
+                {
+                    b.Property<Guid>("FacilityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("facility_id");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("audience");
+
+                    b.Property<string>("ChildPolicy")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("child_policy");
+
+                    b.Property<DateOnly[]>("ClosedDates")
+                        .IsRequired()
+                        .HasColumnType("date[]")
+                        .HasColumnName("closed_dates");
+
+                    b.Property<string>("ContactDetails")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("contact_details");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("HoursJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("hours_json");
+
+                    b.Property<int?>("MaximumAge")
+                        .HasColumnType("integer")
+                        .HasColumnName("maximum_age");
+
+                    b.Property<int?>("MinimumAge")
+                        .HasColumnType("integer")
+                        .HasColumnName("minimum_age");
+
+                    b.Property<bool>("Published")
+                        .HasColumnType("boolean")
+                        .HasColumnName("published");
+
+                    b.Property<Guid?>("ResponsibleStaffId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("responsible_staff_id");
+
+                    b.Property<string>("Rules")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("rules");
+
+                    b.Property<string>("SupervisionNote")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("supervision_note");
+
+                    b.Property<Guid>("Token")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("token");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("FacilityId");
+
+                    b.ToTable("facility_guides", "property_assets", t =>
+                        {
+                            t.HasCheckConstraint("ck_facility_guide_age", "(minimum_age IS NULL OR minimum_age BETWEEN 0 AND 120) AND (maximum_age IS NULL OR maximum_age BETWEEN 0 AND 120) AND (minimum_age IS NULL OR maximum_age IS NULL OR minimum_age <= maximum_age)");
+
+                            t.HasCheckConstraint("ck_facility_guide_audience", "audience IN ('GENERAL','CHILDREN','FAMILY','ADULTS')");
+
+                            t.HasCheckConstraint("ck_facility_guide_child_policy", "child_policy IN ('GUARDIAN_REQUIRED','SUPERVISED_CONTACT_REQUIRED','NOT_FOR_CHILDREN')");
+                        });
+                });
+
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -447,6 +540,15 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("FacilityType");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityGuide", b =>
+                {
+                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", null)
+                        .WithOne()
+                        .HasForeignKey("PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityGuide", "FacilityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", b =>

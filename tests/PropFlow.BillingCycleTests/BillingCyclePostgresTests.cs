@@ -40,11 +40,12 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
     private DateOnly Month => new(DateTime.Today.Year, DateTime.Today.Month, 1);
     public async Task InitializeAsync()
     {
-        var source = Environment.GetEnvironmentVariable("PROPFLOW_TEST_DATABASE") ?? throw new InvalidOperationException("Set PROPFLOW_TEST_DATABASE to a local PostgreSQL admin connection.");
-        var builder = new NpgsqlConnectionStringBuilder(source) { Database = "postgres", Pooling = false }; admin = builder.ConnectionString;
+        var builder = TestDatabaseSafety.Dedicated();
+        builder.Database = "postgres"; builder.Pooling = false; admin = builder.ConnectionString;
         await using var c = new NpgsqlConnection(admin); await c.OpenAsync();
-        await using var create = new NpgsqlCommand($"CREATE DATABASE {name}", c); await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(c, name);
         builder.Database = name; connection = builder.ConnectionString;
+        await TestDatabaseSafety.VerifyFixtureAsync(connection, name, TestDatabaseSafety.ProcessOwner);
         await using var billing = Billing(); await billing.Database.MigrateAsync();
         await using var payment = Payments(); await payment.Database.MigrateAsync();
         await using var communication = Communication(); await communication.Database.MigrateAsync();
@@ -55,9 +56,9 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
     }
     public async Task DisposeAsync()
     {
-        if (string.IsNullOrEmpty(admin)) return;
+        if (string.IsNullOrEmpty(connection)) return;
         await using var c = new NpgsqlConnection(admin); await c.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {name} WITH (FORCE)", c); await drop.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(c, name);
     }
     private BillingDbContext Billing() => new(new DbContextOptionsBuilder<BillingDbContext>().UseNpgsql(connection,
         x => x.MigrationsHistoryTable("__EFMigrationsHistory", "billing")).Options);
@@ -130,8 +131,10 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.Equal(3, await billing.ElectricityUsages.CountAsync());
     }
 
-    [Fact]
-    public async Task Notification_api_paginates_newest_first_and_updates_only_the_current_user()
+    [Theory]
+    [InlineData("/api/v1/notifications")]
+    [InlineData("/api/v1/resident/notifications")]
+    public async Task Notification_api_paginates_newest_first_and_updates_only_the_current_user(string path)
     {
         await using var communication = Communication();
         var otherUser = Guid.NewGuid();
@@ -153,9 +156,14 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         using var manager = factory.Client("MANAGER", user, "MANAGE_OPERATIONS");
         using var staff = factory.Client("STAFF", otherUser, "PERFORM_ASSIGNED_OPERATIONS");
         using var anonymous = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
-        const string path = "api/v1/notifications";
         async Task<int> Count(HttpClient client) =>
             (await client.GetFromJsonAsync<System.Text.Json.JsonElement>($"{path}/unread-count")).GetProperty("count").GetInt32();
+        async Task<(Guid Id, bool IsRead, DateTimeOffset? ReadAt)[]> ReadState()
+        {
+            var rows = await communication.Notifications.AsNoTracking().OrderBy(item => item.Id)
+                .Select(item => new { item.Id, item.IsRead, item.ReadAt }).ToArrayAsync();
+            return rows.Select(item => (item.Id, item.IsRead, item.ReadAt)).ToArray();
+        }
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
         Assert.Equal(101, await Count(manager));
         var first = (await manager.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"{path}?pageSize=1"))!;
@@ -164,12 +172,21 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.False(first[0].GetProperty("isRead").GetBoolean());
         var next = (await manager.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"{path}?page=2&pageSize=1"))!;
         Assert.Equal(notifications[^2].Id, Assert.Single(next).GetProperty("id").GetGuid());
-        Assert.Equal(HttpStatusCode.NotFound, (await manager.PostAsJsonAsync($"{path}/{foreign.Id}/read", new { })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsJsonAsync($"{path}/{notifications[^1].Id}/read", new { })).StatusCode);
+        var before = await ReadState();
+        var target = $"{path}/{notifications[^1].Id}/read";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync(target, new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await staff.PostAsJsonAsync(target, new { })).StatusCode);
+        Assert.Equal(before, await ReadState());
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsJsonAsync(target, new { })).StatusCode);
         Assert.Equal(100, await Count(manager));
+        var afterSingle = await ReadState();
+        Assert.Equal(notifications[^1].Id, Assert.Single(afterSingle, item => item.IsRead).Id);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync($"{path}/read-all", new { })).StatusCode);
+        Assert.Equal(afterSingle, await ReadState());
         Assert.Equal(HttpStatusCode.OK, (await manager.PostAsJsonAsync($"{path}/read-all", new { })).StatusCode);
         Assert.Equal(0, await Count(manager));
         Assert.Equal(1, await Count(staff));
+        Assert.Equal((foreign.Id, false, (DateTimeOffset?)null), Assert.Single(await ReadState(), item => !item.IsRead));
     }
     [Fact]
     public async Task Monthly_generation_obeys_the_configured_building_timezone_at_month_boundary()
@@ -345,6 +362,64 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         clock.Now=clock.Now.AddDays(1);await cycle.RunAsync(default);
         Assert.Equal(2,await c.Notifications.CountAsync(x=>x.Title=="Thông báo công nợ quá hạn"));
     }
+    [Fact]
+    public async Task Notification_read_state_invalidates_only_the_recipient_sessions_after_commit()
+    {
+        await using var db = Communication();
+        var otherUser = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var first = new PropFlow.Modules.Communication.Domain.Notifications.Notification(user,
+            PropFlow.Modules.Communication.Domain.Notifications.NotificationType.SYSTEM, "Kiểm thử 1", "Nội dung", now);
+        var second = new PropFlow.Modules.Communication.Domain.Notifications.Notification(user,
+            PropFlow.Modules.Communication.Domain.Notifications.NotificationType.SYSTEM, "Kiểm thử 2", "Nội dung", now);
+        db.Notifications.AddRange(first, second);
+        await db.SaveChangesAsync();
+        await using var factory = new Factory(connection, user, apartment);
+        using var reader = factory.Client("RESIDENT", user);
+        using var outsider = factory.Client("RESIDENT", otherUser);
+        HubConnection Connect(Guid id, string path) => new HubConnectionBuilder().WithUrl("https://localhost" + path, options =>
+        {
+            options.Transports = HttpTransportType.LongPolling;
+            options.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+            options.Headers["X-Role"] = "RESIDENT";
+            options.Headers["X-User"] = id.ToString();
+        }).Build();
+        await using var own = Connect(user, "/hubs/notifications");
+        await using var peer = Connect(user, "/hubs/resident-notifications");
+        await using var other = Connect(otherUser, "/hubs/notifications");
+        var ownUpdates = System.Threading.Channels.Channel.CreateUnbounded<int>();
+        var peerUpdates = System.Threading.Channels.Channel.CreateUnbounded<int>();
+        var foreignUpdates = 0;
+        async Task Snapshot(System.Threading.Channels.ChannelWriter<int> channel)
+        {
+            using var response = await reader.GetAsync("/api/v1/notifications/unread-count");
+            response.EnsureSuccessStatusCode();
+            var count = (await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("count").GetInt32();
+            await channel.WriteAsync(count);
+        }
+        own.On("NotificationReadStateChanged", () => Snapshot(ownUpdates.Writer));
+        peer.On("NotificationReadStateChanged", () => Snapshot(peerUpdates.Writer));
+        other.On("NotificationReadStateChanged", () => Interlocked.Increment(ref foreignUpdates));
+        await Task.WhenAll(own.StartAsync(), peer.StartAsync(), other.StartAsync());
+
+        var readPath = $"/api/v1/notifications/{first.Id}/read";
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.PostAsJsonAsync(readPath, new { })).StatusCode);
+        var concurrent = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => reader.PostAsJsonAsync(readPath, new { })));
+        Assert.All(concurrent, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        using var signals = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, await ownUpdates.Reader.ReadAsync(signals.Token));
+        Assert.Equal(1, await peerUpdates.Reader.ReadAsync(signals.Token));
+        Assert.Equal(HttpStatusCode.OK, (await reader.PostAsJsonAsync("/api/v1/resident/notifications/read-all", new { })).StatusCode);
+        Assert.Equal(0, await ownUpdates.Reader.ReadAsync(signals.Token));
+        Assert.Equal(0, await peerUpdates.Reader.ReadAsync(signals.Token));
+        Assert.Equal(HttpStatusCode.OK, (await reader.PostAsJsonAsync("/api/v1/resident/notifications/read-all", new { })).StatusCode);
+        await Task.Delay(200, signals.Token);
+        Assert.False(ownUpdates.Reader.TryRead(out _));
+        Assert.False(peerUpdates.Reader.TryRead(out _));
+        Assert.Equal(0, Volatile.Read(ref foreignUpdates));
+        Assert.Equal(2, await db.Notifications.AsNoTracking().CountAsync(row => row.RecipientUserId == user && row.IsRead));
+    }
+
     [Fact]
     public async Task Realtime_finance_notification_is_committed_deduplicated_and_sent_only_to_recipient()
     {
@@ -709,8 +784,28 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         p.Payments.Add(payment); await p.SaveChangesAsync();
         await cycle.RunAsync(default);
         Assert.Single(await c.Notifications.Where(x=>x.Title=="Thanh toán đang chờ xác minh").ToArrayAsync());
-        var store=new PaymentFinanceStore(p,new InvoiceFinancialSource(b));
-        Assert.Equal(MutationOutcome.Success,(await store.ChangeAsync(payment.Id,"REJECT","Sai tham chiếu", "reject-key",actor,default)).Outcome);
+        await using var factory = new Factory(connection, user, apartment);
+        using var manager = factory.Client("MANAGER", actor, "MANAGE_OPERATIONS");
+        using var accountant = factory.Client("ACCOUNTANT", actor, "MANAGE_FINANCE");
+        manager.DefaultRequestHeaders.Add("Idempotency-Key", "reject-key");
+        accountant.DefaultRequestHeaders.Add("Idempotency-Key", "reject-key");
+        var path = $"api/v1/payments/{payment.Id}/reject";
+        var payload = new { reason = "Sai tham chiếu" };
+        var historyBefore = await p.PaymentStatusHistory.CountAsync();
+        var operationsBefore = await p.PaymentOperations.CountAsync();
+        var noticesBefore = await c.Notifications.CountAsync();
+        using var denied = await manager.PostAsJsonAsync(path, payload);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        await p.Entry(payment).ReloadAsync();
+        Assert.Equal(PaymentStatus.PENDING, payment.Status);
+        Assert.Equal(historyBefore, await p.PaymentStatusHistory.CountAsync());
+        Assert.Equal(operationsBefore, await p.PaymentOperations.CountAsync());
+        Assert.Equal(noticesBefore, await c.Notifications.CountAsync());
+
+        using var accepted = await accountant.PostAsJsonAsync(path, payload);
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+        await p.Entry(payment).ReloadAsync();
+        Assert.Equal(PaymentStatus.REJECTED, payment.Status);
         await cycle.RunAsync(default); await cycle.RunAsync(default);
         var notice=Assert.Single(await c.Notifications.Where(x=>x.Title=="Khoản thanh toán chưa được chấp nhận").ToArrayAsync());
         Assert.Equal(user,notice.RecipientUserId); Assert.Contains("Sai tham chiếu",notice.Message);
@@ -746,6 +841,8 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
                 services.AddSingleton<IBillingHouseholdDirectory>(new Directory(new(apartment,"A-101",70,user,"Chủ hộ","head@example.invalid")));
                 services.AddAuthentication(o=>o.DefaultAuthenticateScheme=o.DefaultChallengeScheme=o.DefaultForbidScheme="CycleTest")
                     .AddScheme<AuthenticationSchemeOptions,TestAuth>("CycleTest",_=>{});
+                services.RemoveAll<PropFlow.Api.Composition.IRealtimeSessionValidation>();
+                services.AddSingleton<PropFlow.Api.Composition.IRealtimeSessionValidation, CycleRealtimeTestValidation>();
             });
         }
         public HttpClient Client(string role, Guid id, string? permission=null) {
@@ -838,6 +935,7 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         var reminder = new { invoiceIds = new[] { invoiceId }, requestId = Guid.NewGuid() };
         using (var denied = await resident.PostAsJsonAsync(reminderPath, reminder))
             Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.Equal(previousEmailIds.Order(), (await reminderNotices.FinanceEmails.Select(x => x.Id).ToArrayAsync()).Order());
         for (var attempt = 0; attempt < 2; attempt++)
         {
             using var accepted = await accountant.PostAsJsonAsync(reminderPath, reminder);
@@ -848,8 +946,10 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         }
         var queued = Assert.Single(await reminderNotices.FinanceEmails.Where(x => !previousEmailIds.Contains(x.Id)).ToArrayAsync());
         Assert.Equal(user, queued.UserId);
+        var beforeSend = await reminderNotices.FinanceEmails.CountAsync();
         Assert.Equal(HttpStatusCode.Forbidden,(await resident.PostAsJsonAsync(sendPath,new{})).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await manager.PostAsJsonAsync(sendPath,new{})).StatusCode);
+        Assert.Equal(beforeSend, await reminderNotices.FinanceEmails.CountAsync());
         Assert.Equal(HttpStatusCode.OK,(await accountant.PostAsJsonAsync(sendPath,new{})).StatusCode);
         Assert.Equal(HttpStatusCode.OK,(await accountant.PostAsJsonAsync(sendPath,new{})).StatusCode);
         await using (var sendNotices = Communication())
@@ -873,15 +973,21 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound,(await accountant.PostAsJsonAsync($"api/v1/billing/cycle/invoices/{Guid.NewGuid()}/send",new{})).StatusCode);
         var electricPath = $"api/v1/billing/cycle/apartments/{apartment}/electricity";
         var usageInput = new ElectricityUsageInput(Month, 321);
+        await using var beforeUsage = Billing();
+        var oldUsageCount = await beforeUsage.ElectricityUsages.CountAsync();
         Assert.Equal(HttpStatusCode.Forbidden, (await accountant.PutAsJsonAsync(electricPath, usageInput)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await resident.PutAsJsonAsync(electricPath, usageInput)).StatusCode);
+        Assert.Equal(oldUsageCount, await beforeUsage.ElectricityUsages.CountAsync());
         Assert.Equal(HttpStatusCode.OK, (await manager.PutAsJsonAsync(electricPath, usageInput)).StatusCode);
         var usage = (await manager.GetFromJsonAsync<ElectricityUsageView>($"{electricPath}?usageMonth={Month:yyyy-MM-dd}"))!;
         Assert.Equal(321, usage.Kwh); Assert.False(usage.IsLocked);
         var utilitiesPath=$"api/v1/billing/cycle/apartments/{apartment}/utilities";
         var utilitiesInput=new UtilityUsageInput(Month,321,5);
+        var utilityBefore = (await manager.GetFromJsonAsync<ElectricityUsageView>($"{electricPath}?usageMonth={Month:yyyy-MM-dd}"))!;
         Assert.Equal(HttpStatusCode.Forbidden,(await accountant.PutAsJsonAsync(utilitiesPath,utilitiesInput)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await resident.PutAsJsonAsync(utilitiesPath,utilitiesInput)).StatusCode);
+        var utilityAfter = (await manager.GetFromJsonAsync<ElectricityUsageView>($"{electricPath}?usageMonth={Month:yyyy-MM-dd}"))!;
+        Assert.Equal(utilityBefore, utilityAfter);
         Assert.Equal(HttpStatusCode.OK,(await manager.PutAsJsonAsync(utilitiesPath,utilitiesInput)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await manager.PutAsJsonAsync(utilitiesPath,utilitiesInput with { CurrentWaterReading=-1 })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await manager.PutAsJsonAsync(utilitiesPath, new { usageMonth = Month, kwh = 999 })).StatusCode);
@@ -908,13 +1014,20 @@ public sealed partial class BillingCyclePostgresTests : IAsyncLifetime
         Assert.Empty((await accountant.GetFromJsonAsync<PaymentRow[]>($"api/v1/payments/by-invoice/{invoiceId}"))!);
         Assert.Equal(HttpStatusCode.Forbidden, (await resident.GetAsync($"api/v1/payments/by-invoice/{invoiceId}")).StatusCode);
         Assert.Contains(invoiceDetail.History, x => x.ToStatus == "ISSUED");
-        Assert.Equal(HttpStatusCode.Forbidden,(await accountant.PostAsJsonAsync("api/v1/billing/cycle/rates",new ServiceRateInput(15000,Month.AddMonths(1)))).StatusCode);
+        var newRate = new ServiceRateInput(15000, Month.AddMonths(1), 50000);
+        var ratesBefore = await beforeUsage.FeeRateRules.CountAsync();
+        var pricingEventsBefore = await beforeUsage.PricingChanges.CountAsync();
+        Assert.Equal(HttpStatusCode.Forbidden,(await accountant.PostAsJsonAsync("api/v1/billing/cycle/rates", newRate)).StatusCode);
+        Assert.Equal(ratesBefore, await beforeUsage.FeeRateRules.CountAsync());
+        Assert.Equal(pricingEventsBefore, await beforeUsage.PricingChanges.CountAsync());
         var rentInput = new RentalPricingInput(apartment,"DAILY",350000,Month.AddMonths(1));
         Assert.Equal(HttpStatusCode.Forbidden,(await accountant.PostAsJsonAsync("api/v1/billing/rental-pricing",rentInput)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await resident.PostAsJsonAsync("api/v1/billing/rental-pricing",rentInput)).StatusCode);
+        Assert.Equal(ratesBefore, await beforeUsage.FeeRateRules.CountAsync());
+        Assert.Equal(pricingEventsBefore, await beforeUsage.PricingChanges.CountAsync());
         Assert.Equal(HttpStatusCode.OK,(await manager.PostAsJsonAsync("api/v1/billing/rental-pricing",rentInput)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await manager.PostAsJsonAsync("api/v1/billing/rental-pricing",rentInput with { ApartmentUnitId=Guid.NewGuid() })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK,(await manager.PostAsJsonAsync("api/v1/billing/cycle/rates",new ServiceRateInput(15000,Month.AddMonths(1),50000))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await manager.PostAsJsonAsync("api/v1/billing/cycle/rates",newRate)).StatusCode);
         var savedRates = await manager.GetFromJsonAsync<ServiceRateView[]>("api/v1/billing/cycle/rates");
         Assert.Equal(50000, Assert.Single(savedRates!.Where(x => x.EffectiveFrom == Month.AddMonths(1))).WaterUnitRate);
         Assert.Equal(HttpStatusCode.OK,(await manager.PostAsJsonAsync("api/v1/billing/cycle/rates",new ServiceRateInput(10000,Month.AddMonths(2),ElectricityUnitRate:2000,WaterM3UnitRate:12000))).StatusCode);

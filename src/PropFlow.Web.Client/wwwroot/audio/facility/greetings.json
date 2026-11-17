@@ -1,0 +1,22 @@
+{
+  "language": "vi-VN",
+  "voice": "Kore",
+  "recordings": [
+    {
+      "kind": "WELCOME",
+      "text": "Chào bạn, mình là trợ lý tiện ích PropFlow. Hôm nay bạn muốn làm gì? Mình sẽ cùng bạn tìm hoạt động và thời gian phù hợp nhé.",
+      "sha256": "E5370FB968236F1649F5B3FE30FEA3BECABCF56A5DD2F9C3DFC1EA4B598404F4",
+      "file": "welcome-vi.wav",
+      "bytes": 407084
+    },
+    {
+      "kind": "NEW_NEED",
+      "text": "Mình nghe đây. Lần này bạn muốn tìm hoạt động gì?",
+      "sha256": "014F2851299A129EF752C8263262525E7C447566B298260258CF440A9644D831",
+      "file": "new-need-vi.wav",
+      "bytes": 174764
+    }
+  ],
+  "sampleRate": 24000,
+  "model": "gemini-3.1-flash-tts-preview"
+}

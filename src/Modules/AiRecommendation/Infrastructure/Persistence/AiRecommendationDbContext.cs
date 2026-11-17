@@ -12,6 +12,12 @@ public class AiRecommendationDbContext : DbContext
 
     public DbSet<AiRequestRecommendation> AiRequestRecommendations => Set<AiRequestRecommendation>();
     public DbSet<AiRecommendationReview> AiRecommendationReviews => Set<AiRecommendationReview>();
+    public DbSet<FacilityRecommendationRun> FacilityRecommendationRuns => Set<FacilityRecommendationRun>();
+    public DbSet<FacilityWeekendNoticeRun> FacilityWeekendNoticeRuns => Set<FacilityWeekendNoticeRun>();
+    public DbSet<PropFlow.Modules.AiRecommendation.Domain.UtilityConsumption.UtilityInsight> UtilityInsights => Set<PropFlow.Modules.AiRecommendation.Domain.UtilityConsumption.UtilityInsight>();
+    public DbSet<PropFlow.Modules.AiRecommendation.Domain.UtilityConsumption.UtilityInsightReview> UtilityInsightReviews => Set<PropFlow.Modules.AiRecommendation.Domain.UtilityConsumption.UtilityInsightReview>();
+    public DbSet<PropFlow.Modules.AiRecommendation.Domain.UtilityConsumption.UtilityAiAttempt> UtilityAiAttempts => Set<PropFlow.Modules.AiRecommendation.Domain.UtilityConsumption.UtilityAiAttempt>();
+    public DbSet<PropFlow.Shared.Messaging.OutboxEvent> UtilityNotices => Set<PropFlow.Shared.Messaging.OutboxEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

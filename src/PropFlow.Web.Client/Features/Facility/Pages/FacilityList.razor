@@ -23,7 +23,7 @@
 <PageTitle>Quản Lý Cơ Sở Vật Chất - PropFlow</PageTitle>
 @if (!IsManager)
 {
-    <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
+    <p class="text-sm text-[var(--pf-muted)]" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
 }
 
 <div class="fe04-page font-sans text-slate-800 antialiased"
@@ -109,7 +109,7 @@
                 <p class="text-sm text-slate-500">Không có cơ sở vật chất nào</p>
                 @if (IsManager)
                 {
-                    <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0284c7] hover:bg-[#0369a1] text-white text-sm font-semibold shadow-sm transition-all" @onclick="OpenCreateDialog">
+                    <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--pf-action-bg)] hover:bg-[var(--pf-action-hover-bg)] text-[color:var(--pf-action-text)] text-sm font-semibold shadow-sm transition-all" @onclick="OpenCreateDialog">
                         <span class="material-symbols-outlined text-lg">add_circle</span>
                         <span>Thêm mới ngay</span>
                     </button>
@@ -206,6 +206,7 @@
                                             <div class="relative inline-block text-left status-dropdown-container @(OpenStatusDropdownId == item.Id ? "is-open" : null)">
                                             <button @onclick="() => ToggleStatusDropdown(item.Id)"
                                                     class="pf-management-row-action"
+                                                    disabled="@(item.Status == MasterDataStatus.UNDER_MAINTENANCE)"
                                                     title="Đổi trạng thái" aria-label="Đổi trạng thái"
                                                     aria-haspopup="menu"
                                                     aria-expanded="@(OpenStatusDropdownId == item.Id)">

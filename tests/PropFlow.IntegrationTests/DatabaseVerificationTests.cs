@@ -116,7 +116,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
     }
 
     [Fact]
-    public async Task Database_ShouldContain72BusinessTablesInCoreSchemas()
+    public async Task Database_ShouldContain73BusinessTablesInCoreSchemas()
     {
         var options = new DbContextOptionsBuilder<PropertyAssetsDbContext>()
             .UseNpgsql(_connectionString)
@@ -142,7 +142,7 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add((reader.GetString(0), reader.GetString(1)));
         }
 
-        Assert.Equal(72, tables.Count);
+        Assert.Equal(73, tables.Count);
 
         // PropertyAssets: 3
         Assert.Contains(("property_assets", "buildings"), tables);
@@ -199,10 +199,10 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
         Assert.Contains(("billing", "invoice_items"), tables);
         Assert.Contains(("billing", "invoice_status_history"), tables);
 
-        // Payments: 3
         Assert.Contains(("payments", "payments"), tables);
         Assert.Contains(("payments", "payment_status_history"), tables);
         Assert.Contains(("payments", "payment_operations"), tables);
+        Assert.Contains(("payments", "sandbox_sepay_receipts"), tables);
 
         // AiClassification: 2
         Assert.Contains(("ai_classification", "ai_request_classifications"), tables);

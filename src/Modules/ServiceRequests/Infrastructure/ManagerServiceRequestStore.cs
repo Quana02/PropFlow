@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
@@ -97,7 +98,8 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 x.ToStatus == null ? null : x.ToStatus.ToString(), x.Title,
                 x.ActivityType == ServiceActivityType.PROPERTY_CONTEXT_ASSOCIATED && x.Detail != null && x.Detail.StartsWith("ApartmentUnitId=")
                     ? "Đã cập nhật vị trí và tài sản liên quan." : x.Detail,
-                x.WorkResult, x.PerformedBy, x.CreatedAt))
+                x.WorkResult, x.PerformedBy, x.CreatedAt,
+                x.Assignment != null && x.Assignment.Status == AssignmentStatus.IN_PROGRESS))
             .ToArrayAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceRequestEvidenceMetadata>> GetEvidenceAsync(Guid id, CancellationToken ct) =>
@@ -182,6 +184,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
     public async Task<ManagerServiceRequestOutcome> AssignAsync(
         Guid id, Guid managerUserId, Guid staffUserId, decimal baseServiceCost, string? note, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var request = await db.ServiceRequests
             .Include(x => x.Assignments)
             .SingleOrDefaultAsync(x => x.Id == id, ct);
@@ -218,18 +221,10 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             title: isReassignment ? "Ban Quản lý đã đổi nhân sự phụ trách" : "Ban Quản lý đã phân công nhân sự",
             detail: note,
             performedBy: managerUserId));
-        db.ResidentEvents.Add(new ServiceRequestWorkflowNotice(managerUserId, staffUserId, request.RequestNumber)
+        db.ResidentEvents.Add(new ServiceRequestWorkflowNotice(managerUserId, staffUserId, request.RequestNumber, assignment.Id)
             .ToEvent(ServiceRequestWorkflowNotice.Assigned, id, now));
 
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            return ManagerServiceRequestOutcome.Success;
-        }
-        catch (DbUpdateException)
-        {
-            return ManagerServiceRequestOutcome.Conflict;
-        }
+        return await SaveAsync(ct, transaction);
     }
 
     public Task<ManagerServiceRequestOutcome> RequestReworkAsync(
@@ -280,20 +275,23 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
     private async Task<ManagerServiceRequestOutcome> ReviewResolutionAsync(
         Guid id, Guid managerUserId, decimal approvedAdditionalCost, string? note, bool approve, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var request = await db.ServiceRequests
             .Include(x => x.Assignments)
             .Include(x => x.Activities)
             .SingleOrDefaultAsync(x => x.Id == id, ct);
         if (request is null) return ManagerServiceRequestOutcome.NotFound;
         if (request.Status != ServiceRequestStatus.IN_PROGRESS || request.IsWaitingForCostConsent || request.ProposedAdditionalCost > 0 && request.AdditionalCostConsentStatus != "ACCEPTED") return ManagerServiceRequestOutcome.Conflict;
+        var activeAssignment = request.Assignments.SingleOrDefault(x => x.Status == AssignmentStatus.IN_PROGRESS);
+        if (activeAssignment is null) return ManagerServiceRequestOutcome.Conflict;
 
         var latestWorkResult = request.Activities
-            .Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED)
+            .Where(x => x.AssignmentId == activeAssignment.Id && x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED)
             .OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .FirstOrDefault();
         var latestRework = request.Activities
-            .Where(x => x.ActivityType == ServiceActivityType.REWORK_REQUESTED)
+            .Where(x => x.AssignmentId == activeAssignment.Id && x.ActivityType == ServiceActivityType.REWORK_REQUESTED)
             .OrderByDescending(x => x.CreatedAt)
             .ThenByDescending(x => x.Id)
             .FirstOrDefault();
@@ -304,21 +302,16 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 .AnyAsync(x => x.ServiceRequestId == id && x.ActivityId == latestWorkResult.Id, ct))
             return ManagerServiceRequestOutcome.Conflict;
 
-        var activeAssignment = request.Assignments
-            .Where(x => x.IsActive)
-            .OrderByDescending(x => x.AssignedAt)
-            .FirstOrDefault();
-
         if (approve)
         {
             request.ApproveAdditionalCost(approvedAdditionalCost, now);
-            activeAssignment?.Complete(now);
+            activeAssignment.Complete(now);
             request.Resolve(now);
             db.ServiceRequestActivities.Add(new ServiceRequestActivity(
                 request.Id,
                 ServiceActivityType.RESOLVED,
                 now,
-                assignmentId: activeAssignment?.Id,
+                assignmentId: activeAssignment.Id,
                 fromStatus: ServiceRequestStatus.IN_PROGRESS,
                 toStatus: ServiceRequestStatus.RESOLVED,
                 title: "Ban Quản lý đã xác nhận kết quả xử lý",
@@ -332,7 +325,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 request.Id,
                 ServiceActivityType.REWORK_REQUESTED,
                 now,
-                assignmentId: activeAssignment?.Id,
+                assignmentId: activeAssignment.Id,
                 fromStatus: ServiceRequestStatus.IN_PROGRESS,
                 toStatus: ServiceRequestStatus.IN_PROGRESS,
                 title: "Ban Quản lý yêu cầu Staff xử lý lại",
@@ -340,14 +333,15 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 performedBy: managerUserId));
         }
 
-        return await SaveAsync(ct);
+        return await SaveAsync(ct, transaction);
     }
 
-    private async Task<ManagerServiceRequestOutcome> SaveAsync(CancellationToken ct)
+    private async Task<ManagerServiceRequestOutcome> SaveAsync(CancellationToken ct, IDbContextTransaction? transaction = null)
     {
         try
         {
             await db.SaveChangesAsync(ct);
+            if (transaction is not null) await transaction.CommitAsync(ct);
             return ManagerServiceRequestOutcome.Success;
         }
         catch (DbUpdateException)

@@ -13,6 +13,44 @@ namespace PropFlow.UnitTests;
 public sealed class MaintenanceStaffHistoryTests
 {
     [Fact]
+    public async Task FormerStaffHistory_PreservesEachParticipationWithoutReadingTheGap()
+    {
+        await using var db = Db();
+        var a = Staff("A");
+        var b = Staff("B");
+        var manager = Guid.NewGuid();
+        var start = DateTimeOffset.UtcNow.AddHours(-1);
+        var task = MakeTask("MT-GAP", "Kiểm tra", start);
+        var first = new MaintenanceAssignment(task.Id, a.UserId, manager, start);
+        first.Reassign(start.AddMinutes(10));
+        var middle = new MaintenanceAssignment(task.Id, b.UserId, manager, start.AddMinutes(10));
+        middle.Reassign(start.AddMinutes(20));
+        var second = new MaintenanceAssignment(task.Id, a.UserId, manager, start.AddMinutes(20));
+        second.Reassign(start.AddMinutes(30));
+        var firstResult = new MaintenanceResult(task.Id, 1, a.UserId, "Lượt đầu", start.AddMinutes(5));
+        firstResult.Approve(manager, start.AddMinutes(14), "Ghi chú sau khi thu hồi");
+        var gapResult = new MaintenanceResult(task.Id, 2, b.UserId, "Kết quả ngoài phạm vi", start.AddMinutes(15));
+        var secondResult = new MaintenanceResult(task.Id, 3, a.UserId, "Lượt sau", start.AddMinutes(25));
+        db.AddRange(task, first, middle, second, firstResult, gapResult, secondResult,
+            new MaintenanceTaskActivity(task.Id, MaintenanceActivityType.PROGRESS_UPDATED, start.AddMinutes(16), middle.Id, detail: "Tiến độ trong khoảng trống"));
+        await db.SaveChangesAsync();
+        var service = Service(db, a, b);
+
+        var history = await service.MyHistoryDetailAsync(task.Id, a.UserId, default);
+
+        Assert.Equal(new[] { first.Id, second.Id }, history.Assignments.Select(item => item.Id));
+        Assert.Equal(new[] { firstResult.Id, secondResult.Id }, history.Results.Select(item => item.Id));
+        Assert.Null(history.Results[0].ReviewNote);
+        Assert.DoesNotContain(history.Timeline, item => item.Detail == "Tiến độ trong khoảng trống");
+        var list = await service.MyHistoryAsync(new(), a.UserId, default);
+        Assert.Equal("Lượt sau", Assert.Single(list.Page.Items).ResultSummary);
+        Assert.Equal(3, (await service.HistoryDetailAsync(task.Id, default)).Results.Count);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.UpdateMyTaskProgressAsync(task.Id, new("Nội dung hợp lệ"), a.UserId, default));
+        Assert.Single(db.MaintenanceTaskActivities);
+    }
+
+    [Fact]
     public async Task MyHistoryDetailAsync_PreservesTwoWorkPassResultsAndReviews()
     {
         await using var db = Db(); var staff = Staff("A"); var manager = Guid.NewGuid(); var task = MakeTask("MT-PASS", "Bơm", DateTimeOffset.UtcNow.AddMinutes(-20)); db.Add(task); await db.SaveChangesAsync(); var service = Service(db, staff);

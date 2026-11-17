@@ -1,0 +1,32 @@
+# Chạy lại kiểm toán phân quyền
+
+Chạy từ thư mục gốc với .NET SDK 8, PowerShell 7, Node 22 trở lên và Chrome cho kiểm thử trình duyệt. Cấu hình riêng `PROPFLOW_TEST_DATABASE` trỏ đến `propflow_test` trên PostgreSQL loopback. Integration cũng nhận `ConnectionStrings__PropFlowTestDatabase` hoặc API user secret `ConnectionStrings:PropFlowTestDatabase`. Thiếu cấu hình, trùng database ứng dụng hoặc sai đích đều làm lượt test dừng.
+
+Fixture dùng tên ngẫu nhiên và ghi mã sở hữu của lượt chạy vào catalog PostgreSQL sau khi tạo thành công. Trước khi gọi API, migrate hoặc seed, runner kiểm tên, endpoint và kết quả `SELECT current_database()`. Cleanup đối chiếu tên và mã sở hữu với catalog trên đúng server trước khi drop. Những database cũ cần quyền cleanup riêng.
+
+```powershell
+node scripts/authz/inventory.mjs
+dotnet build src/PropFlow.Api/PropFlow.Api.csproj --artifacts-path artifacts/authz/build
+dotnet build src/PropFlow.Web/PropFlow.Web.csproj --artifacts-path artifacts/authz/web-build
+dotnet build scripts/authz/fixture/BrowserFixture.csproj --artifacts-path artifacts/authz/fixture-build
+pwsh -NoProfile -File scripts/authz/browser.ps1 -Scope Full
+```
+
+- `Routes` chỉ kiểm truy cập trang, `Api` chạy các probe từ chối, JWT và tài nguyên chéo, `Session` chạy logout ở hai tab, `Maintenance` kiểm lịch sử hai đợt ở ba chiều rộng và hai giao diện, `Full` chạy ma trận route và API trong một lượt. Đặt `PROPFLOW_AUTHZ_CHROME` nếu Chrome ở đường dẫn khác. Dùng cổng local 47101 và 47201.
+- `-UseRelease` dùng output đã publish với `dotnet publish -c Release --artifacts-path` tương ứng, và chạy hai process ở Production. Chế độ `Session` phù hợp cho smoke Release.
+- `-Scope Proxy -UseRelease -LoadUsers 50` chạy cùng origin qua cổng TLS loopback 47301. Dùng `-ChromeSession` để mở hai tab Chrome qua proxy. JSON tải chứa các mẫu thu hồi riêng và working set API sau khi đóng socket.
+- `-Scope Proxy -UseRelease -LoadUsers 1 -ChromeNotifications -ChromeSession` kiểm browser notification với context riêng cho từng actor và hai tab của cùng STAFF. Bằng chứng đã lược định danh ở `final-notification-browser.json`. `final-loaded-runtimes.json` ghi đường dẫn các module runtime nạp trong PID test.
+- Đặt `PROPFLOW_NOTIFICATION_GROUP` thành `ServiceRequests`, `Operations`, `Finance`, `Communication`, `Emergency`, `ReadState` hoặc `Reconnect` trước khi dùng `-Scope Proxy -UseRelease -LoadUsers 1 -ChromeNotifications`. Mỗi nhóm ghi JSON riêng trong `artifacts/authz`. Khi chạy `Emergency` đặt `Communication__EmergencyCalls__StunUrls__0` thành `stun:127.0.0.1:9` để giới hạn signaling Chrome với microphone giả trong fixture cục bộ. `Reconnect` ngắt WebSocket trong trang fixture đang mở và mô phỏng offline bằng CDP.
+- Với nhóm `ServiceRequests`, đặt thêm `PROPFLOW_FE05_B3=1` để kiểm consent, tiến độ và giao diện kết quả sau khi đổi phân công A → B → A. Upload multipart và tác động tài chính được kiểm qua fixture HTTP/PostgreSQL.
+- Với nhóm `Operations`, đặt thêm `PROPFLOW_FE07_B4=1` để chỉ kiểm lịch, workspace bảo trì, thay phân công, phạm vi lịch sử và liên kết yêu cầu dịch vụ. Điều khiển thao tác qua API trong Chrome. Upload và nghiệm thu chạy qua HTTP/PostgreSQL.
+- Nhóm `AiAuthorization` chạy Chrome Release cho FE-10/11/12. Build lại project `BrowserFixture` trước khi chạy `-Scope Proxy -UseRelease -LoadUsers 1 -ChromeNotifications` với nhóm này. Runner chỉ nạp hook giả lập transport Gemini trong tiến trình API của fixture đã được xác minh. Bằng chứng lưu vào `artifacts/authz/notification-ai-authorization.json`.
+- `-Scope Theme` dùng Chrome và tài khoản fixture của năm vai trò để kiểm chọn sáng/tối qua đăng nhập, điều hướng, tải lại và đăng xuất. Kết quả đo màu từ mẫu chữ và nền nằm trong `theme-browser.json`, kèm ảnh desktop và mobile.
+- `& ./scripts/authz/database-rehearsal.ps1 -PgBin $pgBin` dùng các PostgreSQL client tools để dump, restore và kiểm trạng thái migration trong hai DB fixture cục bộ.
+- Kiểm thử resource scope và ghi dữ liệu chạy qua `dotnet test tests/PropFlow.IntegrationTests --settings tests/postgres.runsettings`. Dùng filter `FullyQualifiedName~Fe04StaffHttpTests` cho bảo trì, `~AuthenticationFlowTests` cho phiên và `~InternalAccountManagementHttpTests` cho FE-15. Dùng `ConnectionStrings__PropFlowTestDatabase` theo hướng dẫn của test project.
+- Chạy `dotnet test tests/PropFlow.BillingCycleTests --artifacts-path artifacts/authz/billing-final` để biên dịch và kiểm dự án BillingCycle riêng. Dự án này nằm ngoài `PropFlow.sln`. Dùng `PROPFLOW_TEST_DATABASE` với PostgreSQL loopback.
+- Kiểm database safety bằng filter `FullyQualifiedName~TestDatabaseSafetyTests` trong Integration. CLI fixture cần tên database ở cả lệnh `verify`, `migrate`, `status` và `drop` cùng `PROPFLOW_FIXTURE_OWNER` của lượt tạo. Ca Unit SePay dùng `PROPFLOW_PAYMENT_TEST_DATABASE`, `PROPFLOW_PAYMENT_TEST_DATABASE_NAME` và cùng mã sở hữu của fixture. Dùng `Get-PropFlowFixtureConnection` trong `test-database.ps1` để parse lại chuỗi đích trước khi dùng.
+- Với TRX từ bộ Integration và Billing, gọi trong PowerShell `& ./scripts/authz/mutation-coverage.ps1 -Trx $integrationTrx,$billingTrx -ApiProbes artifacts/authz/api-matrix.json`. `-ApiProbes` tùy chọn ghi nhận probe từ chối đã qua. Tỷ lệ VERIFIED chỉ đếm test được liệt kê trong fixture manifest và thực sự PASS trong TRX.
+
+Khi có route hoặc endpoint mới, đọc hợp đồng chức năng, xác định tập role/phạm vi tài nguyên, sửa chính sách và cập nhật dòng tương ứng trong `expected-authorization.json` qua review. Inventory quan sát route/action từ source và so với ma trận version-control. Kiểm thử architecture vẫn kiểm metadata controller đã biên dịch và allowlist anonymous. Route có ID cần fixture dữ liệu thật để xác minh quyền tài nguyên. Các probe từ chối rộng chỉ đo lớp bảo vệ, còn fixture mutation phải có payload hợp lệ, actor thành công, actor bị từ chối và đối chiếu trạng thái trước/sau. Bổ sung dòng fixture manifest sau khi review đủ các điều kiện này. [OWASP Authorization Testing](https://wstg.owasp.org/v4.2/4-Web_Application_Security_Testing/05-Authorization_Testing/02-Testing_for_Bypassing_Authorization_Schema/)
+
+TRX, chứng cứ Chrome và build outputs nằm trong `artifacts/authz` bị Git bỏ qua. Giữ chuỗi kết nối, JWT và mật khẩu ở phạm vi tiến trình. Script dùng chứng chỉ localhost cho kiểm thử và ghi nhận PID do lượt chạy tạo. [Runbook triển khai](../../docs/deployment/authorization-hardening-runbook.md)

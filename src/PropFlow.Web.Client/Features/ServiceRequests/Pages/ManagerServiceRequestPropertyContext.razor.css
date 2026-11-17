@@ -36,8 +36,8 @@
 .source-facts .original-apartment { display:grid; margin:.45rem 0; padding:.8rem; border:1px solid #e1e8f0; border-radius:1rem; background:#f8fafc; }
 .original-apartment dd { display:flex; align-items:center; justify-content:flex-end; gap:.3rem; }
 .original-apartment dd .material-symbols-outlined { font-size:1rem; color:#f59e0b; }
-.original-apartment p { grid-column:1/-1; margin:.35rem 0 0; color:#bd7a12; font-size:.65rem; }
-.inline-status { display:inline-flex; align-items:center; gap:.5rem; color:#a46508; }
+.original-apartment p { grid-column:1/-1; margin:.35rem 0 0; color:var(--pf-warning); font-size:.65rem; }
+.inline-status { display:inline-flex; align-items:center; gap:.5rem; color:var(--pf-warning); }
 .source-description { margin-top:.95rem; }
 .source-description > span { display:block; margin-bottom:.45rem; color:#71829a; font-size:.7rem; font-weight:700; }
 .source-description blockquote { margin:0; padding:.8rem; border:1px solid #e2e8f0; border-radius:1rem; background:#f8fafc; color:#516078; font-size:.73rem; line-height:1.65; font-style:italic; }
@@ -97,9 +97,9 @@
 .context-kicker,.card-title-row .title-icon { border-color:color-mix(in srgb,var(--app-accent) 25%,var(--app-line)); background:color-mix(in srgb,var(--app-accent) 10%,var(--app-surface)); color:var(--app-accent); }
 .request-tag { color:var(--app-accent); }
 .request-tag small { color:var(--app-muted); }
-.status-tag { border-color:rgba(245,158,11,.32); background:color-mix(in srgb,#f59e0b 10%,var(--app-surface)); color:#d98a0b; }
+.status-tag { border-color:rgba(245,158,11,.32); background:color-mix(in srgb,var(--pf-warning) 10%,var(--pf-menu-surface)); color:var(--pf-warning); }
 .readonly-chip { background:color-mix(in srgb,var(--app-muted) 13%,transparent); color:var(--app-muted); }
-.standard-chip { border-color:rgba(16,185,129,.3); background:color-mix(in srgb,#10b981 11%,var(--app-surface)); color:#10b981; }
+.standard-chip { border-color:rgba(16,185,129,.3); background:color-mix(in srgb,var(--pf-success) 8%,var(--pf-menu-surface)); color:var(--pf-success); }
 .source-facts .original-apartment,.source-description blockquote,.context-summary,.summary-grid article { border-color:var(--app-line); background:color-mix(in srgb,var(--app-surface) 88%,var(--app-muted) 12%); }
 .source-description blockquote { color:var(--app-muted); }
 .source-facts .code-value,.context-field b .material-symbols-outlined,.summary-grid article:first-child strong { color:var(--app-accent); }

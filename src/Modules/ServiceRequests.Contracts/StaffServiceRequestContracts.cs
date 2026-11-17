@@ -40,7 +40,8 @@ public sealed record StaffServiceRequestActivityItem(
     string? Detail,
     string? WorkResult,
     Guid? PerformedBy,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool IsFromCurrentAssignment = false);
 
 public sealed record StaffServiceRequestEvidenceItem(
     Guid Id,

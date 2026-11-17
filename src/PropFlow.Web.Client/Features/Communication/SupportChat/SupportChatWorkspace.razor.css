@@ -15,7 +15,7 @@
     background: var(--composer-surface);
     border-top: 1px solid var(--composer-line);
 }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-compose {
+:where(html.dark, html[data-theme="dark"]) .support-compose {
     --composer-surface: #162535;
     --composer-field: #203445;
     --composer-line: #365267;
@@ -23,56 +23,6 @@
     --composer-muted: #b5cbdc;
     --composer-accent: #007fa6;
 }
-.support-compose-row {
-    display: flex;
-    align-items: flex-end;
-    gap: .4rem;
-    padding: .25rem .3rem .25rem .65rem;
-    border: 1px solid var(--composer-line);
-    border-radius: 1.5rem;
-    background: var(--composer-field);
-}
-.support-compose-row:focus-within {
-    border-color: #38aacc;
-}
-.support-compose textarea {
-    box-sizing: border-box;
-    flex: 1;
-    width: 100%;
-    min-width: 0;
-    min-height: 2.5rem;
-    max-height: 7.5rem;
-    field-sizing: content;
-    padding: .55rem .3rem;
-    border: 0;
-    outline: 0;
-    resize: none;
-    overflow-y: auto;
-    background: transparent;
-    color: var(--composer-text);
-    font: inherit;
-    font-size: 1rem;
-    line-height: 1.4;
-}
-.support-compose textarea:focus {
-    outline: none;
-    box-shadow: none;
-}
-.support-compose textarea::placeholder { color: var(--composer-muted); }
-.support-send {
-    display: grid;
-    flex: 0 0 2.5rem;
-    place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    background: var(--composer-accent);
-    color: #fff;
-}
-.support-send:not(:disabled):hover { background: #006789; }
-.support-send svg { width: 1.15rem; height: 1.15rem; }
 .support-send-progress {
     width: 1rem;
     height: 1rem;
@@ -132,7 +82,7 @@
 .support-selection button:hover:not(:disabled) { background: #0284c726; }
 .support-selection button.danger { color: #bf3147; background: #bf314719; }
 .support-selection button.danger:hover:not(:disabled) { background: #bf31472c; }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-selection button.danger { color: #fca5a5; }
+:where(html.dark, html[data-theme="dark"]) .support-selection button.danger { color: #fca5a5; }
 .support-selection button.support-selection-cancel { padding-inline: .6rem; border-radius: .4rem; background: transparent; font-weight: 650; }
 .support-selection button.support-selection-cancel:hover:not(:disabled) { background: #0284c726; }
 .support-selection .material-symbols-outlined { font-size: 1.1rem; line-height: 1; }
@@ -237,7 +187,7 @@
     background: var(--app-soft, #eaf6fc);
 }
 .support-message-menu .danger { color: #bf3147; }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-message-menu .danger { color: #fca5a5; }
+:where(html.dark, html[data-theme="dark"]) .support-message-menu .danger { color: #fca5a5; }
 .support-message-menu hr { margin: .25rem .35rem; border: 0; border-top: 1px solid var(--app-line, #d4e5ef); }
 .support-details-preview {
     display: flex;
@@ -296,4 +246,65 @@
 .support-send-status.failed { color: #ad3e51; }
 .support-receipt { margin-top: .2rem; text-align: end; }
 .support-bubble .recalled { color: #547488; font-style: italic; }
-:is(.app-shell-dark, html.dark, html[data-theme="dark"]) .support-send-status.failed { color: #fca5a5; }
+:where(html.dark, html[data-theme="dark"]) .support-send-status.failed { color: #fca5a5; }
+
+/* Both portal theme signals cover the entire conversation, not only its composer. */
+:where(html.dark, html[data-theme="dark"]) .support-workspace {
+    --support-surface: #132233;
+    --support-soft: #1b3042;
+    --support-line: #345067;
+    --support-text: #edf6ff;
+    --support-muted: #b5cbdc;
+    --support-accent: #7dddf3;
+    color: var(--support-text);
+    color-scheme: dark;
+}
+:where(html.dark, html[data-theme="dark"]) .support-heading h1,
+:where(html.dark, html[data-theme="dark"]) .support-list h2,
+:where(html.dark, html[data-theme="dark"]) .support-chat-heading h2 { color: var(--support-text); }
+:where(html.dark, html[data-theme="dark"]) .support-eyebrow,
+:where(html.dark, html[data-theme="dark"]) .support-typing { color: var(--support-accent); }
+:where(html.dark, html[data-theme="dark"]) .support-heading p,
+:where(html.dark, html[data-theme="dark"]) .support-empty,
+:where(html.dark, html[data-theme="dark"]) .support-chat-heading small,
+:where(html.dark, html[data-theme="dark"]) .conversation-link small,
+:where(html.dark, html[data-theme="dark"]) .conversation-link time,
+:where(html.dark, html[data-theme="dark"]) .support-bubble strong,
+:where(html.dark, html[data-theme="dark"]) .support-bubble time,
+:where(html.dark, html[data-theme="dark"]) .support-bubble > small,
+:where(html.dark, html[data-theme="dark"]) .support-message-label,
+:where(html.dark, html[data-theme="dark"]) .support-bubble .recalled { color: var(--support-muted); }
+:where(html.dark, html[data-theme="dark"]) .support-list,
+:where(html.dark, html[data-theme="dark"]) .support-chat,
+:where(html.dark, html[data-theme="dark"]) .conversation-link {
+    background: var(--support-surface);
+    border-color: var(--support-line);
+    color: var(--support-text);
+}
+:where(html.dark, html[data-theme="dark"]) .support-list-heading { border-color: var(--support-line); }
+:where(html.dark, html[data-theme="dark"]) .conversation-link.selected { background: #103b50; border-left-color: var(--support-accent); }
+:where(html.dark, html[data-theme="dark"]) .support-list-heading button,
+:where(html.dark, html[data-theme="dark"]) .support-pagination button,
+:where(html.dark, html[data-theme="dark"]) .support-older,
+:where(html.dark, html[data-theme="dark"]) .support-ended button {
+    background: var(--support-soft);
+    border-color: var(--support-line);
+    color: var(--support-accent);
+}
+:where(html.dark, html[data-theme="dark"]) .support-chat-heading {
+    background: linear-gradient(110deg, #153447, var(--support-surface));
+    border-color: var(--support-line);
+}
+:where(html.dark, html[data-theme="dark"]) .support-connection { background: var(--support-soft); color: var(--support-muted); }
+:where(html.dark, html[data-theme="dark"]) .support-connection.online { background: #163b33; color: #8de3c3; }
+:where(html.dark, html[data-theme="dark"]) .support-close { background: #361f2b; border-color: #754154; color: #fda4af; }
+:where(html.dark, html[data-theme="dark"]) .draft-disclosure { background: #302a19; border-color: #675b33; color: #f4d593; }
+:where(html.dark, html[data-theme="dark"]) .support-thread { background: #0b1622; }
+:where(html.dark, html[data-theme="dark"]) .support-bubble.mine { background: #103b50; border-color: #28637b; color: var(--support-text); }
+:where(html.dark, html[data-theme="dark"]) .support-bubble.theirs { background: var(--support-surface); border-color: var(--support-line); color: var(--support-text); }
+:where(html.dark, html[data-theme="dark"]) .support-bubble.system,
+:where(html.dark, html[data-theme="dark"]) .support-ended { background: var(--support-soft); color: var(--support-muted); }
+:where(html.dark, html[data-theme="dark"]) .support-live-draft { background: #0e3039; border-color: #356c78; color: #a2e2ec; }
+:where(html.dark, html[data-theme="dark"]) .support-bubble.selectable:has(.support-message-picker:checked) { background: #164d67; border-color: #73bdd8; }
+:where(html.dark, html[data-theme="dark"]) .support-error { background: #361f2b; color: #fda4af; }
+:where(html.dark, html[data-theme="dark"]) .support-error button { background: #542e40; color: #ffd1d9; }

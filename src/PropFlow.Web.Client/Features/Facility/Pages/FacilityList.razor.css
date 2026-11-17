@@ -75,67 +75,72 @@
 .fe04-nested-modal { max-height: calc(100vh - 2rem); overflow: auto; border: 1px solid var(--admin-line, #dce8f1); box-shadow: 0 1.5rem 4rem rgba(15, 23, 42, .3); }
 
 /* Dark mode follows the existing AppShell theme; it deliberately does not use a second theme switch. */
-.app-shell-dark .fe04-page { color: var(--admin-text, #edf6ff); }
-.app-shell-dark .fe04-header, .app-shell-dark .fe04-panel, .app-shell-dark .fe04-legend, .app-shell-dark .fe04-metric-card, .app-shell-dark .fe04-modal { background: #0d1728; border-color: rgba(34, 211, 238, .13); box-shadow: 0 1rem 2.25rem -1rem rgba(0, 0, 0, .58); }
-.app-shell-dark .fe04-page .bg-white, .app-shell-dark .fe04-page .bg-slate-50, .app-shell-dark .fe04-page .bg-slate-50\/50, .app-shell-dark .fe04-page .bg-slate-50\/70, .app-shell-dark .fe04-page .bg-white\/80 { background-color: #0d1728; }
-.app-shell-dark .fe04-page .border-slate-100, .app-shell-dark .fe04-page .border-slate-200, .app-shell-dark .fe04-page .border-slate-200\/80, .app-shell-dark .fe04-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(34, 211, 238, .13); }
-.app-shell-dark .fe04-page .text-slate-900, .app-shell-dark .fe04-page .text-\[\#0f172a\], .app-shell-dark .fe04-page .text-slate-800 { color: #f1f5f9; }
-.app-shell-dark .fe04-page .text-slate-500, .app-shell-dark .fe04-page .text-slate-600, .app-shell-dark .fe04-page .text-\[\#64748b\], .app-shell-dark .fe04-page .text-slate-400 { color: #94a3b8; }
-.app-shell-dark .fe04-toolbar { background: linear-gradient(90deg, rgba(8, 47, 73, .72), #0d1728 70%); }
-.app-shell-dark .fe04-page input, .app-shell-dark .fe04-page .status-dropdown-menu { background: #111f33; border-color: rgba(34, 211, 238, .16); color: #f1f5f9; }
-.app-shell-dark .fe04-page input::placeholder { color: #71839a; }
-.app-shell-dark .fe04-page tbody tr:hover { background: rgba(56, 189, 248, .07); }
-.app-shell-dark .fe04-page .hover\:bg-sky-50:hover { background: rgba(8, 47, 73, .75); }
-.app-shell-dark .fe04-page .hover\:bg-slate-50:hover, .app-shell-dark .fe04-page .hover\:bg-slate-100:hover { background: rgba(30, 41, 59, .85); }
-.app-shell-dark .fe04-page .bg-emerald-50 { background: rgba(6, 95, 70, .28); }
-.app-shell-dark .fe04-page .bg-amber-50 { background: rgba(146, 64, 14, .28); }
-.app-shell-dark .fe04-page .bg-indigo-50 { background: rgba(67, 56, 202, .25); }
-.app-shell-dark .fe04-page .bg-rose-50 { background: rgba(159, 18, 57, .25); }
-.app-shell-dark .fe04-page .bg-slate-100 { background: rgba(71, 85, 105, .36); }
-.app-shell-dark .fe04-page .bg-blue-50\/70, .app-shell-dark .fe04-page .bg-sky-50 { background: rgba(3, 105, 161, .2); }
-.app-shell-dark .fe04-light-select ::deep .pf-select, .app-shell-dark .fe04-light-select ::deep .pf-select__trigger, .app-shell-dark .fe04-light-select ::deep .pf-select__menu { background: #111f33; border-color: rgba(34, 211, 238, .16); color: #f1f5f9; }
-.app-shell-dark .fe04-light-select ::deep .pf-select__option { color: #cbd5e1; }
-.app-shell-dark .fe04-light-select ::deep .pf-select__option:hover, .app-shell-dark .fe04-light-select ::deep .pf-select__option.is-active { background: rgba(8, 47, 73, .75); }
-.app-shell-dark .fe04-light-select ::deep .pf-select__option.is-selected { background: rgba(8, 47, 73, .95); color: #67e8f9; }
+:where(html[data-theme="dark"]) .app-shell .fe04-page { color: var(--admin-text, #edf6ff); }
+:where(html[data-theme="dark"]) .app-shell .fe04-header, :where(html[data-theme="dark"]) .app-shell .fe04-panel, :where(html[data-theme="dark"]) .app-shell .fe04-legend, :where(html[data-theme="dark"]) .app-shell .fe04-metric-card, :where(html[data-theme="dark"]) .app-shell .fe04-modal { background: #0d1728; border-color: rgba(34, 211, 238, .13); box-shadow: 0 1rem 2.25rem -1rem rgba(0, 0, 0, .58); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .bg-white, :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-slate-50, :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-slate-50\/50, :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-slate-50\/70, :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-white\/80 { background-color: #0d1728; }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .border-slate-100, :where(html[data-theme="dark"]) .app-shell .fe04-page .border-slate-200, :where(html[data-theme="dark"]) .app-shell .fe04-page .border-slate-200\/80, :where(html[data-theme="dark"]) .app-shell .fe04-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(34, 211, 238, .13); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .text-slate-900, :where(html[data-theme="dark"]) .app-shell .fe04-page .text-\[\#0f172a\], :where(html[data-theme="dark"]) .app-shell .fe04-page .text-slate-800 { color: #f1f5f9; }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .text-slate-500, :where(html[data-theme="dark"]) .app-shell .fe04-page .text-slate-600, :where(html[data-theme="dark"]) .app-shell .fe04-page .text-\[\#64748b\], :where(html[data-theme="dark"]) .app-shell .fe04-page .text-slate-400 { color: #94a3b8; }
+:where(html[data-theme="dark"]) .app-shell .fe04-toolbar { background: linear-gradient(90deg, rgba(8, 47, 73, .72), #0d1728 70%); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page input, :where(html[data-theme="dark"]) .app-shell .fe04-page .status-dropdown-menu { background: #111f33; border-color: rgba(34, 211, 238, .16); color: #f1f5f9; }
+:where(html[data-theme="dark"]) .app-shell .fe04-page input::placeholder { color: #71839a; }
+:where(html[data-theme="dark"]) .app-shell .fe04-page tbody tr:hover { background: rgba(56, 189, 248, .07); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .hover\:bg-sky-50:hover { background: rgba(8, 47, 73, .75); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .hover\:bg-slate-50:hover, :where(html[data-theme="dark"]) .app-shell .fe04-page .hover\:bg-slate-100:hover { background: rgba(30, 41, 59, .85); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .bg-emerald-50 { background: rgba(6, 95, 70, .28); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .bg-amber-50 { background: rgba(146, 64, 14, .28); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .bg-indigo-50 { background: rgba(67, 56, 202, .25); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .bg-rose-50 { background: rgba(159, 18, 57, .25); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .bg-slate-100 { background: rgba(71, 85, 105, .36); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-emerald-700 { color: var(--pf-success); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-amber-700 { color: var(--pf-warning); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-indigo-700 { color: var(--pf-violet); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-slate-700 { color: var(--pf-muted); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-rose-700 { color: var(--pf-danger); }
+:where(html[data-theme="dark"]) .app-shell .fe04-page .bg-blue-50\/70, :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-sky-50 { background: rgba(3, 105, 161, .2); }
+:where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select, :where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__trigger, :where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__menu { background: #111f33; border-color: rgba(34, 211, 238, .16); color: #f1f5f9; }
+:where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__option { color: #cbd5e1; }
+:where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__option:hover, :where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__option.is-active { background: rgba(8, 47, 73, .75); }
+:where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__option.is-selected { background: rgba(8, 47, 73, .95); color: #67e8f9; }
 
 /* Tailwind CDN is loaded after the isolated stylesheet. These are limited to
    surfaces that also carry Tailwind's light-only background utility. */
-.app-shell-dark .fe04-header,
-.app-shell-dark .fe04-metric-card,
-.app-shell-dark .fe04-panel,
-.app-shell-dark .fe04-panel > .fe04-pagination,
-.app-shell-dark .fe04-legend,
-.app-shell-dark .fe04-panel table,
-.app-shell-dark .fe04-panel tbody,
-.app-shell-dark .fe04-panel tbody tr,
-.app-shell-dark .fe04-panel tbody td {
+:where(html[data-theme="dark"]) .app-shell .fe04-header,
+:where(html[data-theme="dark"]) .app-shell .fe04-metric-card,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel > .fe04-pagination,
+:where(html[data-theme="dark"]) .app-shell .fe04-legend,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel table,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody tr,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody td {
     background-color: #0d1728 !important;
 }
-.app-shell-dark .fe04-panel thead,
-.app-shell-dark .fe04-panel thead tr {
+:where(html[data-theme="dark"]) .app-shell .fe04-panel thead,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel thead tr {
     background-color: #0a1627 !important;
 }
-.app-shell-dark .fe04-panel tbody td,
-.app-shell-dark .fe04-panel tbody td .font-semibold {
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody td,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody td .font-semibold {
     color: #f1f5f9 !important;
 }
-.app-shell-dark .fe04-panel tbody td .text-xs,
-.app-shell-dark .fe04-panel tbody td .text-slate-600,
-.app-shell-dark .fe04-panel tbody td .text-slate-500 {
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody td .text-xs,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody td .text-slate-600,
+:where(html[data-theme="dark"]) .app-shell .fe04-panel tbody td .text-slate-500 {
     color: #94a3b8 !important;
 }
-.app-shell-dark .fe04-toolbar input {
+:where(html[data-theme="dark"]) .app-shell .fe04-toolbar input {
     background-color: #111f33 !important;
     border-color: rgba(34, 211, 238, .22) !important;
     color: #f1f5f9 !important;
 }
-.app-shell-dark .fe04-toolbar input::placeholder { color: #94a3b8 !important; }
-.app-shell-dark .fe04-toolbar > div:last-child button {
+:where(html[data-theme="dark"]) .app-shell .fe04-toolbar input::placeholder { color: #94a3b8 !important; }
+:where(html[data-theme="dark"]) .app-shell .fe04-toolbar > div:last-child button {
     background-color: #111f33 !important;
     border-color: rgba(34, 211, 238, .22) !important;
     color: #cbd5e1 !important;
 }
-.app-shell-dark .fe04-toolbar > div:last-child button:hover {
+:where(html[data-theme="dark"]) .app-shell .fe04-toolbar > div:last-child button:hover {
     background-color: rgba(8, 47, 73, .9) !important;
     color: #67e8f9 !important;
 }

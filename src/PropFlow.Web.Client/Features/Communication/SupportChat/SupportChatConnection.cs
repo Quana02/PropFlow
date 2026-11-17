@@ -58,6 +58,7 @@ public sealed class SupportChatConnection : ISupportChatConnection, IAsyncDispos
         var apiBase = new Uri(new Uri(navigation.BaseUri), configuration["Api:BaseUrl"] ?? throw new InvalidOperationException("Thiếu cấu hình API."));
         var source = new HubConnectionBuilder().WithUrl(new Uri(apiBase, "hubs/support-chat"), o => o.AccessTokenProvider = session.GetValidAccessTokenAsync)
             .WithAutomaticReconnect(new Reconnect()).Build();
+        session.ObserveTransport(source);
         source.On<Guid>("SupportChatChanged", async id => {
             if (!Current(source)) return;
             if (Changed is not null) foreach (var handler in Changed.GetInvocationList().Cast<Func<Guid, Task>>()) await handler(id);

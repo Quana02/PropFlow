@@ -1,0 +1,24 @@
+{
+  "name": "Dữ liệu mẫu kiểm tra phân tích tiêu thụ nước",
+  "unit": "m³",
+  "initialReading": 0,
+  "note": "Dữ liệu giả lập cho một căn hộ demo chưa có chỉ số hoặc hóa đơn trong các kỳ này. Các request dùng chỉ số công tơ tích lũy, không dùng lượng nước tiêu thụ. Nhập tuần tự từ tháng 01 đến tháng 10; bộ dữ liệu không tự ghi vào database.",
+  "requests": [
+    { "usageMonth": "2026-01-01", "currentElectricityReading": null, "currentWaterReading": 0.0 },
+    { "usageMonth": "2026-02-01", "currentElectricityReading": null, "currentWaterReading": 11.2 },
+    { "usageMonth": "2026-03-01", "currentElectricityReading": null, "currentWaterReading": 23.6 },
+    { "usageMonth": "2026-04-01", "currentElectricityReading": null, "currentWaterReading": 35.6 },
+    { "usageMonth": "2026-05-01", "currentElectricityReading": null, "currentWaterReading": 48.0 },
+    { "usageMonth": "2026-06-01", "currentElectricityReading": null, "currentWaterReading": 60.0 },
+    { "usageMonth": "2026-07-01", "currentElectricityReading": null, "currentWaterReading": 72.4 },
+    { "usageMonth": "2026-08-01", "currentElectricityReading": null, "currentWaterReading": 84.8 },
+    { "usageMonth": "2026-09-01", "currentElectricityReading": null, "currentWaterReading": 124.8 },
+    { "usageMonth": "2026-10-01", "currentElectricityReading": null, "currentWaterReading": 127.9 }
+  ],
+  "expectedResults": [
+    { "usageMonth": "2026-07-01", "waterM3": 12.4, "severity": "INSUFFICIENT", "referenceM3": null, "changePercent": null },
+    { "usageMonth": "2026-08-01", "waterM3": 12.4, "severity": "NORMAL", "referenceM3": 12.4, "changePercent": 0.0 },
+    { "usageMonth": "2026-09-01", "waterM3": 40.0, "severity": "HIGH", "referenceM3": 12.0, "changePercent": 233.3 },
+    { "usageMonth": "2026-10-01", "waterM3": 3.1, "severity": "WATCH", "referenceM3": 12.4, "changePercent": -75.0 }
+  ]
+}
