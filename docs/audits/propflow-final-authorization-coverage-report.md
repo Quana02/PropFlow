@@ -1,5 +1,7 @@
 # PropFlow — Kiểm chứng phân quyền cuối kỳ
 
+**Kết quả mới nhất 18/11/2026:** Post-pull stabilization hoàn tất: **2.136 PASS, 0 FAIL, 0 SKIP**, inventory 258 HTTP operations, **142/142 applicable VERIFIED**. Baseline 133 mapping và PF-AUTHZ-04 139/139 giữ nguyên. Các checkpoint bên dưới là lịch sử; [báo cáo stabilization](propflow-post-pull-stabilization-report.md) ghi kết quả thay thế bảy FAIL và các gaps sau pull.
+
 Checkpoint bắt đầu ngày 16/11/2026 từ HEAD `0859534` và worktree đã có Hardening 1.1/1.2 cùng SDK audit. Inventory chạy lại khớp 65 route, 247 cặp HTTP method/route và 7 đường dẫn SignalR với 6 hub. Mẫu số làm việc vẫn là 133 operation có tác động. Baseline 32 VERIFIED, 100 PARTIALLY VERIFIED và 1 NOT VERIFIED.
 
 ## Checkpoint sau các ca HTTP
@@ -411,3 +413,84 @@ Lượt BillingCycle toàn bộ sau sửa đạt 154/154. Tổng hồi quy là *
 Đã dừng PostgreSQL tạm, API, Web, proxy và Chrome của B6, giải phóng sáu cổng test và dọn cluster, fixture, profile, chứng chỉ, khóa và dữ liệu tổng hợp. Đối chiếu catalog chỉ đọc theo đúng danh sách B5 xác nhận database ứng dụng và đủ 11 database được bảo vệ. [Cleanup](../../artifacts/authz/b6-cleanup.json)
 
 Thay đổi B6 tập trung vào guard trạng thái tài sản, nút trạng thái tương ứng và bằng chứng kiểm thử. B6 không cần migration hoặc nâng cấp thành phần. Weather dùng provider giả và release smoke chạy cục bộ. Weather live và điều kiện phát hành công khai vẫn theo đánh giá runtime hiện hành. [Đánh giá runtime](propflow-runtime-security-risk-assessment.md)
+
+## B7 — AI Authorization Coverage Completion
+
+Baseline của B7 là 125/133 operation VERIFIED. Phạm vi là ba route xử lý đề xuất của Manager, bốn route quản lý tài liệu và một route hỏi chatbot của cư dân. Fixture B7 dùng account tổng hợp, JWT qua đăng nhập chuẩn, PostgreSQL trên loopback 45487 và hai transport HTTP Gemini giả. Preflight kiểm data directory, tên database hiệu lực và marker sở hữu trước khi migration fixture. Guard database đạt 8/8. [Preflight](../../artifacts/authz/b7-db-preflight.log) · [Guard](../../artifacts/authz/b7-safety.trx) · [Fixture HTTP](../../tests/PropFlow.IntegrationTests/AiAuthorizationHttpTests.cs)
+
+| Feature | Operation dưới `/api/v1` | Actor và phạm vi | Đối chứng |
+| --- | --- | --- | --- |
+| FE-10 | PUT `/manager/service-requests/{id:guid}/classification/review` | Manager, đề xuất mới nhất thuộc đúng yêu cầu và danh mục còn hiệu lực | Giữ đề xuất gốc, ghi actor từ JWT và chỉ đổi danh mục chính thức. Sai phiếu hoặc danh mục bị chặn. Hai review khác quyết định chỉ giữ một bản ghi. |
+| FE-11 | POST `/manager/service-requests/{id:guid}/recommendation` | Manager, yêu cầu hiện hữu còn ở trạng thái xử lý | Đề xuất chỉ nhập bảng AI. Lệnh cạnh tranh bị chặn trong lúc gọi provider. Retry dùng lại kết quả, output thiếu trường giữ ưu tiên cũ. |
+| FE-11 | PUT `/manager/service-requests/{id:guid}/recommendation/review` | Manager, đề xuất đúng yêu cầu và phiên bản hiện hành | Ghi đúng người duyệt và giá trị chính thức. Chặn sai phiếu, đề xuất cũ, thiếu lý do và priority sai. STAFF được giao chỉ nhận phương án đã duyệt. |
+| FE-12 | POST `/knowledge/documents` | ADMIN hoặc MANAGER có quyền quản lý tài liệu chung cư | Tạo bản nháp v1 và lịch sử đúng actor. STAFF không đọc được bản nháp. Không tin creator, revision hay trạng thái do payload chèn. |
+| FE-12 | PUT `/knowledge/documents/{id:guid}` | ADMIN hoặc MANAGER, đúng token tài liệu | Hai lượt sửa đồng thời chỉ tạo một revision. Giữ bản và audience đã xuất bản khi bản nháp thay đổi. |
+| FE-12 | POST `/knowledge/documents/{id:guid}/publication` | ADMIN hoặc MANAGER, token thuộc tài liệu và bản mới nhất đã lưu | Xuất bản theo token. Cạnh tranh và replay token cũ bị chặn, STAFF nhận đúng bản đã xuất bản. |
+| FE-12 | POST `/knowledge/documents/{id:guid}/unpublish` | ADMIN hoặc MANAGER, token đúng tài liệu đang xuất bản | Thu hồi bản công bố một lần khi cạnh tranh. Giữ lịch sử và chặn STAFF đọc lại bằng ID cũ. |
+| FE-12 | POST `/resident/chatbot/ask` | RESIDENT có cư trú hiện hành, nguồn RESIDENT đang xuất bản | Chặn user ngoài scope trước Gemini. Chỉ gửi nguồn hiện hành; fallback timeout và citation giả giữ nguồn hợp lệ; thu hồi trong lúc chạy bỏ kết quả cũ. |
+
+Các yêu cầu bị từ chối dùng payload trên tài nguyên tổng hợp có thật. Đối chiếu database trước và sau, số lượt gọi provider, số sự kiện realtime và các bản ghi trực tiếp liên quan. Ca PF-AUTHZ-08 đối chiếu metadata danh sách và chi tiết của STAFF trước và sau khi Manager lưu bản nháp. [FE-10/11](../../tests/PropFlow.IntegrationTests/AiAuthorizationHttpTests.ServiceRequests.cs) · [Tài liệu FE-12](../../tests/PropFlow.IntegrationTests/AiAuthorizationHttpTests.Knowledge.cs) · [Chatbot FE-12](../../tests/PropFlow.IntegrationTests/AiAuthorizationHttpTests.Chat.cs)
+
+**Lỗi production đã tái hiện.** Credential tổng hợp trong mô tả phiếu đã tới transport phân loại. Hàm che dữ liệu chung trước đó che email và dãy số dài, còn JWT và các giá trị JWT, API key, mật khẩu, OTP có nhãn vẫn có thể đi vào request. B7 bổ sung bộ lọc theo định dạng và nhãn vào hàm dùng chung, qua đó áp dụng cả cho classification, recommendation, câu hỏi chatbot và đoạn nguồn gửi sang Gemini. Ca đầu gặp 429 do dùng chung lượt yêu cầu của một Manager, nên tách actor thử để giữ giới hạn production. Sau đó ca tái hiện ghi nhận lỗi payload trên đối chứng hợp lệ. [Lượt đầu](../../artifacts/authz/b7-focused-first.trx) · [Lượt tái hiện](../../artifacts/authz/b7-focused-red.trx) · [Bộ che dữ liệu](../../src/Modules/AiChatbot/Domain/KnowledgeChunk.cs)
+
+Manager xác nhận đề xuất trước khi danh mục hoặc mức ưu tiên chính thức thay đổi. Phương án bảo trì vẫn là dữ liệu để Manager duyệt. Chatbot chỉ lấy bản RESIDENT đang xuất bản, từ chối nguồn đã thu hồi trong khi đợi provider và đưa câu hỏi hóa đơn cá nhân về đúng giao diện. Các ca injection không mở rộng phạm vi truy xuất, không tạo tác nghiệp và không ghi dữ liệu tài chính. Các mẫu che dữ liệu đã kiểm không bao quát mọi cách người dùng nhập thông tin cá nhân tự do. Việc duyệt nội dung nguồn, mục đích gửi dữ liệu và chính sách lưu giữ bên provider vẫn thuộc nghiệm thu privacy.
+
+| Checkpoint | Sau checkpoint | Tổng VERIFIED |
+| --- | --- | ---: |
+| B7.1 | FE-10 2/2, FE-11 2/2 | 128/133 |
+| B7.2 | Bốn route kho tài liệu FE-12 | 132/133 |
+| B7.3 | FE-12 5/5, gồm chatbot | 133/133 |
+
+Nhóm AI chạy từ source sau bản sửa đạt 28/28. Manifest có 247 operation HTTP, gồm 133 VERIFIED, 114 NOT APPLICABLE, 0 PARTIALLY VERIFIED và 0 NOT VERIFIED. Đối chiếu tên test và khóa method/route của 133 dòng áp dụng. Chỉ tám dòng B7 đổi trạng thái, bằng chứng trước B7 được giữ. NOT APPLICABLE là phân loại cho mẫu số kiểm thử mutation. [TRX AI](../../artifacts/authz/b7-ai-final.trx) · [Mapping](../../scripts/authz/mutation-cases.json) · [Manifest](../../artifacts/authz/final-authorization-mutation-coverage.json)
+
+| Feature | VERIFIED | Feature | VERIFIED | Feature | VERIFIED |
+| --- | ---: | --- | ---: | --- | ---: |
+| FE-01 | 17/17 | FE-05/10 | 1/1 | FE-10 | 2/2 |
+| FE-02 | 6/6 | FE-06 | 7/7 | FE-11 | 2/2 |
+| FE-03 | 8/8 | FE-07 | 13/13 | FE-12 | 5/5 |
+| FE-04 | 10/10 | FE-08 | 6/6 | FE-13 | 18/18 |
+| FE-05 | 14/14 | FE-09 | 20/20 | FE-15 | 4/4 |
+
+### Chrome Release và hồi quy
+
+Chrome Release qua HTTPS proxy dùng hook fixture để thay HTTP transport Gemini. Manager phân tích và xác nhận classification từ giao diện, rồi giao diện tải recommendation đã duyệt qua API. STAFF nhận 403 khi thử duyệt hoặc công bố. Manager lưu nháp từ giao diện, ADMIN công bố và thu hồi qua API, STAFF chỉ đọc đúng bản công bố. Cư dân đặt câu hỏi trong giao diện, nhận câu trả lời từ Gemini giả với nguồn hiện hành rồi hỏi lại sau khi thu hồi. Lượt đầu hết thời gian chờ DevTools ở smoke phiên. Lượt chạy lại sau khi các suite database đã kết thúc đạt ca AI và smoke HTTPS/SignalR. [Chrome AI](../../artifacts/authz/notification-ai-authorization.json) · [Chrome lượt đầu](../../artifacts/authz/b7-browser-first.log) · [HTTPS và SignalR](../../artifacts/authz/b7-hardening-12-proxy-load-1.json)
+
+Solution build, publish API/Web Release, Unit 940/940, Architecture 64/64 và JavaScript 36/36 đạt. Publish Web và build BrowserFixture ghi NU1900 khi tải dữ liệu advisory NuGet. Lượt Integration toàn bộ có 617 ca PASS và thêm 65 kết quả FAIL trùng tên từ hai class hết thời gian khi dọn fixture. Lượt BillingCycle toàn bộ có 150 PASS và 4 timeout tại cùng bước `DROP DATABASE`. Trace xác định lỗi ở `TestDatabaseSafety.DropAsync`. [Build](../../artifacts/authz/b7-build-final.log) · [Unit](../../artifacts/authz/b7-unit.trx) · [Architecture](../../artifacts/authz/b7-architecture.trx) · [JavaScript](../../artifacts/authz/b7-javascript.log) · [Integration](../../artifacts/authz/b7-integration.trx) · [BillingCycle](../../artifacts/authz/b7-billing.trx)
+
+Các ca timeout được chạy lại theo nhóm sau khi Chrome dừng, với timeout dài hơn chỉ trên kết nối thử. Integration đạt 65/65 ở hai class bị ảnh hưởng. BillingCycle đạt 10/10 ở hai test theo tham số, gồm cả bốn trường hợp từng timeout. Đối chiếu theo tên ca cho kết quả **1.811 ca phân biệt PASS, 0 ca còn FAIL, 0 SKIP**. Ca focused và các lượt chạy lại không được cộng thêm vào tổng. Đã khớp bằng chứng PASS thực tế trên source cuối với toàn bộ 133 khóa method/route và mapping test của manifest. [Integration chạy lại](../../artifacts/authz/b7-integration-retry.trx) · [BillingCycle chạy lại](../../artifacts/authz/b7-billing-retry.trx)
+
+### Cleanup và các điều kiện còn mở
+
+Tám fixture từng timeout được dọn qua `TestDatabaseSafety` sau khi xác minh cluster, PID, marker sở hữu và kiểm không còn kết nối. Đã dừng PostgreSQL tạm và các tiến trình API, Web, proxy, Chrome. Sáu cổng thử đã được giải phóng, certificate, profile, key và dữ liệu tổng hợp đã được dọn. Truy vấn catalog chỉ đọc xác nhận database ứng dụng và đủ 11 database được bảo vệ. [Cleanup](../../artifacts/authz/b7-cleanup.json)
+
+B7 giữ baseline framework, SDK, runtime, EF Core, Npgsql, PostgreSQL, model Gemini, schema và migrations. Phần source production thay đổi là bước che thông tin xác thực trước khi gửi payload sang AI. Gemini live, nghiệm thu các provider ngoài, toàn bộ ma trận PF-AUTHZ-04, Final Local Acceptance và điều kiện phát hành công khai về runtime tiếp tục được theo dõi riêng. [Điều kiện triển khai](../deployment/README.md) · [Đánh giá runtime](propflow-runtime-security-risk-assessment.md)
+
+## PF-AUTHZ-04 — SignalR session revocation và realtime authorization
+
+Lượt 18/11/2026 mở rộng evidence trên bảy hub paths, sáu hub types và 17 cặp path/role. Ma trận có **139/139 tổ hợp applicable VERIFIED backend**, 211 N/A có lý do, không còn ô backend PARTIALLY VERIFIED/NOT VERIFIED. Logout chỉ thu hồi logical SID; thay đổi security thu hồi các phiên tài khoản liên quan. Phiên cũ bị từ chối HTTP, refresh, reconnect và private dispatch mới. Natural expiration vẫn cho phép refresh hợp lệ của SID; missed invalidation, idle reconciliation và interruption của PostgreSQL tạm đều được kiểm riêng. [Báo cáo chi tiết và kết quả cuối](propflow-pf-authz-04-completion-report.md) · [Ma trận](../../artifacts/authz/pf-authz-04-revocation-matrix.json).
+
+Resource scope tiếp tục giữ contract: FE-07 nhân viên cũ đọc đúng lịch sử đợt được giao; FE-05 nhân viên cũ không sửa/hoàn tất sau reassignment; chat không gửi draft/typing/message ngoài participant; emergency chỉ gửi signaling cho selected connection/revision. Resource loss không đồng nghĩa logout toàn tài khoản.
+
+Chrome Release đã tái hiện hai lỗi media client và sửa tối thiểu trong `EmergencyCallClient.cs`: reset cờ pause khi nhận call ID mới, dọn peer/micro/audio khi cuộc gọi kết thúc hoặc một bên offline. Ca kiểm có peer thật connected với fake microphone local trước logout; sau sửa phía logout dọn trong 782 ms và bên hợp tác trong 927 ms, bearer/reconnect cũ 401, phiên hợp lệ khác vẫn 200. Không kết thúc call record chỉ vì transport/session mất kết nối. [Chrome media](../../artifacts/authz/pf04-Emergency-notification-emergency.json).
+
+133/133 mutation baseline giữ nguyên, đã đối chiếu lại bằng các suite cuối. Source mới pull thêm ba mutation chưa có mapping fixture ngoài baseline; không mở rộng kết luận thành toàn web 100% coverage. Năm suite có **2.118 PASS / 2.125 ca, 7 FAIL, 0 SKIP**; subset **176/176 PF-AUTHZ-04 PASS** đã nằm trong Integration, không cộng trùng. Bảy FAIL gồm menu STAFF hai ca, native select FacilityGuides một ca, schema-count hai ca và Finance/UtilityInsights hai ca. Không tự kết luận tất cả là false positive hoặc bỏ qua để làm xanh. BillingCycle build lại dependency cuối và kiểm hash bản copy trong test host: **154/154 PASS**, không dùng lượt 150 ca từ DLL cũ.
+
+Bảy nhóm Chrome Release đạt qua các lượt có log gốc/retry: session revocation, emergency, reconnect, operations, service requests, communication và read state. HTTPS/WebSocket/Long Polling/restart smoke đạt. Fixture interruption đã sửa launcher Windows giữ pipe; ca focused sau sửa PASS và runner thực sự trả trong khi server tạm còn chạy. Đây là kết quả nhiều lượt được đối chiếu, không phải một full clean run.
+
+Đã dừng cluster tạm đúng PID/marker, dọn fixture/profile/key, giải phóng bốn cổng test và kiểm không còn runtime thuộc output thử. Snapshot chỉ đọc còn đủ 14 database được bảo vệ, gồm ứng dụng và 11 database lịch sử; cluster/ứng dụng của người dùng không bị dừng. [Cleanup](../../artifacts/authz/pf04-cleanup.json).
+
+Framework, SDK/runtime, dependency versions, schema/migrations và business contracts giữ nguyên. Live TURN/media qua Internet, SMTP/Gemini/provider live, Final Local Acceptance và runtime release blocker vẫn là các điều kiện riêng. Không tuyên bố production-ready.
+
+## Post-pull regression stabilization & authorization delta — hoàn tất
+
+Đã xử lý đúng bảy FAIL: hai ca navigation STAFF cập nhật theo menu Complaints đã duyệt; FacilityGuides dùng bốn shared selects; hai schema assertions so exact identities sau đối chiếu migrations/ownership; hai Finance assertions áp đúng shared UtilityInsights MANAGER/ACCOUNTANT + MainLayout. Không bỏ/skip/rename các method để giấu lỗi. Các regression RED/GREEN bổ sung khóa lỗi ARIA boolean, callback Enter không render và che credential trước Gemini. Hai ca PF idle/outage có race ở positive marker setup được thêm server-readiness barrier, giữ nguyên production authorization, timeout và mọi security assertions.
+
+Parser hiện bao phủ action routes của controller không có class Route và array response metadata; khớp exact metadata MVC: **258 HTTP operations**, 70 UI routes, không có guard chưa phân loại. Bổ sung năm UtilityInsights actions bị bỏ sót. So với B7 có 11 HTTP keys mới, không removal/guard change trên 247 keys cũ. Mẫu số **142 = 133 baseline + 9 applicable delta**; ba Utility GET có persisted effects và GET recommendation/today cấp speech ticket đều được tính theo hành vi. Hai catalogue reads N/A không phải tuyên bố mọi read authorization đã VERIFIED.
+
+Ba fact real-login PostgreSQL với production policies/services và provider stubs bao phủ chín operations mới: guide save; recommendation/today/speech; năm UtilityInsights routes. Kiểm anonymous/wrong roles/revoked bearer, effective permission loss, scope, stale/concurrent writes, guide đối chứng, provider/privacy/cache/quota và snapshot denied side effects. [Manifest cuối](../../artifacts/authz/final-authorization-mutation-coverage.json): **142 VERIFIED, 0 PARTIALLY VERIFIED, 0 NOT VERIFIED, 116 NOT APPLICABLE**. 133 mapping cũ giữ nguyên và đều VERIFIED trong evidence mới.
+
+Lượt cuối trên source cuối: Unit **1.067**, Architecture **64**, JavaScript **50**, Integration **801**, BillingCycle **154** — **2.136 ca phân biệt đều PASS, 0 FAIL/0 SKIP**. 176 ca PF nằm trong Integration; không cộng focused/retries. BillingCycle build mới và kiểm hash dependency Web.Client, không dùng stale DLL. Solution/dependency builds, API/Web Release publish, JavaScript syntax và diff check đạt; không suppress warnings. Targeted Chrome PostPull HTTPS PASS, gồm sáu viewport/theme combinations, keyboard/ARIA, loading/empty/busy/failure và role routes. Bảy nhóm Chrome PF04 cũ được giữ nguyên evidence riêng.
+
+Đối chiếu matrix PF04 với TRX mới giữ **139/139** và 167 tên evidence liên quan đều PASS; không audit lại matrix riêng. Cleanup đã dừng postmaster 6276 thuộc cluster TEMP có marker, xóa cluster, giải phóng 45488/47101/47201/47301; không còn artifact runtime/profile. Đủ 14 database bảo vệ vẫn có trong catalog chỉ đọc; cluster ứng dụng không bị dừng. [Kết quả suite](../../artifacts/authz/stabilize-final-results.json) · [Baseline validation](../../artifacts/authz/stabilize-pf-baseline-validation.json) · [Cleanup](../../artifacts/authz/stabilize-cleanup.json).
+
+Không còn regression hoặc missing authorization evidence trong scope stabilization. External provider/live TURN, runtime release blocker và quyết định phát hành theo các báo cáo trước vẫn giữ riêng. Framework/SDK/runtime/dependencies, schema/migrations, RBAC và approved business contracts không đổi. Không commit/push/deploy, không tự chuyển sang Final Local Acceptance. [Chi tiết D1–D4, exact routes, test names và lịch sử retries](propflow-post-pull-stabilization-report.md).

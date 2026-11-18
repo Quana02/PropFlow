@@ -35,6 +35,15 @@ internal static class AuthenticationTestSessions
         return closed.Task;
     }
 
+    internal static async Task AwaitServerReadyAsync(HubConnection hub)
+    {
+        // StartAsync completes the client handshake before server lifetime registration is guaranteed.
+        // A completion for a deliberately absent method is a setup barrier, with no business write.
+        var completion = await Assert.ThrowsAsync<Microsoft.AspNetCore.SignalR.HubException>(() =>
+            hub.InvokeAsync("PF04_UnregisteredMethod"));
+        Assert.Contains("PF04_UnregisteredMethod", completion.Message);
+    }
+
     internal static async Task<SessionResponse> IssueAsync(IServiceProvider services, AccountResponse account, DateTimeOffset now)
     {
         await using var scope = services.CreateAsyncScope();

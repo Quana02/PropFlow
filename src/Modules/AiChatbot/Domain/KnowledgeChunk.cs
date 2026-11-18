@@ -64,7 +64,14 @@ public static partial class KnowledgeText
                 builder.Append(c == 'đ' ? 'd' : char.IsLetterOrDigit(c) ? c : ' ');
         return Spaces().Replace(builder.ToString(), " ").Trim();
     }
-    public static string Redact(string text) => Sensitive().Replace(text, "[thông tin đã ẩn]");
+    public static string Redact(string text) =>
+        Sensitive().Replace(Credentials().Replace(text, "[thông tin đã ẩn]"), "[thông tin đã ẩn]");
     [GeneratedRegex(@"\s+")] private static partial Regex Spaces();
     [GeneratedRegex(@"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|(?<!\w)(?:\+?\d[\d .()-]{7,}\d)(?!\w)")] private static partial Regex Sensitive();
+    [GeneratedRegex("""
+        (?<![\w-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?![\w-])
+        |\b(?:api[ _-]*key|access[ _-]*token|refresh[ _-]*token|jwt|authorization|otp|mật[ \t]+khẩu|password)
+        [ \t]*[:=][ \t]*(?:bearer[ \t]+)?(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)
+        """, RegexOptions.IgnoreCase | RegexOptions.IgnorePatternWhitespace | RegexOptions.CultureInvariant)]
+    private static partial Regex Credentials();
 }

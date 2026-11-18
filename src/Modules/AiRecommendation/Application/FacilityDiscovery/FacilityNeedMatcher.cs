@@ -17,6 +17,12 @@ public static class FacilityNeedMatcher
         .Where(c => CharUnicodeInfo.GetUnicodeCategory(c)!=UnicodeCategory.NonSpacingMark).ToArray());
     public static string Redact(string text)
     {
+        // Keep the B7 credential boundary for both resident needs and public guide context sent to providers.
+        text=Regex.Replace(text,"""
+            (?<![\w-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?![\w-])
+            |\b(?:api[ _-]*key|access[ _-]*token|refresh[ _-]*token|jwt|authorization|otp|mật[ \t]+khẩu|password)
+            [ \t]*[:=][ \t]*(?:bearer[ \t]+)?(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)
+            ""","[thông tin đã ẩn]",RegexOptions.IgnoreCase|RegexOptions.IgnorePatternWhitespace|RegexOptions.CultureInvariant);
         text=Regex.Replace(text,@"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}|(?<!\d)(?:\+?84|0)(?:[ .-]?\d){8,10}(?!\d)|\b\d{9,12}\b","[thông tin đã ẩn]");
         return Regex.Replace(text,@"(?i)(?:tên(?:\s+là)?|tôi\s+là)\s+\p{L}+(?:\s+\p{L}+){1,3}","[tên đã ẩn]");
     }

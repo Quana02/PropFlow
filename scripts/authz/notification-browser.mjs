@@ -12,13 +12,16 @@ const profile = await mkdtemp(join(root, 'chrome-notifications-'));
 const fixture = JSON.parse(await readFile(join(root, 'browser-resources.json'), 'utf8'));
 const group = process.env.PROPFLOW_NOTIFICATION_GROUP;
 const scenarios = {
+  PostPull: 'post-pull',
   ServiceRequests: 'service-requests',
   Operations: 'operations',
   PropertyOperations: 'property-operations',
+  AiAuthorization: 'ai-authorization',
   Finance: 'finance',
   Communication: 'communication',
   ReadState: 'read-state',
   Emergency: 'emergency',
+  SessionRevocation: 'session-revocation',
   Reconnect: 'reconnect'
 };
 const browser = spawn(process.env.PROPFLOW_AUTHZ_CHROME ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -35,7 +38,7 @@ try {
   let port;
   for (let attempt = 0; attempt < 100 && !port; attempt++) {
     try { port = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0].trim(); }
-    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    catch (error) { if (!['ENOENT', 'EBUSY'].includes(error.code)) throw error; }
     if (!port) await delay(100);
   }
   assert(port, 'Chrome DevTools did not start');
@@ -51,6 +54,9 @@ try {
     const tab = tabs.get(message.sessionId);
     if (!tab) return;
     const event = message.params;
+    if (message.method === 'Network.responseReceived' && event.response.status === 401 &&
+        /^\/api\/v1\/auth\/(me|refresh)$/.test(new URL(event.response.url).pathname))
+      tab.authDeniedAt ??= performance.now();
     if (message.method === 'Network.responseReceived' && event.response.status === 200 &&
         event.response.url === origin + '/api/v1/auth/login') tab.loginResponse = event.requestId;
     if (message.method === 'Network.webSocketCreated') {
@@ -60,7 +66,10 @@ try {
     }
     if (message.method === 'Network.webSocketHandshakeResponseReceived' &&
         tab.sockets.has(event.requestId) && event.response.status === 101) tab.openSockets.add(event.requestId);
-    if (message.method === 'Network.webSocketClosed') tab.openSockets.delete(event.requestId);
+    if (message.method === 'Network.webSocketClosed') {
+      if (tab.sockets.get(event.requestId) === '/hubs/notifications') tab.notificationClosedAt ??= performance.now();
+      tab.openSockets.delete(event.requestId);
+    }
     if (message.method === 'Network.webSocketFrameReceived' && tab.sockets.has(event.requestId)) {
       for (const fragment of event.response.payloadData.split('\x1e').filter(Boolean)) {
         try {
@@ -108,6 +117,40 @@ try {
       communicationUpdates: [], sockets: new Map(), openSockets: new Set() };
     tabs.set(sessionId, tab);
     await call('Network.enable', {}, sessionId);
+    if (group === 'Emergency') {
+      await call('Page.enable', {}, sessionId);
+      await call('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+        const peers = new Set(), tracks = new Set(), state = new WeakMap();
+        const NativePeer = window.RTCPeerConnection;
+        window.RTCPeerConnection = new Proxy(NativePeer, {
+          construct(target, args) {
+            const peer = Reflect.construct(target, args); peers.add(peer);
+            const info = { localCandidates: 0, remoteCandidates: 0, candidateErrors: 0 };
+            state.set(peer, info);
+            peer.addEventListener('icecandidate', event => { if (event.candidate) info.localCandidates++; });
+            const add = peer.addIceCandidate.bind(peer);
+            peer.addIceCandidate = (...values) => {
+              info.remoteCandidates++;
+              return add(...values).catch(error => { info.candidateErrors++; throw error; });
+            };
+            return peer;
+          }
+        });
+        const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = async (...args) => {
+          const stream = await capture(...args); stream.getTracks().forEach(track => tracks.add(track)); return stream;
+        };
+        window.pf04MediaState = () => ({
+          livePeers: [...peers].filter(peer => peer.connectionState !== 'closed').length,
+          connectedPeers: [...peers].filter(peer => peer.connectionState === 'connected').length,
+          liveTracks: [...tracks].filter(track => track.readyState === 'live').length,
+          totalPeers: peers.size,
+          states: [...peers].map(peer => ({ connection: peer.connectionState, ice: peer.iceConnectionState,
+            signaling: peer.signalingState, local: peer.localDescription?.type, remote: peer.remoteDescription?.type,
+            ...state.get(peer) }))
+        });
+      })()` }, sessionId);
+    }
     if (group === 'Communication') {
       await call('Page.enable', {}, sessionId);
       await call('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
@@ -170,22 +213,30 @@ try {
     tab.sockets.clear();
     return call('Page.navigate', { url: path === 'about:blank' ? path : origin + path }, tab.sessionId);
   }
-  const badge = tab => evaluate(tab, 'Number(document.querySelector(".notification-badge")?.textContent ?? 0)');
+  const badge = tab => evaluate(tab, 'Number(document.querySelector(".notification-trigger")?.getAttribute("aria-label")?.match(/\\d+/)?.[0] ?? 0)');
+  const hasDot = tab => evaluate(tab, 'Boolean(document.querySelector(".notification-badge"))');
   const framesFor = (tab, id) => tab.notices.filter(notice => notice.id === id);
   const menuItems = tab => evaluate(tab, 'document.querySelectorAll(".notification-item").length');
   const click = (tab, selector) => evaluate(tab, 'document.querySelector(' + JSON.stringify(selector) + ').click()');
+  const pressKey = async (tab, key) => {
+    const code = { Escape: 27, ArrowDown: 40, Enter: 13 }[key];
+    assert.ok(code, 'Unsupported fixture key');
+    await call('Page.bringToFront', {}, tab.sessionId);
+    for (const type of ['keyDown', 'keyUp'])
+      await call('Input.dispatchKeyEvent', { type, key, code: key, windowsVirtualKeyCode: code, nativeVirtualKeyCode: code }, tab.sessionId);
+  };
   async function snapshot(tab, name) {
     const { data } = await call('Page.captureScreenshot', { format: 'png' }, tab.sessionId);
     await writeFile(join(root, name + '.png'), Buffer.from(data, 'base64'));
   }
   const socketsReady = (tab, path = '/hubs/notifications') => until(
     () => [...tab.openSockets].some(id => tab.sockets.get(id) === path), 'WebSocket missing for ' + path);
-  async function login(role) {
+  async function login(role, password = process.env.PHASE11_PASSWORD) {
     const { browserContextId } = await call('Target.createBrowserContext');
     const tab = await openTab(browserContextId);
     await navigate(tab, '/login');
     await until(() => evaluate(tab, 'Boolean(document.querySelector("#username"))'), 'Login form missing for ' + role, 50000);
-    const credentials = [['username', 'phase11_' + role], ['password', process.env.PHASE11_PASSWORD]];
+    const credentials = [['username', 'phase11_' + role], ['password', password]];
     await evaluate(tab, 'for(const [id,value] of ' + JSON.stringify(credentials) + '){const el=document.getElementById(id); el.value=value; el.dispatchEvent(new Event("change",{bubbles:true}));}document.querySelector("#password").closest("form").requestSubmit()');
     await until(async () => tab.loginResponse && await evaluate(tab, 'Boolean(document.querySelector(".notification-trigger"))'),
       'Login did not load bell for ' + role);
@@ -266,7 +317,7 @@ try {
     const { default: verify } = await import(`./notification-${scenario}.mjs`);
     await verify({
       fixture, login, openTab, navigate, evaluate, until, socketsReady, api, badge, notifications, persistedNotice, framesFor,
-      click, snapshot, setOffline, setViewport, openRevocationProbe,
+      click, pressKey, snapshot, setOffline, setViewport, openRevocationProbe,
       save: checks => writeFile(join(root, `notification-${scenario}.json`), JSON.stringify(checks, null, 2))
     });
     console.log('Chrome notification checks recorded for', group);
@@ -292,6 +343,7 @@ try {
     'STAFF A tabs did not receive the exact assignment on WebSocket');
   await until(async () => (await badge(staffA)) === initialA + 1 && (await badge(staffATab2)) === initialA + 1,
     'STAFF A notification badges did not update');
+  assert.equal(await hasDot(staffA), true);
   const assignBadgeObservedAt = performance.now();
   assert.equal(framesFor(staffB, noticeId).length, 0);
   assert.equal(framesFor(manager, noticeId).length, 0);
@@ -309,6 +361,8 @@ try {
 
   await click(staffA, '.notification-trigger');
   await until(async () => (await menuItems(staffA)) === initialA + 1, 'STAFF A bell did not show the assignment');
+  assert.equal(await hasDot(staffA), false);
+  assert.equal(await badge(staffA), initialA + 1);
   await snapshot(staffA, 'final-staff-assignment-bell');
   const readStartedAt = performance.now();
   await click(staffA, '.notification-item.unread');
@@ -345,6 +399,7 @@ try {
   staffA.token = disconnectedToken;
   await navigate(staffA, '/my-maintenance');
   await socketsReady(staffA);
+  await until(() => hasDot(staffA), 'A notification received while offline did not restore the dot');
   await click(staffA, '.notification-trigger');
   await until(async () => {
     const records = (await notifications(staffA)).data;

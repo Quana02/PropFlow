@@ -92,6 +92,11 @@
 :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-indigo-50 { background: rgba(67, 56, 202, .25); }
 :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-rose-50 { background: rgba(159, 18, 57, .25); }
 :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-slate-100 { background: rgba(71, 85, 105, .36); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-emerald-700 { color: var(--pf-success); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-amber-700 { color: var(--pf-warning); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-indigo-700 { color: var(--pf-violet); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-slate-700 { color: var(--pf-muted); }
+:where(html[data-theme="dark"]) .app-shell .fe04-legend .text-rose-700 { color: var(--pf-danger); }
 :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-blue-50\/70, :where(html[data-theme="dark"]) .app-shell .fe04-page .bg-sky-50 { background: rgba(3, 105, 161, .2); }
 :where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select, :where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__trigger, :where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__menu { background: #111f33; border-color: rgba(34, 211, 238, .16); color: #f1f5f9; }
 :where(html[data-theme="dark"]) .app-shell .fe04-light-select ::deep .pf-select__option { color: #cbd5e1; }

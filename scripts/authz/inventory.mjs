@@ -1,3 +1,4 @@
+import { controllerOperations } from './controller-inventory.mjs';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const root = 'artifacts/authz';
@@ -6,6 +7,7 @@ const roles = ['ADMIN', 'MANAGER', 'STAFF', 'ACCOUNTANT', 'RESIDENT'];
 const [admin, manager, staff, accountant, resident] = roles;
 const policies = {
   'AssetPermissions.ViewPolicy': [manager, staff],
+  'property-assets.view': [manager, staff],
   'PropertyAssetsAuthorizationPolicies.View': [manager, staff],
   'PropertyAssetsAuthorizationPolicies.Manage': [manager],
   'MaintenanceAuthorizationPolicies.View': [manager, staff],
@@ -66,6 +68,7 @@ const modules = { Authentication:'01', Residents:'02', Resident:'02', Apartments
   Facility:'04', ServiceRequests:'05', Complaints:'06', Maintenance:'07', Billing:'08', Payments:'09',
   AiChatbot:'12', Communication:'13', Reporting:'14', Administration:'15' };
 function feature(file, path) {
+  if (path.includes('/utility-insights') || path === '/resident/utilities') return 'FE-08/11';
   if (path.includes('/classification')) return 'FE-10';
   if (path.includes('/recommendation')) return 'FE-11';
   if (path.includes('/resident/weather') || path.includes('/buildings')) return 'FE-04';
@@ -95,6 +98,12 @@ for (const file of files.filter(path => path.endsWith('.razor'))) {
   }
 }
 const endpoints = [];
+if (process.argv.includes('--theme')) {
+  routes.sort((left, right) => left.path.localeCompare(right.path));
+  writeFileSync(join(root, 'theme-routes.json'), JSON.stringify(routes, null, 2));
+  console.log('Theme route inventory:', routes.length);
+  process.exit(0);
+}
 const controllers = new Map();
 for (const file of files.filter(path => /Controller.*\.cs$/.test(path))) {
   const source = readFileSync(file, 'utf8');
@@ -108,25 +117,9 @@ for (const file of files.filter(path => /Controller.*\.cs$/.test(path))) {
   const controller = source.match(/\bclass\s+(\w+Controller)\b/);
   if (!controller) continue;
   const header = controllers.get(controller[1]) ?? source.slice(0, controller.index);
-  const prefixes = [...header.matchAll(/\bRoute\("([^"]+)"\)/g)].map(match => match[1]);
-  if (!prefixes.length) continue;
-  const matchedVerbs = new Set();
-  // Attribute areas end before the action signature, even when the declarations share a line.
-  for (const match of source.matchAll(/(^[ \t]*(?:\[(?:(?:[^"\]\r\n]|"(?:[^"\\]|\\.)*")+)\][ \t]*(?:\r?\n[ \t]*)?)+)[ \t]*public\s+(?:async\s+)?[^\r\n]*?\s+(\w+)\(/gm)) {
-    const [full, attributes, action] = match;
-    for (const verb of attributes.matchAll(/\bHttp(Get|Post|Put|Patch|Delete|Head|Options)(?:\("([^"]*)"\))?/g)) {
-      matchedVerbs.add(match.index + verb.index);
-      const suffix = verb[2] ?? '';
-      const paths = suffix.startsWith('/') ? [suffix] : prefixes.map(prefix => ['/' + prefix, suffix].filter(Boolean).join('/'));
-      for (const rawPath of paths) {
-        const path = rawPath.replace('[controller]', controller[1].slice(0, -10));
-        const meta = auth(header + '\n' + attributes);
-        endpoints.push({ path, method: verb[1].toUpperCase(), feature: feature(file, path), file, action, ...meta });
-      }
-    }
-  }
-  for (const verb of source.matchAll(/\bHttp(Get|Post|Put|Patch|Delete|Head|Options)\b/g)) {
-    if (!matchedVerbs.has(verb.index)) console.log('UNPARSED', file, source.slice(verb.index, verb.index + 95).split(/\r?\n/)[0]);
+  for (const operation of controllerOperations(source, header, controller[1])) {
+    const { attributes, ...row } = operation;
+    endpoints.push({ ...row, feature: feature(file, row.path), file, ...auth(header + '\n' + attributes) });
   }
 }
 routes.sort((a, b) => a.path.localeCompare(b.path));

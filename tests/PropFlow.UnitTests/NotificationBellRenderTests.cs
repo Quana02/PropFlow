@@ -104,7 +104,7 @@ public sealed class NotificationBellRenderTests
     }
 
     [Fact]
-    public async Task Badge_uses_the_server_total_and_refreshes_after_a_successful_read()
+    public async Task Opening_the_inbox_hides_the_dot_without_marking_notifications_read()
     {
         using var transport = new NoticeTransport();
         using var http = new HttpClient(transport) { BaseAddress = new Uri("https://example.invalid/") };
@@ -118,18 +118,52 @@ public sealed class NotificationBellRenderTests
         await state.ReloadAsync();
         var root = await renderer.Dispatcher.InvokeAsync(() => renderer.RenderComponentAsync<NotificationBell>(
             ParameterView.FromDictionary(new Dictionary<string, object?> { [nameof(NotificationBell.Connect)] = false })));
-        Assert.Contains("99+", WebUtility.HtmlDecode(await renderer.Dispatcher.InvokeAsync(root.ToHtmlString)));
+        var beforeOpening = WebUtility.HtmlDecode(await renderer.Dispatcher.InvokeAsync(root.ToHtmlString));
+        Assert.Contains("notification-badge", beforeOpening);
+        Assert.Contains("100 chưa đọc", beforeOpening);
+
+        await renderer.Dispatcher.InvokeAsync(state.AcknowledgeInbox);
+        await renderer.Dispatcher.InvokeAsync(state.ReloadAsync);
+        var afterOpening = WebUtility.HtmlDecode(await renderer.Dispatcher.InvokeAsync(root.ToHtmlString));
+        Assert.DoesNotContain("notification-badge", afterOpening);
+        Assert.Contains("100 chưa đọc", afterOpening);
+        Assert.False(Assert.Single(state.Items).IsRead);
 
         Assert.True(await renderer.Dispatcher.InvokeAsync(() => state.ReadAsync(transport.NoticeId)));
         Assert.Equal(99, state.UnreadCount);
         Assert.True(Assert.Single(state.Items).IsRead);
         var afterRead = WebUtility.HtmlDecode(await renderer.Dispatcher.InvokeAsync(root.ToHtmlString));
-        Assert.DoesNotContain("99+", afterRead);
+        Assert.DoesNotContain("notification-badge", afterRead);
         Assert.Contains("99 chưa đọc", afterRead);
 
         await renderer.Dispatcher.InvokeAsync(state.ReadAllAsync);
         Assert.Equal(0, state.UnreadCount);
         Assert.DoesNotContain("notification-badge", await renderer.Dispatcher.InvokeAsync(root.ToHtmlString));
+    }
+
+    [Fact]
+    public async Task A_new_notification_restores_the_dot_but_a_duplicate_does_not()
+    {
+        using var transport = new NoticeTransport(0);
+        using var http = new HttpClient(transport) { BaseAddress = new Uri("https://example.invalid/") };
+        var state = new ResidentFinanceNoticeState(new FinanceCycleApi(new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance)));
+        var first = new ResidentNotice(Guid.NewGuid(), "Thông báo mới", "Công việc", null, false, DateTimeOffset.UtcNow);
+        var second = first with { Id = Guid.NewGuid(), CreatedAt = first.CreatedAt.AddSeconds(1) };
+        transport.Publish(first);
+        await state.ReloadAsync();
+        state.AcknowledgeInbox();
+
+        state.Receive(first);
+        Assert.False(state.HasNewNotices);
+        transport.Publish(second);
+        await state.ReloadAsync();
+        Assert.True(state.HasNewNotices);
+        Assert.Equal(2, state.UnreadCount);
+
+        state.AcknowledgeInbox();
+        state.Receive(second);
+        Assert.False(state.HasNewNotices);
+        Assert.Equal(2, state.UnreadCount);
     }
 
     [Theory]
