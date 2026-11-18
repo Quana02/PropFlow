@@ -39,19 +39,23 @@
 
     @if (detail?.AdditionalCostConsent is { } consent)
     {
-        <section class="cost-consent-summary" aria-label="Duyệt chi phí phát sinh">
-            <strong>Staff đề xuất: @Money(consent.Amount)</strong><p>@consent.Note</p>
-            <p role="status">@(consent.Status switch {
-                "AWAITING_MANAGER" => "Chờ Manager duyệt phí. Staff đang tạm dừng phần việc phát sinh.",
-                "PENDING" => "Đã gửi cư dân xác nhận. Staff chưa được tiếp tục và Manager chưa được nghiệm thu.",
-                "ACCEPTED" => "Cư dân đã đồng ý chi phí phát sinh. Staff được tiếp tục công việc.",
-                _ => "Cư dân từ chối chi phí; yêu cầu đã bị hủy." })</p>
-            @if (consent.Status == "AWAITING_MANAGER" && detail.Status is "IN_PROGRESS" or "ASSIGNED")
-            {
-                <button type="button" class="primary-action" disabled="@savingCostApproval" @onclick="OpenCostApproval">Duyệt và gửi cư dân xác nhận</button>
-            }
-            @if (costApprovalError is not null) { <p role="alert">@costApprovalError</p> }
-        </section>
+        <div class="cost-review-notice">
+            <PropFlowNotice Title="@(consent.Status switch { "AWAITING_MANAGER" => "Chi phí phát sinh chờ duyệt", "PENDING" => "Đã gửi báo giá cho cư dân", "ACCEPTED" => "Cư dân đã chấp thuận báo giá", _ => "Yêu cầu đã hủy do từ chối chi phí" })"
+                Tone="@(consent.Status switch { "AWAITING_MANAGER" => NoticeTone.Warning, "PENDING" => NoticeTone.Info, "ACCEPTED" => NoticeTone.Success, _ => NoticeTone.Danger })"
+                Message="@(consent.Status switch { "AWAITING_MANAGER" => "Kiểm tra báo giá của Staff trước khi gửi cư dân xác nhận. Công việc phát sinh đang tạm dừng.", "PENDING" => "Đang chờ cư dân xác nhận. Staff chưa được tiếp tục và Manager chưa được nghiệm thu.", "ACCEPTED" => "Staff được tiếp tục công việc theo chi phí cư dân đã đồng ý.", _ => "Staff dừng công việc; không phát hành hóa đơn cho yêu cầu bị hủy." })">
+                <ChildContent>
+                    <div class="cost-review-quote"><span>Staff đề xuất</span><strong>@Money(consent.Amount)</strong></div>
+                    <div class="cost-review-reason"><span>Lý do phát sinh</span><p>@consent.Note</p></div>
+                </ChildContent>
+                <Actions>
+                    @if (consent.Status == "AWAITING_MANAGER" && detail.Status is "IN_PROGRESS" or "ASSIGNED")
+                    {
+                        <button type="button" class="pf-notice-action--primary" disabled="@savingCostApproval" @onclick="OpenCostApproval"><span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span>Duyệt và gửi cư dân xác nhận</button>
+                    }
+                </Actions>
+            </PropFlowNotice>
+        </div>
+        @if (costApprovalError is not null) { <PropFlowNotice Title="Chưa thể duyệt chi phí" Message="@costApprovalError" Tone="NoticeTone.Danger" /> }
     }
     <section class="signal-strip" aria-label="Tóm tắt xử lý">
         <article><span class="signal-icon sky"><span class="material-symbols-outlined">schedule</span></span><div><small>Thời gian từ khi gửi</small><strong>@ElapsedLabel()</strong></div></article>
@@ -271,7 +275,6 @@
                 }
             </div>
             @if (CommonArea) { <p>Công việc tại khu vực chung của chung cư không thu phí cư dân.</p> }
-            else { <p>Chỉ phân công nhân sự. Staff sẽ khảo sát và báo phí phát sinh để Manager duyệt, sau đó gửi cư dân chấp thuận.</p> }
             <label class="note-field"><span>Ghi chú phân công (không bắt buộc)</span><textarea rows="3" maxlength="2000" @bind="assignmentNote" placeholder="Thông tin cần lưu ý cho Staff…"></textarea></label>
             @if (!string.IsNullOrWhiteSpace(assignmentError)) { <p class="ui-notice" role="alert">@assignmentError</p> }
             <footer><button type="button" class="dialog-cancel" disabled="@savingAssignment" @onclick="CloseAssignPanel">Hủy</button><button type="button" class="dialog-confirm" disabled="@(savingAssignment || selectedStaffUserId is null)" @onclick="ConfirmAssignmentAsync">@(savingAssignment ? "Đang lưu…" : "Xác nhận phân công")</button></footer>

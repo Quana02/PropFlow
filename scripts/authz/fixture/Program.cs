@@ -170,6 +170,30 @@ request2.MarkAssigned(now);
 requests.AddRange(request2, new ServiceRequestAssignment(request2.Id, actors["STAFF2"], actors["MANAGER"], now));
 await requests.SaveChangesAsync();
 
+// Theme-only states let the browser open forms without submitting operational or financial mutations.
+ServiceRequest? staffThemeRequest = null, managerThemeRequest = null, residentThemeRequest = null;
+if (Environment.GetEnvironmentVariable("PROPFLOW_AUTHZ_SCOPE") == "Theme")
+{
+    ServiceRequest ThemeRequest(string suffix)
+    {
+        var item = new ServiceRequest("PHASE11-THEME-" + suffix, residentId, residency.Id,
+            "Kiểm tra vòi nước tại căn hộ", "Vòi nước bị rò, cần khảo sát và kiểm tra vật tư.", now,
+            apartmentUnitId: unit.Id, serviceAreaCode: "IN_APARTMENT", submittedByUserId: actors["RESIDENT"]);
+        item.MarkUnderReview(now); item.MarkAssigned(now); item.MarkInProgress(now);
+        var worker = new ServiceRequestAssignment(item.Id, actors["STAFF"], actors["MANAGER"], now);
+        worker.Start(now);
+        requests.AddRange(item, worker);
+        return item;
+    }
+    staffThemeRequest = ThemeRequest("WORK");
+    managerThemeRequest = ThemeRequest("MANAGER");
+    managerThemeRequest.ProposeAdditionalCost(50000, "Thay van cấp nước và kiểm tra kín nước sau xử lý.", now);
+    residentThemeRequest = ThemeRequest("RESIDENT");
+    residentThemeRequest.ProposeAdditionalCost(50000, "Thay van cấp nước và kiểm tra kín nước sau xử lý.", now);
+    residentThemeRequest.SubmitAdditionalCostForResident(residentThemeRequest.AdditionalCostProposalId!.Value, now);
+    await requests.SaveChangesAsync();
+}
+
 await using var complaints = Open("Complaints", "ComplaintsDbContext", "complaints");
 var complaint = new Complaint("PHASE11-C1", residentId, residency.Id, "Phản ánh kiểm thử A", "Mô tả kiểm thử", now, unit.Id);
 var complaint2 = new Complaint("PHASE11-C2", resident2, residency2.Id, "Phản ánh kiểm thử B", "Mô tả kiểm thử", now, unit2.Id);
@@ -204,6 +228,8 @@ await maintenance.SaveChangesAsync();
 
 await File.WriteAllTextAsync("artifacts/authz/browser-resources.json", System.Text.Json.JsonSerializer.Serialize(new {
     requestId = request.Id, otherRequestId = request2.Id, evidenceId = evidence.Id,
+    staffThemeRequestId = staffThemeRequest?.Id, staffThemeRequestCode = staffThemeRequest?.RequestNumber,
+    managerThemeRequestId = managerThemeRequest?.Id, residentThemeRequestId = residentThemeRequest?.Id,
     invoiceId = invoice.Id, otherInvoiceId = invoice2.Id, conversationId = conversation.Id, otherConversationId = conversation2.Id,
     apartmentId = unit.Id, residentId,
     complaintId = complaint.Id, otherComplaintId = complaint2.Id,

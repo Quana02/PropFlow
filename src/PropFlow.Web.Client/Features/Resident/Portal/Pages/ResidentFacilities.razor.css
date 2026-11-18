@@ -1,6 +1,6 @@
 .resident-facility-discovery {
     --assistant-ink: #142742;
-    --assistant-muted: #64758c;
+    --assistant-muted: var(--pf-muted);
     --assistant-panel: rgba(255,255,255,.84);
     --assistant-line: rgba(79,131,177,.18);
     --assistant-accent: #007ba4;
