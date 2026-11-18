@@ -3,7 +3,7 @@
     color: var(--app-text); background: var(--app-surface); border: 1px solid var(--app-line); border-radius: 1rem;
 }
 .email-verification h1 { margin: .6rem 0; }
-.email-verification a { color: var(--app-accent); }
+.email-verification a { color:var(--pf-info); }
 fieldset { display: grid; min-width: 0; border: 0; padding: 0; gap: .6rem; margin: 1rem 0; }
 .email-verification ::deep input, .email-verification button {
     border: 1px solid var(--app-line); border-radius: .5rem; padding: .65rem .8rem; background: var(--app-surface); color: inherit;

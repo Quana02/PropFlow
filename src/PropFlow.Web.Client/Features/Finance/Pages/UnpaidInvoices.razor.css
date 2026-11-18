@@ -15,7 +15,7 @@
 .unpaid-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .unpaid-breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; color: var(--unpaid-muted); font-size: 11px; }
 .unpaid-breadcrumb ::deep a { color: var(--unpaid-muted); text-decoration: none; }
-.unpaid-breadcrumb ::deep a:hover, .unpaid-breadcrumb [aria-current] { color: var(--unpaid-accent); }
+.unpaid-breadcrumb ::deep a:hover, .unpaid-breadcrumb [aria-current] { color:var(--pf-success); }
 .unpaid-breadcrumb [aria-current] { font-weight: 700; }
 .title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .unpaid-heading h1 { margin: 0 0 5px; font: 700 clamp(25px, 2.6vw, 34px)/1.2 var(--pf-font); letter-spacing: -.025em; text-transform: capitalize; }
@@ -35,8 +35,8 @@
 .unpaid-card strong small { color: var(--unpaid-muted); font: 500 10px/1 var(--pf-font); }
 .unpaid-card p { margin: 0; color: var(--unpaid-muted); font-size: 9px; }
 .unpaid-card.amount strong { color: #2563eb; }
-.unpaid-card.due-soon strong { color: #e97905; }
-.unpaid-card.due-soon .material-symbols-outlined { background: #fff8e7; color: #e97905; }
+.unpaid-card.due-soon strong { color:var(--pf-warning); }
+.unpaid-card.due-soon .material-symbols-outlined { background: #fff8e7; color:var(--pf-warning); }
 .unpaid-card.partial strong { color: var(--pf-violet); }
 .unpaid-card.partial .material-symbols-outlined { background: color-mix(in srgb, var(--pf-violet) 12%, var(--pf-menu-surface)); color: var(--pf-violet); }
 
@@ -66,7 +66,7 @@
 .unpaid-table-card input[type="checkbox"] { accent-color: #1687eb; }
 .amount-cell { text-align: right; }
 .amount-cell strong { color: #2563eb; font-size: 12px !important; white-space: nowrap; }
-.due-cell strong { color: #d97706; white-space: nowrap; }
+.due-cell strong { color:var(--pf-warning); white-space: nowrap; }
 .due-cell.overdue strong, .due-cell.overdue small { color: #e11d48; }
 .invoice-status { display: inline-flex; align-items: center; justify-content: center; padding: 6px 9px; border-radius: 999px; font-size: 8px; font-weight: 750; white-space: nowrap; }
 .status-unpaid { border: 1px solid #fde68a; background: #fffbeb; color: #b45309; }

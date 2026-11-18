@@ -181,8 +181,8 @@ public sealed class ManagerServiceRequestReviewHandler(
             return Invalid<ManagerServiceRequestDetailResponse>("invalid_assignment", "Thông tin phân công nhân sự không hợp lệ.");
         if (request.Note?.Trim().Length > 2000)
             return Invalid<ManagerServiceRequestDetailResponse>("assignment_note_too_long", "Ghi chú phân công không được vượt quá 2000 ký tự.");
-        if (!ValidMoney(request.BaseServiceCost))
-            return Invalid<ManagerServiceRequestDetailResponse>("invalid_base_service_cost", "Chi phí dịch vụ phải là số tiền VND nguyên, không âm.");
+        if (request.BaseServiceCost != 0)
+            return Invalid<ManagerServiceRequestDetailResponse>("assignment_cost_not_allowed", "Chỉ phân công nhân sự. Staff sẽ khảo sát và gửi phí phát sinh để Manager duyệt trước khi xin cư dân chấp thuận.");
 
         var staff = await staffDirectory.GetActiveStaffAsync(request.StaffUserId, ct);
         if (staff is null)

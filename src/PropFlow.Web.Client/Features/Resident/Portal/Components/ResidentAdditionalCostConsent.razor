@@ -3,22 +3,37 @@
 @using PropFlow.Web.Client.Shared.Feedback
 @inject AuthenticatedApiClient Api
 
-@if (Consent is { } proposal)
+@if (Consent is { Status: not "AWAITING_MANAGER" } proposal)
 {
-    <section class="cost-consent" aria-label="Xác nhận chi phí phát sinh">
-        <h3>Chi phí phát sinh cần xác nhận</h3>
-        <p>Chi phí ban đầu: <strong>@Money(BaseCost)</strong></p>
-        <p>Chi phí phát sinh: <strong>@Money(proposal.Amount)</strong> · Tổng dự kiến: <strong>@Money(BaseCost + proposal.Amount)</strong></p>
-        <p class="reason">@proposal.Note</p>
-        @if (proposal.Status == "PENDING")
-        {
-            <p>Công việc đang chờ phản hồi của bạn. Đồng ý để bộ phận xử lý tiếp tục; từ chối sẽ tự động kết thúc yêu cầu dịch vụ.</p>
-            <div class="actions"><button type="button" disabled="@busy" @onclick="() => Ask(true)">Đồng ý chi phí và tiếp tục</button><button type="button" class="reject" disabled="@busy" @onclick="() => Ask(false)">Từ chối dịch vụ</button></div>
-        }
-        else if (proposal.Status == "ACCEPTED") { <p role="status">Bạn đã đồng ý chi phí phát sinh. Bộ phận xử lý được tiếp tục công việc.</p> }
-        else if (proposal.Status == "REJECTED") { <p role="status">Bạn đã từ chối chi phí phát sinh. Yêu cầu dịch vụ đã được tự động từ chối.</p> }
-        @if (error is not null) { <p role="alert">@error</p><button type="button" disabled="@busy" @onclick="() => Changed.InvokeAsync()">Tải lại đề xuất</button> }
-    </section>
+    <div class="cost-consent">
+        <PropFlowNotice Title="@(proposal.Status switch { "PENDING" => "Chi phí phát sinh cần xác nhận", "ACCEPTED" => "Bạn đã chấp thuận báo giá", _ => "Yêu cầu dịch vụ đã hủy" })"
+            Tone="@(proposal.Status switch { "PENDING" => NoticeTone.Warning, "ACCEPTED" => NoticeTone.Success, _ => NoticeTone.Danger })"
+            Message="@(proposal.Status switch { "PENDING" => "Ban Quản lý đã kiểm tra báo giá. Công việc đang chờ bạn đồng ý; từ chối sẽ tự động kết thúc yêu cầu dịch vụ.", "ACCEPTED" => "Bạn đã đồng ý chi phí phát sinh. Bộ phận xử lý được tiếp tục công việc.", _ => "Bạn đã từ chối chi phí phát sinh. Yêu cầu dịch vụ đã được tự động từ chối." })">
+            <ChildContent>
+                <dl class="cost-consent-totals">
+                    @if (BaseCost > 0) { <div><dt>Chi phí ban đầu</dt><dd>@Money(BaseCost)</dd></div> }
+                    <div><dt>Phí phát sinh</dt><dd>@Money(proposal.Amount)</dd></div>
+                    <div class="cost-consent-total"><dt>Tổng dự kiến</dt><dd>@Money(BaseCost + proposal.Amount)</dd></div>
+                </dl>
+                <div class="cost-consent-reason"><span>Lý do phát sinh</span><p>@proposal.Note</p></div>
+            </ChildContent>
+            <Actions>
+                @if (proposal.Status == "PENDING")
+                {
+                    <button type="button" class="pf-notice-action--primary" disabled="@busy" @onclick="() => Ask(true)"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span>Đồng ý chi phí và tiếp tục</button>
+                    <button type="button" class="pf-notice-action--danger" disabled="@busy" @onclick="() => Ask(false)">Từ chối dịch vụ</button>
+                }
+            </Actions>
+        </PropFlowNotice>
+    </div>
+}
+@if (error is not null)
+{
+    <div class="cost-consent-error">
+        <PropFlowNotice Title="Chưa thể xác nhận chi phí" Message="@error" Tone="NoticeTone.Danger">
+            <Actions><button type="button" disabled="@busy" @onclick="() => Changed.InvokeAsync()">Tải lại đề xuất</button></Actions>
+        </PropFlowNotice>
+    </div>
 }
 @if (pending is not null && decision.HasValue)
 {

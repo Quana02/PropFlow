@@ -49,6 +49,7 @@ function inspectTheme() {
   let textSamples = 0;
   for (const node of document.body.querySelectorAll('body *:not(svg, svg *, script, style)')) {
     if (node.closest('[inert], [aria-hidden="true"], :disabled, svg, iframe, .material-symbols-outlined')) continue;
+    if (node.checkVisibility && !node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
     const bounds = node.getBoundingClientRect();
     if (bounds.width < 8 || bounds.height < 8 || bounds.right <= 0 || bounds.left >= innerWidth) continue;
     const style = getComputedStyle(node);
@@ -85,14 +86,17 @@ export async function auditThemeRoutes({ role, routes, dynamic, call, evaluate, 
   const anonymous = role === 'Ẩn danh';
   const candidates = routes.filter(row => row.allow.includes(role) &&
     (anonymous ? row.type === 'PUBLIC' : !['PUBLIC', 'INTERNAL/TECHNICAL'].includes(row.type)));
-  const auditRoutes = [...candidates.map(row => row.path), ...extraRoutes[role] ?? []];
+  const requestedRoutes = process.env.PROPFLOW_THEME_ROUTE_PATHS?.split('|').filter(Boolean);
+  const auditRoutes = [...candidates.map(row => row.path), ...extraRoutes[role] ?? []]
+    .filter(path => !requestedRoutes || requestedRoutes.includes(path));
   const results = [];
-  const report = join(root, `theme-scan-${anonymous ? 'public' : role.toLowerCase()}.json`);
+  const report = join(root, `theme-${requestedRoutes ? 'recheck' : 'scan'}-${anonymous ? 'public' : role.toLowerCase()}.json`);
   const themeState = mode => `document.documentElement.dataset.theme === ${JSON.stringify(mode)} && document.documentElement.classList.contains(${JSON.stringify(mode)})`;
   const setTheme = async mode => {
     if (!await evaluate(themeState(mode))) await evaluate(`(() => {
       const toggle = document.querySelector(${JSON.stringify(themeButtons)});
-      if (toggle) toggle.click(); else window.propFlowTheme.toggle();
+      if (document.querySelector('dialog[open]')) window.propFlowTheme.toggle();
+      else if (toggle) toggle.click(); else window.propFlowTheme.toggle();
     })()`);
     if (!await waitFor(themeState(mode), 15)) throw Error(`Không đổi được chế độ ${mode}`);
   };
@@ -102,7 +106,13 @@ export async function auditThemeRoutes({ role, routes, dynamic, call, evaluate, 
       await call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
       for (const mode of ['dark', 'light']) {
         await setTheme(mode);
-        await delay(150);
+        await delay(350);
+        // Measure the settled UI; offscreen color transitions may be throttled in headless Chrome.
+        await evaluate(`document.getAnimations().forEach(animation => {
+          if (animation.effect?.getComputedTiming().iterations !== Infinity) {
+            try { animation.finish(); } catch { /* Pending view transitions have no end time yet. */ }
+          }
+        })`);
         const inspect = `(${inspectTheme})()`;
         let sample = await evaluate(inspect);
         if (sample.findings.some(finding => finding.type === 'surface' || finding.ratio < 2)) {
@@ -141,6 +151,8 @@ export async function auditThemeRoutes({ role, routes, dynamic, call, evaluate, 
         styles.textContent = '* { transition-duration: 0s !important; }';
         document.head.append(styles);
       })()`);
+      // Expand disclosure-only content so its inputs are actually rendered before measuring theme colors.
+      await evaluate(`document.querySelectorAll('details').forEach(detail => { detail.open = true; })`);
       const samples = await capture();
       results.push({ route, ...state, status: 'rendered', samples });
       const desktopDark = samples.find(sample => sample.width === 1440 && sample.mode === 'dark');
@@ -152,6 +164,40 @@ export async function auditThemeRoutes({ role, routes, dynamic, call, evaluate, 
         const { data } = await call('Page.captureScreenshot', { format: 'png' });
         const name = route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
         await writeFile(join(root, `theme-surface-${anonymous ? 'public' : role.toLowerCase()}-${name}-${lightSurface.width}.png`), Buffer.from(data, 'base64'));
+      }
+      const dialogs = role === 'STAFF' && route === '/staff/service-requests/{Code}'
+        ? ['Báo phí phát sinh', 'Cập nhật tiến độ', 'Ghi kết quả và tải ảnh']
+        : role === 'MANAGER' && route === '/manager/service-requests/{Id:guid}'
+          ? ['Duyệt và gửi cư dân xác nhận']
+          : role === 'RESIDENT' && route === '/resident/service-requests/{Id:guid}'
+            ? ['Đồng ý chi phí và tiếp tục', 'Từ chối dịch vụ'] : [];
+      for (const name of dialogs) {
+        const modal = `document.querySelector('dialog[open], .work-dialog[role="dialog"]')`;
+        try {
+          const opened = await evaluate(`(() => {
+            const trigger = Array.from(document.querySelectorAll('button')).find(button =>
+              !button.disabled && !button.closest('dialog, [role="dialog"]') && button.textContent.includes(${JSON.stringify(name)}));
+            if (!trigger) return false;
+            trigger.click(); return true;
+          })()`);
+          if (!opened || !await waitFor(`Boolean(${modal})`, 20)) throw Error('Không mở được popup');
+          await delay(150);
+          results.push({ route, view: name, ...state, status: 'rendered', samples: await capture() });
+          await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+          await setTheme('dark');
+          const { data } = await call('Page.captureScreenshot', { format: 'png' });
+          const label = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+          await writeFile(join(root, `theme-dialog-${role.toLowerCase()}-${label}.png`), Buffer.from(data, 'base64'));
+          console.log('Theme dialog', role, name);
+        } catch (error) {
+          results.push({ route, view: name, status: 'unverified', error: error.message });
+        } finally {
+          await evaluate(`(() => {
+            const modal = ${modal};
+            (modal?.querySelector('[data-dialog-close]') ?? modal?.querySelector('button[aria-label="Đóng"]'))?.click();
+          })()`);
+          if (!await waitFor(`!${modal}`, 15)) throw Error('Popup chưa được đóng');
+        }
       }
       const [tabSelector, selected] = maintenanceTabs[route] ?? [];
       if (tabSelector) {
@@ -181,5 +227,9 @@ export async function auditThemeRoutes({ role, routes, dynamic, call, evaluate, 
   }
   const failures = results.filter(result => result.status !== 'rendered');
   console.log('Theme route coverage', role, `${results.length - failures.length}/${results.length}`);
-  return failures.map(result => `${role} ${result.route}: ${result.error ?? result.status}`);
+  const themeIssues = results.flatMap(result => (result.samples ?? []).flatMap(sample => [
+    ...(sample.overflow > 0 ? [`${role} ${result.route}: overflow ${sample.overflow}px (${sample.width}px ${sample.mode})`] : []),
+    ...sample.findings.map(finding => `${role} ${result.route}: ${finding.type} ${finding.selector} (${sample.width}px ${sample.mode})`)
+  ]));
+  return [...failures.map(result => `${role} ${result.route}: ${result.error ?? result.status}`), ...themeIssues];
 }

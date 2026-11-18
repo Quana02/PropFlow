@@ -19,6 +19,8 @@ public sealed class ServiceRequestCostFailure(int status, string code, string me
 }
 
 public sealed record AdditionalCostNotice(Guid ResidentId, string RequestNumber, decimal Amount, string Note, Guid ProposalId);
+public sealed record AdditionalCostReviewNotice(Guid ProposalId, Guid? StaffUserId, string RequestNumber);
+public sealed record ServiceRequestInvoiceNotice(Guid ResidentId, string RequestNumber, Guid InvoiceId);
 
 public sealed class AdditionalCostConsentService(ServiceRequestsDbContext db, IResidentResidenceSource residences,
     ICurrentBuildingTimeZone buildingZone, TimeProvider clock, IServiceRequestRealtimeNotifier? realtime = null)
@@ -46,10 +48,33 @@ public sealed class AdditionalCostConsentService(ServiceRequestsDbContext db, IR
         try { request.ProposeAdditionalCost(input.Amount, input.Note, now); }
         catch (InvalidOperationException) { throw Conflict(); }
         db.ServiceRequestActivities.Add(new(id, ServiceActivityType.ADDITIONAL_COST_PROPOSED, now, assignment.Id,
-            title: "Staff đề nghị cư dân xác nhận chi phí phát sinh", detail: input.Note.Trim(), performedBy: staffId));
+            title: "Staff gửi Manager duyệt chi phí phát sinh", detail: input.Note.Trim(), performedBy: staffId));
+        db.ResidentEvents.Add(new OutboxEvent("ServiceRequestAdditionalCostReviewRequested", id,
+            JsonSerializer.Serialize(new AdditionalCostReviewNotice(request.AdditionalCostProposalId!.Value, staffId,
+                request.RequestNumber)), now));
+        await SaveAsync(ct);
+        if (tx is not null) await tx.CommitAsync(ct);
+        if (realtime is not null) await realtime.NotifyChangedAsync(id, ct: ct);
+        return View(request)!;
+    }
+
+    public async Task<AdditionalCostConsentView> ApproveAsync(Guid managerId, Guid id, ApproveAdditionalCostProposalRequest input, CancellationToken ct)
+    {
+        await using var tx = await db.BeginWorkflowMutationAsync(id, ct);
+        var request = await db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (request is null) throw Missing();
+        // A retry of the same reviewed proposal must not send another resident notification.
+        if (request.AdditionalCostProposalId == input.ProposalId &&
+            request.AdditionalCostConsentStatus is "PENDING" or "ACCEPTED" or "REJECTED") return View(request)!;
+        var now = clock.GetUtcNow();
+        try { request.SubmitAdditionalCostForResident(input.ProposalId, now); }
+        catch (InvalidOperationException) { throw Conflict(); }
+        db.ServiceRequestActivities.Add(new(id, ServiceActivityType.ADDITIONAL_COST_MANAGER_APPROVED, now,
+            title: "Manager duyệt phí và gửi cư dân xác nhận",
+            detail: $"Đề xuất {input.ProposalId}: {request.ProposedAdditionalCost:N0} đ. {request.AdditionalCostNote}", performedBy: managerId));
         db.ResidentEvents.Add(new OutboxEvent("ServiceRequestAdditionalCostProposed", id,
-            JsonSerializer.Serialize(new AdditionalCostNotice(request.ResidentId, request.RequestNumber, input.Amount,
-                input.Note.Trim(), request.AdditionalCostProposalId!.Value)), now));
+            JsonSerializer.Serialize(new AdditionalCostNotice(request.ResidentId, request.RequestNumber, request.ProposedAdditionalCost,
+                request.AdditionalCostNote!, input.ProposalId)), now));
         await SaveAsync(ct);
         if (tx is not null) await tx.CommitAsync(ct);
         if (realtime is not null) await realtime.NotifyChangedAsync(id, ct: ct);

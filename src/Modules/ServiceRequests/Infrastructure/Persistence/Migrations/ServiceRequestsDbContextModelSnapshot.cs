@@ -505,7 +505,7 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
 
                     b.ToTable("service_requests", "service_requests", t =>
                         {
-                            t.HasCheckConstraint("ck_service_request_cost_consent", "additional_cost_consent_status IN ('NONE','PENDING','ACCEPTED','REJECTED') AND (additional_cost_consent_status = 'NONE' OR (additional_cost_proposal_id IS NOT NULL AND proposed_additional_cost > 0 AND additional_cost_proposed_at IS NOT NULL)) AND (additional_cost_consent_status NOT IN ('ACCEPTED','REJECTED') OR (additional_cost_responded_at IS NOT NULL AND additional_cost_responded_by IS NOT NULL)) AND (additional_cost_consent_status <> 'REJECTED' OR status = 'CANCELLED')");
+                            t.HasCheckConstraint("ck_service_request_cost_consent", "additional_cost_consent_status IN ('NONE','AWAITING_MANAGER','PENDING','ACCEPTED','REJECTED') AND (additional_cost_consent_status = 'NONE' OR (additional_cost_proposal_id IS NOT NULL AND proposed_additional_cost > 0 AND additional_cost_proposed_at IS NOT NULL)) AND (additional_cost_consent_status NOT IN ('ACCEPTED','REJECTED') OR (additional_cost_responded_at IS NOT NULL AND additional_cost_responded_by IS NOT NULL)) AND (additional_cost_consent_status <> 'REJECTED' OR status = 'CANCELLED')");
                         });
                 });
 

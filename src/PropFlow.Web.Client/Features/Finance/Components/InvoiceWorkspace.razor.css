@@ -18,8 +18,8 @@
 .billing-workspace td,.billing-workspace th { text-align:left; padding:16px 12px; border-bottom:1px solid var(--line,#dbe4ee); vertical-align:middle; }
 .billing-workspace th { background:rgba(148,163,184,.06); color:var(--muted,#64748b); font-size:12px; font-weight:700; }
 .billing-workspace .table-scroll { overflow:auto; border:1px solid var(--line,#dbe4ee); border-radius:16px; background:var(--surface,#fff); }
-.billing-workspace .error { padding:12px; background:#fff0f0; color:#a11b1b; border-radius:10px; }
-.billing-workspace .notice { padding:12px; background:#eef8f0; color:#1d6530; border-radius:10px; }
+.billing-workspace .error { padding:14px 16px; border:1px solid color-mix(in srgb,var(--pf-danger) 30%,var(--pf-line)); border-inline-start:3px solid var(--pf-danger); background:color-mix(in srgb,var(--pf-danger) 6%,var(--pf-menu-surface)); color:var(--pf-danger); border-radius:12px; line-height:1.6; }
+.billing-workspace .notice { padding:14px 16px; border:1px solid color-mix(in srgb,var(--pf-success) 30%,var(--pf-line)); border-inline-start:3px solid var(--pf-success); background:color-mix(in srgb,var(--pf-success) 6%,var(--pf-menu-surface)); color:var(--pf-success); border-radius:12px; line-height:1.6; }
 .billing-workspace form,.billing-workspace .detail { padding:20px; border:1px solid var(--line,#dbe4ee); border-radius:16px; margin:20px 0; background:var(--surface,#fff); box-shadow:0 12px 30px rgba(29,49,82,.05); scroll-margin-top:24px; }
 .billing-workspace .summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
 .billing-workspace .summary-card { display:flex; flex-direction:column; gap:12px; padding:20px; border:1px solid var(--line,#dbe4ee); border-radius:16px; background:var(--surface,#fff); box-shadow:0 12px 30px rgba(29,49,82,.05); }

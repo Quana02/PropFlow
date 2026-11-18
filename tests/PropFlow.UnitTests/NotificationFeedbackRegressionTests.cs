@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.JSInterop;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Web.Client.Features.ServiceRequests.Pages;
 using PropFlow.Web.Client.Features.ServiceRequests.Services;
@@ -26,7 +27,7 @@ public sealed class NotificationFeedbackRegressionTests
         using var http = new HttpClient(new FailureTransport(serverFailure)) { BaseAddress = new("https://test.invalid/") };
         var api = new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance);
         var capture = new Capture();
-        await using var services = new ServiceCollection().AddLogging().AddSingleton<ToastService>()
+        await using var services = new ServiceCollection().AddLogging().AddSingleton<ToastService>().AddSingleton<IJSRuntime, StaticDialogJs>()
             .AddSingleton<AuthenticatedApiClient>(api).AddSingleton<ApiClient>(api)
             .AddSingleton<IConfiguration>(new ConfigurationManager()).AddSingleton<NavigationManager, Navigation>()
             .AddSingleton<AuthSession>().AddSingleton<ServiceRequestRealtimeClient>()
@@ -63,7 +64,7 @@ public sealed class NotificationFeedbackRegressionTests
         using var http = new HttpClient(transport) { BaseAddress = new("https://test.invalid/") };
         var api = new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance);
         var capture = new Capture();
-        await using var services = new ServiceCollection().AddLogging().AddSingleton<ToastService>()
+        await using var services = new ServiceCollection().AddLogging().AddSingleton<ToastService>().AddSingleton<IJSRuntime, StaticDialogJs>()
             .AddSingleton<AuthenticatedApiClient>(api).AddSingleton<ApiClient>(api)
             .AddSingleton<IConfiguration>(new ConfigurationManager()).AddSingleton<NavigationManager, Navigation>()
             .AddSingleton<AuthSession>().AddSingleton<ServiceRequestRealtimeClient>()
@@ -119,6 +120,14 @@ public sealed class NotificationFeedbackRegressionTests
     {
         public Navigation() => Initialize("https://test.invalid/", "https://test.invalid/staff/service-requests/SR-1");
         protected override void NavigateToCore(string uri, bool forceLoad) { }
+    }
+    // HtmlRenderer checks the actual native-dialog markup without running browser lifecycle callbacks.
+    private sealed class StaticDialogJs : IJSRuntime
+    {
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) =>
+            throw new NotSupportedException("Static rendering does not run JavaScript.");
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) =>
+            InvokeAsync<TValue>(identifier, args);
     }
     private sealed class FailureTransport(bool serverFailure) : HttpMessageHandler
     {
