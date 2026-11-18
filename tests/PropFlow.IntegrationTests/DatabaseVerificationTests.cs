@@ -142,7 +142,19 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add((reader.GetString(0), reader.GetString(1)));
         }
 
-        Assert.Equal(73, tables.Count);
+        // Compare every table identity against its owning module model, including additions after the original 73-table baseline.
+        using var scope = _factory.Services.CreateScope();
+        DbContext[] owners = [scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>(),
+            scope.ServiceProvider.GetRequiredService<ApartmentsDbContext>(), scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>(),
+            scope.ServiceProvider.GetRequiredService<ResidentsDbContext>(), scope.ServiceProvider.GetRequiredService<AdministrationDbContext>(),
+            scope.ServiceProvider.GetRequiredService<ServiceRequestsDbContext>(), scope.ServiceProvider.GetRequiredService<ComplaintsDbContext>(),
+            scope.ServiceProvider.GetRequiredService<MaintenanceDbContext>(), scope.ServiceProvider.GetRequiredService<BillingDbContext>(),
+            scope.ServiceProvider.GetRequiredService<PaymentsDbContext>(), scope.ServiceProvider.GetRequiredService<AiClassificationDbContext>(),
+            scope.ServiceProvider.GetRequiredService<AiRecommendationDbContext>(), scope.ServiceProvider.GetRequiredService<CommunicationDbContext>()];
+        var expected = owners.SelectMany(owner => owner.Model.GetRelationalModel().Tables.Select(table => (Schema: table.Schema!, Table: table.Name)))
+            .Where(table => table.Schema != "shared").Distinct().OrderBy(table => table.Schema, StringComparer.Ordinal).ThenBy(table => table.Table, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expected, tables.OrderBy(table => table.Schema, StringComparer.Ordinal).ThenBy(table => table.Table, StringComparer.Ordinal).ToArray());
+        Assert.Contains(("property_assets", "facility_guides"), tables);
 
         // PropertyAssets: 3
         Assert.Contains(("property_assets", "buildings"), tables);
@@ -1109,9 +1121,8 @@ public class DatabaseVerificationTests : IClassFixture<PropFlowApiFactory>
             tables.Add(reader.GetString(0));
         }
 
-        Assert.Equal(2, tables.Count);
-        Assert.Contains("ai_request_recommendations", tables);
-        Assert.Contains("ai_recommendation_reviews", tables);
+        Assert.Equal(new[] { "ai_recommendation_reviews", "ai_request_recommendations", "facility_recommendation_runs",
+            "facility_weekend_notice_runs", "utility_ai_attempts", "utility_insight_reviews", "utility_insights", "utility_notification_outbox" }, tables);
     }
 
     [Fact]

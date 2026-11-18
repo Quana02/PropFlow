@@ -1,6 +1,5 @@
-.resident-profile-page { --app-surface: #fff; --app-text: #24334b; --app-muted: #64748b; --app-line: #dce5ef; --app-accent: #0284c7; --app-on-accent: #fff; padding: .5rem 0 1.5rem; color: var(--app-text); }
-:is(html.dark, html[data-theme="dark"]) .resident-profile-page { --app-surface: #101b2e; --app-text: #e2e8f0; --app-muted: #a9b7c9; --app-line: #2b3c53; --app-accent: #38bdf8; }
-.profile-back { display: inline-block; margin-bottom: 1rem; color: var(--app-accent); font-size: .875rem; text-decoration: none; }
+.resident-profile-page { --app-surface: var(--pf-menu-surface); --app-text: var(--pf-text); --app-muted: var(--pf-muted); --app-line: var(--pf-line); --app-accent: var(--pf-info); --app-on-accent: var(--pf-action-text); padding: .5rem 0 1.5rem; color: var(--app-text); }
+.profile-back { display: inline-block; margin-bottom: 1rem; color:var(--pf-info); font-size: .875rem; text-decoration: none; }
 .profile-sections { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
 .profile-sections a { padding: .6rem .9rem; border: 1px solid var(--app-line); border-radius: 99px; color: var(--app-text); background: var(--app-surface); font-size: .875rem; text-decoration: none; }
 .profile-sections a:hover { border-color: #38bdf8; color: #0369a1; }
@@ -14,7 +13,7 @@ dt { margin-bottom: .3rem; color: var(--app-muted, #64748b); font-size: .8125rem
 dd { margin: 0; font-size: .9rem; font-weight: 500; overflow-wrap: anywhere; }
 .resident-profile-panel > footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; padding: 1rem 1.5rem; border-top: 1px solid var(--app-line, #e5e7ef); background: rgba(148,163,184,.04); font-size: .8125rem; }
 footer p { margin: 0; color: var(--app-muted, #64748b); }
-a { color: var(--app-accent, #0369a1); }
+a { color:var(--pf-info); }
 .profile-state, .vehicle-content { padding: 1.5rem; }
 .vehicle-guidance { margin: 0; color: var(--app-muted, #64748b); font-size: .875rem; line-height: 1.7; }
 .vehicle-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1rem 0 1.5rem; font-size: .875rem; }

@@ -72,7 +72,7 @@ A resident-reported or recorded transfer awaiting reconciliation by an Accountan
 
 ## Service Request Charge
 
-The payable cost of one Service Request. It consists of an optional Base Service Cost recorded by the Manager before work starts and an optional Additional Cost proposed by Staff and explicitly approved by the Manager during acceptance. Staff proposals are not payable until approved.
+The payable cost of one Service Request. New assignments carry no estimated charge; any Additional Cost is proposed by Staff after inspection, reviewed by a Manager and explicitly accepted by the Resident before the paid work continues. Historical Base Service Costs remain part of their original records; the final invoice cannot exceed the accepted quote.
 
 ## Service Request Invoice
 

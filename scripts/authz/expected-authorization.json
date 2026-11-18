@@ -1,5 +1,10 @@
 {
   "routes": [
+    {"path":"/finance/utility-insights","allow":["MANAGER","ACCOUNTANT"],"guard":"Roles = \"MANAGER,ACCOUNTANT\", Policy = \"billing.read\""},
+    {"path":"/operations/facility-guides","allow":["MANAGER"],"guard":"Roles=\"MANAGER\",Policy=\"property-assets.view\""},
+    {"path":"/operations/utility-insights","allow":["MANAGER","ACCOUNTANT"],"guard":"Roles = \"MANAGER,ACCOUNTANT\", Policy = \"billing.read\""},
+    {"path":"/resident/facilities","allow":["RESIDENT"],"guard":"Roles = \"RESIDENT\""},
+    {"path":"/resident/utilities","allow":["RESIDENT"],"guard":"Roles = \"RESIDENT\""},
     {"path":"/","allow":["Ẩn danh","ADMIN","MANAGER","STAFF","ACCOUNTANT","RESIDENT"],"guard":"Route công khai"},
     {"path":"/account","allow":["ADMIN","MANAGER","STAFF","ACCOUNTANT","RESIDENT"],"guard":"Authenticated"},
     {"path":"/account-activated","allow":["Ẩn danh","ADMIN","MANAGER","STAFF","ACCOUNTANT","RESIDENT"],"guard":"Route công khai"},
@@ -67,6 +72,17 @@
     {"path":"/terms","allow":["Ẩn danh","ADMIN","MANAGER","STAFF","ACCOUNTANT","RESIDENT"],"guard":"AllowAnonymous"}
   ],
   "endpoints": [
+    {"method":"GET","path":"/api/v1/facility-guides","allow":["MANAGER"],"guard":"Policy=PropertyAssetsAuthorizationPolicies.Manage"},
+    {"method":"PUT","path":"/api/v1/facility-guides/{facility:guid}","allow":["MANAGER"],"guard":"Policy=PropertyAssetsAuthorizationPolicies.Manage"},
+    {"method":"GET","path":"/api/v1/resident/facility-recommendations","allow":["RESIDENT"],"guard":"Roles = \"RESIDENT\""},
+    {"method":"POST","path":"/api/v1/resident/facility-recommendations","allow":["RESIDENT"],"guard":"Roles = \"RESIDENT\""},
+    {"method":"POST","path":"/api/v1/resident/facility-recommendations/speech","allow":["RESIDENT"],"guard":"Roles = \"RESIDENT\""},
+    {"method":"GET","path":"/api/v1/resident/facility-recommendations/today","allow":["RESIDENT"],"guard":"Roles = \"RESIDENT\""},
+    {"method":"GET","path":"/api/v1/utility-insights","allow":["MANAGER","ACCOUNTANT"],"guard":"Authenticated + Roles = \"MANAGER,ACCOUNTANT\", Policy = \"billing.read\""},
+    {"method":"GET","path":"/api/v1/utility-insights/apartments/{apartment:guid}","allow":["MANAGER","ACCOUNTANT"],"guard":"Authenticated + Roles = \"MANAGER,ACCOUNTANT\", Policy = \"billing.read\""},
+    {"method":"POST","path":"/api/v1/utility-insights/apartments/{apartment:guid}/explain","allow":["MANAGER","ACCOUNTANT"],"guard":"Authenticated + Roles = \"MANAGER,ACCOUNTANT\", Policy = \"billing.read\""},
+    {"method":"POST","path":"/api/v1/utility-insights/apartments/{apartment:guid}/review","allow":["MANAGER"],"guard":"Authenticated + Roles = \"MANAGER\", Policy = \"billing.configure\""},
+    {"method":"GET","path":"/api/v1/resident/utility-insights","allow":["RESIDENT"],"guard":"Authenticated + Roles = \"RESIDENT\""},
     {"method":"GET","path":"/api/v1/administration/activity","allow":["ADMIN"],"guard":"Roles = SystemRoleCodes.Admin + Policy = AdministrationAuthorizationPolicies.ViewAdministrationActivity"},
     {"method":"GET","path":"/api/v1/administration/internal-accounts","allow":["ADMIN"],"guard":"Roles = SystemRoleCodes.Admin + Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts"},
     {"method":"POST","path":"/api/v1/administration/internal-accounts","allow":["ADMIN"],"guard":"Roles = SystemRoleCodes.Admin + Policy = AdministrationAuthorizationPolicies.ManageInternalAccounts"},
@@ -209,6 +225,7 @@
     {"method":"GET","path":"/api/v1/manager/service-requests/{id:guid}/classification","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"POST","path":"/api/v1/manager/service-requests/{id:guid}/classification","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"PUT","path":"/api/v1/manager/service-requests/{id:guid}/classification/review","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
+    {"method":"POST","path":"/api/v1/manager/service-requests/{id:guid}/additional-cost/approve","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"POST","path":"/api/v1/manager/service-requests/{id:guid}/close","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"GET","path":"/api/v1/manager/service-requests/{id:guid}/evidence/{evidenceId:guid}","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"PUT","path":"/api/v1/manager/service-requests/{id:guid}/property-context","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},

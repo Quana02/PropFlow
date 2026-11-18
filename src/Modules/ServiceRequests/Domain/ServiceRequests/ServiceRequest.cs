@@ -181,10 +181,20 @@ public class ServiceRequest
         AdditionalCostNote = normalized;
         ApprovedAdditionalCost = 0;
         AdditionalCostProposalId = amount > 0 ? Guid.NewGuid() : null;
-        AdditionalCostConsentStatus = amount > 0 ? "PENDING" : "NONE";
+        AdditionalCostConsentStatus = amount > 0 ? "AWAITING_MANAGER" : "NONE";
         AdditionalCostProposedAt = amount > 0 ? now : null;
         AdditionalCostRespondedAt = null;
         AdditionalCostRespondedBy = null;
+        UpdatedAt = now;
+    }
+
+    public void SubmitAdditionalCostForResident(Guid proposalId, DateTimeOffset now)
+    {
+        EnsureNotClosedOrCancelled();
+        if (Status is not (ServiceRequestStatus.IN_PROGRESS or ServiceRequestStatus.ASSIGNED) ||
+            AdditionalCostProposalId != proposalId || AdditionalCostConsentStatus != "AWAITING_MANAGER")
+            throw new InvalidOperationException("Đề xuất chi phí không còn chờ Manager duyệt.");
+        AdditionalCostConsentStatus = "PENDING";
         UpdatedAt = now;
     }
 

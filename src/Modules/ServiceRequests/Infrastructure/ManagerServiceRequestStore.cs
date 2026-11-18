@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using System.Text.Json;
+using PropFlow.Shared.Messaging;
 using PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
@@ -191,7 +193,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
         if (request is null) return ManagerServiceRequestOutcome.NotFound;
         if (request.Status is not (ServiceRequestStatus.UNDER_REVIEW or ServiceRequestStatus.ASSIGNED or ServiceRequestStatus.IN_PROGRESS))
             return ManagerServiceRequestOutcome.Conflict;
-        if (baseServiceCost > 0 && ServiceRequestAreaCodes.IsCommonArea(request.ServiceAreaCode))
+        if (baseServiceCost != 0)
             return ManagerServiceRequestOutcome.InvalidInput;
 
         var activeAssignment = request.Assignments
@@ -208,8 +210,6 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
 
         var assignment = new ServiceRequestAssignment(request.Id, staffUserId, managerUserId, now, note);
         db.ServiceRequestAssignments.Add(assignment);
-        if (request.Status != ServiceRequestStatus.IN_PROGRESS)
-            request.SetBaseServiceCost(baseServiceCost, now);
         request.MarkAssigned(now);
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(
             request.Id,
@@ -259,12 +259,16 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
     public async Task<ManagerServiceRequestOutcome> LinkInvoiceAsync(
         Guid id, Guid invoiceId, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var request = await db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (request is null) return ManagerServiceRequestOutcome.NotFound;
+        if (request.ServiceInvoiceId == invoiceId) return ManagerServiceRequestOutcome.Success;
         try
         {
             request.LinkServiceInvoice(invoiceId, now);
-            return await SaveAsync(ct);
+            db.ResidentEvents.Add(new OutboxEvent("ServiceRequestInvoiceReady", id,
+                JsonSerializer.Serialize(new ServiceRequestInvoiceNotice(request.ResidentId, request.RequestNumber, invoiceId)), now));
+            return await SaveAsync(ct, transaction);
         }
         catch (InvalidOperationException)
         {

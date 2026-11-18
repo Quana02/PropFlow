@@ -1,0 +1,37 @@
+<section class="pf-notice" data-tone="@Tone.ToString().ToLowerInvariant()"
+         role="@(Tone == NoticeTone.Danger ? "alert" : "status")" aria-labelledby="@titleId">
+    <span class="pf-notice__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            @switch (Tone)
+            {
+                case NoticeTone.Success:
+                    <circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" />
+                    break;
+                case NoticeTone.Warning:
+                    <path d="m10.3 4.2-8 14a1.7 1.7 0 0 0 1.5 2.5h16.4a1.7 1.7 0 0 0 1.5-2.5l-8-14a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4m0 3h.01" />
+                    break;
+                case NoticeTone.Danger:
+                    <circle cx="12" cy="12" r="9" /><path d="m9 9 6 6m0-6-6 6" />
+                    break;
+                default:
+                    <circle cx="12" cy="12" r="9" /><path d="M12 11v5m0-8h.01" />
+                    break;
+            }
+        </svg>
+    </span>
+    <div class="pf-notice__content">
+        <strong id="@titleId" class="pf-notice__title">@Title</strong>
+        @if (!string.IsNullOrWhiteSpace(Message)) { <p class="pf-notice__message">@Message</p> }
+        @if (ChildContent is not null) { <div class="pf-notice__detail">@ChildContent</div> }
+        @if (Actions is not null) { <div class="pf-notice__actions">@Actions</div> }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public NoticeTone Tone { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    private readonly string titleId = $"pf-notice-{Guid.NewGuid():N}";
+}

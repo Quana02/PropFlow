@@ -1,1 +1,17 @@
-.payment-backdrop{position:fixed;inset:0;margin:0;width:100vw;height:100dvh;max-width:none;max-height:none;border:0;padding:24px;background:rgba(15,23,42,.35);box-sizing:border-box;align-items:center;justify-content:center}.payment-backdrop:popover-open{display:flex}.payment-dialog{width:min(520px,100%);max-height:calc(100dvh - 48px);overflow:auto;background:var(--surface,#fff);color:var(--text,#17243b);padding:28px;border-radius:22px;box-shadow:0 24px 80px #0f172a40;box-sizing:border-box}.payment-dialog h2{font-size:22px}.payment-dialog p{margin:12px 0;line-height:1.6}.payment-dialog label{display:block;margin:16px 0}.payment-dialog input{display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid #cedded;border-radius:10px;margin-top:6px}.payment-dialog [role=alert]{color:#b91c1c}.dialog-actions{display:flex;justify-content:flex-end;gap:10px}.dialog-actions button{padding:11px 18px;border:1px solid #d4e1ef;border-radius:12px;background:#fff;cursor:pointer}.dialog-actions .primary{background:#008bc3;color:white}.dialog-actions button:disabled{opacity:.5;cursor:wait}
+.payment-backdrop { position: fixed; inset: 0; margin: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; border: 0; padding: 24px; background: rgb(3 10 22 / 48%); box-sizing: border-box; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.payment-backdrop:popover-open { display: flex; }
+.payment-dialog { box-sizing: border-box; width: min(520px, 100%); max-height: calc(100dvh - 48px); overflow: auto; padding: 28px; border: 1px solid var(--pf-line); border-radius: 22px; background: var(--pf-menu-surface); color: var(--pf-text); box-shadow: 0 24px 80px #0004; }
+.payment-dialog h2 { margin: 0; font-size: 22px; }
+.payment-dialog p { margin: 12px 0; line-height: 1.6; }
+.payment-dialog label { display: block; margin: 16px 0; font-weight: 600; }
+.payment-dialog input { display: block; box-sizing: border-box; width: 100%; min-height: 44px; margin-top: 6px; padding: 12px; border: 1px solid var(--pf-line); border-radius: 14px; background: color-mix(in srgb, var(--pf-accent) 4%, var(--pf-menu-surface)); color: var(--pf-text); font: inherit; }
+.payment-dialog input::placeholder { color: var(--pf-muted); }
+.payment-dialog input:focus-visible { outline: 2px solid var(--pf-accent); outline-offset: 2px; }
+.payment-dialog [role=alert] { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--pf-danger) 35%, var(--pf-line)); border-radius: 12px; background: color-mix(in srgb, var(--pf-danger) 8%, var(--pf-menu-surface)); color: var(--pf-danger); overflow-wrap: anywhere; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.dialog-actions button { min-height: 44px; padding: 11px 18px; border: 1px solid var(--pf-line); border-radius: 12px; background: var(--pf-menu-surface); color: var(--pf-text); font: inherit; font-weight: 650; cursor: pointer; }
+.dialog-actions .primary { border-color: transparent; background: var(--pf-action-bg); color: var(--pf-action-text); }
+.dialog-actions .primary:hover:not(:disabled) { background: var(--pf-action-hover-bg); }
+.dialog-actions button:focus-visible { outline: 2px solid var(--pf-accent); outline-offset: 3px; }
+.dialog-actions button:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 480px) { .payment-backdrop { padding: 12px; } .payment-dialog { padding: 20px; max-height: calc(100dvh - 24px); } .dialog-actions { flex-direction: column; } }

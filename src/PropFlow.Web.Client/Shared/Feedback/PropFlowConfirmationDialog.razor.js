@@ -75,18 +75,27 @@ export function openDialog(dialog) {
     dialog.showModal();
     modalStack.add(dialog);
 
-    return DotNet.createJSObjectReference({
-        close() {
-            controller.abort();
-            modalStack.delete(dialog);
-            // Removing a modal can reset focus to the document before Blazor disposes it.
-            const restore = dialog.contains(document.activeElement) || document.activeElement === document.body;
-            if (dialog.open) dialog.close();
-            if (restore && previous instanceof HTMLElement && previous.isConnected) {
-                previous.focus({ preventScroll: true });
-            }
-        }
+    let released = false;
+    const observer = new MutationObserver(() => {
+        if (!dialog.isConnected) release();
     });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    function release() {
+        if (released) return;
+        released = true;
+        observer.disconnect();
+        controller.abort();
+        modalStack.delete(dialog);
+        // Blazor can remove the DOM before its asynchronous disposal callback runs.
+        const restore = dialog.contains(document.activeElement) || document.activeElement === document.body;
+        if (dialog.open) dialog.close();
+        if (restore && previous instanceof HTMLElement && previous.isConnected) {
+            previous.focus({ preventScroll: true });
+        }
+    }
+
+    return DotNet.createJSObjectReference({ close: release });
 }
 
 export function close(dialog) {
