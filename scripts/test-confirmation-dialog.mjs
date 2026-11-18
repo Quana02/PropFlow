@@ -190,6 +190,12 @@ try {
     await evaluate('document.documentElement.dataset.theme = "dark"');
     assert.equal((await evaluate('snapshot()')).surface, 'rgb(19, 34, 56)', 'An open dialog follows the document theme');
     await evaluate('handle.close()');
+    await open('decision');
+    await evaluate('dialog.remove()');
+    for (let attempt = 0; attempt < 100 && !await evaluate('document.activeElement === launcher'); attempt++) await delay(20);
+    assert.ok(await evaluate('document.activeElement === launcher'),
+        'Removing a modal before asynchronous disposal must restore focus to its launcher');
+    await evaluate('handle.close()'); // A later disposal callback must remain safe and idempotent.
     console.log('PASS: 4 variants × 5 viewport widths × 2 themes, keyboard focus, backdrop, Escape, and focus return. Chrome PID ' + processHandle.pid);
 } finally {
     if (send && socket?.readyState === WebSocket.OPEN) {
