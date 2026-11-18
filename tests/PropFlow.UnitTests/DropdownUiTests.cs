@@ -58,7 +58,7 @@ public sealed class DropdownUiTests
         Assert.DoesNotContain("@onpointerdown=\"CancelCreateFeedbackClose\"", source, StringComparison.Ordinal);
         Assert.Contains(".resident-modal-form-shell ::deep form", styles, StringComparison.Ordinal);
         Assert.Contains(".resident-modal-body{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto", styles, StringComparison.Ordinal);
-        Assert.Contains(".resident-modal-header>button{border:0;background:none;color:#94a3b8;font-size:1.45rem;cursor:pointer}", styles, StringComparison.Ordinal);
+        Assert.Contains(".resident-modal-header>button{border:0;background:none;color:var(--pf-muted);font-size:1.45rem;cursor:pointer}", styles, StringComparison.Ordinal);
         Assert.Contains(".resident-modal-close{display:inline-flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem", styles, StringComparison.Ordinal);
     }
 
