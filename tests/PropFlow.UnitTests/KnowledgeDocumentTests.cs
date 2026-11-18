@@ -47,11 +47,18 @@ public sealed class KnowledgeDocumentTests
         var draft = (await service.GetAsync(id, true, default))!;
         await service.SetPublicationAsync(id, draft.Document.Token, true, actor, default);
         var published = (await service.GetAsync(id, true, default))!;
+        var staffPublished = (await service.GetAsync(id, false, default))!.Document;
+        var staffListBeforeDraft = (await service.ListAsync(false, null, 1, default)).Items;
         await service.SaveAsync(id, new("Quy trình nội bộ", "Bí mật nội bộ", "INTERNAL", published.Document.Token), actor, default);
         var staff = (await service.GetAsync(id, false, default))!;
+        Assert.Equal(staffPublished, staff.Document);
+        Assert.Equal(Guid.Empty, staff.Document.Token);
+        Assert.Equal(staff.Revision.CreatedAt, staff.Document.UpdatedAt);
+        Assert.Equal(staffListBeforeDraft, (await service.ListAsync(false, null, 1, default)).Items);
         Assert.Equal("Nội dung công khai", staff.Revision.Content); Assert.Single(staff.History); Assert.Empty(staff.Activity);
         Assert.Equal("Nội dung công khai", (await service.FindResidentSourceAsync(id, default))!.Content);
         var latest = (await service.GetAsync(id, true, default))!;
+        Assert.NotEqual(published.Document.Token, latest.Document.Token);
         await service.SetPublicationAsync(id, latest.Document.Token, true, actor, default);
         Assert.Equal("Bí mật nội bộ", (await service.GetAsync(id, false, default))!.Revision.Content);
         Assert.Null(await service.FindResidentSourceAsync(id, default));

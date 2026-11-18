@@ -17,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Hosting;
+using PropFlow.Api.Composition;
 using PropFlow.Modules.Administration.Contracts;
 using PropFlow.Modules.Complaints.Application;
 using PropFlow.Modules.Complaints.Infrastructure.Persistence;
@@ -61,6 +62,8 @@ public sealed class ComplaintAnnouncementHttpTests
             {
                 // These HTTP tests must never start finance, email or maintenance workers.
                 services.RemoveAll<IHostedService>();
+                services.RemoveAll<IRealtimeSessionValidation>();
+                services.AddSingleton<IRealtimeSessionValidation>(new TestRealtimeSessionValidation("ComplaintTest"));
                 services.AddDataProtection().UseEphemeralDataProtectionProvider();
                 services.AddAuthentication(o => { o.DefaultAuthenticateScheme = "ComplaintTest"; o.DefaultChallengeScheme = "ComplaintTest"; o.DefaultForbidScheme = "ComplaintTest"; })
                     .AddScheme<AuthenticationSchemeOptions, Authentication>("ComplaintTest", _ => { });
@@ -212,15 +215,19 @@ public sealed class ComplaintAnnouncementHttpTests
         using var manager = factory.Client("MANAGER");
         using var resident = factory.Client("RESIDENT", Resident);
         using var unverified = factory.Client("RESIDENT", Unverified);
-        var response = await manager.PostAsJsonAsync("/api/v1/announcements", new { title = "Cúp nước", content = "Thông báo thời gian tạm ngừng cấp nước." });
+        var announcement = new { title = "Cúp nước", content = "Thông báo thời gian tạm ngừng cấp nước." };
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CommunicationDbContext>();
+        using var denied = await resident.PostAsJsonAsync("/api/v1/announcements", announcement);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.False(await db.Announcements.AnyAsync());
+        using var response = await manager.PostAsJsonAsync("/api/v1/announcements", announcement);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var posted = (await response.Content.ReadFromJsonAsync<AnnouncementView>())!;
         Assert.Equal(posted, await resident.GetFromJsonAsync<AnnouncementView>($"/api/v1/announcements/{posted.Id}"));
         Assert.Single((await resident.GetFromJsonAsync<AnnouncementPage>("/api/v1/announcements"))!.Items);
-        Assert.Equal(HttpStatusCode.Forbidden, (await resident.PostAsJsonAsync("/api/v1/announcements", new { title = "Không được", content = "Không được" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await unverified.GetAsync("/api/v1/announcements")).StatusCode);
-        using var scope = factory.Services.CreateScope();
-        var stored = await scope.ServiceProvider.GetRequiredService<CommunicationDbContext>().Announcements.Include(a => a.Versions).Include(a => a.Audiences).SingleAsync();
+        var stored = await db.Announcements.Include(a => a.Versions).Include(a => a.Audiences).SingleAsync();
         Assert.Equal(AnnouncementStatus.PUBLISHED, stored.Status);
         Assert.Single(stored.Versions);
         Assert.Equal(AnnouncementAudienceType.ALL_RESIDENTS, Assert.Single(stored.Audiences).AudienceType);

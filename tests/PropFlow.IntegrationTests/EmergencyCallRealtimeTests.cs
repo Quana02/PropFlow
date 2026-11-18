@@ -42,6 +42,8 @@ public sealed class EmergencyCallRealtimeTests(SupportChatDatabaseFixture databa
         managerHub.On<EmergencySignal>("EmergencySignal", s => offerReceived.TrySetResult(s));
         residentHub.On<EmergencySignal>("EmergencySignal", s => answerReceived.TrySetResult(s));
         await residentHub.StartAsync(); await managerHub.StartAsync(); await strangerHub.StartAsync();
+        // The client handshake can finish before OnConnectedAsync commits presence.
+        await Task.WhenAll(residentHub.InvokeAsync("Heartbeat"), managerHub.InvokeAsync("Heartbeat"));
         var request = new StartEmergencyCall(Guid.NewGuid(), residentHub.ConnectionId);
         using var started = await residentApi.PostAsJsonAsync("/api/v1/emergency-calls", request);
         Assert.Equal(HttpStatusCode.OK, started.StatusCode);

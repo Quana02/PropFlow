@@ -7,7 +7,8 @@ try {
         $taskSecretsPath = Join-Path $env:APPDATA 'Microsoft/UserSecrets/adbac45b-651b-498f-a797-12585846625f/secrets.json'
         if (-not (Test-Path -LiteralPath $taskSecretsPath)) { throw 'Configure PROPFLOW_TEST_DATABASE with a local PostgreSQL admin connection.' }
         $taskSecrets = Get-Content -LiteralPath $taskSecretsPath -Raw | ConvertFrom-Json
-        $env:PROPFLOW_TEST_DATABASE = $taskSecrets.'ConnectionStrings:PropFlowDatabase'
+        $env:PROPFLOW_TEST_DATABASE = $taskSecrets.'ConnectionStrings:PropFlowTestDatabase'
+        if (!$env:PROPFLOW_TEST_DATABASE) { throw 'Configure a dedicated PropFlowTestDatabase connection.' }
     }
     Push-Location $taskRepo
     try {

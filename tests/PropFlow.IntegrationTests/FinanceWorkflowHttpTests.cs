@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
@@ -39,6 +40,7 @@ public sealed class FinanceWorkflowHttpTests
                     ["Authentication:OtpHashKey"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
                     ["Authentication:Mail:Host"] = "invalid.test",
                     ["Authentication:Mail:From"] = "test@example.invalid",
+                    ["Payments:SePay:OAuth:Enabled"] = "false",
                     ["Logging:LogLevel:Default"] = "None"
                 });
             });
@@ -61,6 +63,27 @@ public sealed class FinanceWorkflowHttpTests
             if (role is not null) client.DefaultRequestHeaders.Add("X-Test-Role", role);
             if (permission is not null) client.DefaultRequestHeaders.Add("X-Test-Permission", permission);
             return client;
+        }
+    }
+
+    [Theory]
+    [Trait("UseCase", "FE-15.8")]
+    [InlineData(null, null, HttpStatusCode.Unauthorized)]
+    [InlineData("STAFF", "MANAGE_PAYMENT_DESTINATION", HttpStatusCode.Forbidden)]
+    [InlineData("ADMIN", null, HttpStatusCode.Forbidden)]
+    [InlineData("ADMIN", "MANAGE_PAYMENT_DESTINATION", HttpStatusCode.Conflict)]
+    public async Task Sepay_challenge_routes_to_the_privileged_action(string? role, string? permission, HttpStatusCode expected)
+    {
+        await using var factory = new Factory();
+        using var client = factory.Client(role, permission);
+
+        using var response = await client.PostAsync("/api/v1/payment-settings/sepay/oauth/challenge/CONNECT", null);
+
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.Conflict)
+        {
+            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("sepay_oauth_not_configured", problem.GetProperty("code").GetString());
         }
     }
 

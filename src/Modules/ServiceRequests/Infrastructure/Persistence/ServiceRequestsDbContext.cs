@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestAssignments;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestCategories;
@@ -22,6 +23,25 @@ public class ServiceRequestsDbContext : DbContext
     public DbSet<ServiceRequestActivity> ServiceRequestActivities => Set<ServiceRequestActivity>();
     public DbSet<ServiceRequestFeedback> ServiceRequestFeedbacks => Set<ServiceRequestFeedback>();
     public DbSet<ServiceRequestEvidenceFile> ServiceRequestEvidenceFiles => Set<ServiceRequestEvidenceFile>();
+
+    internal async Task<IDbContextTransaction?> BeginWorkflowMutationAsync(Guid requestId, CancellationToken ct)
+    {
+        if (!Database.IsRelational()) return null;
+
+        var transaction = Database.CurrentTransaction is null ? await Database.BeginTransactionAsync(ct) : null;
+        try
+        {
+            if (Database.IsNpgsql())
+                await Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtextextended({requestId.ToString()}, 5))", ct);
+            return transaction;
+        }
+        catch
+        {
+            if (transaction is not null) await transaction.DisposeAsync();
+            throw;
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

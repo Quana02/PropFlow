@@ -12,6 +12,14 @@ One of the five fixed roles: RESIDENT, STAFF, ACCOUNTANT, MANAGER, or ADMIN. A U
 
 The application-defined, read-only relationship between a predefined role and its permissions. Changing a UserAccount's role automatically changes its effective permissions. Individual permission grants, revocations, custom roles, and mapping changes are not administrative functions.
 
+## Logical Session
+
+One successful FE-01 login, identified by a stable session ID across refresh-token rotation. Its current refresh-token record is the authoritative session state. Separate logins have independent sessions even when they belong to the same UserAccount.
+
+## Maintenance Participation
+
+One interval in which a Staff member holds a Maintenance Assignment. Reassignment ends the interval. Assigning the member again creates a new interval. Historical access follows the member's own participation intervals, and operational access follows the current assignment.
+
 ## Internal User Account
 
 A UserAccount provisioned for a member of the management organization with the MANAGER, STAFF, or ACCOUNTANT role. FE-15 administers these accounts.

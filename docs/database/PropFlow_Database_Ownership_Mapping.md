@@ -32,6 +32,24 @@ Tài liệu này ánh xạ schema hiện hành trong `docs/database/PropFlow.dbm
 
 Reporting và AiChatbot hiện không có source-of-truth table riêng trong DBML.
 
+### Inventory delta đã xác minh sau pull (18/11/2026)
+
+Bảng baseline/DBML ở trên là thiết kế lịch sử, không phải danh mục exhaustive của tất cả migration hiện hành. Đợt stabilization đối chiếu migration, model và schema fixture mới; không thêm migration. So với baseline 73 bảng trong 13 core schemas, bảy bảng hiện hành được bổ sung:
+
+| Danh tính bảng | Owner | Migration / mục đích |
+|---|---|---|
+| `property_assets.facility_guides` | PropertyAssets | `20261116003135_ReplaceOccupancyWithFacilityGuides`: hồ sơ/lịch/người phụ trách, token chống ghi đè; loại bảng occupancy/settings cũ |
+| `ai_recommendation.utility_insights` | AiRecommendation | `20261114111444_AddUtilityConsumptionInsights`: phân tích theo apartment/month/fingerprint |
+| `ai_recommendation.utility_insight_reviews` | AiRecommendation | Cùng migration: history xét duyệt, actor/revision |
+| `ai_recommendation.utility_ai_attempts` | AiRecommendation | Cùng migration: quota và metadata provider, không phải source công tơ/hóa đơn |
+| `ai_recommendation.utility_notification_outbox` | AiRecommendation | Cùng migration: technical envelope do module sở hữu, không ghi thay Communication |
+| `ai_recommendation.facility_recommendation_runs` | AiRecommendation | `20261115183522_AddFacilityRecommendationRuns`: cache/quota recommendation theo actor, không lưu raw need |
+| `ai_recommendation.facility_weekend_notice_runs` | AiRecommendation | `20261117135903_AddFacilityWeekendNotices`: lease và chống lặp slot/facility cuối tuần |
+
+AiRecommendation có tám bảng: hai bảng recommendation/review FE-11 cũ cộng sáu bảng trên. Billing tiếp tục sở hữu consumption, invoice và recipient snapshots; AiRecommendation chỉ đọc qua `IUtilityConsumptionSource`. Staff được PropertyAssets resolve qua public directory; không có EF navigation xuyên module. Mỗi module giữ migration history riêng.
+
+`DatabaseVerificationTests.Database_ShouldContain73BusinessTablesInCoreSchemas` giữ tên cũ để truy vết ca regression, nhưng hiện so sánh toàn bộ danh tính `(schema, table)` với relational models của 13 owner contexts thay vì số tổng; phát hiện cả bảng thiếu và orphan trong các schema đó. Test AI kiểm danh sách tám tên cố định. Danh tính schema thực tế và history của fixture nằm tại `artifacts/authz/stabilize-schema-identities.txt`, không suy inventory từ riêng một số 80/8.
+
 ## 3. Cấu trúc building scope đã loại bỏ
 
 | Cấu trúc cũ | Quyết định hiện hành |

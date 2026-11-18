@@ -1,0 +1,97 @@
+@page "/operations/utility-insights"
+@page "/finance/utility-insights"
+@attribute [Authorize(Roles = "MANAGER,ACCOUNTANT", Policy = "billing.read")]
+@layout PropFlow.Web.Client.Layout.MainLayout
+@using PropFlow.Web.Client.Features.UtilityInsights.Services
+@using PropFlow.Web.Client.Features.UtilityInsights.Components
+@inject UtilityInsightsApi Api
+@inject PropFlow.Web.Client.Services.Authentication.AuthSession Session
+@implements IDisposable
+
+<PageTitle>Phân tích điện nước — PropFlow</PageTitle>
+<main class="utility-workspace">
+    <header><small>HỖ TRỢ VẬN HÀNH</small><h1>Phân tích tiêu thụ điện nước</h1><p>Đối chiếu từng căn hộ với lịch sử riêng, xác minh trước khi thông báo cư dân.</p></header>
+    <form class="utility-filters" @onsubmit="Search" @onsubmit:preventDefault>
+        <label>Kỳ sử dụng<input type="month" value="@month" @onchange='args => month = args.Value?.ToString() ?? ""' disabled="@(loading || busy)" /></label>
+        <label>Căn hộ<input type="search" @bind="search" placeholder="Tìm số căn hộ" disabled="@(loading || busy)" /></label>
+        <button type="submit" disabled="@(loading || busy)">@(loading ? "Đang phân tích…" : "Xem phân tích")</button>
+    </form>
+    @if (error is not null) { <p class="utility-feedback" role="alert">@error</p> }
+    @if (message is not null) { <p class="utility-feedback" role="status">@message</p> }
+    @if (loading) { <p role="status">Đang đọc chỉ số và đối chiếu lịch sử…</p> }
+    else if (data is not null)
+    {
+        <div class="utility-list"><table><thead><tr><th>Căn hộ</th><th>Điện</th><th>Nước</th><th>Số liệu / Xét duyệt</th><th></th></tr></thead><tbody>
+            @foreach (var row in data.Items)
+            {
+                <tr @key="row.Id"><td><strong>@row.UnitNumber</strong></td><td><span class="utility-state @row.Analysis.Electricity.Severity.ToLowerInvariant()">@UtilityInsightsApi.SeverityLabel(row.Analysis.Electricity.Severity)</span></td><td><span class="utility-state @row.Analysis.Water.Severity.ToLowerInvariant()">@UtilityInsightsApi.SeverityLabel(row.Analysis.Water.Severity)</span></td><td>@(row.IsFinal ? "Đã chốt" : "Đang nhập") · @UtilityInsightsApi.ReviewLabel(row.Review)</td><td><button type="button" disabled="@busy" @onclick="() => Select(row)">Xem biểu đồ</button></td></tr>
+            }
+        </tbody></table></div>
+        @if (data.Items.Length == 0) { <p>Không có căn hộ phù hợp điều kiện tìm kiếm.</p> }
+        <nav class="utility-pagination" aria-label="Phân trang căn hộ"><span>@data.Total căn hộ · Trang @data.Page</span><button type="button" disabled="@(busy || page <= 1)" @onclick="Previous">Trước</button><button type="button" disabled="@(busy || page * data.PageSize >= data.Total)" @onclick="Next">Sau</button></nav>
+    }
+    @if (selected is not null)
+    {
+        <UtilityInsightDetail Data="selected">
+            <div class="utility-actions">
+                <button type="button" disabled="@(busy || selected.AiExplanation is not null)" @onclick="Explain">@(busy ? "Đang xử lý…" : "AI giải thích thêm")</button>
+                @if (Session.User?.Role == "MANAGER" && Abnormal(selected))
+                {
+                    @if (!selected.IsFinal) { <p>Cần chốt kỳ chỉ số qua quy trình hóa đơn trước khi xét duyệt và gửi cảnh báo.</p> }
+                    else if (selected.Review == "PENDING")
+                    {
+                        <label>Ghi chú kiểm tra<textarea @bind="note" maxlength="500" placeholder="Kết quả đối chiếu chỉ số và thông tin đã xác minh" disabled="@busy"></textarea></label>
+                        <button type="button" disabled="@(busy || string.IsNullOrWhiteSpace(note))" @onclick='() => Review("CONFIRMED")'>Xác nhận và báo cư dân</button>
+                        <button type="button" disabled="@(busy || string.IsNullOrWhiteSpace(note))" @onclick='() => Review("DISMISSED")'>Bỏ qua cảnh báo</button>
+                    }
+                }
+            </div>
+        </UtilityInsightDetail>
+    }
+</main>
+
+@code {
+    private string month = DateTime.Today.ToString("yyyy-MM");
+    private string? search, error, message;
+    private string note = "";
+    private int page = 1;
+    private bool loading, busy, disposed;
+    private UtilityInsightPage? data;
+    private UtilityInsightView? selected;
+    private readonly CancellationTokenSource lifetime = new();
+    protected override Task OnInitializedAsync() => Load();
+    private static bool Abnormal(UtilityInsightView x) => x.Analysis.Electricity.Severity is "WATCH" or "HIGH" || x.Analysis.Water.Severity is "WATCH" or "HIGH";
+    private void Select(UtilityInsightView row) { selected = row; note = ""; error = message = null; }
+    private async Task Search() { if (loading || busy) return; page = 1; await Load(); }
+    private async Task Previous() { if (!loading && !busy && page > 1) { page--; await Load(); } }
+    private async Task Next() { if (loading || busy) return; page++; await Load(); }
+    private async Task Load()
+    {
+        if (!DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", out var period)) { error = "Chọn tháng hợp lệ."; return; }
+        loading = true; error = null; selected = null; note = "";
+        try { var result = await Api.ListAsync(period, page, search, lifetime.Token); if (!disposed) { data = result.Data; error = result.IsSuccess ? null : result.Message; } }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { if (!disposed) loading = false; }
+    }
+    private Task Explain() => Operate(view => Api.ExplainAsync(view, lifetime.Token), "Đã cập nhật phần giải thích. Nếu AI chưa sẵn sàng, hãy dùng căn cứ thống kê để kiểm tra.");
+    private Task Review(string decision) => Operate(view => Api.ReviewAsync(view, decision, note, lifetime.Token), decision == "CONFIRMED" ? "Đã xác nhận. Thông báo cư dân được xếp hàng gửi một lần." : "Đã ghi nhận kết quả bỏ qua cảnh báo.");
+    private async Task Operate(Func<UtilityInsightView, Task<PropFlow.Web.Client.Services.Api.ApiResult<UtilityInsightView>>> action, string success)
+    {
+        if (busy || selected is null) return;
+        busy = true; error = message = null;
+        try
+        {
+            var result = await action(selected);
+            if (disposed) return;
+            if (result.IsSuccess && result.Data is { } view)
+            {
+                selected = view; message = success;
+                if (data is not null) data = data with { Items = data.Items.Select(x => x.Id == view.Id ? view : x).ToArray() };
+            }
+            else { error = result.Message; if (result.Code == "utility_changed") { var detail = error; await Load(); error = detail; } }
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { if (!disposed) busy = false; }
+    }
+    public void Dispose() { disposed = true; lifetime.Cancel(); lifetime.Dispose(); }
+}

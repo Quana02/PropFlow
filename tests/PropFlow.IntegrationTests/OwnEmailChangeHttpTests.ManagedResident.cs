@@ -105,11 +105,28 @@ public sealed partial class OwnEmailChangeHttpTests
         using var login = await Post(otherSession, "login", new LoginRequest(resident.Username, Password));
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var target = Target();
+        using var scope = database.Factory.Services.CreateScope();
+        var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();
+        var refreshIds = await auth.RefreshTokens.Where(row => row.UserId == resident.Id).Select(row => row.Id).ToArrayAsync();
+        Assert.Equal(2, refreshIds.Length);
+        foreach (var role in new[] { "ADMIN", "STAFF", "ACCOUNTANT", "RESIDENT" })
+        {
+            var (deniedClient, _) = await Login(role);
+            using var actor = deniedClient;
+            using var denied = await Post(actor, RequestPath(linked.Id), ManagedRequest(target));
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+        using var anonymous = Client();
+        using var noActor = await Post(anonymous, RequestPath(linked.Id), ManagedRequest(target));
+        Assert.Equal(HttpStatusCode.Unauthorized, noActor.StatusCode);
         using var missingCsrf = await Post(manager, RequestPath(linked.Id), ManagedRequest(target), false);
         using var unconfirmed = await Post(manager, RequestPath(linked.Id), ManagedRequest(target) with { IdentityCheckedInPerson = false });
         Assert.Equal(HttpStatusCode.BadRequest, missingCsrf.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, unconfirmed.StatusCode);
         Assert.False(database.Factory.Mail.Codes.ContainsKey(target));
+        Assert.False(await auth.PrivilegedActionChallenges.AnyAsync(row => row.UserId == resident.Id));
+        Assert.Equal(resident.Email, await auth.UserAccounts.Where(row => row.Id == resident.Id).Select(row => row.Email).SingleAsync());
+        Assert.Equal(2, await auth.RefreshTokens.CountAsync(row => refreshIds.Contains(row.Id) && row.RevokedAt == null));
         using var sent = await Post(manager, RequestPath(linked.Id), ManagedRequest(target));
         Assert.Equal(HttpStatusCode.NoContent, sent.StatusCode);
         Assert.Empty(await sent.Content.ReadAsStringAsync());
@@ -121,16 +138,26 @@ public sealed partial class OwnEmailChangeHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, managerCannotVerify.StatusCode);
         var (otherResident, _) = await Login("RESIDENT");
         using var other = otherResident;
+        using var anonymousVerify = await Post(anonymous, VerifyPath, verify);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousVerify.StatusCode);
         using var wrongAccount = await Post(other, VerifyPath, verify);
+        Assert.Equal(HttpStatusCode.BadRequest, wrongAccount.StatusCode);
+        Assert.Equal(0, await auth.PrivilegedActionChallenges.Where(row => row.Id == verify.ChallengeId).Select(row => row.AttemptCount).SingleAsync());
         using var wrongPassword = await Post(owner, VerifyPath, verify with { CurrentPassword = "wrong" });
         using var wrongOtp = await Post(owner, VerifyPath, verify with { Code = code == "111111" ? "222222" : "111111" });
         Assert.Equal(HttpStatusCode.BadRequest, wrongAccount.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, wrongPassword.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, wrongOtp.StatusCode);
+        Assert.Equal(resident.Email, await auth.UserAccounts.Where(row => row.Id == resident.Id).Select(row => row.Email).SingleAsync());
+        Assert.Equal(2, await auth.RefreshTokens.CountAsync(row => refreshIds.Contains(row.Id) && row.RevokedAt == null));
+        Assert.Equal(2, await auth.PrivilegedActionChallenges.Where(row => row.Id == verify.ChallengeId).Select(row => row.AttemptCount).SingleAsync());
         using var completed = await Post(owner, VerifyPath, verify);
         Assert.Equal(HttpStatusCode.NoContent, completed.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await owner.GetAsync("api/v1/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Post(otherSession, "refresh", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Post(owner, VerifyPath, verify)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await other.GetAsync("api/v1/auth/me")).StatusCode);
+        Assert.Equal(2, await auth.RefreshTokens.CountAsync(row => refreshIds.Contains(row.Id) && row.RevokedReason == "email_changed"));
         using var fresh = Client();
         using var signedIn = await Post(fresh, "login", new LoginRequest(resident.Username, Password));
         var session = (await signedIn.Content.ReadFromJsonAsync<SessionResponse>())!;
@@ -139,11 +166,10 @@ public sealed partial class OwnEmailChangeHttpTests
         Assert.True(session.User.EmailVerified);
         Assert.Equal(HttpStatusCode.BadRequest, (await Post(fresh, VerifyPath, verify)).StatusCode);
 
-        using var scope = database.Factory.Services.CreateScope();
         var profile = await scope.ServiceProvider.GetRequiredService<ResidentsDbContext>().Residents.SingleAsync(r => r.Id == linked.Id);
         Assert.Equal(linked.ContactEmail, profile.Email);
         Assert.Equal(resident.Id, profile.UserId);
-        var audit = await scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>().PrivilegedActionChallenges
+        var audit = await auth.PrivilegedActionChallenges.AsNoTracking()
             .SingleAsync(item => item.Id == pending.ChallengeId);
         Assert.Equal(managerAccount.Id, audit.RequestedBy);
         Assert.Equal(resident.Id, audit.UserId);

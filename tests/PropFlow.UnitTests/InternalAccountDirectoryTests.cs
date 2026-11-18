@@ -15,7 +15,7 @@ public sealed class InternalAccountDirectoryTests
         db.UserAccounts.Add(new UserAccount("manager1", "hash", "Quản lý", DateTimeOffset.UtcNow,
             "existing@example.test", status: AccountStatus.ACTIVE));
         await db.SaveChangesAsync();
-        var directory = new InternalAccountDirectory(db, null!);
+        var directory = new InternalAccountDirectory(db, null!, null!);
 
         var exception = await Assert.ThrowsAsync<InternalAccountConflictException>(() => directory.CreateAsync(
             new CreateInternalAccount("manager1", "Tên khác", "new-email@example.test", "Password123!", null),
@@ -31,7 +31,7 @@ public sealed class InternalAccountDirectoryTests
         db.UserAccounts.Add(new UserAccount("manager1", "hash", "Quản lý", DateTimeOffset.UtcNow,
             "existing@example.test", status: AccountStatus.ACTIVE));
         await db.SaveChangesAsync();
-        var directory = new InternalAccountDirectory(db, null!);
+        var directory = new InternalAccountDirectory(db, null!, null!);
 
         var exception = await Assert.ThrowsAsync<InternalAccountConflictException>(() => directory.CreateAsync(
             new CreateInternalAccount("new-manager", "Tên khác", "existing@example.test", "Password123!", null),
@@ -51,7 +51,7 @@ public sealed class InternalAccountDirectoryTests
         var unrelated = new UserAccount("manager01", "hash", "Trần Cường", now, "manager@example.test", status: AccountStatus.ACTIVE);
         db.UserAccounts.AddRange(active, disabled, unrelated);
         await db.SaveChangesAsync();
-        var directory = new InternalAccountDirectory(db, null!);
+        var directory = new InternalAccountDirectory(db, null!, null!);
 
         var result = await directory.SearchAsync(
             [active.Id, disabled.Id], "staff", "ACTIVE", page: 1, pageSize: 10, default);

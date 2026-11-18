@@ -24,7 +24,7 @@
 <PageTitle>Quản Lý Thiết Bị - PropFlow</PageTitle>
 @if (!IsManager)
 {
-    <p class="text-sm text-slate-600" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
+    <p class="text-sm text-[var(--pf-muted)]" role="note">Chỉ đọc · Thông tin và số lượng tài sản trong phạm vi công việc đang được phân công.</p>
 }
 
 <div class="fe04-page font-sans text-slate-800 antialiased">
@@ -100,7 +100,7 @@
                 <p class="text-sm text-slate-400 max-w-sm">Không tìm thấy thiết bị khớp với tiêu chí tìm kiếm.</p>
                 @if (IsManager)
                 {
-                    <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow-md transition-stitch"
+                    <button class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--pf-action-bg)] hover:bg-[var(--pf-action-hover-bg)] text-[color:var(--pf-action-text)] text-sm font-semibold shadow-md transition-stitch"
                             @onclick="OpenCreateDialog">
                         <span class="material-symbols-outlined text-[18px]">add_circle</span>
                         <span>Thêm mới ngay</span>
@@ -205,6 +205,7 @@
                                         <div class="relative inline-block text-left status-dropdown-container @(OpenStatusDropdownId == item.Id ? "is-open" : null)">
                                             <button type="button"
                                                     class="pf-management-row-action"
+                                                    disabled="@(item.Status == EquipmentStatus.UNDER_MAINTENANCE)"
                                                     title="Đổi trạng thái vận hành" aria-label="Đổi trạng thái vận hành"
                                                     aria-haspopup="menu"
                                                     aria-expanded="@(OpenStatusDropdownId == item.Id)"

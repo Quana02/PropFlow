@@ -31,6 +31,14 @@ public sealed class WorkflowNotificationDelivery(AuthenticationDbContext account
 
     public async Task PublishAssignmentAsync(OutboxEvent item, Guid sender, Guid recipient, string sourceType, string path, CancellationToken ct)
     {
+        var canWork = await administration.UserRoleAssignments.AsNoTracking().AnyAsync(assignment =>
+            assignment.UserId == recipient && assignment.Role.IsActive && assignment.Role.Code == SystemRoleCodes.Staff &&
+            assignment.Role.RolePermissions.Any(grant => grant.Permission.IsActive &&
+                grant.Permission.Code == SystemPermissionCodes.PerformAssignedOperations), ct);
+        if (!canWork || !await accounts.UserAccounts.AsNoTracking()
+                .AnyAsync(account => account.Id == recipient && account.Status == AccountStatus.ACTIVE, ct))
+            return;
+
         var managerName = await accounts.UserAccounts.AsNoTracking().Where(x => x.Id == sender)
             .Select(x => x.DisplayName).SingleOrDefaultAsync(ct);
         var author = string.IsNullOrWhiteSpace(managerName) ? "Ban Quản lý" : $"quản lý {managerName}";

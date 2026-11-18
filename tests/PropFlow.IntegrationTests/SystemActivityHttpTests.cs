@@ -39,7 +39,7 @@ public sealed class SystemActivityHttpTests(AuthDatabaseFixture database) : ICla
         access.UserRoleAssignments.Add(new UserRoleAssignment(user.Id, assigned.Id, now)); await access.SaveChangesAsync();
         var account = new AccountResponse(user.Id, username, user.DisplayName, null, null, "ACTIVE", true, role, assigned.RolePermissions.Select(x => x.Permission.Code).ToArray());
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", scope.ServiceProvider.GetRequiredService<IAuthSecrets>().Issue(account, now).AccessToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await AuthenticationTestSessions.IssueAsync(scope.ServiceProvider, account, now)).AccessToken);
         return (client, user.Id, username);
     }
 

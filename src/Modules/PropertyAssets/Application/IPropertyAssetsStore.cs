@@ -42,6 +42,8 @@ public interface IPropertyAssetsStore
     void Add(EquipmentTypeEntity equipmentType);
 
     Task<T> WithAdvisoryLockAsync<T>(string scope, Func<CancellationToken, Task<T>> action, CancellationToken ct);
+    Task<T> WithFacilityStatusLockAsync<T>(Guid id, Func<CancellationToken, Task<T>> action, CancellationToken ct);
+    Task<T> WithEquipmentStatusLockAsync<T>(Guid id, Func<CancellationToken, Task<T>> action, CancellationToken ct);
     void Detach(object entity);
 
     Task SaveAsync(CancellationToken ct);

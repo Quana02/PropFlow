@@ -342,7 +342,15 @@
     private bool CanAssign => detail?.Status is "UNDER_REVIEW" or "ASSIGNED" or "IN_PROGRESS";
     private IReadOnlyList<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestEvidenceItem> SelectedEvidence =>
         selectedActivity is null ? [] : detail?.Evidence.Where(x => x.ActivityId == selectedActivity.Id).ToArray() ?? [];
-    private bool CanReviewStaffResult => selectedActivity?.ActivityType == "WORK_RESULT_ADDED" && detail?.Status == "IN_PROGRESS" && (detail.ProposedAdditionalCost == 0 || detail.AdditionalCostConsent?.Status == "ACCEPTED") && SelectedEvidence.Count > 0;
+    private bool CanReviewStaffResult =>
+        selectedActivity is { ActivityType: "WORK_RESULT_ADDED", IsFromCurrentAssignment: true } result &&
+        detail?.Status == "IN_PROGRESS" &&
+        (detail.ProposedAdditionalCost == 0 || detail.AdditionalCostConsent?.Status == "ACCEPTED") &&
+        result.Id == detail.Activities.LastOrDefault(activity =>
+            activity.IsFromCurrentAssignment && activity.ActivityType == "WORK_RESULT_ADDED")?.Id &&
+        !detail.Activities.Any(activity => activity.IsFromCurrentAssignment &&
+            activity.ActivityType == "REWORK_REQUESTED" && activity.CreatedAt >= result.CreatedAt) &&
+        SelectedEvidence.Count > 0;
     private IEnumerable<PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestStaffOption> FilteredStaff =>
         string.IsNullOrWhiteSpace(staffSearch)
             ? staffOptions

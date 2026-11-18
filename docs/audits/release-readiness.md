@@ -4,6 +4,8 @@ Demo dùng dữ liệu giả đã có bằng chứng trên Chrome. Pilot với d
 
 ## Trước khi dùng dữ liệu hoặc tiền thật
 
+Release rehearsal đã quan sát ASP.NET Core 8.0.33 trong tiến trình API. Chặn phát hành public/staging với dữ liệu thật, pilot và production trên runtime này trong khi chờ quyết định xử lý CVE SignalR Critical và vòng đời .NET 8. Phép thử QA cục bộ sử dụng fixture tổng hợp. [Đánh giá runtime](propflow-runtime-security-risk-assessment.md)
+
 | Ưu tiên | Điều kiện | Bằng chứng cần có |
 | --- | --- | --- |
 | P0 · Ảnh FE-05 | Mã nguồn dùng Cloudinary authenticated cho ảnh mới. Ảnh public cũ và biến thể CDN cần kiểm kê và chuyển đổi theo kế hoạch được duyệt. | Thử bằng ảnh giả trên tenant kiểm thử. URL original/derived yêu cầu xác thực. STAFF ngoài phân công bị từ chối. Thu hồi và CDN invalidation được xác nhận. Có backup và đối chiếu khi chuyển ảnh cũ. |
@@ -16,7 +18,7 @@ Demo dùng dữ liệu giả đã có bằng chứng trên Chrome. Pilot với d
 
 - **FE-02 và các trang công khai:** Đã chặn suy luận thông tin liên hệ qua tìm kiếm ACCOUNTANT. Bốn tuyến công khai đã chạy kiểm thử. Phê duyệt nội dung và kênh hỗ trợ vẫn là điều kiện vận hành. [Kiểm chứng bảo mật](security-privacy-regression.md) · [Kiểm chứng trang công khai](public-information-verification.md).
 - **FE-05 và nghiệp vụ xuyên vai trò:** Chạy yêu cầu → phân công → cập nhật → duyệt → cư dân xem kết quả, gồm các ca hủy, chi phí và dấu vết chứng cứ. Nếu pilot cần cư dân gửi ảnh, chốt hợp đồng gửi tệp và quyền đọc. Bộ chọn hiện chỉ xem tên tệp cục bộ.
-- **Hồi quy browser:** Xác minh OTP có challenge hợp lệ, tài khoản khóa, logout các role còn thiếu, gửi/đọc hết thông báo, các thao tác chat, đối soát, bộ lọc và phân trang nhiều trang. Ưu tiên phím Tab/Escape, focus, phóng to và màn nhỏ.
+- **Hồi quy browser:** 22/22 nhóm realtime áp dụng có ít nhất một ca Chrome/SignalR trực tiếp trên fixture. Đã kiểm đọc và đọc hết trên hai tab cùng phiên và một phiên độc lập. Các biến thể chưa đạt đối chứng được theo dõi trong báo cáo realtime. Các ca khác cần xác minh gồm OTP, tài khoản khóa, logout các role còn thiếu, đối soát, bộ lọc, phân trang và khả năng thao tác bằng bàn phím. [Báo cáo realtime](propflow-realtime-notification-regression-report.md)
 - **AI và tài liệu:** Đo chất lượng tiếng Việt, tình huống thiếu dữ kiện, nguồn nội bộ hoặc đã thu hồi, prompt injection và nhà cung cấp gián đoạn.
 - **FE-15.8 và báo cáo:** Chốt phạm vi cấu hình hành chính trước khi mở hợp đồng. Với tính năng xuất báo cáo, duyệt mục đích, quyền, cột dữ liệu tối thiểu và audit trước khi mở giao diện. [Đặc tả FE-15](../requirements/FE-15-Administration.md).
 

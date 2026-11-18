@@ -1,0 +1,57 @@
+@page "/operations/facility-guides"
+@attribute [Authorize(Roles="MANAGER",Policy="property-assets.view")]
+@layout PropFlow.Web.Client.Layout.MainLayout
+@using PropFlow.Modules.PropertyAssets.Contracts
+@using GuideManagementData = PropFlow.Modules.PropertyAssets.Contracts.FacilityGuidesManagement
+@using PropFlow.Web.Client.Features.Facility.Services
+@inject FacilityRecommendationsApi Api
+@implements IDisposable
+<PageTitle>Hồ sơ tiện ích — PropFlow</PageTitle>
+<main class="facility-guides">
+    <header><small>TIỆN ÍCH THÔNG MINH</small><h1>Hồ sơ tiện ích cho cư dân</h1><p>Cung cấp thông tin thật để AI gợi ý theo nhu cầu: khu vực phù hợp, lịch hoạt động và người phụ trách.</p></header>
+    @if(error is not null){<p class="guide-feedback" role="alert">@error</p>}
+    @if(message is not null){<p class="guide-feedback" role="status">@message</p>}
+    @if(loading){<p role="status">Đang tải hồ sơ tiện ích…</p>}
+    @if(data is not null)
+    {
+        <section class="guide-panel"><label>Chọn cơ sở vật chất<PropFlowSelect Id="guide-facility" AriaLabel="Chọn cơ sở vật chất" Value="@selectedId.ToString()" ValueChanged="SelectFacility" Options="@FacilityOptions" Disabled="@(busy||loading||data.Facilities.Length==0)" /></label>@if(data.Facilities.Length==0){<p>Tạo hồ bơi, khu vui chơi hoặc tiện ích có thật tại mục Cơ sở vật chất trước.</p>}</section>
+        @if(selected is not null)
+        {
+            <form class="guide-panel" @onsubmit="Save" @onsubmit:preventDefault>
+                <header><h2>@selected.Name</h2><span>@(selected.Status=="ACTIVE"?"Đang hoạt động":"Hiện không hoạt động")</span></header>
+                <label>Mô tả hoạt động, nhu cầu mà tiện ích đáp ứng<textarea @bind="description" maxlength="2000" required rows="4" disabled="@busy" placeholder="Ví dụ: Khu vui chơi trong nhà có trò chơi vận động nhẹ và góc đọc sách, phù hợp gia đình có trẻ nhỏ."></textarea></label>
+                <div class="guide-fields"><label>Đối tượng phù hợp<PropFlowSelect Id="guide-audience" AriaLabel="Đối tượng phù hợp" @bind-Value="audience" Options="@AudienceOptions" Disabled="@busy" /></label><label>Độ tuổi tối thiểu (nếu có)<input type="number" @bind="minimumAge" min="0" max="120" disabled="@busy" /></label><label>Độ tuổi tối đa (nếu có)<input type="number" @bind="maximumAge" min="0" max="120" disabled="@busy" /></label></div>
+                <label>Điều kiện dành cho trẻ em<PropFlowSelect Id="guide-child-policy" AriaLabel="Điều kiện dành cho trẻ em" @bind-Value="childPolicy" Options="@ChildPolicyOptions" Disabled="@busy" /></label>
+                @if(childPolicy=="SUPERVISED_CONTACT_REQUIRED"){<label>Thông tin chương trình có giám sát<textarea @bind="supervisionNote" maxlength="1000" rows="3" required disabled="@busy" placeholder="Mô tả chương trình, lịch riêng, điều kiện tiếp nhận và cách xác nhận với người phụ trách."></textarea></label>}
+                <div class="guide-fields"><label>Người phụ trách<PropFlowSelect Id="guide-responsible" AriaLabel="Người phụ trách" Value="@responsibleId.ToString()" ValueChanged="SelectResponsible" Options="@StaffOptions" Disabled="@busy" /></label><label>Đầu mối liên hệ công việc<input @bind="contactDetails" maxlength="300" disabled="@busy" placeholder="Quầy lễ tân tầng…, số máy nội bộ/hotline công việc…" /></label></div>
+                <p class="guide-hint">Tên người phụ trách và đầu mối này sẽ hiển thị cho cư dân.</p>
+                <fieldset disabled="@busy"><legend>Giờ mở và đóng cửa</legend>@foreach(var day in hours){<div class="guide-hour"><label><input type="checkbox" @bind="day.Enabled" /> @FacilityRecommendationsApi.Weekday(day.Day)</label><input aria-label="@($"Giờ mở {FacilityRecommendationsApi.Weekday(day.Day)}")" type="time" value="@day.Start" @onchange='args=>day.Start=args.Value?.ToString()??""' disabled="@(!day.Enabled)" required="@day.Enabled" /><span>đến</span><input aria-label="@($"Giờ đóng {FacilityRecommendationsApi.Weekday(day.Day)}")" type="time" value="@day.End" @onchange='args=>day.End=args.Value?.ToString()??""' disabled="@(!day.Enabled)" required="@day.Enabled" /></div>}</fieldset>
+                <fieldset disabled="@busy"><legend>Ngày đóng cửa ngoại lệ</legend><div class="guide-inline"><input aria-label="Ngày đóng cửa" type="date" @bind="closedDate" /><button type="button" @onclick="AddClosed">Thêm ngày</button></div><div class="guide-tags">@foreach(var day in closedDates.Order()){<button type="button" @onclick="()=>closedDates.Remove(day)">@day.ToString("dd/MM/yyyy") ×</button>}</div></fieldset>
+                <label>Nội quy, điều kiện sử dụng<textarea @bind="rules" maxlength="4000" rows="4" disabled="@busy"></textarea></label>
+                <label class="guide-check"><input type="checkbox" @bind="published" disabled="@busy" /> Xuất bản cho cư dân và AI tra cứu</label>
+                <button type="submit" class="primary" disabled="@busy">@(busy?"Đang lưu…":"Lưu hồ sơ tiện ích")</button>
+            </form>
+        }
+    }
+    else if(!loading){<button type="button" @onclick="Load">Thử tải lại</button>}
+</main>
+@code{
+    private IReadOnlyList<PropFlowSelectOption> FacilityOptions => [new(Guid.Empty.ToString(), "Chọn tiện ích"), ..(data?.Facilities.Select(item => new PropFlowSelectOption(item.FacilityId.ToString(), $"{item.Name} · {(item.Published ? "Đã xuất bản" : "Bản nháp")}")) ?? [])];
+    private IReadOnlyList<PropFlowSelectOption> StaffOptions => [new(Guid.Empty.ToString(), "Chọn Staff phụ trách"), ..(data?.Staff.Select(person => new PropFlowSelectOption(person.Id.ToString(), person.Name)) ?? [])];
+    private static readonly PropFlowSelectOption[] AudienceOptions = [new("GENERAL", "Cư dân nói chung"), new("CHILDREN", "Trẻ em"), new("FAMILY", "Gia đình"), new("ADULTS", "Người lớn")];
+    private static readonly PropFlowSelectOption[] ChildPolicyOptions = [new("GUARDIAN_REQUIRED", "Phải có phụ huynh/người giám hộ đi cùng"), new("SUPERVISED_CONTACT_REQUIRED", "Có hoạt động giám sát, cần liên hệ xác nhận tiếp nhận"), new("NOT_FOR_CHILDREN", "Không dành cho trẻ em")];
+    private void SelectFacility(string value) { if (Guid.TryParse(value, out var id)) { selectedId=id; Select(); } }
+    private void SelectResponsible(string value) { if (Guid.TryParse(value, out var id)) responsibleId=id; }
+    private GuideManagementData? data;private FacilityGuideView? selected;private Guid selectedId,responsibleId;
+    private string description="",audience="GENERAL",childPolicy="GUARDIAN_REQUIRED",supervisionNote="",contactDetails="",rules="";
+    private int? minimumAge,maximumAge;private bool published,loading,busy,disposed;private string? error,message;private DateOnly closedDate;
+    private readonly List<HourEdit> hours=Enumerable.Range(0,7).Select(day=>new HourEdit{Day=day}).ToList();private readonly HashSet<DateOnly> closedDates=[];
+    private readonly CancellationTokenSource lifetime=new();
+    protected override Task OnInitializedAsync()=>Load();
+    private async Task Load(){loading=true;error=null;try{var result=await Api.ManagementAsync(lifetime.Token);if(disposed)return;if(!result.IsSuccess||result.Data is null){error=result.Message;return;}data=result.Data;closedDate=data.Today;if(!data.Facilities.Any(x=>x.FacilityId==selectedId))selectedId=data.Facilities.FirstOrDefault()?.FacilityId??Guid.Empty;Select();}catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}finally{if(!disposed)loading=false;}}
+    private void Select(){selected=data?.Facilities.SingleOrDefault(x=>x.FacilityId==selectedId);if(selected is null)return;description=selected.Description;audience=selected.Audience;minimumAge=selected.MinimumAge;maximumAge=selected.MaximumAge;childPolicy=selected.ChildPolicy;supervisionNote=selected.SupervisionNote;contactDetails=selected.ContactDetails;responsibleId=selected.ResponsibleStaffId??Guid.Empty;rules=selected.Rules;published=selected.Published;closedDates.Clear();closedDates.UnionWith(selected.ClosedDates);foreach(var day in hours){var item=selected.Hours.SingleOrDefault(x=>x.DayOfWeek==day.Day);day.Enabled=item is not null;day.Start=item?.OpensAt.ToString("HH:mm")??"";day.End=item?.ClosesAt.ToString("HH:mm")??"";}}
+    private void AddClosed(){if(closedDates.Count<120)closedDates.Add(closedDate);else error="Tối đa một trăm hai mươi ngày ngoại lệ.";}
+    private async Task Save(){if(busy||selected is null)return;var openings=new List<FacilityOpening>();foreach(var day in hours.Where(x=>x.Enabled)){if(!TimeOnly.TryParseExact(day.Start,"HH:mm",out var start)||!TimeOnly.TryParseExact(day.End,"HH:mm",out var end)){error="Nhập đủ giờ mở và đóng cửa cho các thứ đã chọn.";return;}openings.Add(new(day.Day,start,end));}busy=true;error=message=null;try{var result=await Api.SaveAsync(selectedId,new(published,description,audience,minimumAge,maximumAge,childPolicy,childPolicy=="SUPERVISED_CONTACT_REQUIRED"?supervisionNote:"",rules,openings.ToArray(),closedDates.ToArray(),responsibleId==Guid.Empty?null:responsibleId,contactDetails,selected.Token==Guid.Empty?null:selected.Token),lifetime.Token);if(disposed)return;if(result.IsSuccess){await Load();message=error is null?"Đã lưu hồ sơ tiện ích.":null;}else{error=result.Message;if(result.StatusCode==409){var detail=error;await Load();error=detail;}}}catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}finally{if(!disposed)busy=false;}}
+    private sealed class HourEdit{public int Day;public bool Enabled;public string Start="",End="";}
+    public void Dispose(){disposed=true;lifetime.Cancel();lifetime.Dispose();}
+}

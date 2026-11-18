@@ -86,6 +86,7 @@ public sealed partial class AuthUseCases
             return true;
         }, ct);
         if (!success) throw InvalidChallenge();
+        await RecheckConnectionsAsync(id);
     }
 
     private async Task<UserAccount> EmailChangeUserAsync(Guid id, CancellationToken ct)

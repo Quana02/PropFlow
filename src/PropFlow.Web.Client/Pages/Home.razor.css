@@ -1,0 +1,8 @@
+.landing-primary-action {
+    background: var(--pf-action-bg);
+    color: var(--pf-action-text);
+}
+
+.landing-primary-action:hover {
+    background: var(--pf-action-hover-bg);
+}

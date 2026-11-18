@@ -40,7 +40,8 @@ test('auth form rules cannot override shared header buttons and links', () => {
         for (const part of selector.split(','))
             assert.doesNotMatch(part.trim(), /^::deep (?:button|a)(?=[\s:.#]|$)/);
     const header = read('src/PropFlow.Web.Client/Layout/Shared/PublicHeader.razor');
-    assert.match(header, /class="public-theme-toggle" onclick="toggleTheme\(\)"/);
+    assert.match(header, /class="public-theme-toggle" onclick="propFlowTheme\.toggle\(\)"/);
+    assert.match(app, /<head>[\s\S]*?<script src="js\/theme\.js"><\/script>[\s\S]*?<\/head>/);
     assert.match(read('src/PropFlow.Web.Client/Features/Authentication/Components/AuthLayout.razor'), /<PropFlow.Web.Client.Layout.Shared.PublicHeader/);
     assert.match(read('src/PropFlow.Web.Client/Pages/Home.razor'), /<PropFlow.Web.Client.Layout.Shared.PublicHeader/);
 });

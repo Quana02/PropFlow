@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using PropFlow.Modules.AiChatbot.Contracts;
-using PropFlow.Web.Client.Features.Facility.Services;
+using PropFlow.Web.Client.Services.Authentication;
 using PropFlow.Web.Client.Layout.Navigation.Shared;
 
 namespace PropFlow.UnitTests;
@@ -30,12 +30,16 @@ public sealed class CompactNavigationTests
     }
     [Theory]
     [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/admin/dashboard?tab=activity", 5)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/manager/service-requests/123", 12)]
-    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/service-requests/123", 2)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/manager/service-requests/123", 14)]
+    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/service-requests/123", 3)]
     [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/knowledge/documents", 5)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/knowledge/documents", 12)]
-    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/my-maintenance", 2)]
-    [InlineData("ACCOUNTANT", "", "/finance/invoices", 7)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/knowledge/documents", 14)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/utility-insights", 14)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/facility-guides", 14)]
+    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/my-maintenance", 3)]
+    [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/complaints", 3)]
+    [InlineData("ACCOUNTANT", "", "/finance/invoices", 8)]
+    [InlineData("ACCOUNTANT", "MANAGE_FINANCE", "/finance/utility-insights", 8)]
     [InlineData("RESIDENT", "", "/resident", 0)]
     [InlineData("ADMIN", "", "/admin/dashboard", 4)]
     [InlineData("MANAGER", "", "/buildings", 0)]
@@ -45,11 +49,8 @@ public sealed class CompactNavigationTests
         var claims = new List<Claim> { new(ClaimTypes.Role, role) };
         if (permission.Length > 0) claims.Add(new("permission", permission));
         var user = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
-        using var services = new ServiceCollection().AddLogging().AddAuthorizationCore(options =>
-        {
-            options.AddPolicy(AssetPermissions.ViewPolicy, policy => policy.RequireAssertion(context => AssetPermissions.CanView(context.User)));
-            options.AddPolicy(KnowledgePolicies.Read, policy => policy.RequireAssertion(context => KnowledgePolicies.CanRead(context.User)));
-        }).AddSingleton<AuthenticationStateProvider>(new Authentication(user)).AddSingleton<NavigationManager>(new Navigation(route))
+        using var services = new ServiceCollection().AddLogging().AddClientAuthorization()
+          .AddSingleton<AuthenticationStateProvider>(new Authentication(user)).AddSingleton<NavigationManager>(new Navigation(route))
           .AddSingleton<IJSRuntime, NoJavaScript>().BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>
@@ -66,9 +67,9 @@ public sealed class CompactNavigationTests
             var expected = role switch
             {
                 "ADMIN" => new[] { "/admin/dashboard?tab=overview", "/admin/dashboard?tab=accounts", "/admin/dashboard?tab=payment", "/admin/dashboard?tab=activity" },
-                "ACCOUNTANT" => new[] { "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices", "/finance/payments/bank-transfers" },
-                "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee" },
-                "STAFF" when count > 0 => new[] { "/staff/service-requests", "/my-maintenance" },
+                "ACCOUNTANT" => new[] { "/finance/utility-insights", "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices", "/finance/payments/bank-transfers" },
+                "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee", "/operations/utility-insights", "/operations/facility-guides" },
+                "STAFF" when count > 0 => new[] { "/staff/service-requests", "/my-maintenance", "/staff/complaints" },
                 _ => Array.Empty<string>()
             };
             if (role != "STAFF" && KnowledgePolicies.CanRead(user)) expected = [..expected, "/knowledge/documents"];

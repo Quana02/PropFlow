@@ -63,6 +63,7 @@ public sealed class EmergencyCallClient(EmergencyCallApi api, AuthSession sessio
                 var apiBase = new Uri(new Uri(navigation.BaseUri), configuration["Api:BaseUrl"] ?? throw new InvalidOperationException("Thiếu cấu hình API."));
                 hub = new HubConnectionBuilder().WithUrl(new Uri(apiBase, "hubs/emergency-calls"), options => options.AccessTokenProvider = session.GetValidAccessTokenAsync)
                     .WithAutomaticReconnect().Build();
+                session.ObserveTransport(hub);
                 hub.On("EmergencyChanged", RefreshAsync);
                 hub.On<EmergencySignal>("EmergencySignal", async value =>
                 {
@@ -174,8 +175,10 @@ public sealed class EmergencyCallClient(EmergencyCallApi api, AuthSession sessio
                 }
                 else
                 {
+                    if (Current?.Id != next.Id) mediaPaused = false;
                     Current = next; PanelOpen = true;
-                    if (next.Status == "WAITING" && peerKey is not null) await StopMediaAsync();
+                    if (peerKey is not null && (next.Status is "WAITING" or "ENDED" || !next.ResidentOnline || !next.ManagerOnline))
+                        await StopMediaAsync();
                     Notify();
                     if (!mediaPaused && next.Status is "CONNECTING" or "CONNECTED" && next.ResidentOnline && next.ManagerOnline)
                     {

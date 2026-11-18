@@ -25,7 +25,7 @@ public interface IAuthStore
     Task<PasswordResetToken?> RecoveryAsync(Guid id, CancellationToken ct);
     Task<List<PasswordResetToken>> RecoveriesAsync(Guid userId, CancellationToken ct);
     Task<RefreshToken?> RefreshAsync(string hash, CancellationToken ct);
-    Task<RefreshToken?> RefreshByIdAsync(Guid id, CancellationToken ct);
+    Task<RefreshToken?> CurrentRefreshAsync(Guid userId, Guid sessionId, CancellationToken ct);
     Task<List<RefreshToken>> SessionsAsync(Guid userId, CancellationToken ct);
     Task<PrivilegedActionChallenge?> PrivilegedChallengeAsync(Guid id, CancellationToken ct);
     Task<List<PrivilegedActionChallenge>> PrivilegedChallengesAsync(Guid userId, string purpose, CancellationToken ct);
@@ -51,7 +51,7 @@ public interface IAuthSecrets
     string BindOtp(string code, string binding);
     bool IsOtpBoundTo(string hash, string binding);
     bool MatchesBoundOtp(string code, string hash, string binding);
-    SessionResponse Issue(AccountResponse user, DateTimeOffset now);
+    SessionResponse Issue(AccountResponse user, DateTimeOffset now, Guid? sessionId = null);
 }
 public interface IAuthEmail
 {

@@ -15,7 +15,6 @@
     align-items: end;
     justify-content: space-between;
     gap: 18px;
-    margin-bottom: 18px;
 }
 
 .finance-eyebrow {
@@ -66,6 +65,7 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
+    margin-block-start: 14px;
 }
 
 .finance-metric,
@@ -147,7 +147,7 @@
     padding: 6px 11px;
     border-radius: 16px;
     background: var(--tone);
-    color: #fff;
+    color: var(--finance-on-tone, #fff);
     font-size: 10px;
     font-weight: 700;
     text-decoration: none;
@@ -158,23 +158,28 @@
 }
 
 .pending {
-    --tone: #d98a08;
+    --tone: var(--pf-warning);
     --tone-bg: #fff3d4;
 }
 
 .invoices {
-    --tone: #2f6fdf;
+    --tone: var(--pf-info);
     --tone-bg: #e6efff;
 }
 
 .overdue {
-    --tone: #e64269;
+    --tone: var(--pf-danger);
     --tone-bg: #ffe8ee;
 }
 
 .confirmed {
-    --tone: #07966a;
+    --tone: var(--pf-success);
     --tone-bg: #def8ed;
+}
+
+:where(html[data-theme="dark"]) .finance-metric {
+    --tone-bg: color-mix(in srgb, var(--tone) 14%, var(--finance-surface));
+    --finance-on-tone: #080d14;
 }
 
 .finance-details {
@@ -375,8 +380,8 @@
 }
 
 .debt-breakdown span { display: flex; align-items: center; gap: 7px; }
-.debt-breakdown i { width: 7px; height: 7px; border-radius: 50%; background: #e64269; }
-.debt-breakdown strong { color: #e64269; font-size: 12px; }
+.debt-breakdown i { width: 7px; height: 7px; border-radius: 50%; background: var(--pf-danger); }
+.debt-breakdown strong { color: var(--pf-danger); font-size: 12px; }
 
 .finance-debt ::deep .debt-link {
     display: flex;
@@ -386,8 +391,8 @@
     margin-top: auto;
     padding: 10px 14px;
     border-radius: 12px;
-    background: var(--finance-green);
-    color: #fff;
+    background: var(--pf-action-bg);
+    color: var(--pf-action-text);
     font-size: 11px;
     font-weight: 750;
     text-decoration: none;

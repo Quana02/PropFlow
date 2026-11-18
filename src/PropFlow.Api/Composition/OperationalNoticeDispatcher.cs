@@ -3,10 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.Administration.Infrastructure.Persistence;
 using PropFlow.Modules.Authentication.Infrastructure.Persistence;
 using PropFlow.Modules.Communication.Application;
+using PropFlow.Modules.Maintenance.Domain.MaintenanceAssignments;
 using PropFlow.Modules.Maintenance.Infrastructure.Persistence;
 using PropFlow.Modules.PropertyAssets.Contracts;
 using PropFlow.Modules.PropertyAssets.Infrastructure.Persistence;
 using PropFlow.Shared.Messaging;
+using PropFlow.Shared;
 
 namespace PropFlow.Api.Composition;
 public sealed class OperationalNoticeDispatcher(PropertyAssetsDbContext assets, MaintenanceDbContext maintenance,
@@ -33,6 +35,17 @@ public sealed class OperationalNoticeDispatcher(PropertyAssetsDbContext assets, 
                 if (item.Version == 1 && item.Name == MaintenanceAssignmentNotice.EventName)
                 {
                     var notice = JsonSerializer.Deserialize<MaintenanceAssignmentNotice>(item.Payload)!;
+                    var taskLock = IdentifierCodeNormalizer.AdvisoryLockKey(MaintenanceTaskLock.Scope(item.SourceId));
+                    await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({taskLock})", ct);
+                    var stillAssigned = await maintenance.MaintenanceAssignments.AsNoTracking().AnyAsync(assignment =>
+                        assignment.MaintenanceTaskId == item.SourceId && assignment.StaffUserId == notice.StaffUserId &&
+                        (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS) &&
+                        (notice.AssignmentId != null ? assignment.Id == notice.AssignmentId : assignment.AssignedAt == item.CreatedAt), ct);
+                    if (!stillAssigned)
+                    {
+                        item.Delivered(Now);
+                        continue;
+                    }
                     var delivery = deliveryServices?.GetRequiredService<WorkflowNotificationDelivery>() ?? workflow
                         ?? throw new InvalidOperationException("Workflow notification delivery is unavailable.");
                     await delivery.PublishAssignmentAsync(item, notice.ManagerUserId, notice.StaffUserId,

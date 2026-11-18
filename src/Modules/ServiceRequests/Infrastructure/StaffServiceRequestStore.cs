@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
@@ -74,7 +75,10 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
             .Select(x => new StaffServiceRequestActivityItem(x.Id, x.ActivityType.ToString(), x.Title,
                 x.ActivityType == ServiceActivityType.PROPERTY_CONTEXT_ASSOCIATED && x.Detail != null && x.Detail.StartsWith("ApartmentUnitId=")
                     ? "Đã cập nhật vị trí và tài sản liên quan." : x.Detail,
-                x.WorkResult, x.PerformedBy, x.CreatedAt)).ToArrayAsync(ct);
+                x.WorkResult, x.PerformedBy, x.CreatedAt,
+                x.Assignment != null && x.Assignment.StaffUserId == staffUserId &&
+                (x.Assignment.Status == AssignmentStatus.IN_PROGRESS || x.Assignment.Status == AssignmentStatus.COMPLETED)))
+            .ToArrayAsync(ct);
     }
 
     public async Task<IReadOnlyList<StaffEvidenceMetadata>> EvidenceAsync(Guid staffUserId, Guid id, CancellationToken ct)
@@ -88,12 +92,24 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
 
     public async Task<Guid?> PendingWorkResultActivityIdAsync(Guid staffUserId, Guid id, CancellationToken ct)
     {
-        if (!await ActiveRequestAsync(staffUserId, id).AnyAsync(ct)) return null;
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
+        return await FindPendingWorkResultAsync(staffUserId, id, ct);
+    }
+
+    private async Task<Guid?> FindPendingWorkResultAsync(Guid staffUserId, Guid id, CancellationToken ct)
+    {
+        var assignmentId = await db.ServiceRequestAssignments.AsNoTracking()
+            .Where(x => x.ServiceRequestId == id && x.StaffUserId == staffUserId && x.Status == AssignmentStatus.IN_PROGRESS &&
+                x.ServiceRequest.Status == ServiceRequestStatus.IN_PROGRESS &&
+                (x.ServiceRequest.ProposedAdditionalCost == 0 || x.ServiceRequest.AdditionalCostConsentStatus == "ACCEPTED"))
+            .Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct);
+        if (assignmentId is null) return null;
         var latestResult = await db.ServiceRequestActivities.AsNoTracking()
-            .Where(x => x.ServiceRequestId == id && x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED && x.PerformedBy == staffUserId)
+            .Where(x => x.ServiceRequestId == id && x.AssignmentId == assignmentId &&
+                x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED && x.PerformedBy == staffUserId)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).Select(x => new { x.Id, x.CreatedAt }).FirstOrDefaultAsync(ct);
         if (latestResult is null) return null;
-        var newerRework = await db.ServiceRequestActivities.AsNoTracking().AnyAsync(x => x.ServiceRequestId == id &&
+        var newerRework = await db.ServiceRequestActivities.AsNoTracking().AnyAsync(x => x.ServiceRequestId == id && x.AssignmentId == assignmentId &&
             x.ActivityType == ServiceActivityType.REWORK_REQUESTED && x.CreatedAt >= latestResult.CreatedAt, ct);
         if (newerRework) return null;
         var alreadyUploaded = await db.ServiceRequestEvidenceFiles.AsNoTracking().AnyAsync(x => x.ActivityId == latestResult.Id, ct);
@@ -112,6 +128,7 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
 
     public async Task<StaffServiceRequestOutcome> AcceptAsync(Guid staffUserId, Guid id, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
         if (state.Request.Status != ServiceRequestStatus.ASSIGNED || state.Assignment.Status != AssignmentStatus.ASSIGNED || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
@@ -121,11 +138,12 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(id, ServiceActivityType.STATUS_CHANGED, now,
             state.Assignment.Id, ServiceRequestStatus.ASSIGNED, ServiceRequestStatus.IN_PROGRESS,
             "Staff đã tiếp nhận yêu cầu", performedBy: staffUserId));
-        return await SaveAsync(ct);
+        return await SaveAsync(transaction, ct);
     }
 
     public async Task<StaffServiceRequestOutcome> AddProgressAsync(Guid staffUserId, Guid id, string detail, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
         if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
@@ -133,19 +151,20 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
         state.Request.MarkInProgress(now);
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(id, ServiceActivityType.PROGRESS_UPDATED, now,
             state.Assignment.Id, title: "Staff cập nhật tiến độ", detail: detail, performedBy: staffUserId));
-        return await SaveAsync(ct);
+        return await SaveAsync(transaction, ct);
     }
 
     public async Task<StaffServiceRequestOutcome> CompleteWorkAsync(Guid staffUserId, Guid id, string workResult,
         decimal additionalCost, string? additionalCostNote, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
         if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
             return StaffServiceRequestOutcome.Conflict;
-        var latestResult = state.Request.Activities.Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED)
+        var latestResult = state.Request.Activities.Where(x => x.AssignmentId == state.Assignment.Id && x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).FirstOrDefault();
-        var latestRework = state.Request.Activities.Where(x => x.ActivityType == ServiceActivityType.REWORK_REQUESTED)
+        var latestRework = state.Request.Activities.Where(x => x.AssignmentId == state.Assignment.Id && x.ActivityType == ServiceActivityType.REWORK_REQUESTED)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).FirstOrDefault();
         if (latestResult is not null && (latestRework is null || latestResult.CreatedAt > latestRework.CreatedAt))
             return StaffServiceRequestOutcome.Conflict;
@@ -154,32 +173,29 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
         state.Request.MarkInProgress(now);
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(id, ServiceActivityType.WORK_RESULT_ADDED, now,
             state.Assignment.Id, title: "Staff xác nhận hoàn thành công việc", workResult: workResult, performedBy: staffUserId));
-        return await SaveAsync(ct);
+        return await SaveAsync(transaction, ct);
     }
 
     public async Task<StaffServiceRequestOutcome> AddEvidenceAsync(Guid staffUserId, Guid id, Guid activityId,
         IReadOnlyList<StaffEvidenceMetadata> evidence, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var state = await CurrentAsync(staffUserId, id, ct);
         if (state.Request is null || state.Assignment is null) return StaffServiceRequestOutcome.NotFound;
         if (state.Assignment.Status != AssignmentStatus.IN_PROGRESS || state.Request.Status != ServiceRequestStatus.IN_PROGRESS || (state.Request.ProposedAdditionalCost > 0 && state.Request.AdditionalCostConsentStatus != "ACCEPTED"))
             return StaffServiceRequestOutcome.Conflict;
-        var pendingId = await PendingWorkResultActivityIdAsync(staffUserId, id, ct);
+        var pendingId = await FindPendingWorkResultAsync(staffUserId, id, ct);
         if (pendingId != activityId) return StaffServiceRequestOutcome.Conflict;
         db.ServiceRequestEvidenceFiles.AddRange(evidence.Select(x => new ServiceRequestEvidenceFile(
             x.ServiceRequestId, x.ActivityId, x.FileName, x.ContentType, x.SizeBytes, x.StorageKey, x.UploadedBy, x.UploadedAt)));
         db.ServiceRequestActivities.Add(new ServiceRequestActivity(id, ServiceActivityType.PROGRESS_UPDATED, now,
             state.Assignment.Id, title: "Staff đã tải ảnh bằng chứng", detail: $"Đã tải {evidence.Count} ảnh bằng chứng hoàn thành.", performedBy: staffUserId));
-        return await SaveAsync(ct);
+        return await SaveAsync(transaction, ct);
     }
 
     private IQueryable<ServiceRequest> VisibleRequests(Guid staffUserId) => db.ServiceRequests.AsNoTracking().Where(x =>
         x.Assignments.Any(a => a.StaffUserId == staffUserId &&
             (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS || a.Status == AssignmentStatus.COMPLETED || a.Status == AssignmentStatus.CANCELLED && x.AdditionalCostConsentStatus == "REJECTED")));
-
-    private IQueryable<ServiceRequest> ActiveRequestAsync(Guid staffUserId, Guid id) => db.ServiceRequests.AsNoTracking().Where(x => x.Id == id &&
-        x.Assignments.Any(a => a.StaffUserId == staffUserId &&
-            (a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)));
 
     private static IQueryable<StaffServiceRequestCore> ProjectCore(IQueryable<ServiceRequest> requests, Guid staffUserId) => requests.Select(x =>
         new StaffServiceRequestCore(x.Id, x.RequestNumber, x.Title, x.Description, x.Category == null ? null : x.Category.Name,
@@ -203,9 +219,14 @@ public sealed class StaffServiceRequestStore(ServiceRequestsDbContext db) : ISta
         return (request, assignment);
     }
 
-    private async Task<StaffServiceRequestOutcome> SaveAsync(CancellationToken ct)
+    private async Task<StaffServiceRequestOutcome> SaveAsync(IDbContextTransaction? transaction, CancellationToken ct)
     {
-        try { await db.SaveChangesAsync(ct); return StaffServiceRequestOutcome.Success; }
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            if (transaction is not null) await transaction.CommitAsync(ct);
+            return StaffServiceRequestOutcome.Success;
+        }
         catch (DbUpdateException) { return StaffServiceRequestOutcome.Conflict; }
     }
 

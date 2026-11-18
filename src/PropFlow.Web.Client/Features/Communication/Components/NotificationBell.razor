@@ -13,9 +13,9 @@
     <button type="button" class="notification-trigger" aria-label="@BellLabel" aria-expanded="@open"
             aria-controls="@(open ? panelId : null)" @ref="trigger" @onclick="ToggleAsync">
         <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
-        @if (Notices.UnreadCount > 0)
+        @if (Notices.HasNewNotices)
         {
-            <span class="notification-badge" aria-hidden="true">@(Notices.UnreadCount > 99 ? "99+" : Notices.UnreadCount.ToString())</span>
+            <span class="notification-badge" aria-hidden="true"></span>
         }
     </button>
     @if (open)
@@ -122,6 +122,7 @@
                 Notices.Receive(notice);
                 await Notices.ReloadAsync();
             }));
+            connection.On("NotificationReadStateChanged", () => InvokeAsync(Notices.ReloadAsync));
             connection.Reconnected += _ => InvokeAsync(Notices.ReloadAsync);
             await ConnectionFactory.StartAsync(connection, cancellation.Token);
             await Notices.ReloadAsync();
@@ -135,6 +136,7 @@
 
     private async Task ToggleAsync()
     {
+        Notices.AcknowledgeInbox();
         open = !open;
         if (open) await Notices.ReloadAsync();
     }
@@ -176,6 +178,8 @@
     private static (string Label, string Icon) Source(string? value) => value switch
     {
         "SERVICE_REQUEST" => ("Yêu cầu dịch vụ", "assignment"),
+        "UTILITY_CONSUMPTION" => ("Điện, nước", "monitoring"),
+        "FACILITY_WEEKEND" => ("Gợi ý cuối tuần", "weekend"),
         "MAINTENANCE" or "ASSET_STATUS" => ("Vận hành tòa nhà", "build"),
         "COMPLAINT" => ("Phản ánh", "forum"),
         "INVOICE" or "PAYMENT" => ("Tài chính", "receipt_long"),

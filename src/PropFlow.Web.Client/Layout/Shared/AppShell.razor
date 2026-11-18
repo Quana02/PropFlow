@@ -6,7 +6,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<div class="app-shell @(dark ? "app-shell-dark" : "") @(ShowAmbientBackground ? "app-shell-ambient" : "")">
+<div class="app-shell @(ShowAmbientBackground ? "app-shell-ambient" : "")">
     @if (ShowAmbientBackground)
     {
         <div class="app-aurora app-aurora-one" aria-hidden="true"></div>
@@ -48,24 +48,18 @@
                     </svg>
                 </button>
             }
-            <button type="button" class="app-theme-button" @onclick="ToggleTheme"
-                    aria-label="@(dark ? "Bật chế độ sáng" : "Bật chế độ tối")"
+            <button type="button" class="app-theme-button" onclick="propFlowTheme.toggle()"
+                    aria-label="Đổi chế độ sáng tối"
                     title="Chuyển giao diện sáng tối">
-                @if (dark)
-                {
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                    <svg class="app-theme-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <circle cx="12" cy="12" r="4" />
                         <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
                     </svg>
-                }
-                else
-                {
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                    <svg class="app-theme-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                     </svg>
-                }
             </button>
 
             <details class="app-profile">
@@ -131,7 +125,6 @@
     [Parameter] public bool ShowAmbientBackground { get; set; } = true;
     [Parameter] public bool ShowWeatherAndClock { get; set; } = true;
 
-    private bool dark;
     private bool busy;
     private bool disposed;
     private Task? initialization;
@@ -236,8 +229,6 @@
                 .TakeLast(2).Select(part => part[0])).ToUpperInvariant();
         }
     }
-
-    private void ToggleTheme() => dark = !dark;
 
     private async Task Logout()
     {

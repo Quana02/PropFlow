@@ -1,0 +1,27 @@
+{
+  "name": "Dữ liệu mẫu phân tích điện và nước cho DEMO-1801",
+  "units": { "electricity": "kWh", "water": "m³" },
+  "note": "Công tơ tích lũy bắt đầu từ không. Mẫu nước giữ nguyên; bổ sung điện với mức bình thường 10 kWh/ngày, tháng 09 tăng mạnh và tháng 10 giảm mạnh. Bộ mẫu dùng cho local/demo.",
+  "requests": [
+    { "usageMonth": "2026-01-01", "currentElectricityReading": 0, "currentWaterReading": 0.0 },
+    { "usageMonth": "2026-02-01", "currentElectricityReading": 280, "currentWaterReading": 11.2 },
+    { "usageMonth": "2026-03-01", "currentElectricityReading": 590, "currentWaterReading": 23.6 },
+    { "usageMonth": "2026-04-01", "currentElectricityReading": 890, "currentWaterReading": 35.6 },
+    { "usageMonth": "2026-05-01", "currentElectricityReading": 1200, "currentWaterReading": 48.0 },
+    { "usageMonth": "2026-06-01", "currentElectricityReading": 1500, "currentWaterReading": 60.0 },
+    { "usageMonth": "2026-07-01", "currentElectricityReading": 1810, "currentWaterReading": 72.4 },
+    { "usageMonth": "2026-08-01", "currentElectricityReading": 2120, "currentWaterReading": 84.8 },
+    { "usageMonth": "2026-09-01", "currentElectricityReading": 3020, "currentWaterReading": 124.8 },
+    { "usageMonth": "2026-10-01", "currentElectricityReading": 3082, "currentWaterReading": 127.9 }
+  ],
+  "expectedResults": [
+    { "usageMonth": "2026-07-01", "waterM3": 12.4, "severity": "INSUFFICIENT", "referenceM3": null, "changePercent": null,
+      "kwh": 310, "electricitySeverity": "INSUFFICIENT", "electricityReferenceKwh": null, "electricityChangePercent": null },
+    { "usageMonth": "2026-08-01", "waterM3": 12.4, "severity": "NORMAL", "referenceM3": 12.4, "changePercent": 0.0,
+      "kwh": 310, "electricitySeverity": "NORMAL", "electricityReferenceKwh": 310, "electricityChangePercent": 0.0 },
+    { "usageMonth": "2026-09-01", "waterM3": 40.0, "severity": "HIGH", "referenceM3": 12.0, "changePercent": 233.3,
+      "kwh": 900, "electricitySeverity": "HIGH", "electricityReferenceKwh": 300, "electricityChangePercent": 200.0 },
+    { "usageMonth": "2026-10-01", "waterM3": 3.1, "severity": "WATCH", "referenceM3": 12.4, "changePercent": -75.0,
+      "kwh": 62, "electricitySeverity": "WATCH", "electricityReferenceKwh": 310, "electricityChangePercent": -80.0 }
+  ]
+}

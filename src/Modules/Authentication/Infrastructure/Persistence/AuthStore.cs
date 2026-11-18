@@ -73,7 +73,9 @@ public sealed class AuthStore(AuthenticationDbContext db) : IAuthStore
     public Task<PasswordResetToken?> RecoveryAsync(Guid id, CancellationToken ct) => db.PasswordResetTokens.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<List<PasswordResetToken>> RecoveriesAsync(Guid id, CancellationToken ct) => db.PasswordResetTokens.Where(x => x.UserId == id).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
     public Task<RefreshToken?> RefreshAsync(string hash, CancellationToken ct) => db.RefreshTokens.SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
-    public Task<RefreshToken?> RefreshByIdAsync(Guid id, CancellationToken ct) => db.RefreshTokens.SingleOrDefaultAsync(x => x.Id == id, ct);
+    public Task<RefreshToken?> CurrentRefreshAsync(Guid userId, Guid sessionId, CancellationToken ct) =>
+        db.RefreshTokens.SingleOrDefaultAsync(token => token.UserId == userId && token.SessionId == sessionId
+            && token.RevokedAt == null, ct);
     public Task<List<RefreshToken>> SessionsAsync(Guid id, CancellationToken ct) => db.RefreshTokens.Where(x => x.UserId == id && x.RevokedAt == null).ToListAsync(ct);
     public Task<PrivilegedActionChallenge?> PrivilegedChallengeAsync(Guid id, CancellationToken ct) => db.PrivilegedActionChallenges.SingleOrDefaultAsync(x => x.Id == id, ct);
     public Task<List<PrivilegedActionChallenge>> PrivilegedChallengesAsync(Guid userId, string purpose, CancellationToken ct) => db.PrivilegedActionChallenges

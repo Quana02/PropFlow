@@ -69,5 +69,6 @@ public sealed partial class AuthUseCases
             await RevokeAllAsync(user.Id, "password_reset", ct);
             return true;
         }, ct);
+        await RecheckConnectionsAsync(candidate.UserId);
     }
 }

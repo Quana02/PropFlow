@@ -8,6 +8,10 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Microsoft.ML.TimeSeries" Version="4.0.3" />
+    <ProjectReference Include="..\Billing.Contracts\PropFlow.Modules.Billing.Contracts.csproj" />
+    <ProjectReference Include="..\PropertyAssets.Contracts\PropFlow.Modules.PropertyAssets.Contracts.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\..\Shared\PropFlow.Shared.csproj" />
   </ItemGroup>
 

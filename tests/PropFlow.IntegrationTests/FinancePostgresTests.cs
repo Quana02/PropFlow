@@ -17,10 +17,12 @@ public sealed class FinancePostgresTests
         var database="propflow_finance_test_"+Guid.NewGuid().ToString("N");
         var config=new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString()); config.Database="postgres";
         await using var admin=new NpgsqlConnection(config.ConnectionString); await admin.OpenAsync();
-        await using(var create=new NpgsqlCommand($"CREATE DATABASE \"{database}\"",admin)) await create.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.CreateAsync(admin, database);
         try
         {
             config.Database=database; var connection=config.ConnectionString;
+            await TestDatabaseSafety.VerifyFixtureAsync(connection, database, TestDatabaseSafety.ProcessOwner,
+                TestDatabaseConfiguration.GetConnectionString());
             BillingDbContext Billing()=>new(new DbContextOptionsBuilder<BillingDbContext>().UseNpgsql(connection).Options);
             PaymentsDbContext Payments()=>new(new DbContextOptionsBuilder<PaymentsDbContext>().UseNpgsql(connection).Options);
             await using var billing=Billing(); await using var payments=Payments();
@@ -76,7 +78,7 @@ public sealed class FinancePostgresTests
         {
             Assert.StartsWith("propflow_finance_test_",database);Assert.Equal(54,database.Length);
             NpgsqlConnection.ClearAllPools();
-            await using var drop=new NpgsqlCommand($"DROP DATABASE \"{database}\" WITH (FORCE)",admin);await drop.ExecuteNonQueryAsync();
+            await TestDatabaseSafety.DropAsync(admin, database);
         }
     }
 }

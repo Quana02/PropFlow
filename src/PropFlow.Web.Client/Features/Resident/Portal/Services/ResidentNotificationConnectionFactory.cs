@@ -11,11 +11,11 @@ public sealed class ResidentNotificationConnectionFactory(IConfiguration configu
     {
         var apiBase = new Uri(new Uri(navigation.BaseUri), configuration["Api:BaseUrl"]
             ?? throw new InvalidOperationException("Thiếu cấu hình Api:BaseUrl."));
-        return new HubConnectionBuilder()
+        return session.ObserveTransport(new HubConnectionBuilder()
             .WithUrl(new Uri(apiBase, "hubs/notifications"), options =>
                 options.AccessTokenProvider = session.GetValidAccessTokenAsync)
             .WithAutomaticReconnect(new ReconnectPolicy())
-            .Build();
+            .Build());
     }
 
     public async Task StartAsync(HubConnection connection, CancellationToken ct)

@@ -4,21 +4,45 @@
     --pf-list-heading: #f3f8fc;
     --pf-line: #d8e5f0;
     --pf-text: #26364e;
-    --pf-muted: #64748b;
+    --pf-muted: #52647a;
     --pf-accent: #0278b4;
+    --pf-info: #075985;
+    --pf-action-bg: #0369a1;
+    --pf-action-hover-bg: #075985;
+    --pf-action-text: #fff;
+    --pf-violet: #6d28d9;
+    --pf-warning: #92400e;
+    --pf-danger: #9f1239;
+    --pf-success: #047857;
+    --pf-canvas: #f8f9ff;
+    color-scheme: light;
     --bs-font-sans-serif: var(--pf-font);
     --bs-font-monospace: var(--pf-font);
     color-scheme: light;
 }
 
 :root.dark, :root[data-theme="dark"] {
-    --pf-menu-surface: #131f31;
+    --pf-canvas: #080d14;
+    --pf-menu-surface: #111c2b;
     --pf-list-heading: #17263a;
     --pf-line: #2b3e54;
-    --pf-text: #edf6ff;
-    --pf-muted: #a5b6cb;
-    --pf-accent: #38bdf8;
+    --pf-text: #f1f7ff;
+    --pf-muted: #b4c3d5;
+    --pf-accent: #67e8f9;
+    --pf-info: #7dd3fc;
+    --pf-action-bg: #67e8f9;
+    --pf-action-hover-bg: #a5f3fc;
+    --pf-action-text: #08131e;
+    --pf-violet: #c4b5fd;
+    --pf-warning: #fcd34d;
+    --pf-danger: #fda4af;
+    --pf-success: #6ee7b7;
     color-scheme: dark;
+}
+
+#app-body {
+    background-color: var(--pf-canvas);
+    color: var(--pf-text);
 }
 
 html, body, button, input, select, textarea, pre, code, kbd, samp {

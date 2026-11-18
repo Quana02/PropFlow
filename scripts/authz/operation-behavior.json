@@ -1,0 +1,62 @@
+{
+  "GET /api/v1/auth/csrf": {
+    "category": "Technical",
+    "applicable": true,
+    "effect": "Cấp cookie hoặc request token antiforgery"
+  },
+  "GET /api/v1/payment-settings/sepay/accounts": {
+    "category": "Provider-dependent",
+    "applicable": true,
+    "effect": "Đọc tài khoản provider và có thể xoay OAuth token"
+  },
+  "GET /api/v1/resident/weather": {
+    "category": "Provider-dependent",
+    "applicable": true,
+    "effect": "Cache miss gọi dịch vụ thời tiết"
+  },
+  "GET /api/v1/emergency-calls/rtc": {
+    "category": "Technical",
+    "applicable": true,
+    "effect": "Cấp cấu hình kết nối và thông tin TURN có thời hạn khi được cấu hình"
+  },
+  "POST /api/v1/payment-settings/destination/preview": {
+    "category": "Read",
+    "applicable": false,
+    "effect": "Tạo QR preview từ bản nháp, không ghi đích thanh toán"
+  },
+  "POST /api/v1/payment-settings/sepay/accounts/preview": {
+    "category": "Provider-dependent",
+    "applicable": true,
+    "effect": "Đọc tài khoản provider và có thể làm mới OAuth token"
+  },
+  "GET /api/v1/utility-insights": {
+    "category": "Workflow transition",
+    "applicable": true,
+    "effect": "Tạo hoặc làm mới cache phân tích persisted theo fingerprint, không gọi provider"
+  },
+  "GET /api/v1/utility-insights/apartments/{apartment:guid}": {
+    "category": "Workflow transition",
+    "applicable": true,
+    "effect": "Tạo hoặc làm mới cache phân tích persisted theo fingerprint, không gọi provider"
+  },
+  "POST /api/v1/utility-insights/apartments/{apartment:guid}/explain": {
+    "category": "AI trigger",
+    "applicable": true,
+    "effect": "Gọi provider giải thích với quota, lưu attempt và kết quả"
+  },
+  "POST /api/v1/utility-insights/apartments/{apartment:guid}/review": {
+    "category": "Workflow transition",
+    "applicable": true,
+    "effect": "Xét duyệt phân tích và ghi history/outbox; không thay hóa đơn"
+  },
+  "GET /api/v1/resident/utility-insights": {
+    "category": "Workflow transition",
+    "applicable": true,
+    "effect": "Tạo/làm mới phân tích cho snapshot recipient đang đăng nhập, không gọi provider"
+  },
+  "GET /api/v1/resident/facility-recommendations/today": {
+    "category": "Technical",
+    "applicable": true,
+    "effect": "Đọc lịch công bố và cấp vé speech tạm, ngẫu nhiên, gắn authenticated resident; không gọi provider"
+  }
+}

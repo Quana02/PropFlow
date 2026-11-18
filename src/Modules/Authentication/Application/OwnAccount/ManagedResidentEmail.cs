@@ -118,6 +118,7 @@ public sealed partial class AuthUseCases
             }, ct);
             if (!verified)
                 throw new AuthFailure(400, "invalid_challenge", "Mật khẩu, email hoặc mã xác minh không hợp lệ, hoặc yêu cầu đã hết hiệu lực.");
+            await RecheckConnectionsAsync(userId);
         }
         catch (AuthFailure failure) when (failure.Code == "email_conflict")
         {
