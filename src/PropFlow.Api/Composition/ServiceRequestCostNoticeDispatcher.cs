@@ -61,6 +61,34 @@ public sealed class ServiceRequestCostNoticeDispatcher(ServiceRequestsDbContext 
                     item.Delivered(clock.GetUtcNow());
                     continue;
                 }
+                if (item.Name == "ServiceRequestInvoiceReady")
+                {
+                    var invoice = JsonSerializer.Deserialize<ServiceRequestInvoiceNotice>(item.Payload)!;
+                    var linked = await db.ServiceRequests.AsNoTracking().AnyAsync(x => x.Id == item.SourceId &&
+                        x.ServiceInvoiceId == invoice.InvoiceId, ct);
+                    if (linked)
+                    {
+                        var recipient = await residents.Residents.AsNoTracking().Where(x => x.Id == invoice.ResidentId)
+                            .Select(x => x.UserId).SingleOrDefaultAsync(ct);
+                        if (recipient is null) throw new InvalidOperationException("Resident account unavailable.");
+                        await notifications.PublishAsync(new(item.Id, recipient, null, "Hóa đơn dịch vụ đã sẵn sàng",
+                            $"Yêu cầu {invoice.RequestNumber} đã được nghiệm thu. Vui lòng xem hóa đơn và thanh toán theo số tiền đã duyệt.",
+                            "", "SERVICE_REQUEST", item.SourceId, $"/resident/service-requests/{item.SourceId}"), ct);
+                    }
+                    item.Delivered(clock.GetUtcNow());
+                    continue;
+                }
+                if (item.Name == "ServiceRequestAdditionalCostReviewRequested")
+                {
+                    var review = JsonSerializer.Deserialize<AdditionalCostReviewNotice>(item.Payload)!;
+                    var waiting = await db.ServiceRequests.AsNoTracking().AnyAsync(x => x.Id == item.SourceId &&
+                        x.AdditionalCostProposalId == review.ProposalId && x.AdditionalCostConsentStatus == "AWAITING_MANAGER", ct);
+                    if (waiting)
+                        await (workflow ?? throw new InvalidOperationException("Workflow notification delivery is unavailable."))
+                            .PublishCostReviewAsync(item, review.StaffUserId, review.RequestNumber, ct);
+                    item.Delivered(clock.GetUtcNow());
+                    continue;
+                }
                 if (item.Name != "ServiceRequestAdditionalCostProposed")
                     throw new InvalidOperationException("Unsupported service request cost notice.");
                 var notice = JsonSerializer.Deserialize<AdditionalCostNotice>(item.Payload)!;

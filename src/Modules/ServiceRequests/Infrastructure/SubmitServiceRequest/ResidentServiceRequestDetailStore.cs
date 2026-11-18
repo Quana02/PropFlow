@@ -100,7 +100,7 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 activity.ToStatus?.ToString(),
                 activity.CreatedAt)).ToArray(),
             request.BaseServiceCost,
-            request.ApprovedAdditionalCost, AdditionalCostConsent: request.AdditionalCostProposalId.HasValue ? new(request.AdditionalCostProposalId.Value, request.ProposedAdditionalCost, request.AdditionalCostNote, request.AdditionalCostConsentStatus, request.AdditionalCostProposedAt, request.AdditionalCostRespondedAt) : null,
+            request.ApprovedAdditionalCost, AdditionalCostConsent: request.AdditionalCostProposalId.HasValue && request.AdditionalCostConsentStatus != "AWAITING_MANAGER" ? new(request.AdditionalCostProposalId.Value, request.ProposedAdditionalCost, request.AdditionalCostNote, request.AdditionalCostConsentStatus, request.AdditionalCostProposedAt, request.AdditionalCostRespondedAt) : null,
             FacilityName: ServiceRequestAreaCodes.IsCommonArea(request.ServiceAreaCode) ? facility?.Name : null);
     }
 
@@ -113,7 +113,8 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
     {
         var (title, description) = type switch
         {
-            ServiceActivityType.ADDITIONAL_COST_PROPOSED => ("Cần xác nhận chi phí phát sinh", "Bộ phận xử lý đang chờ bạn chấp nhận chi phí trước khi tiếp tục công việc."),
+            ServiceActivityType.ADDITIONAL_COST_PROPOSED => ("Ban Quản lý đang kiểm tra phí phát sinh", "Bộ phận xử lý đã báo phí để Ban Quản lý xem xét trước khi gửi bạn xác nhận."),
+            ServiceActivityType.ADDITIONAL_COST_MANAGER_APPROVED => ("Cần xác nhận chi phí phát sinh", "Ban Quản lý đã duyệt báo giá. Vui lòng chấp thuận hoặc từ chối chi phí để tiếp tục xử lý."),
             ServiceActivityType.ADDITIONAL_COST_ACCEPTED => ("Đã đồng ý chi phí phát sinh", "Bạn đã chấp nhận chi phí; bộ phận xử lý được tiếp tục công việc."),
             ServiceActivityType.ADDITIONAL_COST_REJECTED => ("Đã từ chối chi phí phát sinh", "Yêu cầu dịch vụ đã tự động bị từ chối theo phản hồi của bạn."),
             ServiceActivityType.CREATED => ("Đã gửi yêu cầu", "Yêu cầu đã được ghi nhận và đang chờ Ban Quản lý tiếp nhận."),

@@ -3,7 +3,7 @@
 @using PropFlow.Web.Client.Shared.Feedback
 @inject AuthenticatedApiClient Api
 
-@if (Consent is { } proposal)
+@if (Consent is { Status: not "AWAITING_MANAGER" } proposal)
 {
     <section class="cost-consent" aria-label="Xác nhận chi phí phát sinh">
         <h3>Chi phí phát sinh cần xác nhận</h3>

@@ -37,7 +37,22 @@
         </div>
     </section>
 
-    @if (detail?.AdditionalCostConsent is { } consent) { <section class="cost-consent-summary" role="status"><strong>Chi phí phát sinh: @Money(consent.Amount)</strong><p>@consent.Note</p><p>@(consent.Status == "PENDING" ? "Đang chờ cư dân xác nhận. Staff chưa được tiếp tục và Manager chưa được nghiệm thu." : consent.Status == "ACCEPTED" ? "Cư dân đã đồng ý chi phí phát sinh." : "Cư dân từ chối chi phí; yêu cầu đã được tự động từ chối.")</p></section> }
+    @if (detail?.AdditionalCostConsent is { } consent)
+    {
+        <section class="cost-consent-summary" aria-label="Duyệt chi phí phát sinh">
+            <strong>Staff đề xuất: @Money(consent.Amount)</strong><p>@consent.Note</p>
+            <p role="status">@(consent.Status switch {
+                "AWAITING_MANAGER" => "Chờ Manager duyệt phí. Staff đang tạm dừng phần việc phát sinh.",
+                "PENDING" => "Đã gửi cư dân xác nhận. Staff chưa được tiếp tục và Manager chưa được nghiệm thu.",
+                "ACCEPTED" => "Cư dân đã đồng ý chi phí phát sinh. Staff được tiếp tục công việc.",
+                _ => "Cư dân từ chối chi phí; yêu cầu đã bị hủy." })</p>
+            @if (consent.Status == "AWAITING_MANAGER" && detail.Status is "IN_PROGRESS" or "ASSIGNED")
+            {
+                <button type="button" class="primary-action" disabled="@savingCostApproval" @onclick="OpenCostApproval">Duyệt và gửi cư dân xác nhận</button>
+            }
+            @if (costApprovalError is not null) { <p role="alert">@costApprovalError</p> }
+        </section>
+    }
     <section class="signal-strip" aria-label="Tóm tắt xử lý">
         <article><span class="signal-icon sky"><span class="material-symbols-outlined">schedule</span></span><div><small>Thời gian từ khi gửi</small><strong>@ElapsedLabel()</strong></div></article>
         <article><span class="signal-icon emerald"><span class="material-symbols-outlined">engineering</span></span><div><small>Nhân sự phụ trách</small><strong>@AssignedStaffName()</strong></div></article>
@@ -142,6 +157,14 @@
     </div>
 </div>
 
+@if (costProposalToApprove is { } pendingCost)
+{
+    <PropFlowConfirmationDialog Title="Duyệt chi phí phát sinh?" Tone="DialogTone.Decision"
+        Message="@($"Xác nhận báo giá {Money(pendingCost.Amount)} của Staff và gửi cư dân chấp thuận.")"
+        Detail="Công việc vẫn tạm dừng cho đến khi cư dân đồng ý. Cư dân từ chối sẽ hủy yêu cầu."
+        ConfirmText="Duyệt và gửi cư dân" Busy="@savingCostApproval" OnConfirm="ApproveCostAsync" OnCancel="CloseCostApproval" />
+}
+
 @if (selectedActivity is not null)
 {
     <PropFlowConfirmationDialog Title="Kiểm tra kết quả xử lý" Tone="DialogTone.Decision" Wide
@@ -172,7 +195,7 @@
                 </section>
 
                 <label class="note-field result-note"><span>Ghi chú nghiệm thu</span><textarea rows="3" maxlength="2000" @bind="reviewDecisionNote" placeholder="Nhập nhận xét cho Staff hoặc ghi chú nghiệm thu…"></textarea></label>
-                <label class="note-field result-note"><span>Chi phí phát sinh được duyệt (VND)</span><input type="number" min="0" step="1" @bind="approvedAdditionalCost" /><small>Staff đề xuất: @Money(detail?.ProposedAdditionalCost ?? 0). Chỉ được nghiệm thu sau khi cư dân đồng ý. Có thể duyệt thấp hơn, không vượt mức cư dân đã chấp thuận.</small></label>
+                <p class="note-field result-note">Phí phát sinh cư dân đã chấp thuận: <strong>@Money(detail?.ProposedAdditionalCost ?? 0)</strong>. Sau nghiệm thu, hệ thống phát hành hóa đơn theo chi phí được duyệt.</p>
                 @if (!string.IsNullOrWhiteSpace(resultActionNotice))
                 {
                     <p class="result-action-notice" role="status"><span class="material-symbols-outlined">info</span>@resultActionNotice</p>
@@ -248,7 +271,7 @@
                 }
             </div>
             @if (CommonArea) { <p>Công việc tại khu vực chung của chung cư không thu phí cư dân.</p> }
-            else { <label class="note-field"><span>Chi phí dịch vụ dự kiến (VND, có thể bằng 0)</span><input type="number" min="0" step="1" @bind="baseServiceCost" /></label> }
+            else { <p>Chỉ phân công nhân sự. Staff sẽ khảo sát và báo phí phát sinh để Manager duyệt, sau đó gửi cư dân chấp thuận.</p> }
             <label class="note-field"><span>Ghi chú phân công (không bắt buộc)</span><textarea rows="3" maxlength="2000" @bind="assignmentNote" placeholder="Thông tin cần lưu ý cho Staff…"></textarea></label>
             @if (!string.IsNullOrWhiteSpace(assignmentError)) { <p class="ui-notice" role="alert">@assignmentError</p> }
             <footer><button type="button" class="dialog-cancel" disabled="@savingAssignment" @onclick="CloseAssignPanel">Hủy</button><button type="button" class="dialog-confirm" disabled="@(savingAssignment || selectedStaffUserId is null)" @onclick="ConfirmAssignmentAsync">@(savingAssignment ? "Đang lưu…" : "Xác nhận phân công")</button></footer>
@@ -284,13 +307,35 @@
     private bool loadingStaff;
     private bool loadingEvidencePreview;
     private bool savingAssignment;
+    private bool savingCostApproval;
+    private string? costApprovalError;
+    private PropFlow.Modules.ServiceRequests.Contracts.AdditionalCostConsentView? costProposalToApprove;
+
+    private void OpenCostApproval()
+    {
+        if (savingCostApproval || detail?.AdditionalCostConsent?.Status != "AWAITING_MANAGER") return;
+        costApprovalError = null;
+        costProposalToApprove = detail.AdditionalCostConsent;
+    }
+    private void CloseCostApproval() { if (!savingCostApproval) costProposalToApprove = null; }
+    private async Task ApproveCostAsync()
+    {
+        if (savingCostApproval || Id is not { } id || costProposalToApprove is not { } proposal) return;
+        savingCostApproval = true;
+        try
+        {
+            var response = await Api.ApproveCostAsync(id, new(proposal.ProposalId));
+            costProposalToApprove = null;
+            if (!response.IsSuccess) costApprovalError = response.Message ?? "Chưa thể duyệt phí. Vui lòng tải lại yêu cầu.";
+            await OnParametersSetAsync();
+        }
+        finally { savingCostApproval = false; }
+    }
     private bool savingResolution;
     private bool savingClose;
     private string? staffSearch;
     private string? assignmentNote;
-    private decimal baseServiceCost;
     private bool CommonArea => PropFlow.Modules.ServiceRequests.Contracts.ServiceRequestAreaCodes.IsCommonArea(detail?.ServiceAreaCode);
-    private decimal approvedAdditionalCost;
     private string? assignmentError;
     private string? reviewDecisionNote;
     private string? resultActionNotice;
@@ -364,7 +409,6 @@
         assignmentError = null;
         staffSearch = null;
         assignmentNote = null;
-        baseServiceCost = detail?.BaseServiceCost ?? 0;
         selectedStaffUserId = detail?.AssignedStaffUserId;
         if (staffOptions.Count == 0)
         {
@@ -387,7 +431,6 @@
     {
         selectedActivity = activity;
         reviewDecisionNote = null;
-        approvedAdditionalCost = detail?.ProposedAdditionalCost ?? 0;
         resultActionNotice = null;
     }
 
@@ -437,7 +480,7 @@
         if (Id is not { } id || !CanReviewStaffResult) return;
         savingResolution = true;
         resultActionNotice = null;
-        var result = await Api.ApproveResolutionAsync(id, new(reviewDecisionNote, approvedAdditionalCost));
+        var result = await Api.ApproveResolutionAsync(id, new(reviewDecisionNote, detail?.ProposedAdditionalCost ?? 0));
         savingResolution = false;
         if (disposed) return;
         if (!result.IsSuccess || result.Data is null)
@@ -493,7 +536,7 @@
         if (Id is not { } id || selectedStaffUserId is not { } staffUserId) return;
         savingAssignment = true;
         assignmentError = null;
-        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote, CommonArea ? 0 : baseServiceCost));
+        var result = await Api.AssignAsync(id, new(staffUserId, assignmentNote));
         savingAssignment = false;
         if (disposed) return;
         if (!result.IsSuccess || result.Data is null)
@@ -523,7 +566,7 @@
         return elapsed.TotalDays >= 1 ? $"{(int)elapsed.TotalDays} ngày {elapsed.Hours} giờ" : $"{Math.Max(0, elapsed.Hours)} giờ {Math.Max(0, elapsed.Minutes)} phút";
     }
     private PropFlow.Modules.ServiceRequests.Contracts.ManagerServiceRequestActivityItem? LatestActivity() => detail?.Activities.LastOrDefault(x => !string.IsNullOrWhiteSpace(x.Detail));
-    private static string ActivityLabel(string type) => type switch { "CREATED" => "Cư dân gửi yêu cầu", "MANAGER_REVIEWED" => "Ban Quản lý tiếp nhận", "PROPERTY_CONTEXT_ASSOCIATED" => "Đã gắn bối cảnh tài sản", "ASSIGNED" => "Đã phân công", "REASSIGNED" => "Đã điều phối lại", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Ghi nhận kết quả", "REWORK_REQUESTED" => "Manager yêu cầu xử lý lại", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", _ => "Cập nhật trạng thái" };
+    private static string ActivityLabel(string type) => type switch { "CREATED" => "Cư dân gửi yêu cầu", "MANAGER_REVIEWED" => "Ban Quản lý tiếp nhận", "PROPERTY_CONTEXT_ASSOCIATED" => "Đã gắn bối cảnh tài sản", "ASSIGNED" => "Đã phân công", "REASSIGNED" => "Đã điều phối lại", "PROGRESS_UPDATED" => "Cập nhật tiến độ", "WORK_RESULT_ADDED" => "Ghi nhận kết quả", "REWORK_REQUESTED" => "Manager yêu cầu xử lý lại", "RESOLVED" => "Đã xử lý", "CLOSED" => "Đã đóng", "ADDITIONAL_COST_PROPOSED" => "Staff gửi báo giá", "ADDITIONAL_COST_MANAGER_APPROVED" => "Manager duyệt và gửi cư dân", "ADDITIONAL_COST_ACCEPTED" => "Cư dân đồng ý phí", "ADDITIONAL_COST_REJECTED" => "Cư dân từ chối, hủy yêu cầu", _ => "Cập nhật trạng thái" };
     private static string FormatBytes(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{bytes / 1024d:0.##} KB";
     private static string StatusTransition(string? from, string? to) => to is null ? "Yêu cầu đã được cập nhật." : $"{StatusLabel(from)} → {StatusLabel(to)}";
     private static string Initials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => char.ToUpperInvariant(x[0])));

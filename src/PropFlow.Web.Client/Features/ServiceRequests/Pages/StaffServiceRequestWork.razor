@@ -36,14 +36,14 @@ else
     {
     <section class="work-card cost-proposal-card">
         <header><h2>Chi phí phát sinh</h2></header>
-        <p>Phí ban đầu: @($"{detail.BaseServiceCost:N0} đ"). Phải gửi đề xuất và chờ cư dân đồng ý trước khi thực hiện phần việc phát sinh.</p>
+        <p>Gửi số tiền và lý do cho Manager duyệt. Chỉ thực hiện phần việc phát sinh sau khi Manager đã gửi báo giá và cư dân đồng ý.</p>
         @if (detail.AdditionalCostConsent is { } consent)
         {
-            <p><strong>@($"{consent.Amount:N0} đ")</strong> · @(consent.Status == "PENDING" ? "Đang chờ cư dân xác nhận — tạm dừng xử lý" : consent.Status == "ACCEPTED" ? "Cư dân đã đồng ý — được tiếp tục xử lý" : "Cư dân từ chối — yêu cầu đã tự động kết thúc")</p><p>@consent.Note</p>
+            <p><strong>@($"{consent.Amount:N0} đ")</strong> · @(consent.Status switch { "AWAITING_MANAGER" => "Đang chờ Manager duyệt phí — tạm dừng xử lý", "PENDING" => "Manager đã duyệt, đang chờ cư dân xác nhận — tạm dừng xử lý", "ACCEPTED" => "Cư dân đã đồng ý — được tiếp tục xử lý", _ => "Cư dân từ chối — yêu cầu đã bị hủy" })</p><p>@consent.Note</p>
         }
         @if (!CommonArea && detail.Status == "IN_PROGRESS" && currentStep == 3)
         {
-            <div class="cost-proposal-form"><label>Chi phí phát sinh (VND)<input type="number" min="1" step="1" @bind="proposalAmount" disabled="@costBusy" /></label><label>Lý do / vật tư cần thực hiện<textarea maxlength="1000" rows="3" @bind="proposalNote" disabled="@costBusy"></textarea></label><button type="button" disabled="@(costBusy || proposalAmount <= 0 || string.IsNullOrWhiteSpace(proposalNote))" @onclick="SendCostProposal">@(costBusy ? "Đang gửi…" : "Gửi cư dân xác nhận chi phí")</button></div>
+            <div class="cost-proposal-form"><label>Chi phí phát sinh (VND)<input type="number" min="1" step="1" @bind="proposalAmount" disabled="@costBusy" /></label><label>Lý do / vật tư cần thực hiện<textarea maxlength="1000" rows="3" @bind="proposalNote" disabled="@costBusy"></textarea></label><button type="button" disabled="@(costBusy || proposalAmount <= 0 || string.IsNullOrWhiteSpace(proposalNote))" @onclick="SendCostProposal">@(costBusy ? "Đang gửi…" : "Gửi Manager duyệt phí")</button></div>
         }
         @if (costError is not null) { <p class="evidence-error" role="alert">@costError</p> }
     </section>
@@ -230,7 +230,7 @@ else
 
     public void Dispose() { toastLifetime.Dispose();  disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
-    private bool CostWorkBlocked => detail?.AdditionalCostConsent?.Status is "PENDING" or "REJECTED" || detail?.Status == "CANCELLED";
+    private bool CostWorkBlocked => detail?.AdditionalCostConsent?.Status is "AWAITING_MANAGER" or "PENDING" or "REJECTED" || detail?.Status == "CANCELLED";
     private decimal proposalAmount;
     private string proposalNote = "";
     private bool costBusy;
@@ -262,12 +262,12 @@ else
     private string Equipment => detail?.EquipmentName ?? "Chưa gắn thiết bị";
     private string ServiceArea => PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.Label(detail?.ServiceAreaCode);
     private string PriorityLabel => detail?.PriorityCode switch { "URGENT" => "Khẩn cấp", "HIGH" => "Cao", null => "Chưa xác định", _ => "Tiêu chuẩn" };
-    private string StatusLabel => detail?.AdditionalCostConsent?.Status == "PENDING" ? "Chờ cư dân xác nhận phí" : detail?.AdditionalCostConsent?.Status == "REJECTED" ? "Cư dân đã từ chối dịch vụ" : detail?.Status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => "Không xác định" };
+    private string StatusLabel => detail?.AdditionalCostConsent?.Status == "AWAITING_MANAGER" ? "Chờ Manager duyệt phí" : detail?.AdditionalCostConsent?.Status == "PENDING" ? "Chờ cư dân xác nhận phí" : detail?.AdditionalCostConsent?.Status == "REJECTED" ? "Cư dân đã từ chối dịch vụ" : detail?.Status switch { "ASSIGNED" => "Chờ tiếp nhận", "IN_PROGRESS" => "Đang xử lý", "RESOLVED" => "Đã nghiệm thu", "CLOSED" => "Đã đóng", "CANCELLED" => "Đã hủy", _ => "Không xác định" };
     private string AssignedAtLabel => detail is null ? "Chưa xác định" : detail.AssignedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string UpdatedAtLabel => detail is null ? "Chưa xác định" : detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy · HH:mm");
     private string PreferredSchedule => detail?.PreferredDate is null ? "Chưa đăng ký" :
         $"{detail.PreferredDate:dd/MM/yyyy} · {PropFlow.Web.Client.Features.ServiceRequests.Models.ServiceRequestAreaText.TimeSlot(detail.PreferredTimeCode)}";
-    private string CurrentProgressLabel => CostWorkBlocked ? detail?.Status == "CANCELLED" ? "Đã từ chối dịch vụ" : "Chờ cư dân xác nhận phí" : currentStep switch { 2 => "Chờ tiếp nhận · Bước 2/4", 3 => "Đang thực hiện · Bước 3/4", 4 => "Thiếu ảnh bằng chứng · Bước 3/4", 5 => "Chờ Manager nghiệm thu · Bước 4/4", 6 => "Đã hoàn tất · Bước 4/4", _ => "Đã phân công · Bước 1/4" };
+    private string CurrentProgressLabel => CostWorkBlocked ? StatusLabel : currentStep switch { 2 => "Chờ tiếp nhận · Bước 2/4", 3 => "Đang thực hiện · Bước 3/4", 4 => "Thiếu ảnh bằng chứng · Bước 3/4", 5 => "Chờ Manager nghiệm thu · Bước 4/4", 6 => "Đã hoàn tất · Bước 4/4", _ => "Đã phân công · Bước 1/4" };
     private string LatestProgressTime => Activities.FirstOrDefault() is { } activity ? $"{activity.CreatedAt.ToLocalTime():HH:mm} hôm nay" : "Chưa cập nhật";
     private string LatestProgressSummary => Activities.FirstOrDefault()?.Title ?? "Chưa có tiến độ";
     private string ResultSummary => LatestWorkResult()?.WorkResult ?? "Bản nháp kết quả đang được Staff hoàn thiện trước khi gửi Ban Quản lý nghiệm thu.";
