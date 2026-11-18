@@ -175,8 +175,10 @@ public sealed class EmergencyCallClient(EmergencyCallApi api, AuthSession sessio
                 }
                 else
                 {
+                    if (Current?.Id != next.Id) mediaPaused = false;
                     Current = next; PanelOpen = true;
-                    if (next.Status == "WAITING" && peerKey is not null) await StopMediaAsync();
+                    if (peerKey is not null && (next.Status is "WAITING" or "ENDED" || !next.ResidentOnline || !next.ManagerOnline))
+                        await StopMediaAsync();
                     Notify();
                     if (!mediaPaused && next.Status is "CONNECTING" or "CONNECTED" && next.ResidentOnline && next.ManagerOnline)
                     {

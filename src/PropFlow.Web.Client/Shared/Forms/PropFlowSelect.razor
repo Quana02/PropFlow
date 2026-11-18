@@ -3,7 +3,7 @@
 @using System.Linq.Expressions
 
 <div @ref="root" class="pf-select pf-select--@Variant.ToLowerInvariant() @(Disabled ? "is-disabled" : null) @(open ? "is-open" : null) @ValidationClass" @attributes="AdditionalAttributes">
-    <button id="@Id" type="button" class="pf-select__trigger" disabled="@Disabled" aria-label="@AriaLabel" aria-haspopup="listbox" aria-expanded="@open" aria-controls="@listboxId" aria-activedescendant="@(open && Options.Count > 0 ? $"{listboxId}-{activeIndex}" : null)" @onclick="ToggleAsync" @onkeydown="HandleKeyDown">
+    <button id="@Id" type="button" class="pf-select__trigger" disabled="@Disabled" aria-label="@AriaLabel" aria-haspopup="listbox" aria-expanded="@(open ? "true" : "false")" aria-controls="@listboxId" aria-activedescendant="@(open && Options.Count > 0 ? $"{listboxId}-{activeIndex}" : null)" @onclick="ToggleAsync" @onkeydown="HandleKeyDown">
         <span class="pf-select__value @(SelectedOption is null ? "is-placeholder" : null)">@(SelectedOption?.Label ?? Placeholder)</span>
         <span class="material-symbols-outlined pf-select__chevron" aria-hidden="true">expand_more</span>
     </button>
@@ -25,7 +25,7 @@
             {
                 var option = VisibleOptions[index];
                 var selected = option.Value == Value;
-                <button @key="option.Value" id="@($"{listboxId}-{index}")" type="button" role="option" class="pf-select__option @(selected ? "is-selected" : null) @(index == activeIndex ? "is-active" : null)" aria-selected="@selected" disabled="@option.Disabled" @onclick="() => SelectAsync(option)">
+                <button @key="option.Value" id="@($"{listboxId}-{index}")" type="button" role="option" class="pf-select__option @(selected ? "is-selected" : null) @(index == activeIndex ? "is-active" : null)" aria-selected="@(selected ? "true" : "false")" disabled="@option.Disabled" @onclick="() => SelectAsync(option)">
                     <span>@option.Label</span>
                     @if (selected) { <span class="material-symbols-outlined" aria-hidden="true">check</span> }
                 </button>
@@ -120,8 +120,13 @@
     }
 
     [JSInvokable]
-    public Task SelectActiveFromKeyboard() =>
-        VisibleOptions.Count > 0 && !VisibleOptions[activeIndex].Disabled ? SelectAsync(VisibleOptions[activeIndex]) : Task.CompletedTask;
+    public async Task SelectActiveFromKeyboard()
+    {
+        if (VisibleOptions.Count == 0 || VisibleOptions[activeIndex].Disabled) return;
+        await SelectAsync(VisibleOptions[activeIndex]);
+        // JS callbacks do not receive the automatic render scheduled for component UI events.
+        await InvokeAsync(StateHasChanged);
+    }
 
     private void OnSearchInput(ChangeEventArgs args)
     {

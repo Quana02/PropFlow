@@ -88,17 +88,18 @@ export default async function verifyCommunicationNotifications({
   checks.draftAndTyping = { trigger: 'UI-to-UI', assignedParticipants: true, otherConversationExcluded: true, draftOutsidePersistedMessages: true };
   await save(checks);
 
-  const managerFramesBeforeSend = frames(manager, 'SupportChatChanged').length;
   await evaluate(owner, 'window.failFixtureChatPost(' + JSON.stringify(chat + '/messages') + ')');
   await click(owner, '.support-send');
   await until(() => visible(owner, '.support-send-status.failed', 'Chưa gửi được'), 'Chat did not display the injected send error');
   assert.equal(await evaluate(owner, 'document.querySelector("#support-message").value'), draft);
-  assert.equal((await action(manager, chat + '/messages', undefined, 200)).items.some(message => message.text === draft), false);
-  assert.equal(frames(manager, 'SupportChatChanged').slice(managerFramesBeforeSend)
-    .some(args => args[0] === fixture.conversationId), false);
+  const afterFailedSend = await action(manager, chat + '/messages', undefined, 200);
+  assert.equal(afterFailedSend.items.some(message => message.text === draft), false);
+  // Read receipts also emit SupportChatChanged; compare persisted messages instead of attributing every hint to the failed send.
+  assert.deepEqual(afterFailedSend.items.map(message => message.id), unreadDraft.items.map(message => message.id));
   checks.draftAndTyping.failedSendKeepsDraft = true;
   await save(checks);
 
+  const managerFramesBeforeSend = frames(manager, 'SupportChatChanged').length;
   await click(owner, '.support-send');
   await until(() => frames(manager, 'SupportChatChanged').slice(managerFramesBeforeSend)
     .some(args => args.length === 1 && args[0] === fixture.conversationId),

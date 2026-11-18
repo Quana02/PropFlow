@@ -48,6 +48,14 @@ public sealed class FinanceAccessTests
             var authorization = page.GetCustomAttributes(typeof(AuthorizeAttribute), true)
                 .Cast<AuthorizeAttribute>().SingleOrDefault();
             Assert.NotNull(authorization);
+            if (page == typeof(PropFlow.Web.Client.Features.UtilityInsights.Pages.UtilityInsightsManagement))
+            {
+                Assert.Equal("MANAGER,ACCOUNTANT", authorization.Roles);
+                Assert.Equal("billing.read", authorization.Policy);
+                Assert.Equal(new[] { "/finance/utility-insights", "/operations/utility-insights" },
+                    page.GetCustomAttributes(typeof(RouteAttribute), false).Cast<RouteAttribute>().Select(route => route.Template).Order().ToArray());
+                return;
+            }
             Assert.Equal("ACCOUNTANT", authorization.Roles);
             Assert.Equal("finance.manage", authorization.Policy);
         });
@@ -63,7 +71,8 @@ public sealed class FinanceAccessTests
 
         Assert.Contains(pages, page => page.Name == "BankTransferReview");
         Assert.All(pages, page =>
-            Assert.Equal(typeof(AccountantLayout), page.GetCustomAttributes(typeof(LayoutAttribute), false)
+            Assert.Equal(page == typeof(PropFlow.Web.Client.Features.UtilityInsights.Pages.UtilityInsightsManagement)
+                    ? typeof(MainLayout) : typeof(AccountantLayout), page.GetCustomAttributes(typeof(LayoutAttribute), false)
                 .Cast<LayoutAttribute>().SingleOrDefault()?.LayoutType));
     }
 }

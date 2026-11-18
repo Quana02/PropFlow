@@ -150,11 +150,12 @@ public sealed class FacilityDiscoveryUiTests
     {
         using var handler=new Responses();using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};var capture=new Capture();
         await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
-            .AddSingleton<FacilityRecommendationsApi>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async()=>{
             var root=await renderer.RenderComponentAsync<ManagementPage>(ParameterView.Empty);var page=capture.Manager!;
             var html=WebUtility.HtmlDecode(root.ToHtmlString());Assert.Contains("Giờ mở và đóng cửa",html);Assert.Contains("Người phụ trách",html);
+            Assert.Contains("aria-expanded=\"false\"",html);
             Assert.DoesNotContain("Sức chứa",html);Assert.DoesNotContain("Số người",html);
             Set(page,"description","Mô tả đã chỉnh sửa");await Invoke(page,"Save");Refresh(page);
             Assert.Equal("Mô tả đã chỉnh sửa",handler.Saved!.Description);Assert.Equal(handler.Guide.Token,handler.Saved.ExpectedToken);
