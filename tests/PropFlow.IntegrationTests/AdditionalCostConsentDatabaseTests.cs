@@ -63,6 +63,46 @@ public sealed class CostConsentDatabaseFixture : IAsyncLifetime
 public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixture database) : IClassFixture<CostConsentDatabaseFixture>
 {
     [Fact]
+    public async Task UpgradeRoutesOnlyUnansweredLegacyQuotesBackToManagerAndRetiresQueuedResidentNotices()
+    {
+        var isolated = new CostConsentDatabaseFixture();
+        await isolated.InitializeAsync();
+        try
+        {
+            await using var db = isolated.CreateDb();
+            var migrator = db.GetService<IMigrator>();
+            await migrator.MigrateAsync("20261101095403_RequireResidentConsentForAdditionalCosts");
+            var now = DateTimeOffset.UtcNow;
+            ServiceRequest Legacy(string suffix, bool accepted = false, bool invoiced = false)
+            {
+                var request = new ServiceRequest("LEGACY-" + suffix, Guid.NewGuid(), Guid.NewGuid(), "Sửa vòi nước", "Kiểm tra vòi nước", now);
+                request.MarkUnderReview(now); request.SetBaseServiceCost(10000, now); request.MarkAssigned(now); request.MarkInProgress(now);
+                request.ProposeAdditionalCost(50000, "Thay van", now);
+                request.SubmitAdditionalCostForResident(request.AdditionalCostProposalId!.Value, now);
+                if (accepted) request.RespondToAdditionalCost(request.AdditionalCostProposalId.Value, Guid.NewGuid(), true, now);
+                if (invoiced) { request.ApproveAdditionalCost(50000, now); request.Resolve(now); request.LinkServiceInvoice(Guid.NewGuid(), now); }
+                return request;
+            }
+            var pending = Legacy("PENDING"); var accepted = Legacy("ACCEPTED", true); var issued = Legacy("ISSUED", true, true);
+            var invoiceId = issued.ServiceInvoiceId;
+            var oldNotice = new OutboxEvent("ServiceRequestAdditionalCostProposed", pending.Id,
+                JsonSerializer.Serialize(new AdditionalCostNotice(pending.ResidentId, pending.RequestNumber, 50000, "Thay van", pending.AdditionalCostProposalId!.Value)), now);
+            db.AddRange(pending, accepted, issued, oldNotice);
+            await db.SaveChangesAsync();
+            await migrator.MigrateAsync();
+            db.ChangeTracker.Clear();
+            var migrated = await db.ServiceRequests.AsNoTracking().SingleAsync(x => x.Id == pending.Id);
+            Assert.Equal("AWAITING_MANAGER", migrated.AdditionalCostConsentStatus);
+            Assert.Equal(10000, migrated.BaseServiceCost);
+            Assert.Equal("ACCEPTED", (await db.ServiceRequests.AsNoTracking().SingleAsync(x => x.Id == accepted.Id)).AdditionalCostConsentStatus);
+            Assert.Equal(invoiceId, (await db.ServiceRequests.AsNoTracking().SingleAsync(x => x.Id == issued.Id)).ServiceInvoiceId);
+            Assert.Equal("Delivered", (await db.ResidentEvents.SingleAsync(x => x.Id == oldNotice.Id)).Status);
+            Assert.Single(await db.ResidentEvents.Where(x => x.Name == "ServiceRequestAdditionalCostReviewRequested").ToArrayAsync());
+        }
+        finally { await isolated.DisposeAsync(); }
+    }
+
+    [Fact]
     public async Task Common_area_work_cannot_propose_a_resident_charge()
     {
         var setup = await Seed(propose: false, serviceArea: ServiceRequestAreaCodes.CommonArea);
@@ -125,7 +165,7 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
 
         Assert.Equal(SubmitServiceRequestOutcome.InvalidInput, (await handler.HandleAsync(owner.Id, command with { Description = "" }, default)).Outcome);
         await dispatcher.DispatchAsync(default);
-        Assert.Empty(await communication.Notifications.ToArrayAsync());
+        Assert.Empty(await communication.Notifications.Where(row => row.SenderUserId == owner.Id).ToArrayAsync());
         await using (var rolledBack = await db.Database.BeginTransactionAsync())
         {
             Assert.Equal(SubmitServiceRequestOutcome.Created, (await handler.HandleAsync(owner.Id, command, default)).Outcome);
@@ -133,7 +173,7 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         }
         db.ChangeTracker.Clear();
         await dispatcher.DispatchAsync(default);
-        Assert.Empty(await communication.Notifications.ToArrayAsync());
+        Assert.Empty(await communication.Notifications.Where(row => row.SenderUserId == owner.Id).ToArrayAsync());
 
         var created = await handler.HandleAsync(owner.Id, command, default);
         Assert.Equal(SubmitServiceRequestOutcome.Created, created.Outcome);
@@ -141,7 +181,7 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         var store = new ManagerServiceRequestStore(db);
         Assert.Equal(ManagerServiceRequestOutcome.Conflict, await store.AssignAsync(request.Id, manager.Id, assignee.Id, null, now, default));
         await dispatcher.DispatchAsync(default);
-        var submission = Assert.Single(await communication.Notifications.ToArrayAsync());
+        var submission = Assert.Single(await communication.Notifications.Where(row => row.SourceId == request.Id).ToArrayAsync());
         Assert.Equal(manager.Id, submission.RecipientUserId);
         Assert.Equal(owner.Id, submission.SenderUserId);
         Assert.Equal(request.Id, submission.SourceId);
@@ -160,14 +200,14 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         }
         db.ChangeTracker.Clear();
         await dispatcher.DispatchAsync(default);
-        Assert.Single(await communication.Notifications.ToArrayAsync());
+        Assert.Single(await communication.Notifications.Where(row => row.SourceId == request.Id).ToArrayAsync());
         Assert.Equal(ManagerServiceRequestOutcome.Success,
             await store.AssignAsync(request.Id, manager.Id, assignee.Id, null, DateTimeOffset.UtcNow, default));
         Assert.Equal(ManagerServiceRequestOutcome.Conflict,
             await store.AssignAsync(request.Id, manager.Id, assignee.Id, null, DateTimeOffset.UtcNow, default));
         await dispatcher.DispatchAsync(default);
         await dispatcher.DispatchAsync(default);
-        var assignment = Assert.Single(await communication.Notifications.Where(row => row.Id != submission.Id).ToArrayAsync());
+        var assignment = Assert.Single(await communication.Notifications.Where(row => row.SourceId == request.Id && row.Id != submission.Id).ToArrayAsync());
         Assert.Equal(assignee.Id, assignment.RecipientUserId);
         Assert.Equal(manager.Id, assignment.SenderUserId);
         Assert.Equal($"/staff/service-requests/{request.RequestNumber}", assignment.ActionPath);
@@ -246,10 +286,27 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         Assert.Equal(6, await communication.Notifications.CountAsync(row => row.SourceId == request.Id));
 
         var identity = new Setup(Guid.Empty, owner.Id, resident.Id, assignee.Id, Guid.Empty);
+        var staged = await Seed(identity: identity, review: false);
+        await dispatcher.DispatchAsync(default);
+        var reviewNotice = Assert.Single(await communication.Notifications.AsNoTracking().Where(x => x.SourceId == staged.Id).ToArrayAsync());
+        Assert.Equal(manager.Id, reviewNotice.RecipientUserId);
+        Assert.Equal("Chi phí phát sinh chờ duyệt", reviewNotice.Title);
+        Assert.Equal("409", await Respond(staged, true));
+        await Service(db, staged).ApproveAsync(manager.Id, staged.Id, new(staged.Proposal), default);
+        await Service(db, staged).ApproveAsync(manager.Id, staged.Id, new(staged.Proposal), default);
+        await dispatcher.DispatchAsync(default);
+        await dispatcher.DispatchAsync(default);
+        var notices = await communication.Notifications.AsNoTracking().Where(x => x.SourceId == staged.Id).ToArrayAsync();
+        Assert.Equal(2, notices.Length);
+        Assert.Single(notices.Where(x => x.RecipientUserId == owner.Id && x.Title == "Yêu cầu xác nhận chi phí phát sinh"));
+
         var replacedProposal = await Seed(identity: identity);
         var resolvedProposal = await Seed(identity: identity);
         await Service(db, replacedProposal).ProposeAsync(assignee.Id, replacedProposal.Id,
             new(70000, "Báo giá mới", replacedProposal.Proposal), default);
+        db.ChangeTracker.Clear();
+        var replaced = await db.ServiceRequests.SingleAsync(x => x.Id == replacedProposal.Id);
+        await Service(db, replacedProposal).ApproveAsync(manager.Id, replacedProposal.Id, new(replaced.AdditionalCostProposalId!.Value), default);
         Assert.Equal("OK", await Respond(resolvedProposal, false));
         await dispatcher.DispatchAsync(default);
         await dispatcher.DispatchAsync(default);
@@ -333,7 +390,7 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         await Task.WhenAll(Replace(), Respond(setup, true));
         await using var check = database.CreateDb();
         var request = await check.ServiceRequests.SingleAsync(x => x.Id == setup.Id);
-        Assert.Equal(70000, request.ProposedAdditionalCost); Assert.Equal("PENDING", request.AdditionalCostConsentStatus);
+        Assert.Equal(70000, request.ProposedAdditionalCost); Assert.Equal("AWAITING_MANAGER", request.AdditionalCostConsentStatus);
         Assert.NotEqual(setup.Proposal, request.AdditionalCostProposalId);
         Assert.Equal(StaffServiceRequestOutcome.Conflict, await new StaffServiceRequestStore(check).CompleteWorkAsync(setup.Staff,
             setup.Id, "Không được làm theo báo giá chưa duyệt", 70000, "Báo giá thay đổi", DateTimeOffset.UtcNow, default));
@@ -342,9 +399,14 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
     [Fact]
     public async Task ProposalAndNotificationAreCommittedTogetherAndStayVisibleInSqlProjections()
     {
-        var setup = await Seed();
+        var setup = await Seed(review: false);
         await using var db = database.CreateDb();
         Assert.Single(await db.ResidentEvents.Where(x => x.SourceId == setup.Id).ToArrayAsync());
+        Assert.Equal("AWAITING_MANAGER", (await new StaffServiceRequestStore(db).GetByIdAsync(setup.Staff, setup.Id, default))!.AdditionalCostConsent!.Status);
+        Assert.Null((await new ResidentServiceRequestDetailStore(db).GetAsync(setup.Resident, setup.Id, default))!.AdditionalCostConsent);
+        Assert.Equal("409", await Respond(setup, true));
+        await Service(db, setup).ApproveAsync(Guid.NewGuid(), setup.Id, new(setup.Proposal), default);
+        Assert.Equal(2, await db.ResidentEvents.CountAsync(x => x.SourceId == setup.Id));
         var detail = await new StaffServiceRequestStore(db).GetByIdAsync(setup.Staff, setup.Id, default);
         Assert.Equal("PENDING", detail!.AdditionalCostConsent!.Status);
         var error = await Assert.ThrowsAsync<ServiceRequestCostFailure>(() => Service(db, setup).RespondAsync(Guid.NewGuid(), setup.Id, new(setup.Proposal, true), default));
@@ -360,7 +422,7 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         catch (ServiceRequestCostFailure error) { return error.Status.ToString(); }
     }
     private static AdditionalCostConsentService Service(ServiceRequestsDbContext db, Setup setup) => new(db, new Scope(setup), new Scope(setup), TimeProvider.System);
-    private async Task<Setup> Seed(bool propose = true, string? serviceArea = null, Setup? identity = null)
+    private async Task<Setup> Seed(bool propose = true, string? serviceArea = null, Setup? identity = null, bool review = true)
     {
         await using var db = database.CreateDb(); var now = DateTimeOffset.UtcNow;
         var setup = identity ?? new Setup(Guid.Empty, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.Empty);
@@ -371,6 +433,7 @@ public sealed class AdditionalCostConsentDatabaseTests(CostConsentDatabaseFixtur
         db.AddRange(request, assignment); await db.SaveChangesAsync(); setup = setup with { Id = request.Id };
         if (!propose) return setup;
         var proposal = await Service(db, setup).ProposeAsync(setup.Staff, setup.Id, new(50000, "Thay vật tư"), default);
+        if (review) await Service(db, setup).ApproveAsync(Guid.NewGuid(), setup.Id, new(proposal.ProposalId), default);
         return setup with { Proposal = proposal.ProposalId };
     }
     private sealed record Setup(Guid Id, Guid Owner, Guid Resident, Guid Staff, Guid Proposal);

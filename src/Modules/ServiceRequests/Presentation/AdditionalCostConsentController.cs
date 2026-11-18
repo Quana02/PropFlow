@@ -14,6 +14,11 @@ public sealed class AdditionalCostConsentController(AdditionalCostConsentService
     public Task<ActionResult<AdditionalCostConsentView>> Propose(Guid id, ProposeAdditionalCostRequest request, CancellationToken ct) =>
         Execute(actor => consent.ProposeAsync(actor, id, request, ct));
 
+    [HttpPost("manager/service-requests/{id:guid}/additional-cost/approve")]
+    [Authorize(Policy = ServiceRequestsAuthorizationPolicies.Manage)]
+    public Task<ActionResult<AdditionalCostConsentView>> Approve(Guid id, ApproveAdditionalCostProposalRequest request, CancellationToken ct) =>
+        Execute(actor => consent.ApproveAsync(actor, id, request, ct));
+
     [HttpPost("resident/service-requests/{id:guid}/additional-cost/response")]
     [Authorize(Policy = ServiceRequestsAuthorizationPolicies.SubmitAsResident)]
     public Task<ActionResult<AdditionalCostConsentView>> Respond(Guid id, RespondAdditionalCostRequest request, CancellationToken ct) =>

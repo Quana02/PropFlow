@@ -305,7 +305,7 @@
     white-space: nowrap;
 }
 
-.status-pill.success { background: #def8ed; color: #07966a; }
+.status-pill.success { background: #def8ed; color:var(--pf-success); }
 .status-pill.waiting { background: #fff3d4; color: #d98a08; }
 .amount { font-weight: 800; white-space: nowrap; }
 
@@ -320,7 +320,7 @@
 }
 
 .panel-footer ::deep a {
-    color: var(--finance-green);
+    color: var(--pf-info);
     font-weight: 750;
     text-decoration: none;
 }

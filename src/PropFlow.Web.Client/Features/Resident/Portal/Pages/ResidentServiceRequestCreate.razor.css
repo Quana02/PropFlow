@@ -1,7 +1,7 @@
 .page-heading { margin: 2rem 3.5rem 1.5rem 0; }
 .back-link { display: inline-flex; margin-bottom: 1.1rem; color: var(--pf-muted); font-size: .72rem; font-weight: 700; text-decoration: none; }
-.back-link:hover { color: #0284c7; }
-.eyebrow { margin: 0 0 .45rem; color: #0284c7; font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.back-link:hover { color:var(--pf-info); }
+.eyebrow { margin: 0 0 .45rem; color:var(--pf-info); font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .page-heading h1 { margin: 0; color: #0f172a; font: 700 clamp(1.75rem, 3.5vw, 2.5rem)/1.15 var(--pf-font); letter-spacing: -.025em; }
 .page-heading > div > p:last-child { margin: .6rem 0 0; color: var(--pf-muted); font-size: .85rem; }
 .create-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(18rem, .85fr); gap: 1.25rem; margin-right: 3.5rem; }
@@ -10,7 +10,7 @@
 .card-heading { display: flex; align-items: center; gap: .8rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(203, 213, 225, .55); }
 .heading-icon { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border-radius: .85rem; background: #e0f2fe; }
 .card-heading h2, .guidance-card h2 { margin: 0; color: #0f172a; font: 700 1rem var(--pf-font); }
-.card-heading p { margin: .25rem 0 0; color: #94a3b8; font-size: .68rem; }
+.card-heading p { margin: .25rem 0 0; color:var(--pf-muted); font-size: .68rem; }
 .form-card ::deep .api-state { margin-top: 1.1rem; }
 .request-form { display: grid; gap: 1rem; margin-top: 1.15rem; }
 .field-group { display: grid; gap: .4rem; }
@@ -25,7 +25,7 @@
 .form-actions a { color: #475569; border: 1px solid #cbd5e1; text-decoration: none; }
 .form-actions button { border: 0; color: white; background: linear-gradient(90deg, #0284c7, #4f46e5); opacity: .5; cursor: not-allowed; }
 .guidance-card { align-self: start; padding: 1.4rem; }
-.guidance-label { margin: 0 0 .35rem; color: #0284c7; font-size: .65rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.guidance-label { margin: 0 0 .35rem; color:var(--pf-info); font-size: .65rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .guidance-card ul { display: grid; gap: 1.1rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
 .guidance-card li { display: grid; grid-template-columns: 2rem 1fr; gap: .75rem; }
 .guidance-card li > span { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: .7rem; color: #0369a1; background: #e0f2fe; font-size: .65rem; font-weight: 800; }

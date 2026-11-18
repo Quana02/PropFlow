@@ -4,3 +4,4 @@ public sealed record AdditionalCostConsentView(Guid ProposalId, decimal Amount, 
     string Status, DateTimeOffset? ProposedAt, DateTimeOffset? RespondedAt);
 public sealed record ProposeAdditionalCostRequest(decimal Amount, string Note, Guid? ExpectedProposalId = null);
 public sealed record RespondAdditionalCostRequest(Guid ProposalId, bool Accepted);
+public sealed record ApproveAdditionalCostProposalRequest(Guid ProposalId);
