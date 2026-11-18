@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -38,8 +37,10 @@ public sealed class UtilityConsumptionHttpTests : IAsyncLifetime
         connection.Database = "postgres"; adminConnection = connection.ConnectionString;
         databaseName = "propflow_utility_test_" + Guid.NewGuid().ToString("N");
         await using (var admin = new NpgsqlConnection(adminConnection))
-        { await admin.OpenAsync(); await using var create = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin); await create.ExecuteNonQueryAsync(); }
+        { await admin.OpenAsync(); await TestDatabaseSafety.CreateAsync(admin, databaseName); }
         connection.Database = databaseName;
+        await TestDatabaseSafety.VerifyFixtureAsync(connection.ConnectionString, databaseName, TestDatabaseSafety.ProcessOwner,
+            TestDatabaseConfiguration.GetConnectionString());
         factory = new(connection.ConnectionString, new Directory(apartment));
         using var scope = factory.Services.CreateScope();
         var billing = scope.ServiceProvider.GetRequiredService<BillingDbContext>();
@@ -67,9 +68,10 @@ public sealed class UtilityConsumptionHttpTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         if (factory is not null) await factory.DisposeAsync();
-        if (!databaseName.StartsWith("propflow_utility_test_", StringComparison.Ordinal)) return;
+        if (string.IsNullOrEmpty(databaseName)) return;
+        NpgsqlConnection.ClearAllPools();
         await using var admin = new NpgsqlConnection(adminConnection); await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE \"{databaseName}\" WITH (FORCE)", admin); await drop.ExecuteNonQueryAsync();
+        await TestDatabaseSafety.DropAsync(admin, databaseName);
     }
     [Fact]
     public async Task Http_scope_concurrent_review_and_notification_outbox_work_on_postgres()
@@ -112,13 +114,12 @@ public sealed class UtilityConsumptionHttpTests : IAsyncLifetime
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new("https://localhost") });
         client.DefaultRequestHeaders.Add("X-Test-Role", role); client.DefaultRequestHeaders.Add("X-Test-User", user.ToString()); return client;
     }
-    private sealed class Factory(string connection, Directory directory) : PropFlowApiFactory
+    private sealed class Factory(string connection, Directory directory) : PropFlowApiFactory(connection)
     {
         public Publisher Publisher { get; } = new();
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:PropFlowDatabase"] = connection }));
             builder.ConfigureTestServices(services =>
             {
                 services.AddAuthentication(o => { o.DefaultAuthenticateScheme = o.DefaultChallengeScheme = o.DefaultForbidScheme = "UtilityTest"; })

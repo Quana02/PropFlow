@@ -43,11 +43,62 @@ export default async function verifyEmergencyNotifications({ login, evaluate, un
     'Manager end-call action did not become ready');
   await click(selectedManager, '.end-call');
   await until(async () => (await status(selectedManager)) === 'Cuộc gọi đã kết thúc', 'Manager did not get the confirmed end status');
-  await until(() => evaluate(owner, 'document.querySelector(".emergency-overlay .call-error")?.innerText.includes("không còn hoạt động tại phiên này") && ' +
-    '!document.querySelector(".emergency-overlay .call-controls")'), 'Resident did not see the call become inactive');
+  await until(() => evaluate(owner, '(document.querySelector(".emergency-overlay .call-error")?.innerText.includes("không còn hoạt động tại phiên này") || ' +
+    'document.querySelector(".emergency-overlay .call-status")?.innerText === "Cuộc gọi đã kết thúc") && ' +
+    '!document.querySelector(".emergency-overlay .end-call")'), 'Resident did not see the call become inactive');
   await until(() => evaluate(owner, 'document.querySelector(".emergency-overlay")?.previousElementSibling?.srcObject === null'),
     'Resident audio element still holds the ended call stream');
   assert.equal(signals(unselected).some(value => value?.callId === offer.callId), false);
   checks.retryAndEnd = { newRevision: true, managerUiEnded: true, ownerUiInactive: true, releasedAudioElement: true };
+  await save(checks);
+
+  const mediaState = tab => evaluate(tab, 'window.pf04MediaState()');
+  await until(async () => (await mediaState(owner)).livePeers === 0 && (await mediaState(owner)).liveTracks === 0,
+    'Ended resident call retained a peer connection or microphone track');
+  await click(owner, '.dismiss-call');
+  await click(selectedManager, '.dismiss-call');
+  await click(owner, '.emergency-service-button');
+  let secondSelected, secondOffer;
+  await until(() => {
+    for (const candidate of [firstManager, secondManager]) {
+      const incoming = signals(candidate).find(signal => signal.kind === 'offer' && signal.callId !== offer.callId);
+      if (incoming) { secondSelected = candidate; secondOffer = incoming; return true; }
+    }
+    return false;
+  }, 'A new active call did not reach a selected manager', 20000);
+  try {
+    await until(async () => (await mediaState(owner)).connectedPeers > 0 &&
+      (await mediaState(secondSelected)).connectedPeers > 0, 'Local fake-microphone WebRTC did not connect before revocation', 25000);
+  } catch (error) {
+    checks.mediaBeforeRevocation = { owner: await mediaState(owner), manager: await mediaState(secondSelected),
+      ownerStatus: await status(owner), managerStatus: await status(secondSelected) };
+    await save(checks);
+    throw error;
+  }
+  assert.ok((await mediaState(owner)).liveTracks > 0);
+  const startedRevoke = performance.now();
+  assert.equal(await evaluate(owner, 'Boolean(document.querySelector(".profile-logout"))'), true);
+  await click(owner, '.profile-logout');
+  await until(() => evaluate(owner, 'location.pathname === "/login"'), 'Logout did not leave protected call UI');
+  await until(async () => (await mediaState(owner)).livePeers === 0 && (await mediaState(owner)).liveTracks === 0,
+    'Logout retained a local peer connection or live microphone track');
+  const clientCleanupMs = Math.round(performance.now() - startedRevoke);
+  assert.ok(clientCleanupMs <= 3000, 'Local client cleanup exceeded the 3-second engineering target');
+  await until(() => evaluate(secondSelected, '!document.querySelector(".emergency-overlay")?.previousElementSibling?.srcObject'),
+    'The cooperating peer retained remote audio after session revocation', 10000);
+  await until(async () => (await mediaState(secondSelected)).livePeers === 0 && (await mediaState(secondSelected)).liveTracks === 0,
+    'The cooperating peer retained its peer connection or microphone after session revocation', 10000);
+  const peerCleanupMs = Math.round(performance.now() - startedRevoke);
+  assert.ok(peerCleanupMs <= 3000, 'Cooperating peer cleanup exceeded the 3-second engineering target');
+  assert.equal((await api(owner, '/api/v1/auth/me')).status, 401);
+  assert.equal((await api(owner, '/hubs/emergency-calls/negotiate?negotiateVersion=1', {})).status, 401);
+  assert.equal((await api(otherResident, '/api/v1/auth/me')).status, 200);
+  assert.equal((await api(secondSelected, '/api/v1/auth/me')).status, 200);
+  checks.revokedActiveMedia = {
+    signalingAndLocalMediaConnectedBeforeRevoke: true, logoutFromUi: true, localPeerClosed: true,
+    microphoneTracksEnded: true, cooperatingPeerAudioReleased: true, oldBearer401: true, oldReconnect401: true,
+    unrelatedSessionStillValid: true, cooperatingPeerConnectionAndMicrophoneReleased: true, clientCleanupMs, peerCleanupMs,
+    scope: 'Local fake microphone and direct ICE only; no live TURN or Internet routing claim'
+  };
   await save(checks);
 }

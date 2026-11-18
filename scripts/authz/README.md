@@ -1,5 +1,11 @@
 # Chạy lại kiểm toán phân quyền
 
+Post-pull stabilization: `inventory.mjs` dùng `controller-inventory.mjs` để ghép controller/action routes (kể cả controller không có Route và absolute aliases). `node --test tests/frontend/controller-inventory.test.cjs` kiểm parser; `HttpInventoryTests` đối chiếu khóa method/route với metadata MVC thực trong test host. Chạy inventory trước test này. Nhóm Chrome `PostPull` dùng output Release qua HTTPS để kiểm FacilityGuides shared selects, bàn phím, sáng/tối/responsive, loading/empty/disabled, giữ draft khi API lỗi và quyền UtilityInsights/STAFF complaints; không gọi provider live. [Kết quả và phạm vi](../../docs/audits/propflow-post-pull-stabilization-report.md).
+
+PF-AUTHZ-04 bổ sung các ca Integration có trait `Security=PF-AUTHZ-04`. Ca interruption mặc định SKIP; chỉ bật khi có cluster PostgreSQL tạm riêng trên `127.0.0.1:45488`, data directory nằm trong TEMP và marker `pf04-owner` của lượt tạo. Cấp `PROPFLOW_PF04_CLUSTER`, `PROPFLOW_PF04_CLUSTER_OWNER` và đường dẫn `PROPFLOW_PF04_PG_CTL` cùng connection test riêng. Ca này kiểm ownership và đích trước khi stop/start, đồng thời phục hồi database trong `finally`. Không trỏ các biến này đến cluster ứng dụng.
+
+Nhóm Chrome `SessionRevocation` kiểm disable, role change và password change với hai tab cùng SID, một phiên độc lập, tài khoản đối chứng và login mới. Nhóm `Emergency` đo thêm peer connection/microphone cleanup khi logout trong cuộc gọi local đã kết nối, bằng fake microphone và instrumentation chỉ có trong runner. Không suy kết quả này thành TURN live hoặc media giữa hai mạng Internet.
+
 Chạy từ thư mục gốc với .NET SDK 8, PowerShell 7, Node 22 trở lên và Chrome cho kiểm thử trình duyệt. Cấu hình riêng `PROPFLOW_TEST_DATABASE` trỏ đến `propflow_test` trên PostgreSQL loopback. Integration cũng nhận `ConnectionStrings__PropFlowTestDatabase` hoặc API user secret `ConnectionStrings:PropFlowTestDatabase`. Thiếu cấu hình, trùng database ứng dụng hoặc sai đích đều làm lượt test dừng.
 
 Fixture dùng tên ngẫu nhiên và ghi mã sở hữu của lượt chạy vào catalog PostgreSQL sau khi tạo thành công. Trước khi gọi API, migrate hoặc seed, runner kiểm tên, endpoint và kết quả `SELECT current_database()`. Cleanup đối chiếu tên và mã sở hữu với catalog trên đúng server trước khi drop. Những database cũ cần quyền cleanup riêng.

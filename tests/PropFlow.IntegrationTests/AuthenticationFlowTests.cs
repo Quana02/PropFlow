@@ -94,7 +94,9 @@ public sealed class AuthFlowFactory(string connection, Action<IServiceCollection
         builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:RateLimits:auth-login:PermitLimit"] = "1000",
-            ["Authentication:RateLimits:auth-entry:PermitLimit"] = "1000"
+            ["Authentication:RateLimits:auth-entry:PermitLimit"] = "1000",
+            // Matrix cases share TestServer's loopback IP; exercise session rejection rather than IP throttling.
+            ["Authentication:RateLimits:auth-session:PermitLimit"] = "1000"
         }));
         builder.ConfigureTestServices(services =>
         {
