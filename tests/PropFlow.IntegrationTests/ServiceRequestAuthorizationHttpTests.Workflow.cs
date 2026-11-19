@@ -13,6 +13,8 @@ using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
+using PropFlow.Modules.Communication.Infrastructure.Persistence;
+using PropFlow.Api.Composition;
 
 namespace PropFlow.IntegrationTests;
 
@@ -79,6 +81,7 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         await Reject(manager, notReviewed.Id, "assignment", HttpStatusCode.Conflict, assignment);
         await Reject(manager, request.Id, "assignment", HttpStatusCode.BadRequest, assignment with { StaffUserId = residentB.Id });
         await Reject(manager, request.Id, "assignment", HttpStatusCode.BadRequest, assignment with { StaffUserId = Guid.NewGuid() });
+        await Reject(manager, request.Id, "assignment", HttpStatusCode.BadRequest, assignment with { BaseServiceCost = 50000 });
         var disabled = await Login("STAFF");
         var grantLost = await Login("STAFF");
         var grantRequest = await Seed(reviewed: true);
@@ -213,9 +216,10 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
     [Fact]
     public async Task Manager_resolution_and_close_issue_one_invoice_for_the_consented_amount_and_owner()
     {
-        var id = await Start(cost: 100_000);
+        var id = await Start();
         var propose = new ProposeAdditionalCostRequest(30_000, "Vật tư thay thế");
         var proposal = await Call(staffB, id, "additional-cost", propose);
+        await Call(manager, id, "additional-cost/approve", new ApproveAdditionalCostProposalRequest(proposal.GetProperty("proposalId").GetGuid()));
         await Call(residentA, id, "additional-cost/response", new RespondAdditionalCostRequest(proposal.GetProperty("proposalId").GetGuid(), true));
         var finish = Work with { AdditionalCost = 30_000, AdditionalCostNote = propose.Note };
         await Call(staffB, id, "complete", finish);
@@ -252,13 +256,18 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         var recipient = Assert.Single(await billing.InvoiceRecipients.ToListAsync());
         var state = await Read(id);
         Assert.Equal(invoice.Id, state.ServiceInvoiceId);
-        Assert.Equal(125_000m, invoice.TotalAmount);
+        Assert.Equal(25_000m, invoice.TotalAmount);
         Assert.Equal(homeA.ApartmentId, invoice.ApartmentUnitId);
         Assert.Equal(homeA.ResidentId, recipient.ResidentId);
         Assert.Equal(residentA.Id, recipient.UserId);
         Assert.Equal(ServiceRequestStatus.CLOSED, state.Status);
         Assert.Equal(manager.Id, state.ClosedBy);
         Assert.Equal(manager.Id, Assert.Single(state.Activities, row => row.ActivityType == ServiceActivityType.RESOLVED).PerformedBy);
+        await scope.ServiceProvider.GetRequiredService<ServiceRequestCostNoticeDispatcher>().DispatchAsync(default);
+        await scope.ServiceProvider.GetRequiredService<ServiceRequestCostNoticeDispatcher>().DispatchAsync(default);
+        var communication = scope.ServiceProvider.GetRequiredService<CommunicationDbContext>();
+        var billNotice = Assert.Single(await communication.Notifications.Where(x => x.SourceId == id && x.Title == "Hóa đơn dịch vụ đã sẵn sàng").ToArrayAsync());
+        Assert.Equal(residentA.Id, billNotice.RecipientUserId);
         var payments = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
         Assert.Empty(await payments.Payments.ToListAsync());
         var payment = new Payment("B3-PAID-FIXTURE", invoice.Id, invoice.TotalAmount, "CASH", Now, Now);
@@ -280,7 +289,7 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         await Reject(staffB, id, "additional-cost", HttpStatusCode.BadRequest, propose with { Amount = -1 });
         var first = (await Call(staffB, id, "additional-cost", propose)).GetProperty("proposalId").GetGuid();
         var pending = await Read(id);
-        Assert.Equal("PENDING", pending.AdditionalCostConsentStatus);
+        Assert.Equal("AWAITING_MANAGER", pending.AdditionalCostConsentStatus);
         Assert.Null(pending.AdditionalCostRespondedBy);
         await Reject(staffB, id, "additional-cost", HttpStatusCode.Conflict, propose);
         await Reject(staffB, id, "progress", HttpStatusCode.Conflict, Progress);
@@ -290,6 +299,11 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         var current = (await Call(staffB, id, "additional-cost", replacement)).GetProperty("proposalId").GetGuid();
         Assert.NotEqual(first, current);
         var decision = new RespondAdditionalCostRequest(current, true);
+        await Reject(residentA, id, "additional-cost/response", HttpStatusCode.Conflict, decision);
+        await Reject(manager, id, "additional-cost/approve", HttpStatusCode.Conflict, new ApproveAdditionalCostProposalRequest(first));
+        await Denied("MANAGER", id, "additional-cost/approve", new ApproveAdditionalCostProposalRequest(current));
+        await Call(manager, id, "additional-cost/approve", new ApproveAdditionalCostProposalRequest(current));
+        await Call(manager, id, "additional-cost/approve", new ApproveAdditionalCostProposalRequest(current));
         await Denied("RESIDENT", id, "additional-cost/response", decision);
         await Reject(residentB, id, "additional-cost/response", HttpStatusCode.NotFound, decision);
         await Reject(residentA, id, "additional-cost/response", HttpStatusCode.Conflict, decision with { ProposalId = first });
@@ -307,7 +321,7 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         {
             var db = scope.ServiceProvider.GetRequiredService<ServiceRequestsDbContext>();
             var costEvents = await db.ResidentEvents.Where(row => row.SourceId == id && row.Name == "ServiceRequestAdditionalCostProposed").ToListAsync();
-            Assert.Equal(2, costEvents.Count);
+            Assert.Single(costEvents);
             Assert.Contains(costEvents, row => row.Payload.Contains(current.ToString(), StringComparison.OrdinalIgnoreCase) &&
                 row.Payload.Contains(homeA.ResidentId.ToString(), StringComparison.OrdinalIgnoreCase));
         }
@@ -351,12 +365,12 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         await AssertNoPaymentOrInvoice();
     }
 
-    private async Task<Guid> Start(Actor? assignee = null, decimal cost = 0)
+    private async Task<Guid> Start(Actor? assignee = null)
     {
         var id = (await Seed(reviewed: true)).Id;
-        await Call(manager, id, "assignment", new AssignManagerServiceRequestRequest(staffA.Id, BaseServiceCost: cost));
+        await Call(manager, id, "assignment", new AssignManagerServiceRequestRequest(staffA.Id));
         if (assignee != staffA)
-            await Call(manager, id, "assignment", new AssignManagerServiceRequestRequest(staffB.Id, BaseServiceCost: cost));
+            await Call(manager, id, "assignment", new AssignManagerServiceRequestRequest(staffB.Id));
         await Call(assignee ?? staffB, id, "accept");
         return id;
     }

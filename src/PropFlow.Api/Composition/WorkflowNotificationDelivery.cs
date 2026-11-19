@@ -14,19 +14,33 @@ public sealed class WorkflowNotificationDelivery(AuthenticationDbContext account
 {
     public async Task PublishSubmissionAsync(OutboxEvent item, Guid sender, string? residentName, CancellationToken ct)
     {
-        // FE-05 sends new requests to the current building's shared management queue.
+        var recipients = await ManagementRecipientsAsync(ct);
+        foreach (var recipient in recipients)
+            await notifications.PublishAsync(new(item.Id, recipient, null, "Yêu cầu dịch vụ mới",
+                $"Bạn có một yêu cầu mới từ {residentName ?? "cư dân"}.", "", "SERVICE_REQUEST", item.SourceId,
+                $"/manager/service-requests/{item.SourceId}", SenderUserId: sender), ct);
+    }
+
+    public async Task PublishCostReviewAsync(OutboxEvent item, Guid? sender, string requestNumber, CancellationToken ct)
+    {
+        var recipients = await ManagementRecipientsAsync(ct);
+        foreach (var recipient in recipients)
+            await notifications.PublishAsync(new(item.Id, recipient, null, "Chi phí phát sinh chờ duyệt",
+                $"Staff đã báo phí phát sinh cho yêu cầu {requestNumber}. Vui lòng kiểm tra và gửi cư dân xác nhận.",
+                "", "SERVICE_REQUEST", item.SourceId, $"/manager/service-requests/{item.SourceId}", SenderUserId: sender), ct);
+    }
+
+    private async Task<Guid[]> ManagementRecipientsAsync(CancellationToken ct)
+    {
+        // FE-05 uses the current building's shared management queue.
         var reviewers = await administration.UserRoleAssignments.AsNoTracking()
             .Where(x => x.Role.IsActive && x.Role.Code == SystemRoleCodes.Manager &&
                 administration.RolePermissions.Any(p => p.RoleId == x.RoleId && p.Permission.IsActive &&
                     p.Permission.Code == SystemPermissionCodes.ManageOperations))
             .Select(x => x.UserId).Distinct().ToArrayAsync(ct);
-        var recipients = await accounts.UserAccounts.AsNoTracking()
+        return await accounts.UserAccounts.AsNoTracking()
             .Where(x => reviewers.Contains(x.Id) && x.Status == AccountStatus.ACTIVE)
             .Select(x => x.Id).ToArrayAsync(ct);
-        foreach (var recipient in recipients)
-            await notifications.PublishAsync(new(item.Id, recipient, null, "Yêu cầu dịch vụ mới",
-                $"Bạn có một yêu cầu mới từ {residentName ?? "cư dân"}.", "", "SERVICE_REQUEST", item.SourceId,
-                $"/manager/service-requests/{item.SourceId}", SenderUserId: sender), ct);
     }
 
     public async Task PublishAssignmentAsync(OutboxEvent item, Guid sender, Guid recipient, string sourceType, string path, CancellationToken ct)

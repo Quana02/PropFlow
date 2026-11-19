@@ -35,8 +35,8 @@
 .overdue-card strong small { color: var(--overdue-muted); font: 500 10px/1 var(--pf-font); }
 .overdue-card p { margin: 0; color: var(--overdue-muted); font-size: 9px; }
 .overdue-card.principal strong { color: var(--overdue-accent); }
-.overdue-card.interest strong { color: #e97905; }
-.overdue-card.interest .material-symbols-outlined { background: #fff8e7; color: #e97905; }
+.overdue-card.interest strong { color:var(--pf-warning); }
+.overdue-card.interest .material-symbols-outlined { background: #fff8e7; color:var(--pf-warning); }
 .overdue-card.intervention strong { color: #9333ea; }
 .overdue-card.intervention .material-symbols-outlined { background: #faf5ff; color: #9333ea; }
 

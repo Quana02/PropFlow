@@ -9,7 +9,7 @@
     border: 1px solid var(--app-line, #d6e4ef);
     border-radius: .65rem;
     background: var(--app-surface, #fff);
-    color: var(--app-accent, #0284c7);
+    color: var(--pf-info, #075985);
     font: inherit;
     font-size: .8rem;
     font-weight: 700;

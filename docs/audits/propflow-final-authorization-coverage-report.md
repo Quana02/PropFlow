@@ -1,6 +1,8 @@
 # PropFlow — Kiểm chứng phân quyền cuối kỳ
 
-**Kết quả mới nhất 18/11/2026:** Post-pull stabilization hoàn tất: **2.136 PASS, 0 FAIL, 0 SKIP**, inventory 258 HTTP operations, **142/142 applicable VERIFIED**. Baseline 133 mapping và PF-AUTHZ-04 139/139 giữ nguyên. Các checkpoint bên dưới là lịch sử; [báo cáo stabilization](propflow-post-pull-stabilization-report.md) ghi kết quả thay thế bảy FAIL và các gaps sau pull.
+**Cập nhật sau pull FE-05 ngày 18/11/2026:** HEAD `1906ca7` + working diff đã review; inventory **70 routes / 259 HTTP operations**, **143/143 applicable VERIFIED** (32 operation có evidence mới, 111 kế thừa không bị ảnh hưởng). Database local đã cập nhật hai migration hiện có, **14 DbContext / 98 migrations / pending=0**, 80 core tables. **384 targeted tests mới PASS, 0 FAIL/0 SKIP**; không coi kết quả full 2.136 bên dưới là lượt chạy mới. [Review dịch vụ, migration, backup và baseline chuẩn bị nghiệm thu](propflow-post-pull-service-request-migration-report.md).
+
+**Checkpoint stabilization trước pull:** **2.136 PASS, 0 FAIL, 0 SKIP**, inventory 258 HTTP operations, **142/142 applicable VERIFIED**. Baseline 133 mapping và PF-AUTHZ-04 139/139 giữ nguyên. Các checkpoint bên dưới là lịch sử; [báo cáo stabilization](propflow-post-pull-stabilization-report.md) ghi kết quả thay thế bảy FAIL và các gaps sau pull.
 
 Checkpoint bắt đầu ngày 16/11/2026 từ HEAD `0859534` và worktree đã có Hardening 1.1/1.2 cùng SDK audit. Inventory chạy lại khớp 65 route, 247 cặp HTTP method/route và 7 đường dẫn SignalR với 6 hub. Mẫu số làm việc vẫn là 133 operation có tác động. Baseline 32 VERIFIED, 100 PARTIALLY VERIFIED và 1 NOT VERIFIED.
 

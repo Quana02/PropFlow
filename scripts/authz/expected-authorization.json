@@ -225,6 +225,7 @@
     {"method":"GET","path":"/api/v1/manager/service-requests/{id:guid}/classification","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"POST","path":"/api/v1/manager/service-requests/{id:guid}/classification","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"PUT","path":"/api/v1/manager/service-requests/{id:guid}/classification/review","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
+    {"method":"POST","path":"/api/v1/manager/service-requests/{id:guid}/additional-cost/approve","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"POST","path":"/api/v1/manager/service-requests/{id:guid}/close","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"GET","path":"/api/v1/manager/service-requests/{id:guid}/evidence/{evidenceId:guid}","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},
     {"method":"PUT","path":"/api/v1/manager/service-requests/{id:guid}/property-context","allow":["MANAGER"],"guard":"Policy = ServiceRequestsAuthorizationPolicies.Manage"},

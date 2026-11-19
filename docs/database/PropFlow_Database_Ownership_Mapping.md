@@ -96,6 +96,8 @@ Consumer module
 
 ## 6. Migration policy
 
+FE-05 `20261118105731_RequireManagerReviewForAdditionalCosts` thuộc `ServiceRequestsDbContext`: mở rộng `ck_service_request_cost_consent` với `AWAITING_MANAGER`; quote cũ còn `PENDING` trên yêu cầu ASSIGNED/IN_PROGRESS chưa có invoice quay về Manager review. Outbox cư dân chưa gửi được ngưng và thay bằng outbox Manager; accepted decisions, phí lịch sử và issued invoices giữ nguyên. Không thêm bảng/cột. Snapshot Residents đã được đồng bộ với các migration hộ gia đình/hồ sơ hiện có, không tạo migration hoặc schema delta trùng. [Kiểm chứng migration local ngày 18/11](../audits/propflow-post-pull-service-request-migration-report.md).
+
 FE-03 bổ sung `default_usable_area_m2 numeric(10,2)`, `default_bedroom_count int`, `default_bathroom_count int` vào `apartments.apartment_unit_types`. Cả ba nullable để giữ nguyên loại cũ chưa có thông số; không backfill số liệu suy đoán. Diện tích khi có dùng giới hạn FE-03 hiện hành >= 25 m²; số phòng >= 0. Manager quản lý loại qua endpoint hiện có. Frontend sao chép defaults khi chọn loại cho căn hộ mới, cho phép sửa thủ công; `apartment_units` tiếp tục lưu thông số thực tế và giữ FK đến loại. Sửa loại không cập nhật các căn hộ đã lưu.
 
 - Giữ historical migrations để EF Core nâng cấp database theo chuỗi; `building_id` trong migration cũ chỉ phản ánh lịch sử schema, không phải khả năng chọn nhiều chung cư của live model.

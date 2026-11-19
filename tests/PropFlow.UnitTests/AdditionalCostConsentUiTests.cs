@@ -15,6 +15,25 @@ namespace PropFlow.UnitTests;
 public sealed class AdditionalCostConsentUiTests
 {
     [Theory]
+    [InlineData("AWAITING_MANAGER")]
+    public async Task UnreviewedStaffQuoteIsNotPresentedAsAResidentDecision(string status)
+    {
+        using var services = new ServiceCollection().AddLogging().AddSingleton<AuthenticatedApiClient>(sp =>
+            new(new HttpClient(), sp.GetRequiredService<ILogger<ApiClient>>())).BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var component = await renderer.RenderComponentAsync<ResidentAdditionalCostConsent>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                ["RequestId"] = Guid.NewGuid(), ["Consent"] = new AdditionalCostConsentView(Guid.NewGuid(), 50000, "Báo giá chưa duyệt", status, DateTimeOffset.UtcNow, null)
+            }));
+            return component.ToHtmlString();
+        });
+        Assert.DoesNotContain("Báo giá chưa duyệt", WebUtility.HtmlDecode(html));
+        Assert.DoesNotContain("button", html);
+    }
+
+    [Theory]
     [InlineData("PENDING", "Đồng ý chi phí và tiếp tục", true)]
     [InlineData("ACCEPTED", "Bạn đã đồng ý chi phí phát sinh", false)]
     [InlineData("REJECTED", "Yêu cầu dịch vụ đã được tự động từ chối", false)]
@@ -38,6 +57,7 @@ public sealed class AdditionalCostConsentUiTests
 
     [Theory]
     [InlineData("Propose")]
+    [InlineData("Approve")]
     [InlineData("Respond")]
     public void EveryDecisionEndpointHasItsOwnActorPolicy(string action)
     {
@@ -45,6 +65,7 @@ public sealed class AdditionalCostConsentUiTests
             .GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>().Single().Policy;
         // Compare against the published permission policy names, not a generic authenticated-user requirement.
         Assert.False(string.IsNullOrWhiteSpace(policy));
-        Assert.Equal(action == "Propose" ? ServiceRequestsAuthorizationPolicies.WorkAssigned : ServiceRequestsAuthorizationPolicies.SubmitAsResident, policy);
+        Assert.Equal(action switch { "Propose" => ServiceRequestsAuthorizationPolicies.WorkAssigned,
+            "Approve" => ServiceRequestsAuthorizationPolicies.Manage, _ => ServiceRequestsAuthorizationPolicies.SubmitAsResident }, policy);
     }
 }

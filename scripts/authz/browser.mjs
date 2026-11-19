@@ -47,10 +47,10 @@ const dynamic = {
   '/manager/complaints/{Id:guid}': fixture.complaintId,
   '/resident/complaints/{Id:guid}': fixture.complaintId,
   '/finance/invoices/{InvoiceId:guid}': fixture.invoiceId,
-  '/manager/service-requests/{Id:guid}': fixture.requestId,
+  '/manager/service-requests/{Id:guid}': themeCheckOnly ? fixture.managerThemeRequestId ?? fixture.requestId : fixture.requestId,
   '/manager/service-requests/{Id:guid}/property-context': fixture.requestId,
-  '/resident/service-requests/{Id:guid}': fixture.requestId,
-  '/staff/service-requests/{Code}': 'PHASE11-EVIDENCE'
+  '/resident/service-requests/{Id:guid}': themeCheckOnly ? fixture.residentThemeRequestId ?? fixture.requestId : fixture.requestId,
+  '/staff/service-requests/{Code}': themeCheckOnly ? fixture.staffThemeRequestCode ?? 'PHASE11-EVIDENCE' : 'PHASE11-EVIDENCE'
 };
 const fallbackId = '42000000-0000-4000-8000-000000000001';
 const allRoles = ['Ẩn danh', 'STAFF', 'ADMIN', 'MANAGER', 'ACCOUNTANT', 'RESIDENT'];
