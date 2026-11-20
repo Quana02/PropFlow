@@ -8,10 +8,7 @@ public interface ISupportChatConnection
     event Action? TransientChanged;
     event Action? StateChanged;
     Task EnsureAsync(CancellationToken ct = default);
-    string? Draft(Guid id);
-    void ClearDraft(Guid id);
     bool IsTyping(Guid id);
-    Task PublishDraft(Guid id, string text);
     Task PublishTyping(Guid id, bool value);
     Task ReleaseResidentAsync();
 }

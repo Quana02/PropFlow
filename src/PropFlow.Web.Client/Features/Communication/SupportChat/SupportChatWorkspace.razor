@@ -53,8 +53,6 @@
         <section class="support-chat" aria-label="Khung trò chuyện với Ban quản lý">
             <header class="support-chat-heading"><div><h2>@(selected is null ? ForManager ? "Chọn cuộc trò chuyện" : "Trợ lý tiếp nhận BQL" : ForManager ? selected.ResidentName : selected.ManagerName ?? "Đang tìm Manager")</h2><small>@ConversationStatus</small></div>
                 @if (selected is { Status: not "CLOSED" }) { <button class="support-close" disabled="@busy" @onclick="CloseConversation">Kết thúc phiên</button> }</header>
-            @if (!ForManager)
-            { <p class="draft-disclosure">Khi đã kết nối, Manager phụ trách có thể xem trực tiếp nội dung bạn đang gõ trước khi bấm Gửi. Chỉ tin đã gửi được lưu vào lịch sử.</p> }
             <div class="support-thread" @ref="thread" role="log" aria-live="polite" aria-relevant="additions text">
                 @if (hasMore) { <button class="support-older" disabled="@busy" @onclick="Older">Tải tin nhắn trước</button> }
                 @if (selected is null && !ForManager)
@@ -139,8 +137,6 @@
                 }
                 @if (!ForManager && selected is not null && Connection.IsTyping(selected.Id)) { <p class="support-typing" role="status">Manager đang nhập câu trả lời…</p> }
             </div>
-            @if (ForManager && selected is { Status: "ACTIVE" } && Connection.Connected && Connection.Draft(selected.Id) is { } draft)
-            { <aside class="support-live-draft" aria-label="Bản nháp cư dân đang gõ"><strong>Cư dân đang soạn — chưa gửi</strong><p>@draft</p><small>Nội dung có thể thay đổi trước khi gửi và không được lưu.</small></aside> }
             @if (selecting)
             {
                 <div class="support-selection" role="group" aria-label="Thao tác với các tin đã chọn">
@@ -197,7 +193,6 @@
                     <div class="support-compose-meta">
                         <small id="support-compose-hint">
                             <span class="support-compose-shortcuts">Enter để gửi · Ctrl+Enter để xuống dòng</span>
-                            @if (!ForManager) { <span>@DraftStatus</span> }
                         </small>
                         <small>@text.Length / 4.000 ký tự</small>
                     </div>
@@ -213,7 +208,7 @@
 @if (!identityChanged && confirmation is { } action)
 {
     <PropFlowConfirmationDialog Title="@(action.Close ? "Kết thúc cuộc trò chuyện?" : "Chuyển cuộc trò chuyện?")"
-        Message="@(action.Close ? "Các tin đã gửi vẫn được giữ trong lịch sử. Bản nháp chưa gửi sẽ bị xóa khi kết thúc phiên." : "Bản nháp đang soạn sẽ bị xóa khi chuyển sang cuộc trò chuyện khác.")"
+        Message="@(action.Close ? "Các tin đã gửi vẫn được giữ trong lịch sử. Nội dung chưa gửi sẽ bị xóa khi kết thúc phiên." : "Nội dung đang soạn sẽ bị xóa khi chuyển sang cuộc trò chuyện khác.")"
         ConfirmText="@(action.Close ? "Kết thúc phiên" : "Chuyển cuộc trò chuyện")" CancelText="Ở lại" Tone="@(action.Close ? DialogTone.Danger : DialogTone.Confirm)"
         Busy="@busy" OnConfirm="ConfirmAction" OnCancel="CancelConfirmation" />
 }
@@ -301,8 +296,6 @@
         "ACTIVE" => selected.ManagerOnline ? "Đang trao đổi với Ban quản lý" : "Manager đang mất kết nối. Tin đã gửi vẫn được lưu; bạn có thể chờ hoặc kết thúc phiên.",
         "CLOSED" => "Cuộc trò chuyện đã kết thúc", _ => ForManager ? "Chọn một phiên được phân để trả lời" : "Trợ lý sẽ tìm Manager sau khi bạn gửi nhu cầu hỗ trợ"
     };
-    private string DraftStatus => selected is { Status: "ACTIVE", ManagerOnline: true } && Connection.Connected
-        ? "Đang chia sẻ bản nháp với Manager" : "Bản nháp chưa được chia sẻ trực tiếp";
     protected override async Task OnInitializedAsync()
     {
         ownerUserId = Session.User?.Id; Session.AuthenticationStateChanged += AuthenticationChanged;
@@ -351,7 +344,6 @@
         var history = await Api.Messages(id, null, lifetime.Token);
         if (!history.IsSuccess || history.Data is null) { error = history.Message; return; }
         var incoming = history.Data.Items.ToList();
-        var previousLastResident = messages.Where(m => m.Kind == "RESIDENT").Select(m => m.Sequence).DefaultIfEmpty().Max();
         var changedSelection = selected?.Id != id;
         var more = history.Data.HasMore;
         if (!reset && !changedSelection && messages.Count > 0)
@@ -373,7 +365,6 @@
         messages = incoming;
         hasMore = more;
         SyncMessageTools();
-        if (messages.Where(m => m.Kind == "RESIDENT").Select(m => m.Sequence).DefaultIfEmpty().Max() > previousLastResident || selected.Status != "ACTIVE") Connection.ClearDraft(id);
         scrollToEnd |= newTail || reset || changedSelection;
     }
     private async Task Select(Guid id)
@@ -476,6 +467,7 @@
     private void Input(ChangeEventArgs args)
     {
         text = args.Value?.ToString() ?? ""; sendFailed = false; draftRevision++;
+        if (!ForManager) return;
         if (draftPump is { IsCompleted: false }) return;
         draftDebounce?.Dispose(); draftDebounce = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         draftPump = SendDraftWhileTyping(draftDebounce.Token);
@@ -491,7 +483,6 @@
                 var revision = draftRevision; var value = text;
                 ct.ThrowIfCancellationRequested();
                 if (ForManager) await Connection.PublishTyping(current.Id, value.Length > 0);
-                else if (current.ManagerOnline) await Connection.PublishDraft(current.Id, value);
                 if (revision == draftRevision) return;
             }
         }
@@ -502,7 +493,7 @@
         draftDebounce?.Cancel();
         if (draftPump is { IsCompleted: false }) await draftPump;
         if (selected is null) return;
-        if (ForManager) await Connection.PublishTyping(selected.Id, false); else await Connection.PublishDraft(selected.Id, "");
+        if (ForManager) await Connection.PublishTyping(selected.Id, false);
     }
     private Task Previous() => page > 1 ? ChangePageAsync(page - 1) : Task.CompletedTask;
     private Task Next() => ChangePageAsync(page + 1);

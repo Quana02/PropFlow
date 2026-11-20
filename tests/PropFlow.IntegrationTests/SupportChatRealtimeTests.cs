@@ -127,16 +127,15 @@ public sealed class SupportChatRealtimeTests(SupportChatDatabaseFixture database
     }
 
     [Fact]
-    public async Task RealSignalRDeliversUnsentDraftOnlyToAssignedManagerAndStopsAfterClosing()
+    public async Task RealSignalRDoesNotDeliverLegacyUnsentDraftToAnyManager()
     {
         var directory = new SupportChatTestDirectory();
         var manager = directory.Manager(); var otherManager = directory.Manager(); var resident = directory.Resident(); var stranger = directory.Resident();
         using var server = Server(directory);
         using var managerApi = Client(server, "MANAGER", manager); using var residentApi = Client(server, "RESIDENT", resident); using var strangerApi = Client(server, "RESIDENT", stranger);
         await using var managerHub = Hub(server, "MANAGER", manager); await using var otherHub = Hub(server, "MANAGER", otherManager); await using var residentHub = Hub(server, "RESIDENT", resident);
-        var received = new TaskCompletionSource<SupportDraft>(TaskCreationOptions.RunContinuationsAsynchronously);
         var managerFrames = new ConcurrentQueue<SupportDraft>(); var otherFrames = new ConcurrentQueue<SupportDraft>();
-        managerHub.On<SupportDraft>("SupportChatDraft", draft => { managerFrames.Enqueue(draft); received.TrySetResult(draft); });
+        managerHub.On<SupportDraft>("SupportChatDraft", draft => managerFrames.Enqueue(draft));
         otherHub.On<SupportDraft>("SupportChatDraft", draft => otherFrames.Enqueue(draft));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         await managerHub.StartAsync(timeout.Token); await otherHub.StartAsync(timeout.Token); await residentHub.StartAsync(timeout.Token);
@@ -153,13 +152,13 @@ public sealed class SupportChatRealtimeTests(SupportChatDatabaseFixture database
         var chat = (await opened.Content.ReadFromJsonAsync<SupportConversationView>(timeout.Token))!; Assert.Equal("ACTIVE", chat.Status);
         using var blocked = await strangerApi.GetAsync($"/api/v1/support-chat/conversations/{chat.Id}/messages", timeout.Token); Assert.Equal(HttpStatusCode.NotFound, blocked.StatusCode);
         await residentHub.InvokeAsync("ResidentDraft", chat.Id, 1L, "BẢN NHÁP CHƯA GỬI", timeout.Token);
-        var draft = await received.Task.WaitAsync(timeout.Token);
-        Assert.Equal("BẢN NHÁP CHƯA GỬI", draft.Text); Assert.Equal(chat.Id, draft.ConversationId); Assert.Empty(otherFrames);
+        await Task.Delay(200, timeout.Token);
+        Assert.Empty(managerFrames); Assert.Empty(otherFrames);
         await using (var db = database.CreateDb())
         { Assert.DoesNotContain(await db.SupportMessages.Where(x => x.ConversationId == chat.Id).ToArrayAsync(timeout.Token), x => x.Text.Contains("BẢN NHÁP")); }
         using var closed = await managerApi.PostAsync($"/api/v1/support-chat/conversations/{chat.Id}/close", null, timeout.Token); Assert.Equal(HttpStatusCode.OK, closed.StatusCode);
         await residentHub.InvokeAsync("ResidentDraft", chat.Id, 2L, "KHÔNG ĐƯỢC TRUYỀN SAU KHI KẾT THÚC", timeout.Token);
-        Assert.Single(managerFrames); Assert.Empty(otherFrames);
+        Assert.Empty(managerFrames); Assert.Empty(otherFrames);
     }
 
     private TestServer Server(SupportChatTestDirectory directory) => new(new WebHostBuilder().ConfigureLogging(l => l.ClearProviders()).ConfigureServices(services =>

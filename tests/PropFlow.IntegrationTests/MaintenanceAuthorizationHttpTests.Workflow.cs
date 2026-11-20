@@ -18,6 +18,87 @@ namespace PropFlow.IntegrationTests;
 
 public sealed partial class MaintenanceAuthorizationHttpTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Scheduled_task_can_be_revised_then_approved_and_restores_equipment(bool reassignAfterRevision, bool handoverBeforeSubmission)
+    {
+        var start = Now.AddMinutes(-20);
+        var schedule = await Call<ScheduleDto>(manager, HttpMethod.Post, "schedules",
+            new CreateScheduleCommand(null, "Kiểm tra bơm theo lịch", start, start.AddHours(2),
+                facility.Id, equipment.Id, "Kiểm tra hoạt động"), HttpStatusCode.Created);
+        await using (var activation = database.Factory.Services.CreateAsyncScope())
+        {
+            await activation.ServiceProvider.GetRequiredService<MaintenanceService>().ActivateDueSchedulesAsync(default);
+            Assert.Equal(EquipmentStatus.UNDER_MAINTENANCE,
+                (await activation.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>().Equipment.SingleAsync(x => x.Id == equipment.Id)).Status);
+        }
+        var task = await NewTask(new(null, "Công việc từ lịch", ScheduleId: schedule.Id, Description: "Kiểm tra bơm"));
+        await Assign(task.Id, staffA);
+        await Call<MaintenanceTaskDto>(staffA, HttpMethod.Post, $"my-tasks/{task.Id}/start");
+        var submittingStaff = handoverBeforeSubmission ? staffB : staffA;
+        if (handoverBeforeSubmission) await Assign(task.Id, submittingStaff);
+        var submitted = await Call<MaintenanceTaskDto>(submittingStaff, HttpMethod.Post, $"my-tasks/{task.Id}/result", ResultForm());
+        var revised = await Call<MaintenanceTaskDto>(manager, HttpMethod.Post,
+            $"tasks/{task.Id}/results/{submitted.LatestResult!.Id}/review",
+            new ReviewMaintenanceResultCommand("request-revision", "Kiểm tra thêm độ rung"));
+        Assert.Equal(MaintenanceTaskStatus.ASSIGNED, revised.Status);
+        Assert.Equal(MaintenanceResultStatus.REVISION_REQUIRED, revised.LatestResult!.ResultStatus);
+        var resumingStaff = reassignAfterRevision ? (handoverBeforeSubmission ? staffA : staffB) : submittingStaff;
+        if (reassignAfterRevision) await Assign(task.Id, resumingStaff);
+        await Call<MaintenanceTaskDto>(resumingStaff, HttpMethod.Post, $"my-tasks/{task.Id}/start");
+        var resubmitted = await Call<MaintenanceTaskDto>(resumingStaff, HttpMethod.Post, $"my-tasks/{task.Id}/result", ResultForm());
+        var approved = await Call<MaintenanceTaskDto>(manager, HttpMethod.Post,
+            $"tasks/{task.Id}/results/{resubmitted.LatestResult!.Id}/review",
+            new ReviewMaintenanceResultCommand("approve", "Đã đạt yêu cầu"));
+        Assert.Equal(MaintenanceTaskStatus.CLOSED, approved.Status);
+        Assert.Equal(MaintenanceResultStatus.APPROVED, approved.LatestResult!.ResultStatus);
+        await using var scope = database.Factory.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var maintenance = services.GetRequiredService<MaintenanceDbContext>();
+        Assert.Equal(2, await maintenance.MaintenanceResults.CountAsync(x => x.MaintenanceTaskId == task.Id));
+        Assert.Equal(MaintenanceResultStatus.REVISION_REQUIRED,
+            (await maintenance.MaintenanceResults.SingleAsync(x => x.Id == submitted.LatestResult.Id)).ResultStatus);
+        Assert.Equal(2, await maintenance.MaintenanceTaskActivities.CountAsync(x =>
+            x.MaintenanceTaskId == task.Id && x.ActivityType == MaintenanceActivityType.RESULT_SUBMITTED));
+        Assert.Equal(MaintenanceScheduleStatus.COMPLETED,
+            (await services.GetRequiredService<MaintenanceDbContext>().MaintenanceSchedules.SingleAsync(x => x.Id == schedule.Id)).Status);
+        Assert.Equal(EquipmentStatus.ACTIVE,
+            (await services.GetRequiredService<PropertyAssetsDbContext>().Equipment.SingleAsync(x => x.Id == equipment.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Failed_review_rolls_back_equipment_result_schedule_and_task_together()
+    {
+        var schedule = await Call<ScheduleDto>(manager, HttpMethod.Post, "schedules",
+            new CreateScheduleCommand(null, "Kiểm tra rollback", Now.AddMinutes(-5), Now.AddHours(1),
+                facility.Id, equipment.Id, "Kiểm tra tính nguyên tử"), HttpStatusCode.Created);
+        await using (var activation = database.Factory.Services.CreateAsyncScope())
+            await activation.ServiceProvider.GetRequiredService<MaintenanceService>().ActivateDueSchedulesAsync(default);
+        var task = await NewTask(new(null, "Công việc rollback", ScheduleId: schedule.Id, Description: "Kiểm tra bơm"));
+        await Assign(task.Id, staffA);
+        await Call<MaintenanceTaskDto>(staffA, HttpMethod.Post, $"my-tasks/{task.Id}/start");
+        var submitted = await Call<MaintenanceTaskDto>(staffA, HttpMethod.Post, $"my-tasks/{task.Id}/result", ResultForm());
+        // Fixture-only constraint makes the final maintenance write fail after asset restoration.
+        await using (var fault = database.Factory.Services.CreateAsyncScope())
+            await fault.ServiceProvider.GetRequiredService<MaintenanceDbContext>().Database.ExecuteSqlRawAsync(
+                "ALTER TABLE maintenance.maintenance_tasks ADD CONSTRAINT test_reject_closed CHECK (status <> 'CLOSED')");
+        using var response = await Send(manager.Client, HttpMethod.Post,
+            $"tasks/{task.Id}/results/{submitted.LatestResult!.Id}/review", new ReviewMaintenanceResultCommand("approve"));
+        await ExpectStatus(response, HttpStatusCode.InternalServerError);
+        await using var readback = database.Factory.Services.CreateAsyncScope();
+        var db = readback.ServiceProvider.GetRequiredService<MaintenanceDbContext>();
+        Assert.Equal(MaintenanceTaskStatus.COMPLETED, (await db.MaintenanceTasks.SingleAsync(x => x.Id == task.Id)).Status);
+        Assert.Equal(MaintenanceResultStatus.SUBMITTED, (await db.MaintenanceResults.SingleAsync(x => x.Id == submitted.LatestResult.Id)).ResultStatus);
+        Assert.Equal(MaintenanceScheduleStatus.ACTIVE, (await db.MaintenanceSchedules.SingleAsync(x => x.Id == schedule.Id)).Status);
+        Assert.Equal(EquipmentStatus.UNDER_MAINTENANCE,
+            (await readback.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>().Equipment.SingleAsync(x => x.Id == equipment.Id)).Status);
+        Assert.False(await db.MaintenanceTaskActivities.AnyAsync(x => x.MaintenanceTaskId == task.Id &&
+            (x.ActivityType == MaintenanceActivityType.CLOSED || x.ActivityType == MaintenanceActivityType.MANAGER_REVIEWED)));
+    }
+
     [Fact]
     public async Task Schedule_mutations_require_manager_and_preserve_related_task_and_asset_state()
     {

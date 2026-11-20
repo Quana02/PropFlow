@@ -38,18 +38,18 @@ public sealed class SupportChatTests
     }
 
     [Fact]
-    public async Task DraftOnlyReachesAssignedManagerAndIsNeverSavedOrSentAfterClose()
+    public async Task UnsentDraftNeverReachesManagerOrDatabaseIncludingLegacyClients()
     {
         await using var f = new Fixture(); await f.Ready();
         var chat = await f.Chat.StartAsync(f.Resident, new(Guid.NewGuid(), "Cần hỗ trợ"), default);
         var before = await f.Db.SupportMessages.CountAsync();
         await f.Chat.DraftAsync(f.Resident, chat.Id, "stream", 1, "UNSENT_PRIVATE_DRAFT", default);
-        Assert.Equal(f.Manager, Assert.Single(f.Push.Drafts).Recipient);
+        Assert.Empty(f.Push.Drafts);
         Assert.Equal(before, await f.Db.SupportMessages.CountAsync());
         Assert.DoesNotContain(await f.Db.SupportMessages.ToArrayAsync(), x => x.Text.Contains("UNSENT_PRIVATE_DRAFT"));
         await f.Chat.CloseAsync(f.Resident, chat.Id, default);
         await f.Chat.DraftAsync(f.Resident, chat.Id, "stream", 2, "AFTER_CLOSE", default);
-        Assert.Single(f.Push.Drafts);
+        Assert.Empty(f.Push.Drafts);
     }
 
     [Fact]

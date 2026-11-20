@@ -128,7 +128,7 @@
 
 @if (challenge is not null)
 {
-    <PaymentDestinationOtpDialog Challenge="challenge" Action="pendingAction" Busy="busy" Error="otpError" OnConfirm="ConfirmOtpAsync" OnResend="ResendOtpAsync" OnCancel="CancelOtpFeedbackCloseOtp" />
+    <PaymentDestinationOtpDialog Challenge="challenge" Action="@pendingAction" Busy="busy" Error="@otpError" OnConfirm="ConfirmOtpAsync" OnResend="ResendOtpAsync" OnCancel="CancelOtpFeedbackCloseOtp" />
 }
 
 @code {
