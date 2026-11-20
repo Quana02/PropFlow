@@ -64,12 +64,13 @@ public sealed class ServiceRequestCostNoticeDispatcher(ServiceRequestsDbContext 
                 if (item.Name == "ServiceRequestInvoiceReady")
                 {
                     var invoice = JsonSerializer.Deserialize<ServiceRequestInvoiceNotice>(item.Payload)!;
-                    var linked = await db.ServiceRequests.AsNoTracking().AnyAsync(x => x.Id == item.SourceId &&
-                        x.ServiceInvoiceId == invoice.InvoiceId, ct);
-                    if (linked)
+                    var linked = await db.ServiceRequests.AsNoTracking()
+                        .Where(x => x.Id == item.SourceId && x.ServiceInvoiceId == invoice.InvoiceId)
+                        .Select(x => new { x.SubmittedByUserId }).SingleOrDefaultAsync(ct);
+                    if (linked is not null)
                     {
-                        var recipient = await residents.Residents.AsNoTracking().Where(x => x.Id == invoice.ResidentId)
-                            .Select(x => x.UserId).SingleOrDefaultAsync(ct);
+                        // This is the account passed to Billing when the issued recipient was snapshotted.
+                        var recipient = linked.SubmittedByUserId;
                         if (recipient is null) throw new InvalidOperationException("Resident account unavailable.");
                         await notifications.PublishAsync(new(item.Id, recipient, null, "Hóa đơn dịch vụ đã sẵn sàng",
                             $"Yêu cầu {invoice.RequestNumber} đã được nghiệm thu. Vui lòng xem hóa đơn và thanh toán theo số tiền đã duyệt.",

@@ -57,11 +57,17 @@ namespace PropFlow.Modules.Residents.Infrastructure.Persistence.Migrations
                     b.Property<string>("RelationshipToHead")
                         .HasMaxLength(30).HasColumnType("character varying(30)").HasColumnName("relationship_to_head");
 
-                    b.Property<string>("ResidencyRole")
+                    b.Property<string>("HouseholdRole")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
-                        .HasColumnName("residency_role");
+                        .HasColumnName("household_role");
+
+                    b.Property<string>("ResidencyType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("residency_type");
 
                     b.Property<Guid>("ResidentId")
                         .HasColumnType("uuid")
@@ -92,7 +98,7 @@ namespace PropFlow.Modules.Residents.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ApartmentUnitId");
-                    b.HasIndex("ApartmentUnitId", "ResidencyRole", "Status");
+                    b.HasIndex("ApartmentUnitId", "HouseholdRole", "Status");
                     b.HasIndex("HouseholdHeadResidencyId");
 
                     b.HasIndex("ResidentId");
@@ -126,6 +132,14 @@ namespace PropFlow.Modules.Residents.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("email");
+
+                    b.Property<DateOnly?>("DateOfBirth").HasColumnType("date").HasColumnName("date_of_birth");
+                    b.Property<string>("Gender").HasMaxLength(30).HasColumnType("character varying(30)").HasColumnName("gender");
+                    b.Property<string>("Nationality").HasMaxLength(80).HasColumnType("character varying(80)").HasColumnName("nationality");
+                    b.Property<string>("IdentityType").HasMaxLength(40).HasColumnType("character varying(40)").HasColumnName("identity_type");
+                    b.Property<string>("IdentityNumber").HasMaxLength(80).HasColumnType("character varying(80)").HasColumnName("identity_number");
+                    b.Property<DateOnly?>("IdentityIssuedDate").HasColumnType("date").HasColumnName("identity_issued_date");
+                    b.Property<DateOnly?>("IdentityExpiryDate").HasColumnType("date").HasColumnName("identity_expiry_date");
 
                     b.Property<string>("FullName")
                         .IsRequired()
