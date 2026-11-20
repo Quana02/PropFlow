@@ -547,7 +547,11 @@ public sealed class MaintenanceService(
 
     public async Task<MaintenanceTaskDto> ReviewResultAsync(Guid taskId, Guid resultId, ReviewMaintenanceResultCommand command, Guid actor, CancellationToken ct)
     {
-        var (task, result) = await WithTaskLockAsync(taskId, token => ReviewResultCoreAsync(taskId, resultId, command, actor, token), ct);
+        Task<(MaintenanceTask Task, MaintenanceResult Result)> Review(CancellationToken token) =>
+            WithTaskLockAsync(taskId, locked => ReviewResultCoreAsync(taskId, resultId, command, actor, locked), token);
+        var (task, result) = assetTransaction is null
+            ? await Review(ct)
+            : await assetTransaction.ExecuteAsync(Review, ct);
         await NotifyVisibleAssigneesAsync(task, ct);
         return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await ToDtoAsync(result, ct), ct);
     }

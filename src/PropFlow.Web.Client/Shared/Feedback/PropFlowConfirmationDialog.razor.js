@@ -23,7 +23,7 @@ export function open(dialog) {
 const modalStack = new Set();
 
 export function openDialog(dialog) {
-    if (!dialog?.isConnected) return DotNet.createJSObjectReference({ close() {} });
+    if (!dialog?.isConnected) return { close() {} };
 
     const previous = document.activeElement;
     const closeButton = dialog.querySelector('[data-dialog-close]');
@@ -95,7 +95,7 @@ export function openDialog(dialog) {
         }
     }
 
-    return DotNet.createJSObjectReference({ close: release });
+    return { close: release };
 }
 
 export function close(dialog) {
