@@ -1,0 +1,106 @@
+@startuml
+title AI 1 - ANALYSIS, EXPLANATION AND ALERT REVIEW
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 19
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 240
+skinparam ParticipantPadding 12
+skinparam BoxPadding 8
+hide footbox
+autonumber
+actor "Manager / Accountant" as Operator
+control UtilityInsights as Service
+participant "IUtilityConsumptionSource\n(Billing)" as Source
+control "UtilityConsumptionAnalyzer\n+ ML.NET" as Analyzer
+participant GeminiUtilityExplanation as Gemini
+database "AI persistence\nAiRecommendationDbContext" as DB
+participant "UtilityNoticeWorker\n+ notification publisher" as Delivery
+actor Resident
+
+note over Operator, Service
+  Application-level interactions; HTTP controller/UI calls are omitted.
+  API checks MANAGER/ACCOUNTANT + billing.read; review requires MANAGER + billing.configure.
+end note
+Operator -> Service : GetAsync(apartment, month, ct)
+Service -> Source : ReadAsync(apartment, month, ct)
+Source --> Service : Consumption window, history, recipients, fingerprint
+Service -> DB : Find insight by apartment and month
+alt Existing fingerprint and method version match
+  DB --> Service : Cached insight
+else New or changed source
+  Service -> Analyzer : Analyze(window)
+  alt Current value/history continuity invalid or fewer than 6 valid periods
+    Analyzer --> Service : INSUFFICIENT + reason
+  else Sufficient reference history
+    Analyzer -> Analyzer : Normalize per day; median/MAD; DetectIidSpike
+    note right of Analyzer : ML.NET failure -> MAD fallback.\nSeverity remains a server calculation.
+    Analyzer --> Service : NORMAL / WATCH / HIGH signals + history
+  end
+  Service -> DB : Begin transaction; lock period; reload persisted insight
+  Service -> Source : Verify source fingerprint again
+  alt Source changed
+    break Reject this request
+      Service --> Operator : 409 utility_changed; reload required
+    end
+  else Source unchanged
+    Service -> DB : Recalculate; SaveChanges; Commit
+  end
+end
+Service --> Operator : UtilityInsightView
+
+opt Operator requests an AI explanation
+  Operator -> Service : ExplainAsync(..., fingerprint, actor, ct)
+  Service -> Service : Validate fingerprint; check readiness, cache and quota
+  alt Not configured / explanation cached / quota exceeded
+    Service --> Operator : NOT_CONFIGURED / cached explanation / 429
+  else External explanation is permitted
+    Service -> DB : Record UtilityAiAttempt; Commit
+    Service -> Gemini : ExplainAsync(analysis, ct)
+    note over Service, Gemini : No database transaction is held during the AI call.\nGemini cannot alter severity, charges or invoice data.
+    Gemini --> Service : Validated explanation / null on failure
+    Service -> Source : Verify source fingerprint after AI call
+    alt Source changed
+      Service --> Operator : 409; discard stale response
+    else Source unchanged
+      Service -> DB : Save GEMINI explanation or FALLBACK mode
+      Service --> Operator : Updated UtilityInsightView
+    end
+  end
+end
+
+opt Manager reviews an abnormal finalized period
+  Operator -> Service : ReviewAsync(..., fingerprint, decision, note, actor, ct)
+  Service -> Source : Verify current data and recipients
+  Service -> Service : Require IsFinal, WATCH/HIGH, valid fingerprint and decision
+  alt Invalid / conflicting review
+    Service --> Operator : 400 / 409; no resident alert
+  else New valid decision
+    group Single transaction
+      Service -> DB : Save CONFIRMED/DISMISSED + UtilityInsightReview
+      opt Decision = CONFIRMED
+        Service -> DB : Insert UtilityConsumptionAlertConfirmed outbox event
+      end
+      Service -> DB : Commit
+    end
+    Service --> Operator : Review result
+  end
+  note over Service, DB : An identical repeated review is idempotent; no duplicate history/event.
+end
+
+opt Pending confirmed-alert event exists
+  Delivery -> Service : DispatchAsync(publisher, ct), polled every 30 seconds
+  Service -> DB : Read pending outbox events
+  Service -> Source : Revalidate source fingerprint, recipients and revision
+  alt Still CONFIRMED, finalized and current
+    Service -> Delivery : PublishAsync(eventId, recipient, /resident/utilities)
+    Delivery -> Resident : In-app alert: electricity/water needs checking
+    Service -> DB : Mark delivered after successful publication
+  else Superseded or invalid alert
+    Service -> DB : Mark handled without sending stale alert
+  end
+  note over Service, Delivery : Delivery failure is retried; event identity supports deduplication.\nNo automatic alert before Manager confirmation; no automatic invoice modification.
+end
+@enduml
+

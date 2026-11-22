@@ -20,29 +20,36 @@
         <div class="assistant-intro"><span>KHÁM PHÁ CHUNG CƯ THEO CÁCH CỦA BẠN</span><h1>Hôm nay bạn muốn làm gì?</h1><p>Kể mình nghe điều bạn thích. Mình sẽ kiểm tra lịch tiện ích để cùng bạn chọn.</p></div>
         <div class="assistant-orbit" aria-hidden="true"><div class="orbit-grid"></div><div class="orbit-ring ring-one"></div><div class="orbit-ring ring-two"></div><div class="orbit-ring ring-three"></div><div class="orbit-core"><svg viewBox="0 0 64 64" fill="none"><path d="m32 10 6 16 16 6-16 6-6 16-6-16-16-6 16-6 6-16Z" fill="currentColor"/><circle cx="32" cy="32" r="28" stroke="currentColor" stroke-opacity=".3"/></svg></div><span class="orbit-dot dot-one"></span><span class="orbit-dot dot-two"></span></div>
         <div class="assistant-status" role="status"><span class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>@StatusText</div>
+        @if(liveMode && conversationActive){<span class="assistant-source">Hội thoại trực tiếp · Gemini Live</span>}
         <div class="assistant-dialogue" aria-live="polite" aria-atomic="true">
             @if(lastSpokenNeed is not null){<p class="assistant-you"><span>BẠN</span>@lastSpokenNeed</p>}
             <p class="assistant-reply">@assistantText</p>
-            @if(speechSupported && (suggestions is not null || voiceNotice is not null)){<button type="button" class="assistant-replay" @onclick="Replay" disabled="@(busy || listening || preparingSpeech)">@(suggestions is not null ? "Nghe lại phản hồi ↗" : "Nghe lại lời chào ↗")</button>}
+            @if(speechSupported && (suggestions is not null || voiceNotice is not null)){<button type="button" class="assistant-replay" @onclick="Replay" disabled="@(liveConnecting || (!liveMode && (busy || listening || preparingSpeech)))">@(suggestions is not null ? "Nghe lại phản hồi ↗" : "Nghe lại lời chào ↗")</button>}
             @if(suggestions?.Suggestions.Length > 0){<button type="button" class="assistant-replay assistant-view-results" @onclick="ShowResults">Xem @suggestions.Suggestions.Length tiện ích ↓</button>}
-            @if(suggestions?.Mode == "CLARIFY"){<button type="button" class="assistant-replay" @onclick="NewNeed" disabled="@(busy || listening)">Tìm cho nhu cầu khác ↗</button>}
+            @if(suggestions?.Mode == "CLARIFY"){<button type="button" class="assistant-replay" @onclick="NewNeed" disabled="@(liveConnecting || (!liveMode && (busy || listening)))">Tìm cho nhu cầu khác ↗</button>}
         </div>
-        <button type="button" class="assistant-mic @(listening ? "is-listening" : "")" @onclick="ToggleMicrophone" disabled="@(busy || !voiceSupported || catalogue?.Facilities.Length is not > 0)" aria-label="@(listening ? "Dừng nói và tìm tiện ích" : "Nói nhu cầu với trợ lý")" aria-pressed="@listening">
-            @if(listening){<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3" /></svg>}
+        <button type="button" class="assistant-mic @(conversationActive ? "is-listening" : "")" @onclick="ToggleMicrophone" disabled="@(!conversationActive && (busy || !voiceSupported || (!liveMode && catalogue?.Facilities.Length is not > 0)))" aria-label="@(conversationActive ? "Kết thúc trò chuyện giọng nói" : "Bắt đầu trò chuyện giọng nói liên tục")" aria-pressed="@conversationActive" aria-describedby="facility-voice-help">
+            @if(conversationActive){<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3" /></svg>}
             else{<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg>}
-            <span>@(listening ? "Xong, tìm giúp tôi" : "Chạm để nói")</span>
+            <span>@(conversationActive ? "Kết thúc trò chuyện" : liveMode ? "Kết nối lại" : "Chạm để nói")</span>
         </button>
+        <p class="assistant-voice-help" id="facility-voice-help">@(liveMode ? conversationActive ? "Bạn cứ trò chuyện tự nhiên, có thể nói chen khi mình đang trả lời." : "Bấm để kết nối lại hội thoại trực tiếp." : conversationActive ? "Bạn cứ nói tự nhiên. Ngừng một nhịp để mình trả lời, rồi nói tiếp khi micro bật lại." : "Chạm một lần để trò chuyện liên tục: nói → nghe trả lời → nói tiếp.")</p>
+        @if(liveMode){<p class="assistant-voice-help">Âm thanh được truyền tới Gemini; phiên vẫn tiếp tục khi bạn chuyển tab. Bấm Kết thúc trò chuyện để dừng.</p>}
+        @if(conversationActive && (speaking || preparingSpeech || busy))
+        {
+            <button type="button" class="assistant-interrupt" @onclick="InterruptAndListen">Ngắt lời và nói tiếp</button>
+        }
         @if(voiceNotice is not null){<p class="assistant-voice-notice" role="status">@voiceNotice</p>}
         @if(interimText.Length > 0){<p class="assistant-transcript">@interimText</p>}
 
         <form class="assistant-composer" @onsubmit="Recommend" @onsubmit:preventDefault>
             <label class="assistant-sr-only" for="facility-need">Nhập nhu cầu hoặc bổ sung câu trả lời</label>
             <div class="pf-chat-composer">
-                <textarea id="facility-need" data-enter-submit enterkeyhint="send" title="Enter để gửi · Ctrl+Enter để xuống dòng" @bind="need" @bind:event="oninput" maxlength="1200" rows="1" disabled="@(busy || listening)" placeholder="Hoặc nhập điều bạn cần ở đây…"></textarea>
-                <button type="submit" class="pf-chat-send" disabled="@(busy || listening || need.Trim().Length < 2 || catalogue?.Facilities.Length is not > 0)" aria-label="Gửi nhu cầu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 2 7 12l-5-2 20-8Zm0 0-8 20-2-5 10-15ZM7 12l5 5" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+                <textarea id="facility-need" data-enter-submit enterkeyhint="send" title="Enter để gửi · Ctrl+Enter để xuống dòng" @bind="need" @bind:event="oninput" maxlength="1200" rows="1" disabled="@(liveConnecting || (!liveMode && (busy || listening)))" placeholder="Hoặc nhập điều bạn cần ở đây…"></textarea>
+                <button type="submit" class="pf-chat-send" disabled="@(liveConnecting || (!liveMode && (busy || listening)) || need.Trim().Length < 2 || (!conversationActive && catalogue?.Facilities.Length is not > 0))" aria-label="Gửi nhu cầu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 2 7 12l-5-2 20-8Zm0 0-8 20-2-5 10-15ZM7 12l5 5" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
             </div>
         </form>
-        <div class="assistant-shortcuts"><span>Thử nói</span><button type="button" disabled="@(busy || listening)" @onclick='() => Example("Tôi muốn đi dạo thư giãn")'>Đi dạo thư giãn</button><button type="button" disabled="@(busy || listening)" @onclick='() => Example("Tôi muốn tập thể lực ở phòng gym")'>Tập luyện</button><button type="button" disabled="@(busy || listening)" @onclick='() => Example("Tôi cần một nơi đọc sách yên tĩnh")'>Đọc sách yên tĩnh</button></div>
+        <div class="assistant-shortcuts"><span>Thử nói</span><button type="button" disabled="@(liveConnecting || (!liveMode && (busy || listening)))" @onclick='() => Example("Tôi muốn đi dạo thư giãn")'>Đi dạo thư giãn</button><button type="button" disabled="@(liveConnecting || (!liveMode && (busy || listening)))" @onclick='() => Example("Tôi muốn tập thể lực ở phòng gym")'>Tập luyện</button><button type="button" disabled="@(liveConnecting || (!liveMode && (busy || listening)))" @onclick='() => Example("Tôi cần một nơi đọc sách yên tĩnh")'>Đọc sách yên tĩnh</button></div>
         @if(catalogue is not null && catalogue.Facilities.Length > 0){<p class="assistant-source"><i></i>@catalogue.Facilities.Length tiện ích có thông tin từ Ban quản lý <span>·</span> Nói hoặc nhập để bắt đầu</p>}
     </div>
 
@@ -51,7 +58,7 @@
     @if(catalogue?.Facilities.Length == 0){<div class="assistant-feedback"><strong>Tiện ích đang được chuẩn bị</strong><p>BQL chưa cung cấp đủ thông tin để gợi ý. Bạn có thể liên hệ BQL để được hỗ trợ.</p><a href="/resident/contact-management">Nhắn BQL →</a></div>}
     @if(suggestions is not null && suggestions.Mode != "CLARIFY" && !busy)
     {
-        <div class="assistant-results" id="facility-ai-results"><FacilityRecommendationCards Data="suggestions" /><button type="button" class="assistant-reset" @onclick="NewNeed" disabled="@(busy || listening)">Tìm cho nhu cầu khác ↗</button></div>
+        <div class="assistant-results" id="facility-ai-results"><FacilityRecommendationCards Data="suggestions" /><button type="button" class="assistant-reset" @onclick="NewNeed" disabled="@(liveConnecting || (!liveMode && (busy || listening)))">Tìm cho nhu cầu khác ↗</button></div>
     }
     </div>
     <footer class="assistant-footnote">Thông tin hoạt động do BQL cung cấp. Liên hệ người phụ trách để xác nhận trước khi sử dụng.</footer>

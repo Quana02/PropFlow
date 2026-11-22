@@ -28,7 +28,10 @@ public sealed class FacilityRecommendations(AiRecommendationDbContext db,IFacili
             ? view with {Message="Hiện không còn lịch công bố phù hợp cho tiện ích được nhắc. Bạn có thể nói nhu cầu để tìm lựa chọn khác."}
             : view;
     }
-    public async Task<FacilityRecommendationView> RecommendAsync(Guid actor,FacilityRecommendationRequest request,CancellationToken ct)
+    public Task<FacilityRecommendationView> RecommendAsync(Guid actor,FacilityRecommendationRequest request,CancellationToken ct) => FindAsync(actor,request,true,ct);
+    // Live interprets the conversation; its lookup only needs verified facts, without another model round-trip.
+    public Task<FacilityRecommendationView> LookupAsync(Guid actor,FacilityRecommendationRequest request,CancellationToken ct) => FindAsync(actor,request,false,ct);
+    private async Task<FacilityRecommendationView> FindAsync(Guid actor,FacilityRecommendationRequest request,bool useAdvisor,CancellationToken ct)
     {
         await Check(actor,ct);var now=await LocalNow(ct);var today=DateOnly.FromDateTime(now);
         if(string.IsNullOrWhiteSpace(request.Need)||request.Need.Trim().Length is <2 or >1200 || request.PreferredDate<today || request.PreferredDate>today.AddDays(30))
@@ -68,6 +71,7 @@ public sealed class FacilityRecommendations(AiRecommendationDbContext db,IFacili
             return new(items,mode,message,followup,clock.GetUtcNow(),ForChildren:effective.ForChildren);
         }
         if(matches.Length==0)return Response([],"NO_MATCH",intent);
+        if(!useAdvisor) { await Check(actor,ct); return Response(matches.Where(x=>x.Score>0),"LOOKUP",intent); }
         if(!advisor.Ready)return Response(matches.Where(x=>x.Score>0),"CATALOGUE",intent);
         var fingerprint=Fingerprint(window,matches,now,alternative);
         string Fingerprint(FacilityGuideWindow facts,FacilityMatch[] candidates,DateTime instant,bool isAlternative)=>Hash(new {facts.Fingerprint,need,date,Alternative=isAlternative,Day=DateOnly.FromDateTime(instant),Matches=candidates.Select(x=>new {x.Guide.FacilityId,x.Times,Open=FacilityNeedMatcher.OpenNow(x,instant)}),FacilityNeedMatcher.Version});
