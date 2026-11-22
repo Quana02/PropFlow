@@ -111,7 +111,7 @@
     {
         if (!firstRender) return;
 
-        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261120-1");
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Feedback/PropFlowConfirmationDialog.razor.js?v=20261120-sepay1");
         if (disposed) return;
 
         var handle = await module.InvokeAsync<IJSObjectReference>("openDialog", dialog);

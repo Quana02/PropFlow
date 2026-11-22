@@ -18,23 +18,23 @@ namespace PropFlow.UnitTests;
 public sealed class SupportChatUiTests
 {
     [Fact]
-    public async Task ResidentSeesGreetingAndDraftDisclosureBeforeSending()
+    public async Task ResidentSeesGreetingWithoutLiveDraftDisclosure()
     {
         await using var fixture = new RenderFixture(false, false);
         var html = await fixture.Render();
         Assert.Contains("Bạn cần Ban quản lý hỗ trợ việc gì?", html);
-        Assert.Contains("trước khi bấm Gửi", html);
+        Assert.DoesNotContain("có thể xem trực tiếp", html);
         Assert.DoesNotContain("Cư dân đang soạn — chưa gửi", html);
         Assert.DoesNotContain(fixture.Transport.DraftText!, html);
     }
 
     [Fact]
-    public async Task ManagerSeesSeparateEscapedUnsentDraftAndSavedMessages()
+    public async Task ManagerSeesSavedMessagesButNeverUnsentDraft()
     {
         await using var fixture = new RenderFixture(true, true);
         var html = await fixture.Render(raw: true);
-        Assert.Contains("Cư dân đang soạn — chưa gửi", WebUtility.HtmlDecode(html));
-        Assert.Contains("&lt;b&gt;", html); Assert.DoesNotContain("<b>PRIVATE_DRAFT", html);
+        Assert.DoesNotContain("Cư dân đang soạn — chưa gửi", WebUtility.HtmlDecode(html));
+        Assert.DoesNotContain("PRIVATE_DRAFT", html);
         Assert.Contains("TIN_DA_GUI", html);
         fixture.Transport.DraftText = null;
         var cleared = await fixture.RenderAgain();
@@ -55,7 +55,7 @@ public sealed class SupportChatUiTests
     }
 
     [Fact]
-    public async Task ContinuousTypingPublishesBeforeTheResidentStopsAndNeverPostsUnsentText()
+    public async Task ContinuousResidentTypingNeverPublishesOrPostsUnsentText()
     {
         await using var fixture = new RenderFixture(false, true);
         await fixture.Render();
@@ -75,8 +75,8 @@ public sealed class SupportChatUiTests
         });
         try
         {
-            var draft = await fixture.Transport.FirstDraft.Task.WaitAsync(TimeSpan.FromSeconds(4));
-            Assert.Contains("Đang gõ liên tục", draft); Assert.False(typing.IsCompleted);
+            await Task.Delay(700);
+            Assert.False(fixture.Transport.FirstDraft.Task.IsCompleted); Assert.False(typing.IsCompleted);
             Assert.Equal(0, fixture.Http.Posts);
         }
         finally { producer.Cancel(); await typing; }

@@ -22,7 +22,7 @@ function environment(connected) {
     const heading = new Element();
     document.body = new Element();
     document.activeElement = previous;
-    const signals = [];
+    const signals = []; let closes = 0;
     const dialog = new Element();
     Object.assign(dialog, {
         isConnected: connected,
@@ -31,7 +31,7 @@ function environment(connected) {
         querySelector: selector => selector === '[data-dialog-close]' ? button : selector === 'h2' ? heading : null,
         contains: element => element === button || element === heading,
         showModal() { this.open = true; document.activeElement = heading; },
-        close() { this.open = false; document.activeElement = document.body; }
+        close() { closes++; this.open = false; document.activeElement = document.body; }
     });
     for (const target of [document, dialog]) {
         const add = target.addEventListener.bind(target);
@@ -45,11 +45,11 @@ function environment(connected) {
     global.DotNet = { createJSObjectReference: () => ({ __jsObjectId: 123 }) };
     const observers = [];
     global.MutationObserver = class {
-        constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
+        constructor(callback) { this.callback = callback; this.disconnected = false; this.disconnects = 0; observers.push(this); }
         observe() {}
-        disconnect() { this.disconnected = true; }
+        disconnect() { this.disconnected = true; this.disconnects++; }
     };
-    return { dialog, previous, document, signals, observers,
+    return { dialog, previous, document, signals, observers, get closes() { return closes; },
         restore() { Object.assign(global, originals); }
     };
 }
@@ -68,6 +68,8 @@ test('dialog returns a callable controller for Blazor and releases modal listene
         assert.ok(dom.observers.every(observer => observer.disconnected));
         assert.equal(dom.document.activeElement, dom.previous);
         assert.doesNotThrow(() => handle.close());
+        assert.equal(dom.closes, 1);
+        assert.ok(dom.observers.every(observer => observer.disconnects === 1));
     } finally { dom.restore(); }
 });
 

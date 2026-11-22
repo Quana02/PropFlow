@@ -51,6 +51,8 @@ public class MaintenanceAssignment
 
         Status = AssignmentStatus.IN_PROGRESS;
         StartedAt ??= now;
+        // A reopened attempt is no longer complete; earlier results and activities remain its history.
+        CompletedAt = null;
     }
 
     public void Complete(DateTimeOffset now)
