@@ -1,0 +1,111 @@
+@startuml
+title SERVICE REQUEST - DOMAIN CLASS DIAGRAM
+top to bottom direction
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 19
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam roundcorner 3
+skinparam nodesep 85
+skinparam ranksep 70
+skinparam padding 1
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #334155
+skinparam classBorderColor #475569
+skinparam classBackgroundColor #FFFFFF
+skinparam classHeaderBackgroundColor #E8F0FA
+skinparam classFontColor #0F172A
+skinparam noteBackgroundColor #F8FAFC
+skinparam noteBorderColor #94A3B8
+hide circle
+hide empty methods
+
+class UserAccount <<entity>> {
+  +Id : Guid
+  +Username : string
+  +DisplayName : string
+  +Status : AccountStatus
+}
+class UserRoleAssignment <<entity>> {
+  +Id : Guid
+  +UserId : Guid
+  +RoleId : Guid
+  +AssignedAt : DateTimeOffset
+}
+class Role <<entity>> {
+  +Id : Guid
+  +Code : string
+  +Name : string
+  +IsActive : bool
+}
+class Resident <<entity>> {
+  +Id : Guid
+  +UserId : Guid?
+  +ResidentCode : string
+  +FullName : string
+}
+class ServiceRequest <<entity>> {
+  +Id : Guid
+  +RequestNumber : string
+  +ResidentId : Guid
+  +Title : string
+  +Status : ServiceRequestStatus
+  +FinalPriorityCode : string?
+  +ProposedAdditionalCost : decimal
+  +AdditionalCostConsentStatus : string
+  +MarkAssigned(now: DateTimeOffset) : void
+  +Resolve(now: DateTimeOffset) : void
+  +Close(closedBy: Guid, now: DateTimeOffset) : void
+  +Cancel(now: DateTimeOffset) : void
+}
+class ServiceRequestCategory <<entity>> {
+  +Id : Guid
+  +Code : string
+  +Name : string
+  +IsActive : bool
+}
+class ServiceRequestAssignment <<entity>> {
+  +Id : Guid
+  +ServiceRequestId : Guid
+  +StaffUserId : Guid
+  +AssignedBy : Guid
+  +Status : AssignmentStatus
+  +Start(now: DateTimeOffset) : void
+  +Complete(now: DateTimeOffset) : void
+  +Cancel(now: DateTimeOffset) : void
+}
+class ServiceRequestActivity <<entity>> {
+  +Id : Guid
+  +ServiceRequestId : Guid
+  +AssignmentId : Guid?
+  +ActivityType : ServiceActivityType
+  +PerformedBy : Guid?
+  +CreatedAt : DateTimeOffset
+}
+
+Resident "1" -right- "0..*" ServiceRequest : requests
+ServiceRequest "0..*" -right- "0..1" ServiceRequestCategory : category
+Resident "0..1" -down- "0..1" UserAccount : UserId
+ServiceRequest "1" -down- "0..*" ServiceRequestAssignment : assignments
+UserAccount "1" -right- "0..*" ServiceRequestAssignment : assigner\n{MANAGER / AssignedBy}
+UserAccount "1" -[norank]- "0..*" ServiceRequestAssignment : assignee\n{STAFF / StaffUserId}
+ServiceRequestAssignment "0..1" -right- "0..*" ServiceRequestActivity : assignment
+ServiceRequest "1" -[norank]- "0..*" ServiceRequestActivity : activities
+UserAccount "1" -down- "0..1" UserRoleAssignment
+UserRoleAssignment "0..*" -right- "1" Role : role
+ServiceRequestCategory -[hidden]down- ServiceRequestActivity
+
+legend bottom left
+  <b>Role responsibilities</b>
+  RESIDENT: submit request; accept/reject extra cost.
+  MANAGER: assign staff; review cost; accept completed work.
+  STAFF: perform assigned work; propose extra cost.
+  <b>Notation</b>
+  Solid lines: associations. End labels: multiplicities. ? : nullable.
+  Cross-module links are logical ID references, not database foreign keys.
+  Role constraints describe the actor at operation time; no role inheritance.
+  Selected members only; actual C# names, types and operation signatures.
+endlegend
+@enduml
+

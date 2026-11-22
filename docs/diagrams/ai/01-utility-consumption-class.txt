@@ -1,0 +1,90 @@
+@startuml
+title AI 1 - UTILITY CONSUMPTION ANALYSIS
+top to bottom direction
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 19
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 65
+skinparam ranksep 65
+skinparam padding 1
+skinparam ArrowColor #334155
+skinparam classBorderColor #475569
+skinparam classBackgroundColor #FFFFFF
+skinparam classHeaderBackgroundColor #E8F0FA
+skinparam noteBackgroundColor #F8FAFC
+skinparam noteBorderColor #94A3B8
+hide circle
+hide empty members
+
+class UtilityInsights <<service>> {
+  +GetAsync(apartment: Guid, month: DateOnly,\n  ct: CancellationToken) : Task<UtilityInsightView>
+}
+class UtilityConsumptionAnalyzer <<service>> {
+  +Signature : string
+  +Analyze(window: UtilityConsumptionWindow) : UtilityAnalysis
+}
+interface IUtilityConsumptionSource <<Billing contract>> {
+  +ReadAsync(apartmentId: Guid, month: DateOnly,\n  ct: CancellationToken) : Task<UtilityConsumptionWindow?>
+}
+interface IUtilitySpikeModel {
+  +Evaluate(history: IReadOnlyList<float>, current: float,\n  confidence: double) : (bool Spike, double PValue)
+}
+class MlNetUtilitySpikeModel
+interface IUtilityExplanation {
+  +Ready : bool
+  +ExplainAsync(analysis: UtilityAnalysis,\n  ct: CancellationToken) : Task<UtilityAiResult?>
+}
+class GeminiUtilityExplanation
+class UtilityInsight <<entity>> {
+  +Id : Guid
+  +ApartmentId : Guid
+  +Month : DateOnly
+  +Fingerprint : string
+  +Revision : int
+  +IsFinal : bool
+  +Review : string
+  +Recipients : Guid[]
+  +AiExplanation : string?
+  +RecordReview(decision: string, note: string,\n  actor: Guid, now: DateTimeOffset) : void
+  +Explain(text: string?) : void
+}
+class UtilityInsightReview <<entity>> {
+  +Id : Guid
+  +InsightId : Guid
+  +Revision : int
+  +Decision : string
+  +Actor : Guid
+  +Note : string
+  +CreatedAt : DateTimeOffset
+}
+class UserAccount <<external entity>> {
+  +Id : Guid
+  +DisplayName : string
+}
+
+IUtilityConsumptionSource <.left. UtilityInsights : reads
+UtilityInsights .right.> IUtilityExplanation : requests explanation
+GeminiUtilityExplanation .up.|> IUtilityExplanation
+UtilityInsights .down.> UtilityConsumptionAnalyzer : analyzes
+UtilityConsumptionAnalyzer .right.> IUtilitySpikeModel : evaluates
+MlNetUtilitySpikeModel .up.|> IUtilitySpikeModel
+UtilityInsights .down.> UtilityInsight : loads / recalculates
+UtilityInsight "1" -down- "0..*" UtilityInsightReview : review history
+UserAccount "1" -right- "0..*" UtilityInsightReview : reviewer {MANAGER}\nActor
+UserAccount "0..*" -[norank]- "0..*" UtilityInsight : recipients {RESIDENT}\nRecipients[]
+IUtilityConsumptionSource -[hidden]down- UserAccount
+UtilityConsumptionAnalyzer -[hidden]down- UtilityInsight
+
+legend bottom left
+  <b>Responsibilities and constraints</b>
+  Manager/Accountant view analysis and request explanations. Only Manager reviews alerts.
+  ML.NET DetectIidSpike + median/MAD determine severity; Gemini only explains it.
+  Review requires a finalized period and WATCH/HIGH; confirmed review queues a resident notice.
+  Minimum history defaults to 6 valid periods; otherwise INSUFFICIENT.
+  <b>UML</b> ..> dependency; ..|> interface realization; solid line = association with multiplicities.
+  Cross-module IDs are logical references. Manager/Resident are roles of UserAccount.
+  Selected members; complete C# signatures, wrapped across lines for readability.
+endlegend
+@enduml

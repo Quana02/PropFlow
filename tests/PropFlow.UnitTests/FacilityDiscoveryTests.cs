@@ -14,6 +14,17 @@ namespace PropFlow.UnitTests;
 [Trait("Feature", "FacilityDiscovery-Task2")]
 public sealed class FacilityDiscoveryTests
 {
+    [Fact]
+    public async Task Live_lookup_returns_verified_facts_without_calling_another_model_or_recording_an_AI_run()
+    {
+        await using var scenario=new Scenario();
+        var view=await scenario.Service.LookupAsync(Guid.NewGuid(),new("Khu vực cuối tuần cho trẻ em 6 tuổi thứ 7"),default);
+        Assert.Equal("LOOKUP",view.Mode);Assert.NotEmpty(view.Suggestions);
+        Assert.Equal(0,scenario.Advisor.Calls);Assert.Empty(scenario.Db.FacilityRecommendationRuns);
+        Assert.All(view.Suggestions, suggestion=>Assert.NotEmpty(suggestion.OpeningTimes));
+        scenario.Access.Active=false;
+        Assert.Equal(403,(await Assert.ThrowsAsync<FacilityRecommendationFailure>(()=>scenario.Service.LookupAsync(Guid.NewGuid(),new("Khu vực cuối tuần cho trẻ em 6 tuổi"),default))).Status);
+    }
     private static readonly DateTime Now = new(2026, 11, 16, 10, 0, 0);
     internal static FacilityGuideView Guide() => new(Guid.NewGuid(), "Góc vui chơi trẻ em", "Khu vui chơi", "Tầng 2", "ACTIVE", true,
         "Trò chơi và góc đọc sách cuối tuần cho trẻ em", "CHILDREN", 3, 12, "GUARDIAN_REQUIRED", "", "Có người lớn đi cùng.",
