@@ -7,8 +7,11 @@ public sealed record FacilityVisitTime(DateOnly Date,TimeOnly OpensAt,TimeOnly C
 public sealed record FacilitySuggestion(ResidentFacilityCard Facility,FacilityVisitTime[] OpeningTimes,string Reason,string Availability="",bool IsOpenNow=false);
 public sealed record FacilityRecommendationView(FacilitySuggestion[] Suggestions,string Mode,string Message,string? FollowUp,DateTimeOffset CalculatedAt,Guid? SpeechId=null,bool ForChildren=false);
 public sealed record FacilitySpeechAudio(string Audio,string ContentType);
+public sealed record FacilityLiveSession(string Token,string WebSocketUrl,System.Text.Json.JsonElement Setup,DateTimeOffset ExpiresAt);
 public sealed class FacilityRecommendationsApi(AuthenticatedApiClient api)
 {
+    public Task<ApiResult<FacilityRecommendationView>> LiveLookupAsync(string need,CancellationToken ct)=>api.SendAsync<FacilityRecommendationView>(HttpMethod.Post,"api/v1/resident/facility-recommendations/live/lookup",new {need},ct:ct);
+    public Task<ApiResult<FacilityLiveSession>> LiveAsync(CancellationToken ct)=>api.SendAsync<FacilityLiveSession>(HttpMethod.Post,"api/v1/resident/facility-recommendations/live",ct:ct);
     public Task<ApiResult<FacilityGuidesManagement>> ManagementAsync(CancellationToken ct)=>api.SendAsync<FacilityGuidesManagement>(HttpMethod.Get,"api/v1/facility-guides",ct:ct);
     public Task<ApiResult<EmptyResponse>> SaveAsync(Guid facility,SaveFacilityGuide request,CancellationToken ct)=>api.SendAsync<EmptyResponse>(HttpMethod.Put,$"api/v1/facility-guides/{facility}",request,ct:ct);
     public Task<ApiResult<ResidentFacilityCatalogue>> CatalogueAsync(CancellationToken ct)=>api.SendAsync<ResidentFacilityCatalogue>(HttpMethod.Get,"api/v1/resident/facility-recommendations",ct:ct);

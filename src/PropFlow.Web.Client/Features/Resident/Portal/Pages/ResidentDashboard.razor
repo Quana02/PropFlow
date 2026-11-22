@@ -194,7 +194,7 @@
         {
             try
             {
-                await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/facility-assistant-voice.js?v=20261117-2");
+                await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/facility-assistant-voice.js?v=20261122-1");
                 await module.InvokeVoidAsync("preloadGreetings");
             }
             catch (JSException) { /* Greeting will load on demand without blocking resident services. */ }

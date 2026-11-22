@@ -2,13 +2,14 @@ export function isSupported() {
   return globalThis.isSecureContext === true && !!(globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition);
 }
 
-export function create(dotnet) {
+export function create(dotnet, options = {}) {
   const Recognition = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
   let recognition = null;
   let currentSession;
   let disposed = false;
   let silenceTimer;
   let queue = Promise.resolve();
+  const silenceMs = Number.isFinite(options.silenceMs) ? Math.max(500, Math.min(3000, options.silenceMs)) : 1500;
   const notify = (name, ...args) => {
     queue = queue.then(() => disposed ? undefined : dotnet.invokeMethodAsync(name, ...args)).catch(() => {});
   };
@@ -48,7 +49,7 @@ export function create(dotnet) {
         clearSilence();
         silenceTimer = setTimeout(() => {
           if (recognition === current) { try { current.stop(); } catch { cancel(); notify("OnVoiceEnded", session, "unknown"); } }
-        }, 1500);
+        }, silenceMs);
       };
       current.onend = () => {
         if (recognition !== current || disposed) return;

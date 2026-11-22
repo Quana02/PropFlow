@@ -3,7 +3,7 @@ const root = path.resolve(__dirname, '../..');
 const recognition = fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/js/resident-request-voice.js'), 'utf8');
 const dependency = 'data:text/javascript;base64,' + Buffer.from(recognition).toString('base64');
 const source = fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/js/facility-assistant-voice.js'), 'utf8')
-  .replace("'./resident-request-voice.js?v=20261112-1'", JSON.stringify(dependency));
+  .replace("'./resident-request-voice.js?v=20261122-1'", JSON.stringify(dependency));
 let fixtureId = 0;
 const wav = Buffer.from('RIFF-test-WAVE').toString('base64');
 
@@ -77,6 +77,14 @@ test('backgrounding stops both playback and microphone and reports paused state'
   session.start(7); document.visibilityState = 'hidden'; document.dispatchEvent(new Event('visibilitychange'));
   assert.equal(microphones[0].aborts, 1); assert.deepEqual(calls.at(-1), ['OnAssistantSpeech', 7, 'paused']);
   assert.equal(await session.play(wav, 'audio/wav', 8), false);
+  assert.equal(session.start(8), false);
+}));
+
+test('backgrounding during an AI request reports its current turn even before audio exists', () => browser(async ({ session, document, calls }) => {
+  session.start(1);
+  session.cancel(2);
+  document.visibilityState = 'hidden'; document.dispatchEvent(new Event('visibilitychange'));
+  assert.deepEqual(calls.at(-1), ['OnAssistantSpeech', 2, 'paused']);
 }));
 test('invalid or non-audio payload fails safely without playing arbitrary content', () => browser(async ({ session, players, calls }) => {
   assert.equal(await session.play('not-an-audio', 'text/html', 3), false); assert.equal(players.length, 0);
