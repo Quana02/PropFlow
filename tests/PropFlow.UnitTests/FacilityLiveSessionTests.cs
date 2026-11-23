@@ -29,10 +29,16 @@ public sealed class FacilityLiveSessionTests
         var setup = root.GetProperty("bidiGenerateContentSetup");
         Assert.False(root.TryGetProperty("fieldMask", out _)); // The complete setup is locked by the provider.
         Assert.Equal(512, setup.GetProperty("generationConfig").GetProperty("maxOutputTokens").GetInt32());
-        Assert.Equal(0, setup.GetProperty("generationConfig").GetProperty("thinkingConfig").GetProperty("thinkingBudget").GetInt32());
+        Assert.Equal("models/gemini-3.1-flash-live-preview", setup.GetProperty("model").GetString());
+        Assert.False(setup.GetProperty("generationConfig").TryGetProperty("thinkingConfig", out _)); // 3.1 Live defaults to minimal thinking.
         Assert.Equal(400, setup.GetProperty("realtimeInputConfig").GetProperty("automaticActivityDetection").GetProperty("silenceDurationMs").GetInt32());
         Assert.Equal("find_facilities", setup.GetProperty("tools")[0].GetProperty("functionDeclarations")[0].GetProperty("name").GetString());
         Assert.Equal("end_conversation", setup.GetProperty("tools")[0].GetProperty("functionDeclarations")[1].GetProperty("name").GetString());
+        var selection = setup.GetProperty("tools")[0].GetProperty("functionDeclarations")[2];
+        Assert.Equal("show_facilities", selection.GetProperty("name").GetString());
+        Assert.Equal(new[] { "lookupId", "facilityIds" }, selection.GetProperty("parameters").GetProperty("required").EnumerateArray().Select(x => x.GetString()));
+        var tools = setup.GetProperty("tools")[0].GetProperty("functionDeclarations").EnumerateArray().Select(x => x.GetProperty("name").GetString()).ToArray();
+        Assert.Contains("find_documents", tools); Assert.Contains("prepare_request", tools); Assert.Contains("submit_request", tools);
         Assert.Contains("2026-11-22 09:30:00", setup.GetProperty("systemInstruction").GetProperty("parts")[0].GetProperty("text").GetString());
         Assert.DoesNotContain("server-only-key", JsonSerializer.Serialize(session));
         Assert.DoesNotContain("resident", handler.Body!, StringComparison.OrdinalIgnoreCase);
@@ -58,6 +64,9 @@ public sealed class FacilityLiveSessionTests
         Assert.Contains("chỉ xử lý phần liên quan chung cư", instructions);
         Assert.Contains("gọi end_conversation trước", instructions);
         Assert.Contains("không đủ ý định kết thúc", instructions);
+        Assert.Contains("find_facilities chỉ trả ứng viên", instructions);
+        Assert.Contains("bắt buộc gọi show_facilities", instructions);
+        Assert.Contains("Không chỉ xin lỗi bằng lời rồi giữ các thẻ sai", instructions);
     }
     [Fact]
     public async Task Unavailable_or_invalid_token_response_never_exposes_provider_errors()

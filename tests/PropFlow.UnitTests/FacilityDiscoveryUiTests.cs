@@ -33,7 +33,7 @@ public sealed class FacilityDiscoveryUiTests
     {
         using var handler=new Responses();using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};var capture=new Capture();
         await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
-            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddResidentAssistant().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async()=>{
             var root=await renderer.RenderComponentAsync<ResidentFacilities>(ParameterView.Empty);var page=capture.Resident!;var id=Guid.NewGuid();
@@ -49,7 +49,7 @@ public sealed class FacilityDiscoveryUiTests
         using var handler=new Responses {View=new([],"CLARIFY","Cần hiểu thêm","Bạn thích hoạt động gì và muốn đi lúc nào?",DateTimeOffset.UtcNow)};
         using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};var capture=new Capture();
         await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
-            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddResidentAssistant().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async()=>{
             var root=await renderer.RenderComponentAsync<ResidentFacilities>(ParameterView.Empty);var page=capture.Resident!;
@@ -95,7 +95,7 @@ public sealed class FacilityDiscoveryUiTests
     {
         using var handler=new Responses();using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};var capture=new Capture();
         await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
-            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime, NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddResidentAssistant().AddSingleton<IJSRuntime, NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async()=>{
             var root=await renderer.RenderComponentAsync<ResidentFacilities>(ParameterView.Empty);var page=capture.Resident!;
@@ -114,7 +114,7 @@ public sealed class FacilityDiscoveryUiTests
     {
         using var handler=new Responses();using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};var capture=new Capture();
         await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
-            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddResidentAssistant().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async()=>{
             var root=await renderer.RenderComponentAsync<ResidentFacilities>(ParameterView.Empty);var page=capture.Resident!;
@@ -151,7 +151,7 @@ public sealed class FacilityDiscoveryUiTests
     {
         using var handler=new Responses();using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};var capture=new Capture();
         await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
-            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddResidentAssistant().AddSingleton<IJSRuntime,NoJavaScript>().AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async()=>{
             var root=await renderer.RenderComponentAsync<ManagementPage>(ParameterView.Empty);var page=capture.Manager!;

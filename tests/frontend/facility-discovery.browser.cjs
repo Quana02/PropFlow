@@ -7,6 +7,8 @@ const root = path.resolve(__dirname, '../..');
 const greetingOnly = process.argv.includes('--greeting-only');
 const liveVoice = process.argv.includes('--live-voice');
 const roles = liveVoice ? ['welcome', 'resident', 'manager', 'live-listening', 'live-speaking'] : process.argv.includes('--continuous-voice') ? ['welcome', 'resident', 'manager', 'listening', 'speaking'] : ['welcome', 'resident', 'manager'];
+if (process.argv.includes('--assistant-content')) roles.push('request', 'documents', 'chat-answer');
+if (process.argv.includes('--idle-only')) roles.splice(0, roles.length, 'idle');
 const scopedStyles = [process.env.PROPFLOW_TEST_CONFIGURATION || 'Debug', 'Fe10Verification'].map(configuration => path.join(root, `src/PropFlow.Web.Client/obj/${configuration}/net8.0/scopedcss/projectbundle/PropFlow.Web.Client.bundle.scp.css`)).find(file => fs.existsSync(file));
 const css = fs.readFileSync(path.join(root, 'src/PropFlow.Web/wwwroot/app.css'), 'utf8') + '\n'
   + fs.readFileSync(scopedStyles, 'utf8')
@@ -14,7 +16,7 @@ const css = fs.readFileSync(path.join(root, 'src/PropFlow.Web/wwwroot/app.css'),
   + '\n' + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/css/chat-composer.css'), 'utf8');
 const pages = Object.fromEntries((greetingOnly ? ['welcome'] : roles).map(role => {
   if(greetingOnly)return [role,'<!doctype html><html lang="vi"><head><meta charset="utf-8"><base href="/"></head><body>Greeting playback test</body></html>'];
-  const file = path.join(os.tmpdir(), `propflow-facility-${role}.html`);
+  const file = path.join(os.tmpdir(), role === 'chat-answer' ? 'propflow-document-chat-answer.html' : `propflow-facility-${role}.html`);
   if (!fs.existsSync(file)) throw Error('Run FacilityDiscoveryUiTests with PROPFLOW_FACILITY_PREVIEW_DIR set to TEMP.');
   return [role, '<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
     + 'body{margin:0;font-family:Segoe UI,Arial,sans-serif}*{box-sizing:border-box}.app-shell{padding:16px}' + css
@@ -71,16 +73,20 @@ function send(method, params = {}, sessionId) {
     const checks = [];
     for (const role of (greetingOnly ? [] : roles)) {
       await send('Page.navigate', { url: 'http://127.0.0.1:' + port + '/' + role }, session);
-      const selector = role === 'manager' ? '.facility-guides' : '.resident-facility-discovery';
+      const selector = role === 'manager' ? '.facility-guides' : role === 'chat-answer' ? '.rag-widget' : '.resident-facility-discovery';
       for (let i = 0; i < 100 && !await evaluate('!!document.querySelector(' + JSON.stringify(selector) + ')'); i++) await wait(50);
+      if (role === 'idle') await evaluate("document.querySelector('dialog').showModal()");
       for (const width of [1366, 820, 390, 320]) {
         await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false }, session);
         for (const dark of [false, true]) {
           await evaluate(`document.documentElement.classList.toggle('dark',${dark});document.documentElement.dataset.theme='${dark?'dark':'light'}';document.querySelector('.app-shell').classList.toggle('app-shell-dark',${dark})`); await wait(750);
-          const expected = role === 'resident' ? 'Nhân viên phụ trách' : role === 'welcome' ? 'Chạm để nói' : role === 'manager' ? 'Giờ mở và đóng cửa' : role.endsWith('listening') ? 'Mình đang nghe bạn' : 'Ngắt lời và nói tiếp';
+          const expected = role === 'idle' ? 'Bạn còn muốn trò chuyện không?' : role === 'request' ? 'Cùng xem lại trước khi gửi' : role === 'documents' ? 'Tài liệu chung cư' : role === 'chat-answer' ? 'Trò chuyện với tôi' : role === 'resident' ? 'Nhân viên phụ trách' : role === 'welcome' ? 'Chạm để nói' : role === 'manager' ? 'Giờ mở và đóng cửa' : role.endsWith('listening') ? 'Mình đang nghe bạn' : 'Ngắt lời và nói tiếp';
           const result = await evaluate(`(()=>{const root=document.querySelector(${JSON.stringify(selector)}),bounds=root.getBoundingClientRect(),fields=[...root.querySelectorAll('input:not([type=checkbox]),textarea,select')];return {overflow:document.documentElement.scrollWidth>innerWidth+1,fieldsFit:fields.every(c=>{const r=c.getBoundingClientRect();return r.left>=bounds.left-1&&r.right<=bounds.right+1}),color:getComputedStyle(root).color,hasContent:root.innerText.includes(${JSON.stringify(expected)})};})()`);
           result.role = role; result.width = width; result.dark = dark;
-          result.passed = !result.overflow && result.fieldsFit && result.hasContent && (dark ? result.color === (role==='manager'?'rgb(241, 247, 255)':'rgb(237, 246, 255)') : result.color === (role !== 'manager' ? 'rgb(20, 39, 66)' : 'rgb(23, 36, 58)')); checks.push(result);
+          result.passed = !result.overflow && result.fieldsFit && result.hasContent && (dark ? result.color === (role==='manager'?'rgb(241, 247, 255)':'rgb(237, 246, 255)') : result.color === (role === 'chat-answer' ? 'rgb(24, 55, 75)' : role !== 'manager' ? 'rgb(20, 39, 66)' : 'rgb(23, 36, 58)'));
+          if (role === 'chat-answer') { result.redCallToAction = await evaluate(`(()=>{const b=document.querySelector('.rag-voice-button'),s=getComputedStyle(b);return s.color==='rgb(255, 255, 255)'&&s.backgroundImage.includes('190, 18, 60')&&b.getBoundingClientRect().height>=44;})()`); result.passed &&= result.redCallToAction; }
+          if (role === 'idle') { result.dialogFits = await evaluate(`(()=>{const d=document.querySelector('dialog'),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&[...d.querySelectorAll('button')].every(b=>{const x=b.getBoundingClientRect();return x.left>=r.left&&x.right<=r.right;})&&d.innerText.includes('30');})()`); result.passed &&= result.dialogFits; }
+          checks.push(result);
           if (width === 1366 || width === 390) {
             const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, session);
             fs.writeFileSync(path.join(os.tmpdir(), `propflow-facility-${role}-${width}-${dark ? 'dark' : 'light'}.png`), Buffer.from(shot.data, 'base64'));
