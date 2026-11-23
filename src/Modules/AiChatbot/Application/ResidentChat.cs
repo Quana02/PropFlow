@@ -36,13 +36,7 @@ public sealed partial class ResidentChat(IResidentKnowledgeSearch search, IChatA
         if (PersonalFinance().IsMatch(normalized))
             return new("GUIDANCE", "Bạn hãy mở mục Hóa đơn và thanh toán để xem thông tin chính xác của mình. Trợ lý tài liệu chưa tra cứu hóa đơn, công nợ hoặc giao dịch cá nhân.", []);
         var safeQuestion = KnowledgeText.Redact(question);
-        float[]? vector = null;
-        if (ai.Ready)
-        {
-            try { vector = (await ai.EmbedAsync([safeQuestion], ct, ChatEmbeddingPurpose.Query)).Single(); }
-            catch (ChatAiUnavailableException) { }
-        }
-        var passages = await search.SearchAsync(safeQuestion, vector, ai.EmbeddingKey, ct);
+        var passages = await FindPassages(safeQuestion, ct);
         if (passages.Count == 0) return new("NO_SOURCES", "Mình chưa tìm thấy tài liệu đã xuất bản phù hợp với câu hỏi này. Bạn hãy thử nêu rõ chủ đề hoặc liên hệ Ban quản lý.", []);
         GroundedAnswer? generated = null;
         var answerUnavailable = false;
@@ -61,6 +55,33 @@ public sealed partial class ResidentChat(IResidentKnowledgeSearch search, IChatA
                 : "Mình chưa tạo được câu trả lời có đủ căn cứ. Bạn có thể đọc các đoạn tài liệu liên quan bên dưới hoặc liên hệ Ban quản lý."
             : "Chức năng trả lời AI chưa được cấu hình. Đây là các đoạn tài liệu tìm được theo câu hỏi của bạn.",
             passages.Select((p, index) => Citation(index + 1, p)).ToArray());
+    }
+    // The active Live model explains these sources; lookup does not call another answer model.
+    public async Task<ResidentChatReply> LookupAsync(Guid actor, string? question, CancellationToken ct)
+    {
+        await EnsureAccess(actor, ct);
+        question = (question ?? "").Trim();
+        if (question.Length is < 2 or > 1000 || question.Any(c => char.IsControl(c) && c is not '\n' and not '\t'))
+            throw new KnowledgeValidationException("Nhập câu hỏi từ 2 đến 1.000 ký tự.");
+        if (PersonalFinance().IsMatch(KnowledgeText.Search(question)))
+            return new("GUIDANCE", "Mở mục Hóa đơn và thanh toán để xem dữ liệu cá nhân chính xác. Tra cứu tài liệu không cung cấp số dư hoặc giao dịch cá nhân.", []);
+        var passages = await FindPassages(KnowledgeText.Redact(question), ct);
+        await EnsureAccess(actor, ct);
+        if (!await search.CurrentAsync(passages, ct))
+            return new("SOURCE_CHANGED", "Tài liệu vừa thay đổi hoặc được thu hồi. Hãy tra cứu lại.", []);
+        return new(passages.Count > 0 ? "DOCUMENTS_ONLY" : "NO_SOURCES",
+            passages.Count > 0 ? "Nội dung dưới đây lấy từ tài liệu BQL đang xuất bản cho cư dân." : "Chưa tìm thấy tài liệu đang xuất bản phù hợp. Hãy hỏi rõ hơn hoặc liên hệ BQL.",
+            passages.Select((p, index) => Citation(index + 1, p)).ToArray());
+    }
+    private async Task<IReadOnlyList<RetrievedPassage>> FindPassages(string safeQuestion, CancellationToken ct)
+    {
+        float[]? vector = null;
+        if (ai.Ready)
+        {
+            try { vector = (await ai.EmbedAsync([safeQuestion], ct, ChatEmbeddingPurpose.Query)).Single(); }
+            catch (ChatAiUnavailableException) { }
+        }
+        return await search.SearchAsync(safeQuestion, vector, ai.EmbeddingKey, ct);
     }
     public async Task<PublishedKnowledgeSource?> SourceAsync(Guid actor, Guid id, int revision, CancellationToken ct)
     { await EnsureAccess(actor, ct); return await search.SourceAsync(id, revision, ct); }

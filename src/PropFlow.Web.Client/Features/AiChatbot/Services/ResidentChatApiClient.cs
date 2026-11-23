@@ -9,6 +9,8 @@ public sealed class ResidentChatApiClient(AuthenticatedApiClient api)
     public Task<ApiResult<ResidentChatStatus>> StatusAsync(CancellationToken ct) => api.SendAsync<ResidentChatStatus>(HttpMethod.Get, Root + "/status", ct: ct);
     public Task<ApiResult<ResidentChatReply>> AskAsync(string question, CancellationToken ct) =>
         api.SendAsync<ResidentChatReply>(HttpMethod.Post, Root + "/ask", new AskResidentChat(question), ct: ct);
+    public Task<ApiResult<ResidentChatReply>> LookupAsync(string question, CancellationToken ct) =>
+        api.SendAsync<ResidentChatReply>(HttpMethod.Post, Root + "/lookup", new AskResidentChat(question), ct: ct);
     public Task<ApiResult<PublishedKnowledgeSource>> SourceAsync(Guid id, int revision, CancellationToken ct) =>
         api.SendAsync<PublishedKnowledgeSource>(HttpMethod.Get, $"{Root}/sources/{id}/{revision}", ct: ct);
 }

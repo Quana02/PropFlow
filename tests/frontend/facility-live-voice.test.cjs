@@ -30,12 +30,103 @@ async function browser(run) {
       addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events) };
     for (const [key, value] of Object.entries(values)) Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
     const module = await import('data:text/javascript;base64,' + Buffer.from(source + '\n//test' + index++).toString('base64'));
-    control = module.create({ invokeMethodAsync: async (...args) => { calls.push(args); if (args[0] === 'OnLiveTool') return toolResult(); } });
+    control = module.create({ invokeMethodAsync: async (...args) => { calls.push(args); if (['OnLiveTool', 'OnLiveSelection', 'OnLiveDocuments', 'OnLivePrepareRequest', 'OnLiveUpdateRequest', 'OnLiveSubmitRequest'].includes(args[0])) return toolResult(); } });
     const session = { token: 'auth_tokens/test', webSocketUrl: 'wss://generativelanguage.googleapis.com/ws/test', setup: { model: 'models/live', tools: [] }, expiresAt: new Date(Date.now() + 600000).toISOString() };
     await run({ module, control, calls, sockets, captures, nodes, contexts, track, document, events, session, media, setTool: handler => toolResult = handler, flush: () => new Promise(setImmediate) });
   } finally { control?.dispose(); for (const [key, value] of Object.entries(previous)) if (value) Object.defineProperty(globalThis, key, value); else delete globalThis[key]; }
 }
 const chunk = { inlineData: { data: Buffer.from([0, 0, 0xff, 0x7f, 0, 0x80, 0, 0]).toString('base64'), mimeType: 'audio/pcm;rate=24000' } };
+
+test('an untranscribed noise burst followed by a fan cannot keep renewing resident idle activity for two minutes', () => browser(async f => {
+  await f.control.start(f.session, 6);
+  const frame = amplitude => f.captures[0].port.onmessage({ data: new Float32Array(1024).fill(amplitude) });
+  for (let i = 0; i < 24; i++) frame(.002);
+  // A chair scrape, followed by a louder steady fan after microphone auto-gain changes.
+  for (let i = 0; i < 4; i++) frame(.08);
+  for (let i = 0; i < 1875; i++) frame(.03);
+  const activity = f.calls.filter(x => x[0] === 'OnLiveSpeechActivity');
+  assert.equal(activity.length, 0, 'Noise without any recognized words must not renew the idle deadline; received ' + activity.length + ' activity pulses');
+  assert.equal(f.calls.filter(x => x[0] === 'OnLiveUserTurn').length, 0);
+}));
+
+test('only recognized words notify resident interaction; local audio energy is not an idle heartbeat', () => browser(async f => {
+  await f.control.start(f.session, 6);
+  const frame = amplitude => f.captures[0].port.onmessage({ data: new Float32Array(1024).fill(amplitude) });
+  for (let i = 0; i < 40; i++) frame(.002);
+  assert.equal(f.calls.filter(x => x[0] === 'OnLiveSpeechActivity').length, 0);
+  for (let i = 0; i < 20; i++) frame(.08);
+  const activity = f.calls.filter(x => x[0] === 'OnLiveSpeechActivity');
+  assert.equal(activity.length, 0);
+  assert.equal(f.calls.filter(x => x[0] === 'OnLiveUserTurn').length, 0);
+  f.sockets[0].receive({ serverContent: { inputTranscription: { text: 'Tôi vẫn đang nói' } } }); await f.flush();
+  assert.ok(f.calls.some(x => x[0] === 'OnLiveUserTurn' && x[3] === 'Tôi vẫn đang nói'));
+}));
+
+test('quiet background after transcribed speech flushes the audio turn promptly instead of streaming noise forever', () => browser(async f => {
+  await f.control.start(f.session, 1);
+  const frame = value => f.captures[0].port.onmessage({ data: new Float32Array(1024).fill(value) });
+  for (let i = 0; i < 12; i++) frame(.002);
+  for (let i = 0; i < 5; i++) frame(.08);
+  f.sockets[0].receive({ serverContent: { inputTranscription: { text: 'Chuyển quạt, PC và tủ ra ngoài' } } }); await f.flush();
+  for (let i = 0; i < 6; i++) frame(.002);
+  assert.equal(f.sockets[0].sent.filter(x => x.realtimeInput?.audioStreamEnd).length, 1);
+  const count = f.sockets[0].sent.length;
+  for (let i = 0; i < 12; i++) frame(.002);
+  assert.equal(f.sockets[0].sent.length, count);
+  frame(.08);
+  assert.ok(f.sockets[0].sent.at(-1).realtimeInput?.audio);
+  assert.equal(f.track.stops, 0);
+}));
+test('speech ending is bounded in audio time without waiting for remote transcription; small pauses and steady noise are preserved', () => browser(async f => {
+  const detector = f.module.createSpeechEndDetector();
+  const quiet = new Float32Array(1024).fill(.002), voice = new Float32Array(1024).fill(.08);
+  for (let i = 0; i < 24; i++) assert.equal(detector.push(quiet, 16000).flush, false);
+  assert.equal(detector.push(voice, 16000).flush, false);
+  for (let i = 0; i < 4; i++) assert.equal(detector.push(quiet, 16000).flush, false); // One click is not a speech burst.
+  for (let i = 0; i < 5; i++) detector.push(voice, 16000);
+  for (let i = 0; i < 4; i++) assert.equal(detector.push(quiet, 16000).flush, false); // 256 ms pause.
+  assert.equal(detector.push(voice, 16000).flush, false); // The resident continues listing items.
+  for (let i = 0; i < 4; i++) assert.equal(detector.push(quiet, 16000).flush, false);
+  assert.equal(detector.push(quiet, 16000).flush, true); // 320 ms after the final item.
+  const noisy = f.module.createSpeechEndDetector();
+  for (let i = 0; i < 80; i++) assert.equal(noisy.push(new Float32Array(1024).fill(.02), 16000).flush, false);
+}));
+
+test('request and document tools use separate callbacks and confirmation receives actual input before a tool call', () => browser(async f => {
+  await f.control.start(f.session, 8); f.setTool(async () => ({ ok: true }));
+  const id = '083485b5-2dcc-45cb-bae4-92fec9b89625';
+  f.sockets[0].receive({ toolCall: { functionCalls: [{ id: 'docs', name: 'find_documents', args: { question: 'Nội quy làm đơn' } }] } }); await f.flush();
+  f.sockets[0].receive({ toolCall: { functionCalls: [{ id: 'draft', name: 'prepare_request', args: { description: 'Vòi nước trong bếp bị rò liên tục.' } }] } }); await f.flush();
+  f.sockets[0].receive({ serverContent: { inputTranscription: { text: 'Gửi đơn này' } }, toolCall: { functionCalls: [{ id: 'submit', name: 'submit_request', args: { draftId: id } }] } }); await f.flush();
+  assert.ok(f.calls.some(x => x[0] === 'OnLiveDocuments')); assert.ok(f.calls.some(x => x[0] === 'OnLivePrepareRequest'));
+  const inputAt = f.calls.findIndex(x => x[0] === 'OnLiveUserTurn' && x[3] === 'Gửi đơn này');
+  const submitAt = f.calls.findIndex(x => x[0] === 'OnLiveSubmitRequest');
+  assert.ok(inputAt >= 0 && inputAt < submitAt);
+  assert.deepEqual(f.calls[submitAt], ['OnLiveSubmitRequest', 8, id]);
+  f.sockets[0].receive({ serverContent: { turnComplete: true } }); await f.flush();
+  f.control.sendText('Chưa gửi');
+  assert.ok(f.calls.some(x => x[0] === 'OnLiveUserTurn' && x[2] === 2 && x[3] === 'Chưa gửi'));
+}));
+
+test('semantic selection displays the chosen subset and can clear cards without another lookup', () => browser(async f => {
+  await f.control.start(f.session, 5);
+  f.setTool(async () => ({ displayed: { suggestions: [] } }));
+  const id = '083485b5-2dcc-45cb-bae4-92fec9b89625';
+  f.sockets[0].receive({ toolCall: { functionCalls: [{ id: 'select', name: 'show_facilities', args: { lookupId: 'lookup-1', facilityIds: [id] } }] } }); await f.flush();
+  assert.deepEqual(f.calls.find(x => x[0] === 'OnLiveSelection'), ['OnLiveSelection', 5, 'lookup-1', [id]]);
+  assert.deepEqual(f.sockets[0].sent.at(-1).toolResponse.functionResponses[0].response, { displayed: { suggestions: [] } });
+  f.sockets[0].receive({ toolCall: { functionCalls: [{ id: 'clear', name: 'show_facilities', args: { lookupId: 'lookup-1', facilityIds: [] } }] } }); await f.flush();
+  assert.deepEqual(f.calls.filter(x => x[0] === 'OnLiveSelection').at(-1)[3], []);
+  assert.equal(f.calls.filter(x => x[0] === 'OnLiveTool').length, 0);
+}));
+test('selection rejects malformed and oversized tool arguments before invoking the UI', () => browser(async f => {
+  await f.control.start(f.session, 1);
+  for (const [index, args] of [{ facilityIds: [] }, { lookupId: 'x', facilityIds: 'bad' }, { lookupId: 'x', facilityIds: [7] }, { lookupId: 'x', facilityIds: ['1', '2', '3', '4'] }].entries()) {
+    f.sockets[0].receive({ toolCall: { functionCalls: [{ id: 'invalid-' + index, name: 'show_facilities', args }] } }); await f.flush();
+    assert.ok(f.sockets[0].sent.at(-1).toolResponse.functionResponses[0].response.error);
+  }
+  assert.equal(f.calls.filter(x => x[0] === 'OnLiveSelection').length, 0);
+}));
 
 test('explicit ending tool waits for the entire goodbye audio before closing capture and notifying navigation', () => browser(async f => {
   await f.control.start(f.session, 7);

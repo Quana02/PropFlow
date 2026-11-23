@@ -9,6 +9,19 @@ namespace PropFlow.UnitTests;
 public sealed class ResidentChatTests
 {
     [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task Live_lookup_returns_verified_sources_without_a_second_answer_model(bool configured)
+    {
+        var f = new Fixture { Ready = configured };
+        var result = await f.Chat.LookupAsync(Guid.NewGuid(), "Nội quy sử dụng tiện ích", default);
+        Assert.Equal("DOCUMENTS_ONLY", result.Mode); Assert.Single(result.Sources);
+        Assert.Equal(f.Passages[0].Content, result.Sources[0].Excerpt); Assert.Equal(0, f.Answers);
+        f.Current = false;
+        Assert.Empty((await f.Chat.LookupAsync(Guid.NewGuid(), "Nội quy sử dụng tiện ích", default)).Sources);
+        f.Active = false;
+        await Assert.ThrowsAsync<ChatAccessException>(() => f.Chat.LookupAsync(Guid.NewGuid(), "Nội quy", default));
+    }
+    [Theory]
     [InlineData("RESIDENT", "USE_RESIDENT_SERVICES", true)]
     [InlineData("RESIDENT", "", false)]
     [InlineData("MANAGER", "MANAGE_OPERATIONS", false)]

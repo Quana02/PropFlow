@@ -13,10 +13,45 @@ export function pcm16(samples, inputRate) {
   return output;
 }
 const encode = bytes => btoa(String.fromCharCode(...bytes));
+// Hybrid VAD: Google still detects speech; this bounded local helper only flushes a confidently quiet tail.
+// Sample counts, rather than background-throttled timers, keep endpointing consistent across browser tabs.
+export function createSpeechEndDetector(silenceMs = 320) {
+  let confirmed = false, paused = false, quietMs = 0, voicedMs = 0, floor = .003, peak = 0, previous;
+  const levels = [];
+  return {
+    confirm() { if (!paused) confirmed = true; },
+    reply() { confirmed = false; quietMs = voicedMs = 0; peak = 0; },
+    push(samples, rate) {
+      const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / Math.max(1, samples.length));
+      if (!confirmed) {
+        levels.push(rms); if (levels.length > 16) levels.shift();
+        floor = Math.max(.0005, [...levels].sort((a, b) => a - b)[Math.floor((levels.length - 1) * .2)]);
+      }
+      const audible = rms > Math.max(.004, Math.min(.025, floor * 2));
+      peak = Math.max(peak, rms);
+      voicedMs = audible ? voicedMs + samples.length / rate * 1000 : 0;
+      // Do not wait for the remote transcript to detect a clear speech burst over a learned noise floor.
+      if (!paused && voicedMs >= 128 && levels.length >= 5 && peak > floor * 3) confirmed = true;
+      quietMs = audible ? 0 : quietMs + samples.length / rate * 1000;
+      let frames = [samples], flush = false;
+      if (paused) {
+        if (audible) { paused = false; quietMs = 0; frames = previous ? [previous, samples] : [samples]; }
+        else frames = [];
+      }
+      else if (confirmed && peak > floor * 2.5 && quietMs >= silenceMs) {
+        flush = paused = true; confirmed = false; peak = 0;
+      }
+      previous = samples;
+      return { frames, flush };
+    }
+  };
+}
 export function create(dotnet) {
   let disposed = false, epoch = 0, socket, stream, context, capture, source, gain, deadline, timeout, finishStart;
   let ready = false, muted = false, nextAudio = 0, generation = 0, turnDone = false, input = '', output = '', newInput = true, newOutput = true, lastState;
   let ending = false, farewellReceived = false;
+  let userTurn = 0;
+  let speechEnd;
   const playing = new Set(), tools = new Map(), seenTools = new Set();
   const notify = (name, ...args) => { if (!disposed) void dotnet.invokeMethodAsync(name, epoch, ...args).catch(() => {}); };
   const state = value => { if (lastState !== value) { lastState = value; notify('OnLiveState', value); } };
@@ -35,6 +70,7 @@ export function create(dotnet) {
     silence();
     for (const id of tools.keys()) notify('OnLiveToolCancelled', id);
     tools.clear(); seenTools.clear();
+    speechEnd = null;
     if (capture) { capture.port.onmessage = null; capture.disconnect(); capture = null; }
     source?.disconnect(); source = null; gain?.disconnect(); gain = null;
     stream?.getTracks().forEach(track => track.stop()); stream = null;
@@ -89,6 +125,17 @@ export function create(dotnet) {
       }
       else if (call.name === 'find_facilities' && typeof call.args?.need === 'string' && call.args.need.trim().length >= 2 && call.args.need.length <= 1200)
         response = await dotnet.invokeMethodAsync('OnLiveTool', epoch, call.id, call.args.need);
+      else if (call.name === 'show_facilities' && typeof call.args?.lookupId === 'string' && call.args.lookupId.length <= 200 &&
+        Array.isArray(call.args.facilityIds) && call.args.facilityIds.length <= 3 && call.args.facilityIds.every(id => typeof id === 'string' && id.length <= 36))
+        response = await dotnet.invokeMethodAsync('OnLiveSelection', epoch, call.args.lookupId, call.args.facilityIds);
+      else if (call.name === 'find_documents' && typeof call.args?.question === 'string' && call.args.question.trim().length >= 2 && call.args.question.length <= 1000)
+        response = await dotnet.invokeMethodAsync('OnLiveDocuments', epoch, call.id, call.args.question);
+      else if (call.name === 'prepare_request' && typeof call.args?.description === 'string' && call.args.description.trim().length >= 10 && call.args.description.length <= 3500)
+        response = await dotnet.invokeMethodAsync('OnLivePrepareRequest', epoch, call.id, call.args.description, call.args.newRequest === true);
+      else if (call.name === 'update_request' && typeof call.args?.draftId === 'string' && call.args.draftId.length === 36)
+        response = await dotnet.invokeMethodAsync('OnLiveUpdateRequest', epoch, call.id, call.args.draftId);
+      else if (call.name === 'submit_request' && typeof call.args?.draftId === 'string' && call.args.draftId.length === 36)
+        response = await dotnet.invokeMethodAsync('OnLiveSubmitRequest', epoch, call.args.draftId);
       if (!disposed && turn === generation && tools.has(call.id)) send({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: response || { error: 'Yêu cầu đã hủy.' } }] } });
     } catch { if (turn === generation && tools.has(call.id)) send({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response: { error: 'Chưa tra cứu được dữ liệu. Hãy thông báo lỗi, không suy đoán.' } }] } }); }
     finally { tools.delete(call.id); }
@@ -100,24 +147,28 @@ export function create(dotnet) {
       send({ clientContent: { turns: [{ role: 'user', parts: [{ text: 'Bắt đầu cuộc trò chuyện: chào ngắn gọn bằng tiếng Việt và hỏi hôm nay tôi muốn làm gì, rồi lắng nghe tôi.' }] }], turnComplete: true } });
     }
     if (data.goAway) { fail('expired'); return; }
+    if (data.toolCallCancellation?.ids?.length) newInput = true;
     for (const id of data.toolCallCancellation?.ids || []) { tools.delete(id); notify('OnLiveToolCancelled', id); }
-    for (const call of data.toolCall?.functionCalls || []) void tool(call, turn);
     const content = data.serverContent;
-    if (!content) return;
-    if (content.interrupted) { silence(); ending = farewellReceived = false; newOutput = true; turnDone = false; state('listening'); }
-    if (content.inputTranscription?.text) {
-      if (newInput) { input = ''; newInput = false; }
-      input = (input + content.inputTranscription.text).slice(-1200); newOutput = true;
+    if (content?.interrupted) { silence(); ending = farewellReceived = false; newInput = newOutput = true; turnDone = false; state('listening'); }
+    if (content?.inputTranscription?.text) {
+      speechEnd?.confirm();
+      if (newInput) { input = ''; newInput = false; userTurn++; }
+      input = (input + content.inputTranscription.text).slice(-3500); newOutput = true;
+      notify('OnLiveUserTurn', userTurn, input);
       notify('OnLiveTranscript', 'user', input);
     }
+    for (const call of data.toolCall?.functionCalls || []) void tool(call, turn);
+    if (!content) return;
     if (content.outputTranscription?.text) {
+      speechEnd?.reply();
       if (ending) farewellReceived = true;
       if (newOutput) { output = ''; newOutput = false; }
       output = (output + content.outputTranscription.text).slice(-6000);
       notify('OnLiveTranscript', 'assistant', output);
     }
     for (const part of content.modelTurn?.parts || []) {
-      if (part.inlineData) { if (ending) farewellReceived = true; turnDone = false; play(part.inlineData.data, part.inlineData.mimeType); }
+      if (part.inlineData) { speechEnd?.reply(); if (ending) farewellReceived = true; turnDone = false; play(part.inlineData.data, part.inlineData.mimeType); }
     }
     if (content.turnComplete) { newInput = true; newOutput = true; turnDone = true; settleTurn(); }
   }
@@ -125,7 +176,8 @@ export function create(dotnet) {
   return {
     async start(session, newEpoch, audioEnabled = true) {
       if (disposed || !capabilities()) return false;
-      close(); epoch = newEpoch; lastState = undefined; muted = !audioEnabled; input = output = ''; newInput = newOutput = true;
+      close(); epoch = newEpoch; userTurn = 0; lastState = undefined; muted = !audioEnabled; input = output = ''; newInput = newOutput = true;
+      speechEnd = createSpeechEndDetector();
       const turn = generation;
       try {
         const url = new URL(session.webSocketUrl);
@@ -147,7 +199,14 @@ export function create(dotnet) {
         source = context.createMediaStreamSource(stream); capture = new AudioWorkletNode(context, 'propflow-facility-capture');
         gain = context.createGain(); gain.gain.value = 0;
         source.connect(capture); capture.connect(gain); gain.connect(context.destination);
-        capture.port.onmessage = event => { if (ready && context && turn === generation) send({ realtimeInput: { audio: { data: encode(pcm16(event.data, context.sampleRate)), mimeType: 'audio/pcm;rate=16000' } } }); };
+        capture.port.onmessage = event => {
+          if (!ready || !context || turn !== generation || !speechEnd) return;
+          const decision = speechEnd.push(event.data, context.sampleRate);
+          // VAD bounds audio turns; amplitude alone is not evidence of resident interaction.
+          // Only recognized words (OnLiveUserTurn) renew the idle deadline, never fan/room noise.
+          for (const frame of decision.frames) send({ realtimeInput: { audio: { data: encode(pcm16(frame, context.sampleRate)), mimeType: 'audio/pcm;rate=16000' } } });
+          if (decision.flush) send({ realtimeInput: { audioStreamEnd: true } });
+        };
         url.searchParams.set('access_token', session.token); socket = new WebSocket(url.href);
         const started = new Promise(resolve => { finishStart = resolve; });
         timeout = setTimeout(() => fail('network'), 15000); deadline = setTimeout(() => fail('expired'), remaining);
@@ -169,7 +228,9 @@ export function create(dotnet) {
     sendText(text) {
       if (!ready || typeof text !== 'string' || text.trim().length < 2 || text.length > 1200) return false;
       silence(); ending = farewellReceived = false; newInput = newOutput = true;
-      return send({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } });
+      const sent = send({ clientContent: { turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true } });
+      if (sent) notify('OnLiveUserTurn', ++userTurn, text);
+      return sent;
     },
     interrupt() {
       silence(); ending = farewellReceived = false; newOutput = true;

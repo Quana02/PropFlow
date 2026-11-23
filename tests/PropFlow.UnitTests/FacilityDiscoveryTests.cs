@@ -14,6 +14,51 @@ namespace PropFlow.UnitTests;
 [Trait("Feature", "FacilityDiscovery-Task2")]
 public sealed class FacilityDiscoveryTests
 {
+    [Theory]
+    [InlineData("Tôi muốn tìm nơi yên tĩnh để học tập một mình hôm nay")]
+    [InlineData("Tôi muốn tìm khu vực học bài trong chung cư hôm nay")]
+    public async Task Live_study_lookup_only_displays_relevant_facilities_instead_of_filling_three_cards(string need)
+    {
+        await using var scenario = new Scenario();
+        var hours = new FacilityOpening(1, new(5, 30), new(22, 0));
+        var library = Library(hours) with { Name = "Thư viện và phòng đọc", Description = "Không gian yên tĩnh để đọc sách, học tập và làm việc." };
+        var gym = library with { FacilityId = Guid.NewGuid(), Name = "Phòng gym người lớn", Type = "Phòng gym", Description = "Khu tập thể hình, rèn luyện sức khỏe dành cho cư dân người lớn." };
+        var court = library with { FacilityId = Guid.NewGuid(), Name = "Sân cầu lông", Type = "Sân thể thao", Description = "Sân cầu lông dành cho cư dân tập luyện và giao lưu thể thao." };
+        scenario.Source.Current = new([gym, library, court], "study-relevance");
+
+        var result = await scenario.Service.LookupAsync(Guid.NewGuid(), new(need), default);
+
+        Assert.Equal(library.FacilityId, Assert.Single(result.Suggestions).Facility.Id);
+        Assert.Equal(0, scenario.Advisor.Calls);
+    }
+    [Fact]
+    public async Task Live_study_lookup_uses_the_librarys_next_day_instead_of_an_unrelated_open_gym()
+    {
+        await using var scenario = new Scenario(); scenario.Options.MaxCandidates = 1;
+        var library = Library(new FacilityOpening(2, new(8, 0), new(22, 0)));
+        var gym = library with { FacilityId = Guid.NewGuid(), Name = "Phòng gym", Type = "Gym", Description = "Tập luyện thể hình", Hours = [new(1, new(8, 0), new(22, 0))] };
+        scenario.Source.Current = new([gym, library], "next-relevant");
+        var result = await scenario.Service.LookupAsync(Guid.NewGuid(), new("Tìm nơi học tập hôm nay"), default);
+        var chosen = Assert.Single(result.Suggestions);
+        Assert.Equal(library.FacilityId, chosen.Facility.Id);
+        Assert.Equal(new DateOnly(2026, 11, 17), chosen.OpeningTimes[0].Date);
+        Assert.Contains("Lịch thay thế", chosen.Availability);
+        scenario.Source.Current = new([gym], "no-study-space");
+        result = await scenario.Service.LookupAsync(Guid.NewGuid(), new("Tìm nơi học tập hôm nay"), default);
+        Assert.Empty(result.Suggestions); Assert.Equal("NO_MATCH", result.Mode);
+    }
+    [Fact]
+    public async Task Live_lookup_provides_candidates_beyond_three_for_semantic_selection_while_regular_suggestions_stay_bounded()
+    {
+        await using var scenario = new Scenario();
+        scenario.Source.Current = new(Enumerable.Range(1, 7).Select(i => Library(new FacilityOpening(1, new(8, 0), new(22, 0))) with { Name = $"Thư viện {i}" }).ToArray(), "many-libraries");
+        var actor = Guid.NewGuid(); var need = new FacilityRecommendationRequest("Tìm nơi đọc sách hôm nay");
+        Assert.Equal(7, (await scenario.Service.LookupAsync(actor, need, default)).Suggestions.Length);
+        scenario.Options.MaxCandidates = 4;
+        Assert.Equal(4, (await scenario.Service.LookupAsync(actor, need, default)).Suggestions.Length);
+        scenario.Advisor.Available = false;
+        Assert.Equal(3, (await scenario.Service.RecommendAsync(actor, need, default)).Suggestions.Length);
+    }
     [Fact]
     public async Task Live_lookup_returns_verified_facts_without_calling_another_model_or_recording_an_AI_run()
     {

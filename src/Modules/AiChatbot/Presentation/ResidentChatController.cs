@@ -20,6 +20,10 @@ public sealed class ResidentChatController(ResidentChat chat, IChatAi ai) : Cont
     public Task<ActionResult<ResidentChatReply>> Ask(AskResidentChat input, CancellationToken ct) =>
         Execute(actor => chat.AskAsync(actor, input.Question, ct));
 
+    [HttpPost("lookup"), EnableRateLimiting(ResidentChatPolicy.RateLimit), RequestSizeLimit(12000)]
+    public Task<ActionResult<ResidentChatReply>> Lookup(AskResidentChat input, CancellationToken ct) =>
+        Execute(actor => chat.LookupAsync(actor, input.Question, ct));
+
     [HttpGet("sources/{id:guid}/{revision:int}")]
     public async Task<ActionResult<PublishedKnowledgeSource>> Source(Guid id, int revision, CancellationToken ct)
     {

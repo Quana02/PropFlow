@@ -8,7 +8,8 @@ public sealed record CreateResidentServiceRequestRequest(
     string? PriorityCode,
     DateOnly? PreferredDate,
     string? PreferredTimeCode,
-    Guid? FacilityId = null);
+    Guid? FacilityId = null,
+    Guid? SubmissionId = null);
 
 public sealed record ResidentServiceRequestFacility(Guid Id, string Name);
 

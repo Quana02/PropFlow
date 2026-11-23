@@ -25,6 +25,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredServ
 builder.Services.AddClientAuthorization();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.KnowledgeApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.ResidentChatApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.AiChatbot.Services.ResidentAssistantHandoff>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.SupportChat.SupportChatApi>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.EmergencyCalls.EmergencyCallApi>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Communication.EmergencyCalls.EmergencyCallClient>();

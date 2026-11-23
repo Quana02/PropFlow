@@ -124,7 +124,7 @@ public sealed class ResidentServiceRequestsController(
         var problem = new ProblemDetails
         {
             Status = status,
-            Title = status switch
+            Title = code == "submission_conflict" ? "Bản nháp đã được sử dụng" : status switch
             {
                 StatusCodes.Status400BadRequest => "Thông tin yêu cầu không hợp lệ",
                 StatusCodes.Status401Unauthorized => "Chưa xác thực",

@@ -1,4 +1,6 @@
 using PropFlow.Modules.PropertyAssets.Contracts;
+using System.Security.Cryptography;
+using System.Text;
 using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.ServiceRequests.Application;
 using PropFlow.Modules.ServiceRequests.Contracts;
@@ -12,7 +14,8 @@ public enum SubmitServiceRequestOutcome
     Created,
     InvalidInput,
     ResidentResidenceNotFound,
-    CategoryUnavailable
+    CategoryUnavailable,
+    SubmissionConflict
 }
 
 public sealed record SubmitServiceRequestResult(
@@ -25,7 +28,9 @@ public interface IServiceRequestSubmissionStore
 {
     Task<Guid?> FindActiveCategoryIdAsync(string categoryCode, CancellationToken ct);
 
-    Task AddAsync(
+    Task<ServiceRequest?> FindByRequestNumberAsync(string requestNumber, CancellationToken ct);
+
+    Task<ServiceRequest> AddAsync(
         ServiceRequest request,
         ServiceRequestActivity initialActivity,
         CancellationToken ct);
@@ -66,6 +71,8 @@ public sealed class SubmitServiceRequestHandler(
     {
         if (userId == Guid.Empty)
             return Invalid("invalid_user", "Phiên đăng nhập không hợp lệ.");
+        if (command.SubmissionId == Guid.Empty)
+            return Invalid("invalid_submission_id", "Khóa gửi yêu cầu không hợp lệ.");
 
         var categoryCode = NormalizeOptional(command.CategoryCode);
         var areaCode = NormalizeOptional(command.ServiceAreaCode);
@@ -117,7 +124,10 @@ public sealed class SubmitServiceRequestHandler(
                 Message: "Loại dịch vụ hiện chưa được cấu hình. Vui lòng liên hệ Ban Quản lý.");
         }
 
-        var requestNumber = $"YC-{today:yyyyMMdd}-{Guid.NewGuid():N}"[..30].ToUpperInvariant();
+        // Stable per actor and draft, protected by the existing unique request-number constraint.
+        var requestNumber = command.SubmissionId is { } submissionId
+            ? "YC-AI-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{userId:N}:{submissionId:N}")))[..24]
+            : $"YC-{today:yyyyMMdd}-{Guid.NewGuid():N}"[..30].ToUpperInvariant();
         var request = new ServiceRequest(
             requestNumber,
             residence.ResidentId,
@@ -142,17 +152,23 @@ public sealed class SubmitServiceRequestHandler(
             detail: "Yêu cầu đang chờ Ban Quản lý tiếp nhận.",
             performedBy: userId);
 
-        await store.AddAsync(request, activity, ct);
-        if (realtime is not null)
+        var existing = command.SubmissionId is not null ? await store.FindByRequestNumberAsync(requestNumber, ct) : null;
+        var saved = existing ?? await store.AddAsync(request, activity, ct);
+        if (saved.Id != request.Id && (saved.SubmittedByUserId != userId || saved.ResidentApartmentId != residence.ResidentApartmentId ||
+            saved.Description != request.Description || saved.Title != request.Title || saved.CategoryId != request.CategoryId ||
+            saved.ServiceAreaCode != request.ServiceAreaCode || saved.FacilityId != request.FacilityId ||
+            saved.PreferredDate != request.PreferredDate || saved.PreferredTimeCode != request.PreferredTimeCode))
+            return new(SubmitServiceRequestOutcome.SubmissionConflict, ErrorCode: "submission_conflict", Message: "Bản nháp này đã được gửi với nội dung khác. Hãy xem lại yêu cầu đã gửi trước khi tạo đơn mới.");
+        if (realtime is not null && saved.Id == request.Id)
             await realtime.NotifyChangedAsync(request.Id, userId, CancellationToken.None);
 
         return new(
             SubmitServiceRequestOutcome.Created,
             new ResidentServiceRequestCreatedResponse(
-                request.Id,
-                request.RequestNumber,
-                request.Status.ToString(),
-                request.SubmittedAt));
+                saved.Id,
+                saved.RequestNumber,
+                saved.Status.ToString(),
+                saved.SubmittedAt));
     }
 
     private async Task<DateOnly> CurrentBuildingDateAsync(DateTimeOffset now, CancellationToken ct)
