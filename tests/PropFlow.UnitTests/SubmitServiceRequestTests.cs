@@ -12,6 +12,29 @@ namespace PropFlow.UnitTests;
 [Trait("UseCase", "FE-05.1")]
 public sealed class SubmitServiceRequestTests
 {
+    [Fact]
+    public async Task Same_draft_key_is_idempotent_and_reusing_it_for_another_body_conflicts()
+    {
+        var actor = Guid.NewGuid(); var store = new FakeStore(null);
+        var handler = Handler(store, new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+        var input = new CreateResidentServiceRequestRequest(null, null, "Vòi nước trong bếp bị rò liên tục.", null, null, null, null, SubmissionId: Guid.NewGuid());
+        var first = await handler.HandleAsync(actor, input, default);
+        var repeated = await handler.HandleAsync(actor, input, default);
+        Assert.Equal(first.Response!.Id, repeated.Response!.Id); Assert.Equal(1, store.Writes);
+        Assert.Equal(30, first.Response.RequestNumber.Length);
+        var conflict = await handler.HandleAsync(actor, input with { Description = "Đăng ký xe máy màu đen biển 59A112345." }, default);
+        Assert.Equal(SubmitServiceRequestOutcome.SubmissionConflict, conflict.Outcome); Assert.Equal(1, store.Writes);
+        var otherActor = await handler.HandleAsync(Guid.NewGuid(), input, default);
+        Assert.NotEqual(first.Response.Id, otherActor.Response!.Id); Assert.NotEqual(first.Response.RequestNumber, otherActor.Response.RequestNumber);
+    }
+    [Fact]
+    public async Task Empty_submission_key_is_rejected_without_writing()
+    {
+        var store = new FakeStore(null);
+        var result = await Handler(store, new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())).HandleAsync(Guid.NewGuid(),
+            new(null, null, "Vòi nước trong bếp bị rò liên tục.", null, null, null, null, SubmissionId: Guid.Empty), default);
+        Assert.Equal(SubmitServiceRequestOutcome.InvalidInput, result.Outcome); Assert.Equal(0, store.Writes);
+    }
     private static readonly DateTimeOffset Now = new(2026, 10, 2, 3, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -225,6 +248,7 @@ public sealed class SubmitServiceRequestTests
     private sealed class FakeStore(Guid? categoryId) : IServiceRequestSubmissionStore
     {
         public int CategoryLookups { get; private set; }
+        public int Writes { get; private set; }
         public ServiceRequest? Request { get; private set; }
         public ServiceRequestActivity? Activity { get; private set; }
 
@@ -234,14 +258,18 @@ public sealed class SubmitServiceRequestTests
             return Task.FromResult(categoryId);
         }
 
-        public Task AddAsync(
+        public Task<ServiceRequest?> FindByRequestNumberAsync(string number, CancellationToken ct) =>
+            Task.FromResult(Request?.RequestNumber == number ? Request : null);
+
+        public Task<ServiceRequest> AddAsync(
             ServiceRequest request,
             ServiceRequestActivity initialActivity,
             CancellationToken ct)
         {
+            Writes++;
             Request = request;
             Activity = initialActivity;
-            return Task.CompletedTask;
+            return Task.FromResult(request);
         }
     }
 

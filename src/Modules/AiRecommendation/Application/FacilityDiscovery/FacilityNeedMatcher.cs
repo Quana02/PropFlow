@@ -11,7 +11,7 @@ public sealed record FacilityConversationContext(bool ActivityKnown,bool Compani
 
 public static class FacilityNeedMatcher
 {
-    public const string Version="facility-conversation-v3";
+    public const string Version="facility-conversation-v4";
     private const string DayReference=@"ngay mai|hom nay|bay gio|hien tai|thu\s*(?:[2-7]|hai|ba|tu|nam|sau|bay)\b|chu nhat|cuoi tuan|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}";
     public static string Normalize(string text) => new string(text.ToLowerInvariant().Replace('đ','d').Normalize(NormalizationForm.FormD)
         .Where(c => CharUnicodeInfo.GetUnicodeCategory(c)!=UnicodeCategory.NonSpacingMark).ToArray());
@@ -69,7 +69,7 @@ public static class FacilityNeedMatcher
     {
         var text=SearchText(need);
         return new(
-            Regex.IsMatch(text,@"gym|tap (?:luyen|the|the thao)|boi|doc sach|thu vien|di dao|di bo|cau long|bong|yoga|vui choi|tre em|tre nho|con nho|\bbe\b|thu gian|yen tinh|van dong|ca phe|gap go"),
+            Regex.IsMatch(text,@"gym|tap (?:luyen|the|the thao)|boi|doc sach|thu vien|hoc (?:tap|bai|nhom)|lam viec|phong doc|di dao|di bo|cau long|bong|yoga|vui choi|tre em|tre nho|con nho|\bbe\b|thu gian|yen tinh|van dong|ca phe|gap go"),
             Regex.IsMatch(text,@"\b(?:mot|1)\s*minh\b|ban than|ca nhan|di rieng|vo chong|gia dinh|ban be|nguoi yeu|di cung|tre em|tre nho|con nho|\bbe\b"),
             Regex.IsMatch(text,DayReference+@"|\d{1,2}\s*(?:gio|h|:)|bat ky luc nao"));
     }
@@ -108,7 +108,9 @@ public static class FacilityNeedMatcher
         guide.ResponsibleName??"Ban quản lý đang cập nhật",guide.ContactDetails);
     public static FacilityMatch[] Match(FacilityGuideWindow window,FacilityNeedIntent intent,string need,DateOnly? preferredDate,DateTime now)
     {
-        var today=DateOnly.FromDateTime(now); var tokens=Regex.Matches(SearchText(need),@"[a-z0-9]+") .Select(x=>x.Value)
+        var search=SearchText(need);
+        var activities=Activities.Where(pattern=>Regex.IsMatch(search,pattern)).ToArray();
+        var today=DateOnly.FromDateTime(now); var tokens=Regex.Matches(search,@"[a-z0-9]+") .Select(x=>x.Value)
             .Where(x=>x.Length>1 && !StopWords.Contains(x)).Distinct().ToArray();
         var result=new List<FacilityMatch>();
         foreach(var guide in window.Guides.Where(x=>x.Published&&x.Status=="ACTIVE"))
@@ -128,6 +130,12 @@ public static class FacilityNeedMatcher
             if(times.Count==0)continue;
             var text=Normalize(guide.Name+" "+guide.Type+" "+guide.Description);
             var score=tokens.Count(token=>Regex.IsMatch(text,@"\b"+Regex.Escape(token)+@"\b"));
+            // A shared syllable (học tập / tập luyện) is not evidence of the same activity.
+            if(activities.Length>0)
+            {
+                var activityMatches=activities.Count(pattern=>Regex.IsMatch(text,pattern));
+                score=activityMatches==0?0:score+10*activityMatches;
+            }
             if(intent.ForChildren&&guide.Audience is "CHILDREN" or "FAMILY")score+=4;
             if(intent.NeedsSupervision)score+=3;
             result.Add(new(guide,times.Take(4).ToArray(),score));
@@ -135,5 +143,13 @@ public static class FacilityNeedMatcher
         return result.OrderByDescending(x=>OpenNow(x,now)).ThenBy(x=>x.Times[0].Date.ToDateTime(x.Times[0].OpensAt)>now?x.Times[0].Date.ToDateTime(x.Times[0].OpensAt):now)
             .ThenByDescending(x=>x.Score).ThenBy(x=>x.Guide.Name).ToArray();
     }
-    private static readonly HashSet<string> StopWords=["toi","muon","can","cho","voi","va","cac","khu","vuc","cuoi","tuan","thu","bay","chu","nhat","chung","cu","nao","mot","nhung","duoc","khong","tai","trong","tim","phu","hop","tuoi"];
+    private static readonly string[] Activities=[
+        @"\b(?:doc sach|thu vien|phong doc|hoc tap|hoc bai|hoc nhom|tu hoc|lam viec|study|reading|coworking)\b",
+        @"\b(?:gym|the hinh|the luc|fitness)\b",
+        @"\b(?:cau long|badminton)\b",
+        @"\b(?:boi|ho boi|be boi|swimming)\b",
+        @"\byoga\b", @"\b(?:di dao|di bo|walking)\b",
+        @"\b(?:bong ro|basketball)\b", @"\b(?:bong da|football)\b"
+    ];
+    private static readonly HashSet<string> StopWords=["toi","muon","can","cho","voi","va","cac","khu","vuc","cuoi","tuan","thu","bay","chu","nhat","chung","cu","nao","mot","nhung","duoc","khong","tai","trong","tim","phu","hop","tuoi","tap","hoc","minh","hom","nay","ngay","gio","hien","dinh","nguoi","dan","noi","de"];
 }

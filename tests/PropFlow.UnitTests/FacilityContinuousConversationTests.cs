@@ -11,11 +11,70 @@ using Microsoft.JSInterop;
 using PropFlow.Web.Client.Features.Facility.Services;
 using PropFlow.Web.Client.Features.Resident.Portal.Pages;
 using PropFlow.Web.Client.Services.Api;
+using PropFlow.Modules.ServiceRequests.Contracts;
+using PropFlow.Modules.AiChatbot.Contracts;
 
 namespace PropFlow.UnitTests;
 
-public sealed class FacilityContinuousConversationTests
+public sealed partial class FacilityContinuousConversationTests
 {
+    [Fact]
+    public Task Live_cards_only_show_the_semantic_selection_and_can_remove_rejected_suggestions() => WithPage(async f =>
+    {
+        f.Player.LiveSupported = true; await f.InitializeVoice();
+        var library = f.Transport.Library;
+        var gym = library with { Id = Guid.NewGuid(), Name = "Phòng gym người lớn" };
+        f.Transport.LookupResult = new([Suggestion(gym), Suggestion(library)], "LOOKUP", "Hồ sơ BQL", null, DateTimeOffset.UtcNow);
+        await f.Page.OnLiveTool(f.Epoch, "lookup-1", "Tìm nơi học tập hôm nay");
+        Assert.Null(f.Get<FacilityRecommendationView?>("suggestions")); // Candidates must not appear as recommendations.
+        var selected = await f.Page.OnLiveSelection(f.Epoch, "lookup-1", [library.Id.ToString()]);
+        Assert.NotNull(selected);
+        Assert.Equal(library.Id, Assert.Single(f.Get<FacilityRecommendationView>("suggestions").Suggestions).Facility.Id);
+        Assert.DoesNotContain("Phòng gym người lớn", f.Html());
+        await f.Page.OnLiveSelection(f.Epoch, "lookup-1", []);
+        Assert.Empty(f.Get<FacilityRecommendationView>("suggestions").Suggestions);
+        Assert.Equal("NO_MATCH", f.Get<FacilityRecommendationView>("suggestions").Mode);
+    });
+
+    [Fact]
+    public Task Live_selection_rejects_invented_duplicate_oversized_stale_and_cancelled_choices() => WithPage(async f =>
+    {
+        f.Player.LiveSupported = true; await f.InitializeVoice(); var epoch = f.Epoch;
+        var library = f.Transport.Library;
+        f.Transport.LookupResult = new([Suggestion(library)], "LOOKUP", "Hồ sơ BQL", null, DateTimeOffset.UtcNow);
+        await f.Page.OnLiveTool(epoch, "lookup-1", "Tìm nơi học tập");
+        foreach (var ids in new[] { new[] { Guid.NewGuid().ToString() }, new[] { "invalid" }, Enumerable.Repeat(library.Id.ToString(), 2).ToArray(), Enumerable.Repeat(library.Id.ToString(), 4).ToArray() })
+        {
+            await f.Page.OnLiveSelection(epoch, "lookup-1", ids);
+            Assert.Null(f.Get<FacilityRecommendationView?>("suggestions"));
+        }
+        await f.Page.OnLiveTool(epoch, "lookup-2", "Tìm nơi đọc sách");
+        await f.Page.OnLiveSelection(epoch, "lookup-1", [library.Id.ToString()]);
+        Assert.Null(f.Get<FacilityRecommendationView?>("suggestions"));
+        await f.Page.OnLiveToolCancelled(epoch, "lookup-2");
+        await f.Page.OnLiveSelection(epoch, "lookup-2", [library.Id.ToString()]);
+        Assert.Null(f.Get<FacilityRecommendationView?>("suggestions"));
+        await f.Page.OnLiveTool(epoch, "lookup-3", "Tìm nơi đọc sách");
+        await f.ClickMicrophone();
+        await f.Page.OnLiveSelection(epoch, "lookup-3", [library.Id.ToString()]);
+        Assert.Null(f.Get<FacilityRecommendationView?>("suggestions"));
+    });
+    private static FacilitySuggestion Suggestion(ResidentFacilityCard card) => new(card, [new(new(2026, 11, 23), new(8, 0), new(22, 0))], "Từ hồ sơ BQL");
+    [Fact]
+    public Task Empty_selection_preserves_clarification_and_starting_a_new_need_invalidates_old_choices() => WithPage(async f =>
+    {
+        f.Player.LiveSupported = true; await f.InitializeVoice();
+        await f.Page.OnLiveTool(f.Epoch, "clarify", "Tôi muốn tìm nơi cho trẻ em");
+        await f.Page.OnLiveSelection(f.Epoch, "clarify", []);
+        Assert.Equal("CLARIFY", f.Get<FacilityRecommendationView>("suggestions").Mode);
+        Assert.NotNull(f.Get<FacilityRecommendationView>("suggestions").FollowUp);
+        var library = f.Transport.Library;
+        f.Transport.LookupResult = new([Suggestion(library)], "LOOKUP", "Hồ sơ BQL", null, DateTimeOffset.UtcNow);
+        await f.Page.OnLiveTool(f.Epoch, "lookup", "Tìm nơi đọc sách");
+        await f.Call("NewNeed");
+        await f.Page.OnLiveSelection(f.Epoch, "lookup", [library.Id.ToString()]);
+        Assert.Null(f.Get<FacilityRecommendationView?>("suggestions"));
+    });
     [Fact]
     public Task Completed_voice_farewell_stops_the_session_then_returns_to_resident_dashboard_once() => WithPage(async f =>
     {
@@ -221,12 +280,17 @@ public sealed class FacilityContinuousConversationTests
     });
 
     [Fact]
-    public Task Silent_sessions_do_not_call_AI_and_pause_after_bounded_empty_turns() => WithPage(async f =>
+    public Task Silent_fallback_sessions_use_the_same_countdown_instead_of_stopping_before_sixty_seconds() => WithPage(async f =>
     {
+        var clock = new IdleTestClock();
+        f.Set("idleWatch", new PropFlow.Web.Client.Features.Resident.Portal.Services.ResidentAssistantIdleWatch(clock));
         await f.ClickMicrophone();
         for (var i = 0; i < 3; i++) await f.Page.OnVoiceEnded(f.Epoch, "no-speech");
-        Assert.False(f.Active); Assert.False(f.Listening); Assert.Empty(f.Transport.Needs);
-        Assert.Equal(3, f.Player.Starts.Count);
+        Assert.True(f.Active); Assert.True(f.Listening); Assert.Empty(f.Transport.Needs);
+        clock.Advance(60); await f.Call("CheckIdleTimeout", f.Get<int>("idleGeneration"));
+        Assert.Contains("Bạn còn muốn trò chuyện không?", WebUtility.HtmlDecode(f.Html()));
+        clock.Advance(30); await f.Call("CheckIdleTimeout", f.Get<int>("idleGeneration"));
+        Assert.False(f.Active); Assert.Equal(1, f.Navigation.Visits);
     });
 
     private static async Task WithPage(Func<Fixture, Task> action)
@@ -234,7 +298,7 @@ public sealed class FacilityContinuousConversationTests
         using var transport = new Responses(); using var http = new HttpClient(transport) { BaseAddress = new("https://facility.test/") };
         var capture = new Capture(); var player = new Player(); var navigation = new FacilityTestNavigation();
         await using var services = new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance))
-            .AddSingleton<NavigationManager>(navigation).AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime>(new Browser(player)).AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<NavigationManager>(navigation).AddSingleton<FacilityRecommendationsApi>().AddResidentAssistant().AddSingleton<IJSRuntime>(new Browser(player)).AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>
         {
@@ -251,6 +315,7 @@ public sealed class FacilityContinuousConversationTests
         public T Get<T>(string name) => (T)typeof(ResidentFacilities).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(Page)!;
         public void Set(string name, object? value) => typeof(ResidentFacilities).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(Page, value);
         public Task Call(string name, params object?[] args) => (Task)typeof(ResidentFacilities).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(Page, args)!;
+        public Task CallSync(string name, params object?[] args) { typeof(ResidentFacilities).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(Page, args); return Task.CompletedTask; }
         public Task InitializeVoice() => Call("OnAfterRenderAsync", true);
         public Task ClickMicrophone() => Call("ToggleMicrophone");
         public async Task Say(string text) { var epoch = Epoch; await Page.OnVoiceResult(epoch, text, ""); await Page.OnVoiceEnded(epoch, ""); }
@@ -285,16 +350,34 @@ public sealed class FacilityContinuousConversationTests
     }
     private sealed class Responses : HttpMessageHandler
     {
+        public ResidentServiceRequestDraftReview DraftReview = new(true, []);
+        public List<CreateResidentServiceRequestRequest> Submissions { get; } = [];
+        public TaskCompletionSource? PendingSubmission;
+        public bool RejectSubmission;
+        public ResidentServiceRequestCreatedResponse Receipt = new(Guid.NewGuid(), "YC-TEST-CONFIRMED", "SUBMITTED", DateTimeOffset.UtcNow);
+        public ResidentChatReply Documents = new("DOCUMENTS_ONLY", "Nguồn BQL", [new(1, Guid.NewGuid(), 2, 0, "Nội quy sử dụng tiện ích", "Không gây tiếng ồn sau 22 giờ. <script>unsafe</script>")]);
+        public ResidentFacilityCard Library = new(Guid.NewGuid(), "Thư viện", "Đọc sách", "Tầng 1", "Nơi đọc sách", "ALL", null, null, "GUARDIAN_REQUIRED", "", "", [], [], "BQL", "Quầy BQL");
+        public FacilityRecommendationView? LookupResult;
         public List<string> Needs { get; } = []; public List<string> Paths { get; } = []; public bool SpeechUnavailable;
         public TaskCompletionSource? Pending; public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Paths.Add(request.RequestUri!.AbsolutePath);
             object payload;
-            if (request.Method == HttpMethod.Get)
+            if (request.RequestUri.AbsolutePath.Contains("/chatbot/sources/"))
+                payload = new PublishedKnowledgeSource(Documents.Sources[0].DocumentId, 2, "Nội quy", "Toàn văn nội quy <script>unsafe</script>");
+            else if (request.RequestUri.AbsolutePath.EndsWith("/chatbot/lookup")) payload = Documents;
+            else if (request.RequestUri.AbsolutePath.EndsWith("/draft-check")) payload = DraftReview;
+            else if (request.Method == HttpMethod.Post && request.RequestUri.AbsolutePath.EndsWith("/service-requests"))
             {
-                var card = new ResidentFacilityCard(Guid.NewGuid(), "Thư viện", "Đọc sách", "Tầng 1", "Nơi đọc sách", "ALL", null, null, "GUARDIAN_REQUIRED", "", "", [], [], "BQL", "Quầy BQL");
-                payload = new ResidentFacilityCatalogue([card], new(2026, 11, 22));
+                Submissions.Add((await request.Content!.ReadFromJsonAsync<CreateResidentServiceRequestRequest>(ct))!);
+                if (PendingSubmission is not null) await PendingSubmission.Task.WaitAsync(ct);
+                if (RejectSubmission) return new(HttpStatusCode.ServiceUnavailable) { Content = JsonContent.Create(new { title = "Chưa xác nhận được kết quả gửi" }) };
+                payload = Receipt;
+            }
+            else if (request.Method == HttpMethod.Get)
+            {
+                payload = new ResidentFacilityCatalogue([Library], new(2026, 11, 22));
             }
             else if (request.RequestUri!.AbsolutePath.EndsWith("/live"))
             {
@@ -310,7 +393,7 @@ public sealed class FacilityContinuousConversationTests
                 using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
                 Needs.Add(json.RootElement.GetProperty("need").GetString()!); Started.TrySetResult();
                 if (Pending is not null) await Pending.Task.WaitAsync(ct);
-                payload = new FacilityRecommendationView([], "CLARIFY", "Cần hiểu thêm", "Bạn thích hoạt động gì?", DateTimeOffset.UtcNow, Guid.NewGuid());
+                payload = LookupResult ?? new FacilityRecommendationView([], "CLARIFY", "Cần hiểu thêm", "Bạn thích hoạt động gì?", DateTimeOffset.UtcNow, Guid.NewGuid());
             }
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(payload, payload.GetType()) };
         }

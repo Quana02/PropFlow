@@ -18,7 +18,6 @@ public partial class ResidentFacilities : IAsyncDisposable
     private bool loading, busy, disposed, listening, speaking, preparingSpeech, voiceSupported, speechSupported, heardSpeech, audioEnabled = true;
     private bool conversationActive, startingMicrophone;
     private bool entryConversationPending = true;
-    private int emptyVoiceTurns;
     private int voiceEpoch;
     private IJSObjectReference? module, voice;
     private DotNetObjectReference<ResidentFacilities>? reference;
@@ -30,8 +29,11 @@ public partial class ResidentFacilities : IAsyncDisposable
     private string StatusText => liveMode ? LiveStatusText : busy ? "Đang tìm điều phù hợp với bạn…" : preparingSpeech ? (lastSpeechKind is "WELCOME" or "NEW_NEED" ? "Đang kết nối trợ lý…" : "Đang tạo giọng tiếng Việt…") : listening ? "Mình đang nghe bạn…" : speaking ? "PropFlow đang nói…" : conversationActive ? "Đang chờ bạn nói tiếp…" : "Mình ở đây để giúp bạn";
 
     protected override Task OnInitializedAsync() => Load();
-    protected override Task OnParametersSetAsync() => SuggestedFacility is { } id && loadedFacility != id && catalogue is not null
-        ? LoadSuggestedFacility(id) : Task.CompletedTask;
+    protected override async Task OnParametersSetAsync()
+    {
+        await ReceiveHandoff();
+        if (SuggestedFacility is { } id && loadedFacility != id && catalogue is not null) await LoadSuggestedFacility(id);
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -74,7 +76,8 @@ public partial class ResidentFacilities : IAsyncDisposable
     {
         if (!entryConversationPending || disposed || voice is null || !voiceSupported || loading || catalogue?.Facilities.Length is not > 0) return;
         entryConversationPending = false;
-        conversationActive = true; emptyVoiceTurns = 0;
+        conversationActive = true;
+        StartIdleWatch();
     }
 
     private async Task LoadSuggestedFacility(Guid id)
@@ -105,11 +108,13 @@ public partial class ResidentFacilities : IAsyncDisposable
 
     private async Task ToggleMicrophone()
     {
+        if (idleExiting) return;
         if (liveMode) { if (conversationActive) await StopLive(); else await StartLive(); return; }
         if (conversationActive) { await StopConversation(); return; }
         if (voice is null || !voiceSupported || busy || disposed || catalogue?.Facilities.Length is not > 0) return;
         entryConversationPending = false;
-        conversationActive = true; emptyVoiceTurns = 0; voiceNotice = error = null;
+        conversationActive = true; voiceNotice = error = null;
+        StartIdleWatch();
         await CancelVoice();
         await ListenAgain();
     }
@@ -135,6 +140,7 @@ public partial class ResidentFacilities : IAsyncDisposable
 
     private async Task StopConversation(string? notice = null)
     {
+        StopIdleWatch();
         if (liveMode) { await StopLive(); if (notice is not null) voiceNotice = notice; return; }
         PreserveInterim(); entryConversationPending = false; conversationActive = false; ++voiceEpoch;
         CancelRecommendation();
@@ -149,7 +155,7 @@ public partial class ResidentFacilities : IAsyncDisposable
         ++voiceEpoch; CancelRecommendation();
         await CancelVoice();
         // The next utterance is a new turn, rather than an append to an interrupted draft.
-        need = interimText = ""; emptyVoiceTurns = 0;
+        need = interimText = "";
         await ListenAgain();
     }
 
@@ -174,6 +180,8 @@ public partial class ResidentFacilities : IAsyncDisposable
     {
         if (liveMode) return;
         if (disposed || epoch != voiceEpoch || !listening) return;
+        if (!string.IsNullOrWhiteSpace(finalText) || !string.IsNullOrWhiteSpace(interim)) MarkIdleActivity();
+        if (IdleExpired || idleExiting) return;
         heardSpeech |= !string.IsNullOrWhiteSpace(finalText) || !string.IsNullOrWhiteSpace(interim);
         var combined = string.Join(" ", new[] { voiceBase, finalText.Trim() }.Where(x => x.Length > 0));
         need = combined.Length <= 1200 ? combined : combined[..1200];
@@ -197,15 +205,14 @@ public partial class ResidentFacilities : IAsyncDisposable
             };
             await StopConversation(notice);
         }
-        else if (heardSpeech && need.Trim().Length >= 2) { emptyVoiceTurns = 0; await Recommend(); }
-        else if (conversationActive && ++emptyVoiceTurns < 3)
+        else if (heardSpeech && need.Trim().Length >= 2) { await Recommend(); }
+        else if (conversationActive)
         {
             voiceNotice = "Mình vẫn đang nghe. Bạn có thể nói nhu cầu khi sẵn sàng.";
             // Yield before restarting a browser recognition session that ended without speech.
             try { await Task.Delay(400, lifetime.Token); if (epoch == voiceEpoch) await ListenAgain(); }
             catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         }
-        else await StopConversation("Mình tạm dừng vì chưa nghe thấy bạn. Chạm để nói khi bạn sẵn sàng nhé.");
         if (!disposed) StateHasChanged();
     });
 
@@ -269,7 +276,15 @@ public partial class ResidentFacilities : IAsyncDisposable
     }
     private async Task NewNeed()
     {
-        if (liveMode && conversationActive) { suggestions = null; await SendLiveText("Mình muốn tìm cho một nhu cầu mới, hãy hỏi mình muốn làm gì."); return; }
+        if (requestSubmitting) return;
+        if (liveMode && conversationActive)
+        {
+            SetAssistantPane("facilities", Guid.NewGuid().ToString("N"));
+            suggestions = liveCandidates = null; liveLookupId = null;
+            foreach (var tool in liveTools.Values.ToArray()) tool.Cancel();
+            liveTools.Clear();
+            await SendLiveText("Mình muốn tìm cho một nhu cầu mới, hãy hỏi mình muốn làm gì."); return;
+        }
         ++voiceEpoch; CancelRecommendation(); speaking = listening = false;
         await CancelVoice();
         suggestions = null; previousNeed = need = ""; lastSpokenNeed = error = null;
@@ -348,6 +363,7 @@ public partial class ResidentFacilities : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (disposed) return;
+        StopIdleWatch();
         if (liveMode) await StopLive();
         disposed = true; conversationActive = false; ++voiceEpoch; CancelRecommendation(); CancelSpeechRequest(); lifetime.Cancel();
         try
@@ -358,6 +374,7 @@ public partial class ResidentFacilities : IAsyncDisposable
             if (module is not null) await module.DisposeAsync();
         }
         catch (Exception ex) when (ex is JSDisconnectedException or JSException or ObjectDisposedException) { }
+        if (idleMonitor is not null) await idleMonitor;
         reference?.Dispose(); lifetime.Dispose();
     }
     private sealed record VoiceCapabilities(bool Recognition, bool Speech);
