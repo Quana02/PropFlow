@@ -22,7 +22,7 @@ public sealed class FacilityGreetingLatencyTests
         using var handler=new OfflineSpeech();using var http=new HttpClient(handler){BaseAddress=new("https://facility.test/")};
         var capture=new Capture();var js=new Browser();
         await using var services=new ServiceCollection().AddLogging().AddSingleton(new AuthenticatedApiClient(http,NullLogger<ApiClient>.Instance))
-            .AddSingleton<FacilityRecommendationsApi>().AddSingleton<IJSRuntime>(js).AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
+            .AddSingleton<NavigationManager,FacilityTestNavigation>().AddSingleton<FacilityRecommendationsApi>().AddResidentAssistant().AddSingleton<IJSRuntime>(js).AddSingleton<IComponentActivator>(capture).BuildServiceProvider();
         await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async()=>{
             await renderer.RenderComponentAsync<ResidentFacilities>(ParameterView.Empty);
@@ -48,13 +48,13 @@ public sealed class FacilityGreetingLatencyTests
     private sealed class Browser:IJSRuntime
     {
         public Player Player {get;}=new();
-        public ValueTask<T> InvokeAsync<T>(string name,object?[]? args)=>ValueTask.FromResult((T)(object)new Module(Player));
+        public ValueTask<T> InvokeAsync<T>(string name,object?[]? args)=>ValueTask.FromResult((T)(object)new Module(Player,args?[0]?.ToString()?.Contains("facility-live-voice")==true));
         public ValueTask<T> InvokeAsync<T>(string name,CancellationToken ct,object?[]? args)=>InvokeAsync<T>(name,args);
     }
-    private sealed class Module(Player player):IJSObjectReference
+    private sealed class Module(Player player,bool live):IJSObjectReference
     {
         public ValueTask<T> InvokeAsync<T>(string name,object?[]? args)=>ValueTask.FromResult(name=="capabilities"
-            ?JsonSerializer.Deserialize<T>("{\"Recognition\":true,\"Speech\":true}")!:(T)(object)player);
+            ?live?(T)(object)false:JsonSerializer.Deserialize<T>("{\"Recognition\":true,\"Speech\":true}")!:(T)(object)player);
         public ValueTask<T> InvokeAsync<T>(string name,CancellationToken ct,object?[]? args)=>InvokeAsync<T>(name,args);
         public ValueTask DisposeAsync()=>ValueTask.CompletedTask;
     }

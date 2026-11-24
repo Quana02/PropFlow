@@ -341,6 +341,22 @@ builder.Services.AddSingleton<PropFlow.Modules.AiRecommendation.Application.Faci
         sp.GetRequiredService<ILogger<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilitySpeech>>());
 });
 builder.Services.AddSingleton<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilitySpeech>();
+builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityLiveOptions>()
+    .BindConfiguration("FacilityRecommendations:Live")
+    .Validate(x => System.Text.RegularExpressions.Regex.IsMatch(x.Model, "^[a-zA-Z0-9._-]{1,100}$") &&
+        x.SessionMinutes is >= 1 and <= 15 && x.MaxOutputTokens is >= 128 and <= 2048 && x.EndOfSpeechSilenceMs is >= 300 and <= 1500 &&
+        (x.ThinkingBudget is null or >= 0 and <= 2048) &&
+        Uri.TryCreate(x.WebSocketUrl, UriKind.Absolute, out var uri) && uri.Scheme == "wss" && uri.Host == "generativelanguage.googleapis.com" && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) && string.IsNullOrEmpty(uri.UserInfo),
+        "Cấu hình hội thoại tiện ích không hợp lệ.").ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityLiveOptions>>().Value);
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.IFacilityLiveProvider>(sp => {
+    var configured = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    return new PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilityLive(
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient("FacilityGeminiSpeech"), configured.ApiKey, configured.Ready,
+        sp.GetRequiredService<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityLiveOptions>(),
+        sp.GetRequiredService<ILogger<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilityLive>>());
+});
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilityLiveSessions>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
 builder.Services.AddScoped<IMaintenanceAssetTransactionCoordinator, MaintenanceAssetTransactionCoordinator>();

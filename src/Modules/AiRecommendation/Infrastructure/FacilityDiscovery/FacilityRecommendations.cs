@@ -28,7 +28,10 @@ public sealed class FacilityRecommendations(AiRecommendationDbContext db,IFacili
             ? view with {Message="Hiện không còn lịch công bố phù hợp cho tiện ích được nhắc. Bạn có thể nói nhu cầu để tìm lựa chọn khác."}
             : view;
     }
-    public async Task<FacilityRecommendationView> RecommendAsync(Guid actor,FacilityRecommendationRequest request,CancellationToken ct)
+    public Task<FacilityRecommendationView> RecommendAsync(Guid actor,FacilityRecommendationRequest request,CancellationToken ct) => FindAsync(actor,request,true,ct);
+    // Live interprets the conversation; its lookup only needs verified facts, without another model round-trip.
+    public Task<FacilityRecommendationView> LookupAsync(Guid actor,FacilityRecommendationRequest request,CancellationToken ct) => FindAsync(actor,request,false,ct);
+    private async Task<FacilityRecommendationView> FindAsync(Guid actor,FacilityRecommendationRequest request,bool useAdvisor,CancellationToken ct)
     {
         await Check(actor,ct);var now=await LocalNow(ct);var today=DateOnly.FromDateTime(now);
         if(string.IsNullOrWhiteSpace(request.Need)||request.Need.Trim().Length is <2 or >1200 || request.PreferredDate<today || request.PreferredDate>today.AddDays(30))
@@ -45,18 +48,20 @@ public sealed class FacilityRecommendations(AiRecommendationDbContext db,IFacili
         FacilityMatch[] Search(FacilityGuideWindow facts,FacilityNeedIntent target,DateTime instant,out bool alternative)
         {
             var found=FacilityNeedMatcher.Match(facts,target,need,date,instant);alternative=false;
+            if(!useAdvisor)found=found.Where(x=>x.Score>0).ToArray();
             if(found.Length==0 && (date is not null || target.At is not null))
             {
                 alternative=true;
                 found=FacilityNeedMatcher.Match(facts,target with {At=null,Weekdays=[]},need,null,instant);
+                if(!useAdvisor)found=found.Where(x=>x.Score>0).ToArray();
             }
-            return found.Take(options.MaxCandidates).ToArray();
+            return found.OrderByDescending(x=>x.Score>0).Take(options.MaxCandidates).ToArray();
         }
         var matches=Search(window,intent,now,out var alternative);
-        FacilityRecommendationView Response(IEnumerable<FacilityMatch> chosen,string mode,FacilityNeedIntent effective)
+        FacilityRecommendationView Response(IEnumerable<FacilityMatch> chosen,string mode,FacilityNeedIntent effective,int limit=3)
         {
             var items=chosen.OrderByDescending(x=>FacilityNeedMatcher.OpenNow(x,now)).ThenBy(x=>x.Times[0].Date.ToDateTime(x.Times[0].OpensAt)>now?x.Times[0].Date.ToDateTime(x.Times[0].OpensAt):now)
-                .Take(3).Select(x=>new FacilitySuggestion(FacilityNeedMatcher.Card(x.Guide),x.Times,
+                .Take(limit).Select(x=>new FacilitySuggestion(FacilityNeedMatcher.Card(x.Guide),x.Times,
                 effective.ForChildren?"Hồ sơ BQL xác định tiện ích phù hợp cho trẻ em hoặc gia đình; kiểm tra độ tuổi và điều kiện đi cùng.":"Tiện ích được đối chiếu với nhu cầu và hồ sơ do BQL cung cấp.",
                 (alternative?"Lịch thay thế · ":"")+FacilityNeedMatcher.Availability(x,now),FacilityNeedMatcher.OpenNow(x,now))).ToArray();
             var message=items.Length==0 ? effective.NeedsSupervision ? "Chưa tìm thấy chương trình có thông tin giám sát phù hợp. Khu vui chơi thông thường không thay thế dịch vụ trông trẻ; hãy liên hệ BQL."
@@ -68,6 +73,8 @@ public sealed class FacilityRecommendations(AiRecommendationDbContext db,IFacili
             return new(items,mode,message,followup,clock.GetUtcNow(),ForChildren:effective.ForChildren);
         }
         if(matches.Length==0)return Response([],"NO_MATCH",intent);
+        // Live selects a semantic subset from these candidates before publishing up to three cards.
+        if(!useAdvisor) { await Check(actor,ct); return Response(matches,"LOOKUP",intent,options.MaxCandidates); }
         if(!advisor.Ready)return Response(matches.Where(x=>x.Score>0),"CATALOGUE",intent);
         var fingerprint=Fingerprint(window,matches,now,alternative);
         string Fingerprint(FacilityGuideWindow facts,FacilityMatch[] candidates,DateTime instant,bool isAlternative)=>Hash(new {facts.Fingerprint,need,date,Alternative=isAlternative,Day=DateOnly.FromDateTime(instant),Matches=candidates.Select(x=>new {x.Guide.FacilityId,x.Times,Open=FacilityNeedMatcher.OpenNow(x,instant)}),FacilityNeedMatcher.Version});

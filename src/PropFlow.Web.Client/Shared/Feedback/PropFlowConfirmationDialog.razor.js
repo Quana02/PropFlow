@@ -95,6 +95,8 @@ export function openDialog(dialog) {
         }
     }
 
+    // Blazor marshals this return value as IJSObjectReference; pre-wrapping it
+    // would make .NET hold a reference to the descriptor, which has no close().
     return { close: release };
 }
 

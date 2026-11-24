@@ -1,0 +1,97 @@
+@startuml
+title AI 2 - FACILITY RECOMMENDATION AND SPEECH
+top to bottom direction
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 19
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 65
+skinparam ranksep 65
+skinparam padding 1
+skinparam ArrowColor #334155
+skinparam classBorderColor #475569
+skinparam classBackgroundColor #FFFFFF
+skinparam classHeaderBackgroundColor #E8F0FA
+skinparam noteBackgroundColor #F8FAFC
+skinparam noteBorderColor #94A3B8
+hide circle
+hide empty members
+
+class FacilityRecommendations <<service>> {
+  +RecommendAsync(actor: Guid, request: FacilityRecommendationRequest,\n  ct: CancellationToken) : Task<FacilityRecommendationView>
+}
+class FacilityNeedMatcher <<static>> {
+  {static} +Interpret(need: string) : FacilityNeedIntent
+  {static} +Clarification(need: string) : string?
+}
+interface IFacilityGuideSource <<PropertyAssets contract>> {
+  +ReadAsync(ct: CancellationToken) : Task<FacilityGuideWindow>
+}
+interface IFacilityNeedAdvisor {
+  +Ready : bool
+  +RecommendAsync(need: string, choices: FacilityAdvisorInput[],\n  ct: CancellationToken) : Task<FacilityAdvisorResult?>
+}
+class GeminiFacilityNeedAdvisor
+class FacilityRecommendationRun <<entity>> {
+  +Id : Guid
+  +Actor : Guid
+  +Fingerprint : string
+  +ResultJson : string?
+  +Model : string?
+  +CreatedAt : DateTimeOffset
+  +CompletedAt : DateTimeOffset?
+}
+class UserAccount <<external entity>> {
+  +Id : Guid
+  +DisplayName : string
+}
+class FacilityRecommendationView <<record>> {
+  +Suggestions : FacilitySuggestion[]
+  +Mode : string
+  +Message : string
+  +FollowUp : string?
+  +SpeechId : Guid?
+}
+class FacilitySuggestion <<record>> {
+  +Facility : ResidentFacilityCard
+  +OpeningTimes : FacilityVisitTime[]
+  +Reason : string
+  +Availability : string
+  +IsOpenNow : bool
+}
+class FacilitySpeech <<service>> {
+  +Prepare(actor: Guid, view: FacilityRecommendationView) : Guid
+  +GetAsync(actor: Guid, input: FacilitySpeechRequest,\n  ct: CancellationToken) : Task<FacilitySpeechAudio>
+}
+interface IFacilitySpeechProvider {
+  +GenerateAsync(transcript: string,\n  ct: CancellationToken) : Task<byte[]?>
+}
+class GeminiFacilitySpeech
+
+IFacilityGuideSource <.left. FacilityRecommendations : reads published guides
+FacilityRecommendations .right.> IFacilityNeedAdvisor : selects candidate keys
+GeminiFacilityNeedAdvisor .down.|> IFacilityNeedAdvisor
+FacilityRecommendations .down.> FacilityNeedMatcher : interprets / validates
+FacilityRecommendations .down.> FacilityRecommendationRun : saves / caches
+UserAccount "1" -right- "0..*" FacilityRecommendationRun : requester {RESIDENT}\nActor
+FacilityRecommendations .down.> FacilityRecommendationView : builds response
+FacilityRecommendationView "0..*" -right-> "0..3" FacilitySuggestion : suggestions
+FacilitySpeech .up.> FacilityRecommendationView : builds transcript from
+FacilitySpeech .right.> IFacilitySpeechProvider : requests WAV audio
+GeminiFacilitySpeech .up.|> IFacilitySpeechProvider
+IFacilityGuideSource -[hidden]down- UserAccount
+FacilityRecommendationRun -[hidden]down- FacilitySpeech
+
+legend bottom left
+  <b>Responsibilities and constraints</b>
+  Resident describes a need; Manager publishes facility guides; Staff is the assigned contact.
+  Manager/Staff have no separate AI entity. Access requires an active resident profile.
+  Gemini returns existing candidate keys or clarification codes; the server validates all facts.
+  Opening hours use the building timezone. No match -> next valid slot or NO_MATCH.
+  Speech tickets are bound to the resident; server-created text only is sent to Gemini TTS.
+  <b>UML</b> ..> dependency; ..|> interface realization; solid line = association with multiplicities.
+  ResultJson is a serialized snapshot, not a foreign key to a persisted View/Suggestion table.
+  Selected members; full C# signatures. Cardinality 0..3 is enforced by recommendation logic.
+endlegend
+@enduml
