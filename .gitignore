@@ -35,6 +35,17 @@ appsettings.*.local.json
 .env
 .env.*
 !.env.example
+*.dump
+*.backup
+*.pfx
+*.p12
+*.key
+*.pem
+deploy/secrets/
+deploy/tls/
+api.production.json
+postgres-password.txt
+deploy/docker/sdk-cache/
 *.pubxml
 *.publishsettings
 
