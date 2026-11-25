@@ -1,0 +1,10 @@
+@page "/operations/parking"
+@attribute [Authorize(Roles="MANAGER",Policy="property-assets.manage")]
+@layout PropFlow.Web.Client.Layout.MainLayout
+@using PropFlow.Web.Client.Features.Facility.Components
+
+<ParkingWorkspace @key="SelectedAreaId" SelectedAreaId="SelectedAreaId" />
+
+@code {
+    [SupplyParameterFromQuery(Name="area")]public Guid? SelectedAreaId {get;set;}
+}

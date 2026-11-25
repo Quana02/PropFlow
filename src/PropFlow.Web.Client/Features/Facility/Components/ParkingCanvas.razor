@@ -1,0 +1,65 @@
+@using Microsoft.JSInterop
+@using PropFlow.Modules.PropertyAssets.Contracts
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+<div class="parking-canvas" @ref="root"></div>
+@code {
+    [Parameter,EditorRequired] public ParkingDrawing Drawing {get;set;}=ParkingDrawing.Empty;
+    [Parameter] public ParkingSpaceView[] Spaces {get;set;}=[];
+    [Parameter] public bool Editable {get;set;}
+    [Parameter] public bool SmartGuides {get;set;}=true;
+    [Parameter] public string? ReferenceImageUrl {get;set;}
+    [Parameter] public EventCallback<ParkingDrawing> Changed {get;set;}
+    [Parameter] public EventCallback<Guid?> Selected {get;set;}
+    [Parameter] public EventCallback<Guid[]> SelectionChanged {get;set;}
+    [Parameter] public EventCallback<int> ClipboardChanged {get;set;}
+    [Parameter] public EventCallback<string> SpacingChanged {get;set;}
+    [Parameter] public EventCallback<string> Failure {get;set;}
+    private ElementReference root;
+    private IJSObjectReference? module,canvas;
+    private DotNetObjectReference<ParkingCanvas>? reference;
+    private ParkingDrawing? rendered;
+    private ParkingSpaceView[]? renderedSpaces;
+    private bool renderedEditable,disposed;
+    private bool? renderedSmartGuides;
+    private string? renderedReference;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if(firstRender)
+            {
+                module=await JS.InvokeAsync<IJSObjectReference>("import","./js/parking-editor.js?v=20261125-source-review-1");
+                if(disposed){await module.DisposeAsync();return;}
+                reference=DotNetObjectReference.Create(this);
+                canvas=await module.InvokeAsync<IJSObjectReference>("create",root,reference,Drawing,Spaces,Editable);
+                if(disposed){await canvas.InvokeVoidAsync("dispose");await canvas.DisposeAsync();return;}
+                rendered=Drawing;renderedSpaces=Spaces;renderedEditable=Editable;
+            }
+            else if(canvas is not null&&(!ReferenceEquals(rendered,Drawing)||!ReferenceEquals(renderedSpaces,Spaces)||renderedEditable!=Editable))
+            {
+                await canvas.InvokeVoidAsync("load",Drawing,Spaces,Editable);rendered=Drawing;renderedSpaces=Spaces;renderedEditable=Editable;
+            }
+            if(canvas is not null&&renderedReference!=ReferenceImageUrl)
+            {await canvas.InvokeVoidAsync("setReference",ReferenceImageUrl);renderedReference=ReferenceImageUrl;}
+            if(canvas is not null&&renderedSmartGuides!=SmartGuides)
+            {await canvas.InvokeVoidAsync("action","smart-guides",SmartGuides);renderedSmartGuides=SmartGuides;}
+        }
+        catch(JSException){if(!disposed)await Failure.InvokeAsync("Chưa mở được sơ đồ. Bạn tải lại trang để thử lại.");}
+    }
+    public async Task ActionAsync(string action,object? input=null){if(canvas is not null&&!disposed)await canvas.InvokeVoidAsync("action",action,input);}
+    [JSInvokable]public async Task OnParkingChanged(ParkingDrawing drawing,Guid? selected)
+    {if(disposed||!Editable)return;rendered=drawing;await Changed.InvokeAsync(drawing);await Selected.InvokeAsync(selected);}
+    [JSInvokable]public Task OnParkingSelected(Guid? id)=>disposed?Task.CompletedTask:Selected.InvokeAsync(id);
+    [JSInvokable]public Task OnParkingSelectionChanged(Guid[] ids)=>disposed?Task.CompletedTask:SelectionChanged.InvokeAsync(ids);
+    [JSInvokable]public Task OnParkingClipboardChanged(int count)=>disposed?Task.CompletedTask:ClipboardChanged.InvokeAsync(count);
+    [JSInvokable]public Task OnParkingSpacingChanged(string text)=>disposed?Task.CompletedTask:SpacingChanged.InvokeAsync(text);
+    [JSInvokable]public Task OnParkingRejected(string message)=>disposed?Task.CompletedTask:Failure.InvokeAsync(message);
+    public async ValueTask DisposeAsync()
+    {
+        if(disposed)return;disposed=true;
+        try{if(canvas is not null){await canvas.InvokeVoidAsync("dispose");await canvas.DisposeAsync();}if(module is not null)await module.DisposeAsync();}
+        catch(Exception ex)when(ex is JSException or JSDisconnectedException or ObjectDisposedException){}
+        reference?.Dispose();
+    }
+}

@@ -451,6 +451,211 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                     b.ToTable("facility_types", "property_assets");
                 });
 
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid>("AreaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("area_id");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid?>("SpaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("space_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AreaId", "At");
+
+                    b.ToTable("parking_actions", "property_assets");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingArea", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("DraftJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("draft_json");
+
+                    b.Property<Guid?>("DraftSourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("draft_source_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("PublishedJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("published_json");
+
+                    b.Property<Guid?>("PublishedSourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_source_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("parking_areas", "property_assets");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AreaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("area_id");
+
+                    b.Property<string>("DrawingJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("drawing_json");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<Guid>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AreaId", "PublishedAt");
+
+                    b.ToTable("parking_revisions", "property_assets");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingSource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AreaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("area_id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)")
+                        .HasColumnName("file_name");
+
+                    b.Property<int>("Page")
+                        .HasColumnType("integer")
+                        .HasColumnName("page");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AreaId");
+
+                    b.ToTable("parking_sources", "property_assets", t =>
+                        {
+                            t.HasCheckConstraint("ck_parking_source_page", "page BETWEEN 1 AND 1000");
+
+                            t.HasCheckConstraint("ck_parking_source_size", "octet_length(content) BETWEEN 1 AND 8388608");
+
+                            t.HasCheckConstraint("ck_parking_source_type", "content_type IN ('image/png','image/jpeg','application/pdf')");
+                        });
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingSpace", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Archived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("archived");
+
+                    b.Property<Guid>("AreaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("area_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AreaId", "Archived");
+
+                    b.ToTable("parking_spaces", "property_assets", t =>
+                        {
+                            t.HasCheckConstraint("ck_parking_space_status", "status IN ('AVAILABLE','IN_USE','MAINTENANCE')");
+                        });
+                });
+
             modelBuilder.Entity("PropFlow.Shared.Messaging.OutboxEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -551,9 +756,50 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingAction", b =>
+                {
+                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingArea", null)
+                        .WithMany()
+                        .HasForeignKey("AreaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingRevision", b =>
+                {
+                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingArea", null)
+                        .WithMany()
+                        .HasForeignKey("AreaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingSource", b =>
+                {
+                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingArea", null)
+                        .WithMany()
+                        .HasForeignKey("AreaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingSpace", b =>
+                {
+                    b.HasOne("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingArea", null)
+                        .WithMany("Spaces")
+                        .HasForeignKey("AreaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Facilities.Facility", b =>
                 {
                     b.Navigation("Equipment");
+                });
+
+            modelBuilder.Entity("PropFlow.Modules.PropertyAssets.Domain.Parking.ParkingArea", b =>
+                {
+                    b.Navigation("Spaces");
                 });
 #pragma warning restore 612, 618
         }
