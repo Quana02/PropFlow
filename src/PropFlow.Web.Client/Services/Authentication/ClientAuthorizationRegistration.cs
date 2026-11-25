@@ -17,8 +17,6 @@ public static class ClientAuthorizationRegistration
                 policy => policy.RequireAssertion(context => AssetPermissions.CanManage(context.User)));
             options.AddPolicy(PropFlow.Modules.Administration.Contracts.AdministrationAuthorizationPolicies.ManageSystemConfiguration,
                 policy => policy.RequireRole("ADMIN").RequireClaim("permission", "MANAGE_SYSTEM_CONFIGURATION"));
-            options.AddPolicy(PropFlow.Modules.PropertyAssets.Contracts.PropertyAssetsAuthorizationPolicies.Manage,
-                policy => policy.RequireAssertion(context => AssetPermissions.CanManage(context.User)));
             options.AddPolicy("billing.read", policy => policy.RequireAssertion(context =>
                 (context.User.IsInRole("MANAGER") && context.User.HasClaim("permission", "MANAGE_OPERATIONS")) ||
                 (context.User.IsInRole("ACCOUNTANT") && context.User.HasClaim("permission", "MANAGE_FINANCE"))));

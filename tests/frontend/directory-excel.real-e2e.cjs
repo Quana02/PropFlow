@@ -35,7 +35,7 @@ async function login(p,role){
 }
 async function apiRequest(p,method,route,body,authenticated=true){
  // Ordinary network request to the real API; token captured from its actual login response.
- return evaluate(p,`(async()=>{const r=await fetch(${JSON.stringify(api+route)},{method:${JSON.stringify(method)},credentials:'include',headers:{'Content-Type':'application/json',${authenticated?`Authorization:${JSON.stringify('Bearer '+p.token)}`:''}},${body===undefined?'':`body:JSON.stringify(${JSON.stringify(body)}),`}});return {status:r.status,body:await r.json().catch(()=>null)};})()`);
+ return evaluate(p,`(async()=>{const headers={'Content-Type':'application/json',${authenticated?`Authorization:${JSON.stringify('Bearer '+p.token)}`:''}};if(!['GET','HEAD'].includes(${JSON.stringify(method)})){const c=await fetch(${JSON.stringify(api+'/api/v1/auth/csrf')},{credentials:'include',headers});headers['X-CSRF-TOKEN']=(await c.json()).token;}const r=await fetch(${JSON.stringify(api+route)},{method:${JSON.stringify(method)},credentials:'include',headers,${body===undefined?'':`body:JSON.stringify(${JSON.stringify(body)}),`}});return {status:r.status,body:await r.json().catch(()=>null)};})()`);
 }
 
 (async()=>{
@@ -339,7 +339,7 @@ async function apiRequest(p,method,route,body,authenticated=true){
   assert.equal(downloads.length,6,"Expected one workbook per successful download, with no extra template download");
   }
   const selectedFeatures=(process.env.PROPFLOW_FILTER_QA_FEATURES||'').split(',').filter(Boolean);
-  const managerGroups=[['assets','manager-assets-filter-qa'],['requests','manager-requests-filter-qa'],['complaints','manager-complaints-filter-qa'],['maintenance','manager-maintenance-filter-qa'],['invoice','manager-finance-filter-qa'],['announcement','manager-announcements-filter-qa']];
+  const managerGroups=[['assets','manager-assets-filter-qa'],['requests','manager-requests-filter-qa'],['complaints','manager-complaints-filter-qa'],['maintenance','manager-maintenance-filter-qa'],['invoice','manager-finance-filter-qa'],['announcement','manager-announcements-filter-qa'],['parking','parking-real-qa']];
   assert.ok(selectedFeatures.every(x=>managerGroups.some(([feature])=>feature===x)),'Unknown QA feature');
   for(const [feature,module] of managerGroups){
    if(selectedFeatures.length&&!selectedFeatures.includes(feature))continue;

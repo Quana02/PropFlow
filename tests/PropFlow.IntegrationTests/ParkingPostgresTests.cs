@@ -21,6 +21,7 @@ public sealed class ParkingPostgresTests
         var target=new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.GetConnectionString()){Pooling=false};
         target.Database="postgres";await using var admin=new NpgsqlConnection(target.ConnectionString);await admin.OpenAsync();
         var name="propflow_parking_test_"+Guid.NewGuid().ToString("N");await TestDatabaseSafety.CreateAsync(admin,name);
+        Console.WriteLine("PARKING_FIXTURE "+name+" owner="+TestDatabaseSafety.ProcessOwner);
         try
         {
             target.Database=name;var options=new DbContextOptionsBuilder<PropertyAssetsDbContext>().UseNpgsql(target.ConnectionString,x=>x.MigrationsHistoryTable("__EFMigrationsHistory","property_assets")).Options;
