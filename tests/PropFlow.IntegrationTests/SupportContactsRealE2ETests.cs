@@ -142,7 +142,8 @@ public sealed class SupportContactsRealE2ETests
         }
         async Task StartServers(string suffix)
         {
-            api=Start("dotnet",[Path.Combine(repo,"src","PropFlow.Api","bin","Debug","net8.0","PropFlow.Api.dll"),"--urls",apiUrl],Path.Combine(repo,"src","PropFlow.Api"),apiEnvironment,"api-"+suffix);
+            var publishedApi=Path.Combine(repo,"artifacts","excel-real-api");
+            api=Start("dotnet",[Path.Combine(publishedApi,"PropFlow.Api.dll"),"--urls",apiUrl],publishedApi,apiEnvironment,"api-"+suffix);
             await Ready(apiUrl+"/api/v1/public/support-contacts",api);
             web=Start("dotnet",[Path.Combine(publishedWeb,"PropFlow.Web.dll"),"--urls",webUrl],publishedWeb,webEnvironment,"web-"+suffix);
             await Ready(webUrl+"/login",web);
