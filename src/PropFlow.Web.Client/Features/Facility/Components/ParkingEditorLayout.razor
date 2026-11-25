@@ -1,0 +1,15 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject PropFlow.Web.Client.Features.Communication.SupportChat.ISupportChatConnection SupportConnection
+
+<div class="parking-editor-host">@Body</div>
+
+@code {
+    private readonly CancellationTokenSource lifetime=new();
+    protected override async Task OnInitializedAsync()
+    {
+        try{await SupportConnection.EnsureAsync(lifetime.Token);}
+        catch(OperationCanceledException)when(lifetime.IsCancellationRequested){}
+    }
+    public void Dispose(){lifetime.Cancel();lifetime.Dispose();}
+}

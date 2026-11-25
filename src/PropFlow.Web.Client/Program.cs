@@ -47,6 +47,7 @@ builder.Services.AddScoped<OnboardingState>();
 builder.Services.AddScoped<IBuildingApiClient, BuildingApiClient>();
 builder.Services.AddScoped<IFacilityApiClient, FacilityApiClient>();
 builder.Services.AddScoped<FacilityRecommendationsApi>();
+builder.Services.AddScoped<ParkingApi>();
 builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
 builder.Services.AddScoped<IMaintenanceApiClient, MaintenanceApiClient>();

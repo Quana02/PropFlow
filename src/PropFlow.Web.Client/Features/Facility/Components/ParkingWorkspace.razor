@@ -1,0 +1,139 @@
+@using PropFlow.Modules.PropertyAssets.Contracts
+@using PropFlow.Web.Client.Features.Facility.Components
+@using PropFlow.Web.Client.Shared.Feedback
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@implements IAsyncDisposable
+<PageTitle>@(StandaloneEditor?"Trình vẽ bãi đỗ — PropFlow":"Bãi đỗ xe — PropFlow")</PageTitle>
+<NavigationLock ConfirmExternalNavigation="dirty" OnBeforeInternalNavigation="BeforeNavigate" />
+<main class="parking-workspace @(StandaloneEditor?"parking-studio":"")" aria-busy="@busy">
+    @if(!StandaloneEditor){<header class="parking-heading"><div><small>KHÔNG GIAN VẬN HÀNH</small><h1>Quản lý bãi đỗ xe</h1><p>Từ sơ đồ của bạn đến từng ô đỗ dễ quản lý.</p></div><span class="parking-live-tag">Sơ đồ quản lý</span></header>}
+    @if(error is not null){<div class="parking-notice is-error" role="alert">@error</div>}
+    @if(message is not null){<div class="parking-notice" role="status">@message</div>}
+    @if(busy&&!recognitionBusy){<div class="parking-progress" role="status"><span></span>@busyLabel</div>}
+    <div class="parking-layout">
+        @if(!StandaloneEditor){
+        <aside class="parking-panel parking-lots"><header><h2>Bãi đỗ của chung cư</h2><span>@areas.Length</span></header>
+            @if(loading){<p role="status">Đang tải bãi đỗ…</p>}
+            @foreach(var lot in areas){<button type="button" class="parking-lot @(area?.Id==lot.Id?"active":"")" disabled="@busy" @onclick="()=>SelectArea(lot.Id)"><strong>@lot.Name</strong><small>@(lot.Published?(lot.Total==0?"Bản vẽ thủ công":$"{lot.Available}/{lot.Total} ô trống"):"Chưa xuất bản sơ đồ")</small></button>}
+            <form @onsubmit="Create" @onsubmit:preventDefault><label for="parking-new">Thêm bãi đỗ</label><input id="parking-new" maxlength="120" @bind="newName" placeholder="Ví dụ: Bãi xe tầng hầm B1" disabled="@busy"/><button type="submit" class="primary" disabled="@(busy||string.IsNullOrWhiteSpace(newName))">+ Tạo bãi đỗ</button></form>
+        </aside>
+        }
+        <section class="parking-content">
+            @if(area is null){@if(StandaloneEditor){<div class="parking-studio-unavailable"><h1>@(loading?"Đang mở bản vẽ…":"Chưa mở được bản vẽ")</h1><a href="/operations/parking">← Về quản lý bãi đỗ</a></div>}else{<div class="parking-empty parking-panel"><span aria-hidden="true">P</span><h2>Vẽ sơ đồ bãi đỗ của bạn</h2><p>Tạo bãi đỗ rồi bắt đầu vẽ thủ công bằng các công cụ hình học, vạch phân cách và ký hiệu. Bạn có thể mở thêm ảnh gốc để tham khảo.</p></div>}}
+            else
+            {
+                @if(!StandaloneEditor){
+                <header class="parking-area-header"><div><h2>@area.Name</h2><p>@(editing?"Thay đổi ở đây chỉ áp dụng sau khi xuất bản.":area.Spaces.Length>0?"Chọn một ô trên sơ đồ để xem và cập nhật trạng thái.":"Xem bản vẽ đã xuất bản; mở trình chỉnh sửa để tiếp tục vẽ.")</p></div><div class="parking-buttons">
+                    <button type="button" disabled="@busy" @onclick="Reload">Tải lại</button>
+                    <button type="button" disabled="@busy" class="@(!editing?"primary":"")" @onclick="ToggleMode">@(editing?"Về màn hình quản lý":"Chỉnh sửa sơ đồ")</button>
+                </div></header>
+                }
+                @if(!editing)
+                {
+                    @if(area.Spaces.Length>0){<div class="parking-stats"><div><small>Tổng số ô</small><strong>@area.Spaces.Length</strong></div><div><small>Trống</small><strong>@Count("AVAILABLE")</strong></div><div><small>Đang sử dụng</small><strong>@Count("IN_USE")</strong></div><div><small>Bảo trì</small><strong>@Count("MAINTENANCE")</strong></div></div>}
+                    else if(area.Published is not null){<div class="parking-stats parking-drawing-stats"><div><small>Bản vẽ thủ công đã xuất bản</small><strong>@area.Published.Shapes.Count(s=>s.Kind!="TRACE") đối tượng</strong><span>Đường vẽ, ký hiệu và vật cản được giữ riêng để tiếp tục chỉnh sửa.</span></div></div>}
+                    @if(area.Published is null){<div class="parking-panel parking-empty"><h3>Bãi đỗ chưa có sơ đồ đang sử dụng</h3><p>Mở trình vẽ để vẽ thủ công, kiểm tra và xuất bản.</p><button class="primary" @onclick="ToggleMode" disabled="@busy">Mở trình vẽ</button></div>}
+                    else
+                    {
+                        <div class="parking-map-row" inert="@(busy?"":null)"><section class="parking-panel parking-map"><div class="parking-map-head"><div class="parking-legend">@if(area.Spaces.Length>0){<span class="available">Trống</span><span class="in-use">Đang sử dụng</span><span class="maintenance">Bảo trì</span>}else{<strong>Sơ đồ thủ công</strong>}</div><div class="parking-buttons"><button @onclick='()=>CanvasAction("zoom-in")' aria-label="Phóng to">+</button><button @onclick='()=>CanvasAction("zoom-out")' aria-label="Thu nhỏ">−</button><button @onclick='()=>CanvasAction("fit")'>Vừa khung</button><button @onclick='()=>CanvasAction("tool","pan")'>Kéo bản đồ</button><button @onclick='()=>CanvasAction("tool","select")'>Chọn ô</button></div></div>
+                            <ParkingCanvas @key="CanvasKey" @ref="canvas" Drawing="area.Published" Spaces="area.Spaces" Selected="SelectShape" Failure="CanvasFailure" />
+                            <p class="parking-hint">@(area.Spaces.Length>0?"Trạng thái do Manager cập nhật thủ công, chưa theo dõi xe ra vào.":"Mỗi đường vẽ, ký hiệu và vật cản là một đối tượng độc lập.")</p>
+                        </section><aside class="parking-panel parking-inspector"><h3>@(area.Spaces.Length>0?"Thông tin ô đỗ":"Chỉnh sửa bản vẽ")</h3>
+                            @if(selectedShape is null){<p>@(area.Spaces.Length>0?"Chọn một ô trên sơ đồ để cập nhật.":"Chọn Chỉnh sửa sơ đồ để di chuyển, xoay hoặc sửa các đối tượng.")</p>}
+                            else{<strong class="parking-space-name">@selectedShape.Label</strong><label>Trạng thái<PropFlowSelect Id="parking-space-state" AriaLabel="Trạng thái ô đỗ" @bind-Value="selectedState" Options="StateOptions" Disabled="busy" /></label><label>Ghi chú<textarea maxlength="500" rows="3" @bind="stateNote" placeholder="Ghi chú cho lần cập nhật này" disabled="@busy"></textarea></label><button class="primary" @onclick="SaveState" disabled="@busy">Cập nhật trạng thái</button>}
+                        </aside></div>
+                    }
+                }
+                else
+                {
+                    <section class="parking-editor parking-studio-editor">
+                        <header class="parking-studio-bar">
+                            <button type="button" class="parking-back" disabled="@busy" @onclick="ToggleMode" aria-label="Về màn hình quản lý">← <span>Về quản lý</span></button>
+                            <div class="parking-studio-title"><h1>@editName</h1><small><span class="parking-save-dot @(dirty?"is-dirty":"")"></span>@(dirty?"Bản nháp · Có thay đổi chưa lưu":"Bản nháp đã lưu")</small></div>
+                            <div class="parking-studio-actions"><button @onclick='()=>CanvasAction("undo")' title="Ctrl+Z" disabled="@busy">↶ Hoàn tác</button><button @onclick='()=>CanvasAction("redo")' title="Ctrl+Y" disabled="@busy">↷ Làm lại</button><button type="button" class="parking-inspector-toggle" @onclick="()=>inspectorOpen=!inspectorOpen" aria-expanded="@inspectorOpen">Thuộc tính</button><button disabled="@busy" @onclick="Save">Lưu nháp</button><button class="primary" disabled="@busy" @onclick="RequestPublish">Xuất bản sơ đồ</button></div>
+                        </header>
+                        <div class="parking-studio-body @(inspectorOpen?"is-inspector-open":"")">
+                            <aside class="parking-toolbar parking-toolbox" role="toolbar" aria-label="Công cụ vẽ sơ đồ" aria-orientation="vertical">
+                                <section class="parking-tool-group parking-clipboard"><h2>Sao chép / Dán</h2><div>
+                                    <button type="button" disabled="@(busy||selectedIds.Length==0)" @onclick='()=>CanvasAction("copy")' title="Sao chép đối tượng hoặc nhóm — Ctrl+C" aria-label="Sao chép"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 8H21V21H8ZM16 8V3H3V16H8"/></svg><span class="parking-tool-title">Sao chép</span></button>
+                                    <button type="button" disabled="@(busy||clipboardCount==0)" @onclick='()=>CanvasAction("paste")' title="Dán bản sao — Ctrl+V" aria-label="Dán"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 5H5V21H19V5H15M9 3H15V7H9ZM8 12H16M8 16H16"/></svg><span class="parking-tool-title">Dán</span></button>
+                                </div><small class="parking-clipboard-status" role="status">@(clipboardCount>0?$"Đã sao chép {clipboardCount} đối tượng":"Chọn hình để sao chép")</small></section>
+                                <section class="parking-tool-group parking-guide-toggle"><h2>Hỗ trợ căn hình</h2><div><button type="button" class="@(smartGuidesEnabled?"active":"")" aria-pressed="@(smartGuidesEnabled?"true":"false")" disabled="@busy" @onclick="()=>smartGuidesEnabled=!smartGuidesEnabled" title="Đường căn và khoảng cách khi kéo. Giữ Alt để kéo tự do." aria-label="Căn thông minh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-dasharray="2 2" d="M12 1V23M1 12H23"/><path d="M3 3H9V9H3ZM15 15H21V21H15Z"/></svg><span class="parking-tool-title">Căn thông minh</span></button></div></section>
+                                @foreach(var group in ToolGroups){<section class="parking-tool-group"><h2>@group.Name</h2><div>@foreach(var key in group.Tools){<button type="button" class="@(tool==key?"active":"")" @onclick="()=>SetTool(key)" disabled="@busy" aria-pressed="@(tool==key)" title="@ToolOptions[key]" aria-label="@ToolOptions[key]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="@ToolIcon(key)"/></svg><span class="parking-tool-title">@ToolOptions[key]</span></button>}</div></section>}
+                            </aside>
+                            <section class="parking-stage" aria-label="Không gian vẽ"><div class="parking-stage-caption"><strong>KHÔNG GIAN VẼ</strong><span>Tự do · @working.Shapes.Count(s=>s.Kind!="TRACE") đối tượng</span></div>
+                                @if(selectedIds.Length>1||(tool=="region"&&selectedIds.Length>0)){<div class="parking-region-actions" role="status"><strong>Đã chọn @selectedIds.Length đối tượng</strong><button type="button" disabled="@busy" title="Ctrl+D" @onclick='()=>CanvasAction("duplicate")'>Nhân bản nhóm</button><button type="button" class="danger" disabled="@busy" @onclick='()=>CanvasAction("delete")'>Xóa vùng đã chọn</button><button type="button" disabled="@busy" @onclick='()=>CanvasAction("clear-selection")'>Bỏ chọn</button></div>}
+                                <div class="parking-stage-canvas" inert="@(busy?"":null)"><ParkingCanvas @key="CanvasKey" @ref="canvas" ReferenceImageUrl="@(compareOriginal && area.DraftSource?.ContentType!="application/pdf"?sourceUrl:null)" Drawing="working" Spaces="area.Spaces" Editable="true" SmartGuides="smartGuidesEnabled" Changed="DrawingChanged" Selected="SelectShape" SelectionChanged="SelectionChanged" ClipboardChanged="count=>clipboardCount=count" SpacingChanged="text=>spacingSummary=text" Failure="CanvasFailure"/></div>
+                                <div class="parking-stage-controls"><p class="parking-hint" role="status" title="@ToolHint">@ToolHint</p><div><button @onclick='()=>CanvasAction("grid")' disabled="@busy" title="Bật/tắt lưới">Lưới</button><button @onclick='()=>CanvasAction("zoom-out")' aria-label="Thu nhỏ">−</button><button @onclick='()=>CanvasAction("fit")'>Xem toàn bộ</button><button @onclick='()=>CanvasAction("zoom-in")' aria-label="Phóng to">+</button></div></div>
+                            </section>
+                            <aside class="parking-inspector parking-studio-inspector" aria-label="Thuộc tính bản vẽ">
+                                <div class="parking-inspector-heading"><h2>Thuộc tính</h2><button type="button" class="parking-inspector-toggle" @onclick="()=>inspectorOpen=false" aria-label="Đóng thuộc tính">×</button></div>
+                                    @if(working.RecognitionReview is {} review)
+                                    {
+                                        <details class="parking-quality-details" open="@(review.Issues.Length>0)"><summary>Kiểm tra bản dựng (@review.Issues.Length)</summary><section class="parking-quality-review" aria-label="Đối chiếu nét nguồn">
+                                            <strong>Đối chiếu nét nguồn</strong>
+                                            @if(review.Stale){<p class="parking-quality-stale" role="status">Bản vẽ đã chỉnh sửa. Các số đo và cảnh báo dưới đây thuộc lần nhận diện trước, cần đối chiếu lại.</p>}
+                                            <p>@review.SourceCheckedObjects / @review.CheckedObjects đối tượng có đường biên được đo theo ảnh.</p>
+                                            @if(review.RefinedObjects>0){<small>@review.RefinedObjects đối tượng chưa chắc chắn được chỉnh cạnh trong giới hạn nhỏ.</small>}
+                                            @if(review.UnreadRegions>0){<p class="parking-quality-warning">Còn @review.UnreadRegions vùng chưa ghép được đầy đủ. Phần đã đúng được giữ lại.</p>}
+                                            <small>Đây là kiểm tra nét ảnh, không phải tỷ lệ chính xác hoặc xác nhận đã nhận đủ chi tiết. Các vùng trống, chữ và ký hiệu vẫn cần đối chiếu.</small>
+                                            @if(review.Issues.Length>0){<ul>@foreach(var issue in review.Issues.Take(12)){<li><p>@issue.Message</p>@if(issue.ShapeIds.Any(id=>working.Shapes.Any(s=>s.Id==id))){<button type="button" disabled="@busy" @onclick="()=>SelectReviewIssue(issue)">Chọn đối tượng cần kiểm tra</button>}</li>}</ul>@if(review.Issues.Length>12){<small>Còn @(review.Issues.Length-12) điểm cần kiểm tra trong sơ đồ.</small>}}
+                                            else{<p>Chưa phát hiện mâu thuẫn theo các phép kiểm tra hiện có. Hãy tiếp tục đối chiếu bản gốc trước khi xuất bản.</p>}
+                                        </section></details>
+                                    }
+                                @if(!HasPhysicalScale){<section class="parking-scale-needed"><h3>Đặt kích thước thực</h3><p>Bản cũ chưa có tỷ lệ. Chọn hình có chiều rộng đã biết rồi nhập chiều rộng thực tế để đo chính xác bằng m/cm.</p><label>Chiều rộng thực của hình chọn (m)<input id="parking-known-width" type="number" min="0.001" step="any" @bind="knownWidthMetres"/></label><button type="button" disabled="@(busy||selectedIds.Length==0||!double.IsFinite(knownWidthMetres)||knownWidthMetres<=0)" @onclick="SetKnownWidth">Đặt tỷ lệ từ hình chọn</button></section>}
+                                <section class="parking-selection-properties">@if(selectedShape is not null){<h4>Đối tượng đang chọn</h4><label>Loại đối tượng<PropFlowSelect Id="parking-object-kind" @bind-Value="shapeKind" Options="ObjectKinds" /></label><label>Nhãn<input @bind="shapeLabel" maxlength="80"/></label>@if(HasPhysicalScale){<div class="parking-properties"><label>X (m)<input type="number" step="any" @bind="shapeX"/></label><label>Y (m)<input type="number" step="any" @bind="shapeY"/></label><label>Rộng (m)<input type="number" min="0.001" step="any" @bind="shapeWidth"/></label><label>Cao (m)<input type="number" min="0.001" step="any" @bind="shapeHeight"/></label></div>}<label>Góc xoay (độ)<input id="parking-shape-rotation" type="number" min="0" max="360" step="1" @bind="shapeRotation"/></label>@if(selectedShape.Kind=="SPACE"){<label class="parking-review-check"><input type="checkbox" @bind="shapeReviewed"/>Đã đối chiếu ô này với bản gốc</label>}<small>@PhysicalSize()</small><button @onclick="ApplyShape" disabled="@busy">Áp dụng thay đổi</button><div class="parking-buttons"><button @onclick='()=>CanvasAction("duplicate")' disabled="@busy">Nhân bản</button><button class="danger" @onclick='()=>CanvasAction("delete")' disabled="@busy">Xóa</button></div>}
+                            else{<p>@(selectedIds.Length>1?$"Đang chọn {selectedIds.Length} đối tượng. Chọn công cụ Chọn rồi kéo một hình để di chuyển cả nhóm. Shift + nhấp để thêm/bỏ hình; Ctrl+C/V sao chép/dán.":"Chọn đối tượng để chỉnh nhãn, vị trí, kích thước và góc xoay. Shift + nhấp để chọn nhiều hình.")</p>}</section>
+                                @if(selectedIds.Length>=2){<section class="parking-group-rotation" aria-label="Xoay nhóm"><h3>Xoay cả nhóm</h3><div class="parking-buttons"><button type="button" disabled="@busy" aria-label="Xoay nhóm sang trái 90 độ" @onclick="()=>RotateSelection(-90)">↶ 90°</button><button type="button" disabled="@busy" aria-label="Xoay nhóm sang phải 90 độ" @onclick="()=>RotateSelection(90)">↷ 90°</button><button type="button" disabled="@busy" @onclick="()=>RotateSelection(180)">180°</button></div><label>Xoay thêm (độ)<input id="parking-group-angle" type="number" step="any" @bind="groupRotationDegrees" disabled="@busy"/></label><button type="button" disabled="@(busy||!double.IsFinite(groupRotationDegrees))" @onclick="()=>RotateSelection(groupRotationDegrees)">Xoay nhóm</button><small>Xoay quanh tâm chung, giữ nguyên bố trí. Có thể kéo tay nắm phía trên nhóm; giữ Shift để xoay theo bước 15°.</small></section>
+                                <section class="parking-spacing-controls" aria-label="Căn chỉnh và khoảng cách"><h3>Căn chỉnh và khoảng cách</h3>
+                                    <div class="parking-buttons"><button type="button" disabled="@(busy||!HasPhysicalScale)" @onclick='()=>AlignSelection("y")'>Cùng hàng</button><button type="button" disabled="@(busy||!HasPhysicalScale)" @onclick='()=>AlignSelection("x")'>Cùng cột</button></div>
+                                    <div class="parking-buttons" role="group" aria-label="Hướng đo khoảng cách"><button type="button" class="@(spacingAxis=="x"?"active":"")" aria-pressed="@(spacingAxis=="x")" disabled="@busy" @onclick='()=>SetSpacingAxis("x")'>Ngang</button><button type="button" class="@(spacingAxis=="y"?"active":"")" aria-pressed="@(spacingAxis=="y")" disabled="@busy" @onclick='()=>SetSpacingAxis("y")'>Dọc</button></div>
+                                    <p class="parking-spacing-summary" role="status">@spacingSummary</p><div class="parking-buttons" role="group" aria-label="Đơn vị khoảng cách"><button type="button" aria-pressed="@(spacingUnit=="m")" class="@(spacingUnit=="m"?"active":"")" disabled="@busy" @onclick='()=>SetSpacingUnit("m")'>m</button><button type="button" aria-pressed="@(spacingUnit=="cm")" class="@(spacingUnit=="cm"?"active":"")" disabled="@busy" @onclick='()=>SetSpacingUnit("cm")'>cm</button></div><label>Khe hở (@SpacingUnit)<input id="parking-spacing-gap" type="number" min="0" step="any" @bind="spacingGap" disabled="@(busy||!HasPhysicalScale)"/></label>
+                                    <button type="button" disabled="@(busy||!HasPhysicalScale||!double.IsFinite(spacingGap)||spacingGap<0)" @onclick='()=>ArrangeSelection("space")'>Áp dụng khe hở</button>
+                                    <button type="button" disabled="@(busy||!HasPhysicalScale||selectedIds.Length<3)" title="Giữ hai hình ngoài cùng, chia đều khe hở giữa các hình. Cần ít nhất ba hình." @onclick='()=>ArrangeSelection("distribute")'>Giãn đều</button>
+                                    <small>Đo giữa các mép khung bao theo trục chọn. Cùng hàng/cột tự xếp tách các hình theo khe hở. Khe hở dùng đơn vị m/cm. Ký hiệu và chú thích được phép đè lên sơ đồ.</small>
+                                </section>}
+                                <details open class="parking-sheet-settings"><summary>Bản vẽ</summary><label>Tên bãi đỗ<input maxlength="120" @bind="editName" @bind:after="MarkDirty" disabled="@busy"/></label><small>Không gian vẽ tự do: kéo khung hoặc lăn chuột để di chuyển, Ctrl + lăn chuột để thu/phóng. Xem toàn bộ để tìm lại các hình.</small><button type="button" disabled="@busy" @onclick="()=>confirmClear=true">Bản vẽ trống</button></details>
+                                <details class="parking-calibration" open="@(working.Scale is not null||tool=="calibrate")"><summary>Kích thước thực</summary><button type="button" class="@(tool=="calibrate"?"active":"")" @onclick='()=>SetTool("calibrate")' disabled="@busy">Hiệu chuẩn kích thước</button><p>Chọn Hiệu chuẩn kích thước, bấm hai đầu đường ghi kích thước rồi nhập đúng giá trị và đơn vị trên bản gốc.</p>@if(working.Scale is not null){<label>Chiều dài trên bản gốc<input id="parking-scale-length" type="number" min="0.001" step="any" @bind="scaleLength"/></label><label>Đơn vị<PropFlowSelect Id="parking-scale-unit" @bind-Value="scaleUnit" Options="ScaleUnits" /></label><button type="button" disabled="@(busy||scaleLength<=0||string.IsNullOrEmpty(scaleUnit))" @onclick="ApplyScale">Xác nhận tỷ lệ</button><button type="button" disabled="@busy" @onclick='()=>CanvasAction("clear-scale")'>Xóa hiệu chuẩn</button><small>@(working.Scale.Confirmed?"Đã xác nhận tỷ lệ. Kích thước quy đổi phụ thuộc độ chính xác của ảnh gốc.":"Chưa xác nhận: chưa dùng để quy đổi kích thước thực.")</small>}</details>
+                                <details class="parking-import"><summary>Ảnh/PDF tham khảo và nhận diện AI · tùy chọn</summary><p>Không cần tải tệp để vẽ thủ công. Nếu dùng nhận diện, kết quả sẽ thay bản nháp sau khi bạn xác nhận.</p><div class="parking-upload-fields"><label>Chọn sơ đồ<InputFile @key="uploadKey" OnChange="ChooseFile" accept="image/png,image/jpeg,application/pdf" disabled="@busy"/></label><label>Trang PDF<input type="number" min="1" max="1000" @bind="pdfPage" disabled="@(busy||pendingFile?.ContentType!="application/pdf")"/></label><button class="primary" disabled="@(busy||pendingFile is null)" @onclick="Import">Tải tệp và nhận diện</button></div><small>PNG/JPG/PDF · tối đa 8 MB. Sơ đồ đang quản lý không đổi cho đến khi xuất bản.</small></details>
+                                @if(area.DraftSource is {ContentType: not "application/pdf"} && sourceUrl is not null){<button type="button" @onclick="()=>compareOriginal=!compareOriginal" aria-pressed="@compareOriginal" disabled="@busy">@(compareOriginal?"Ẩn nền gốc":"Chồng bản gốc")</button>}
+                                <details class="parking-ai-review"><summary>Đối chiếu nhận diện</summary>
+                                    @if(working.Digitization is not null){<div class="parking-source-summary"><strong>Sơ đồ đối tượng có thể chỉnh sửa</strong><span>@working.Shapes.Count(x=>x.Kind=="SPACE") ô đỗ riêng biệt</span><small>Chọn một ô để kéo, đổi kích thước, xoay hoặc xóa. Ô viền cam cần đối chiếu với bản thiết kế.</small><div class="parking-buttons"><button type="button" disabled="@(busy||!working.Shapes.Any(x=>x.Kind=="SPACE"&&x.NeedsReview))" @onclick="()=>confirmCandidates=true">Xác nhận các ô đã đối chiếu</button></div></div>}
+                                </details>
+                                @if(area.DraftSource is not null){<details class="parking-reference"><summary>Đối chiếu bản gốc · @area.DraftSource.FileName · trang @area.DraftSource.Page</summary><button type="button" @onclick="RecognizeAgain" disabled="@busy">Dựng lại sơ đồ đối tượng</button>
+                        @if(sourceUrl is not null){@if(area.DraftSource.ContentType=="application/pdf"){<iframe src="@(sourceUrl+"#page="+area.DraftSource.Page)" title="Sơ đồ PDF gốc"></iframe>}else{<img src="@sourceUrl" alt="Sơ đồ bãi đỗ gốc để đối chiếu"/>}}
+                        else{<p>Chưa tải được bản gốc.</p><button @onclick="LoadSource" disabled="@busy">Tải lại bản gốc</button>}
+                    </details>}
+                            </aside>
+                        </div>
+                    </section>
+                }
+                @if(!StandaloneEditor){<details class="parking-panel parking-history" @ontoggle="LoadHistory"><summary>Lịch sử cập nhật</summary>@if(history.Length==0){<p>Chưa có lịch sử để hiển thị.</p>}@foreach(var item in history){<div><strong>@ActionText(item.Action)</strong><small>@FormatTime(item.At)</small>@if(item.Note.Length>0){<p>@item.Note</p>}</div>}<div class="parking-buttons"><button disabled="@(busy||historyPage==1)" @onclick="PreviousHistory">Trước</button><span>Trang @historyPage</span><button disabled="@(busy||history.Length<20)" @onclick="NextHistory">Sau</button></div></details>}
+            }
+        </section>
+    </div>
+</main>
+@if(recognitionBusy||recognitionNotice is not null)
+{
+    <div class="parking-recognition-feedback">
+        <PropFlowConfirmationDialog Title="@(recognitionBusy?"AI đang nhận diện sơ đồ":recognitionSucceeded?"Đã tạo bản nháp sơ đồ":"Chưa hoàn tất nhận diện")"
+                                    Message="@(recognitionBusy?null:recognitionNotice)" Tone="DialogTone.Info"
+                                    Busy="recognitionBusy" CloseOnBackdrop="false" ConfirmText="Tiếp tục chỉnh sửa"
+                                    OnCancel="CloseRecognitionNotice">
+            @if(recognitionBusy)
+            {
+                <div class="parking-ai-loading" role="status" aria-live="polite">
+                    <span class="parking-ai-spinner" aria-hidden="true"></span>
+                    <strong>@busyLabel</strong>
+                    <p>Thời gian xử lý phụ thuộc độ chi tiết sơ đồ và dịch vụ AI.</p>
+                    <small>Vui lòng giữ trang này mở. Kết quả sẽ hiện tại đây khi xử lý xong.</small>
+                </div>
+            }
+        </PropFlowConfirmationDialog>
+    </div>
+}
+@if(confirmPublish){<PropFlowConfirmationDialog Title="Xuất bản sơ đồ bãi đỗ?" Message="Bản nháp sẽ trở thành sơ đồ đang quản lý. Trạng thái các ô được giữ theo mã đối tượng; ô mới bắt đầu ở trạng thái Trống." Tone="DialogTone.Confirm" ConfirmText="Xuất bản" CancelText="Kiểm tra lại" Busy="busy" OnConfirm="Publish" OnCancel="CancelPublish"/>}
+@if(discardAction is not null){<PropFlowConfirmationDialog Title="Bạn có thay đổi chưa lưu" Message="Các chỉnh sửa chưa lưu sẽ được bỏ. Bạn có muốn tiếp tục?" Tone="DialogTone.Danger" ConfirmText="Bỏ thay đổi và tiếp tục" CancelText="Ở lại" OnConfirm="Discard" OnCancel="CancelDiscard"/>}
+@if(confirmCandidates){<PropFlowConfirmationDialog Title="Đã đối chiếu các ô với bản gốc?" Message="Xác nhận rằng bạn đã kiểm tra ô thật, loại các vùng nhầm bên trong hình minh họa và sửa các ô còn thiếu. Mỗi ô vẫn là một đối tượng riêng trong bản vẽ." Tone="DialogTone.Confirm" ConfirmText="Tôi đã kiểm tra" CancelText="Kiểm tra lại" OnConfirm="ConfirmCandidates" OnCancel="()=>confirmCandidates=false"/>}
+@if(confirmClear){<PropFlowConfirmationDialog Title="Bắt đầu bản vẽ trống?" Message="Các đối tượng trong bản đang chỉnh sửa sẽ được bỏ. Thay đổi chỉ được lưu khi bạn bấm Lưu nháp; sơ đồ đã xuất bản vẫn giữ nguyên." Tone="DialogTone.Danger" ConfirmText="Tạo bản vẽ trống" CancelText="Giữ bản hiện tại" OnConfirm="ClearDrawing" OnCancel="()=>confirmClear=false"/>}
