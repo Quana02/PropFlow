@@ -18,9 +18,15 @@ public sealed class ComplaintUseCases(IComplaintStore store, IComplaintCommitter
             DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime), ct);
     }
 
-    public async Task<ComplaintResult<ComplaintPage>> ListAsync(Guid actor, string role, string? search, string? status, int page, CancellationToken ct)
+    public async Task<ComplaintResult<ComplaintPage>> ListAsync(Guid actor, string role, string? search, string? status, int page, CancellationToken ct,ComplaintDirectoryFilter? filters=null)
     {
         if (page < 1 || page > 100000 || search?.Length > 200) return new(400, Message: "Bộ lọc không hợp lệ.");
+        if(filters is not null)
+        {
+            if(role!="MANAGER" && ((filters.Statuses?.Length??0)>0 || (filters.AssignedStaffUserIds?.Length??0)>0 || filters.From.HasValue || filters.To.HasValue || filters.HasActiveFollowup.HasValue))return new(403,Message:"Bộ lọc này chỉ dành cho quản lý.");
+            if(filters.Statuses?.Length>100 || filters.AssignedStaffUserIds?.Length>100 || (filters.Statuses?.Any(x=>!Enum.IsDefined(x))??false) || (filters.AssignedStaffUserIds?.Contains(Guid.Empty)??false) || filters.From>filters.To)return new(400,Message:"Bộ lọc không hợp lệ.");
+            filters=filters with {Statuses=filters.Statuses?.Distinct().ToArray(),AssignedStaffUserIds=filters.AssignedStaffUserIds?.Distinct().ToArray()};
+        }
         ComplaintStatus? filter = null;
         if (!string.IsNullOrWhiteSpace(status))
         {
@@ -29,7 +35,14 @@ public sealed class ComplaintUseCases(IComplaintStore store, IComplaintCommitter
         }
         var residence = role == "RESIDENT" ? await Residence(actor, ct) : null;
         if (role == "RESIDENT" && residence is null) return new(403, Message: "Tài khoản chưa có liên kết cư trú được xác minh.");
-        return new(200, await store.ListAsync(residence?.ResidentId, role == "STAFF" ? actor : null, search, filter, page, ct));
+        return new(200, await store.ListAsync(residence?.ResidentId, role == "STAFF" ? actor : null, search, filter, page, ct,filters));
+    }
+
+    public async Task<ComplaintResult<IReadOnlyList<ContextOption>>> FilterStaffAsync(CancellationToken ct)
+    {
+        var ids=await store.FilterStaffIdsAsync(ct);
+        if(ids.Length>1000)return new(400,Message:"Danh mục người phụ trách vượt giới hạn tải an toàn; cần tra cứu phía server.");
+        return new(200,(await staff.GetHistoricalStaffAsync(ids,ct)).OrderBy(x=>x.DisplayName).Select(x=>new ContextOption(x.UserId,x.DisplayName)).ToArray());
     }
 
     public async Task<ComplaintResult<ComplaintDetail>> GetAsync(Guid actor, string role, Guid id, CancellationToken ct)

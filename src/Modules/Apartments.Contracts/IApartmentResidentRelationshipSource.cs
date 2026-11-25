@@ -3,6 +3,8 @@ namespace PropFlow.Modules.Apartments.Contracts;
 /// <summary>Public read contract used by other modules to describe apartment relationships.</summary>
 public interface IApartmentResidentRelationshipSource
 {
+    Task<ApartmentDirectoryScope> GetDirectoryScopeAsync(int? floorNumber, Guid? apartmentUnitId, DateOnly date, CancellationToken ct,
+        IReadOnlyCollection<int>? floorNumbers = null, IReadOnlyCollection<Guid>? apartmentUnitIds = null);
     Task<IReadOnlyList<ApartmentReference>> GetApartmentsAsync(
         IReadOnlyCollection<Guid> apartmentUnitIds,
         CancellationToken ct);
@@ -25,6 +27,8 @@ public interface IApartmentResidentRelationshipSource
         DateOnly date,
         CancellationToken ct);
 }
+
+public sealed record ApartmentDirectoryScope(IReadOnlyList<Guid> ApartmentIds, IReadOnlyList<Guid> OwnerResidentIds);
 
 public sealed record ApartmentReference(Guid Id, string UnitNumber, int FloorNumber);
 

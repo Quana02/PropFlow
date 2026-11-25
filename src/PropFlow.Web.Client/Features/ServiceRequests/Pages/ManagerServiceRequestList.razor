@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.IManagerServiceRequestApiClient Api
 @inject PropFlow.Web.Client.Features.ServiceRequests.Services.ServiceRequestRealtimeClient Realtime
+@inject PropFlow.Web.Client.Features.Facility.Services.IBuildingApiClient BuildingApi
 
 <PageTitle>Quản lý yêu cầu dịch vụ - PropFlow</PageTitle>
 
@@ -44,11 +45,17 @@
                     <button type="button" aria-label="Xóa tìm kiếm" @onclick="ClearSearch"><span class="material-symbols-outlined">close</span></button>
                 }
             </label>
-            <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters"
-                                 OnReset="ResetDraft" OnApply="ApplyDraft">
-                <label><input type="checkbox" @bind="draftUrgent" />Khẩn cấp</label>
-                <label><input type="checkbox" @bind="draftUnassigned" />Chưa phân công</label>
-                <label><input type="checkbox" @bind="draftRecent" />30 ngày gần nhất</label>
+            <PropFlowFilterPopover Variant="Directory" ActiveCount="@ActiveFilterCount" Disabled="@loading" OnOpen="OpenFilters"
+                                 OnReset="ResetDraft" OnApply="ApplyDraft" Validate="ValidateDraft">
+                <label><span>Trạng thái yêu cầu</span><PropFlowFilterMultiSelect Options="RequestStatusOptions" Values="draft.Statuses" ValuesChanged="v=>draft=draft with {Statuses=v}" AriaLabel="Trạng thái yêu cầu" /></label>
+                <label><span>Mức ưu tiên</span><PropFlowFilterMultiSelect Options="RequestPriorityOptions" Values="draft.Priorities" ValuesChanged="v=>draft=draft with {Priorities=v}" AriaLabel="Mức ưu tiên yêu cầu" /></label>
+                <label><span>Loại yêu cầu</span><PropFlowFilterMultiSelect Options="CategoryOptions" Values="draft.Categories" ValuesChanged="v=>draft=draft with {Categories=v}" Searchable="true" Disabled="@(optionsLoading||optionsError is not null)" AriaLabel="Loại yêu cầu" /></label>
+                <label><span>Nhân viên phụ trách</span><PropFlowFilterMultiSelect Options="StaffOptions" Values="draft.Staff" ValuesChanged="v=>draft=draft with {Staff=v}" Searchable="true" Disabled="@(optionsLoading||optionsError is not null)" AriaLabel="Nhân viên phụ trách yêu cầu" /></label>
+                @if(optionsError is not null){<small role="alert">@optionsError</small>}
+                <label><span>Phân công</span><PropFlowSelect Value="@(draft.Unassigned ? "true":"")" ValueChanged="SetUnassigned" Options="AssignmentFilterOptions" AriaLabel="Tình trạng phân công yêu cầu" Variant="Filter" /></label>
+                <div class="pf-filter-range"><label><span>Ngày gửi từ</span><input type="date" @bind="draftFrom" /></label><label><span>Ngày gửi đến</span><input type="date" @bind="draftTo" /></label></div>
+                <label><span>Thời gian nhanh</span><PropFlowSelect Value="@(draft.Recent ? "30":"")" ValueChanged="SetRecent" Options="RecentFilterOptions" AriaLabel="Thời gian nhanh yêu cầu" Variant="Filter" /></label>
+                @if(filterError is not null){<small role="alert">@filterError</small>}
             </PropFlowFilterPopover>
             <span class="pf-management-count result-count">@items.Count yêu cầu đang hiển thị</span>
             <PropFlowListRefresh OnRefresh="LoadAsync" Busy="@loading" />
@@ -120,9 +127,19 @@
     private const int PageSize = 20;
     private string? searchText;
     private string selectedStatus = "ALL";
-    private string? priorityFilter;
-    private bool unassignedOnly;
-    private int? submittedWithinDays;
+    private sealed record RequestFilters(IReadOnlyList<string> Statuses,IReadOnlyList<string> Priorities,IReadOnlyList<string> Categories,IReadOnlyList<string> Staff,bool Unassigned=false,bool Recent=false,DateTime? From=null,DateTime? To=null);
+    private RequestFilters applied=new([],[],[],[]),draft=new([],[],[],[]);
+    private DateTime? draftFrom,draftTo;
+    private TimeZoneInfo? filterZone;
+    private bool optionsLoading;
+    private string? optionsError;
+    private string? filterError;
+    private IReadOnlyList<PropFlowSelectOption> CategoryOptions=[],StaffOptions=[];
+    private static readonly PropFlowSelectOption[] RequestStatusOptions=[..new[]{"SUBMITTED","UNDER_REVIEW","ASSIGNED","IN_PROGRESS","RESOLVED","CLOSED","CANCELLED"}.Select(x=>new PropFlowSelectOption(x,StatusLabel(x)))];
+    private static readonly PropFlowSelectOption[] RequestPriorityOptions=[new("LOW","Thấp"),new("NORMAL","Tiêu chuẩn"),new("HIGH","Cao"),new("URGENT","Khẩn cấp")];
+    private static readonly PropFlowSelectOption[] AssignmentFilterOptions=[new("","Tất cả"),new("true","Chưa phân công")];
+    private static readonly PropFlowSelectOption[] RecentFilterOptions=[new("","Không giới hạn"),new("30","30 ngày gần nhất")];
+    private DateTimeOffset? Boundary(DateTime? value,bool end=false)=>value is null?null:new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(value.Value.Date.Add(end?TimeOnly.MaxValue.ToTimeSpan():TimeSpan.Zero),DateTimeKind.Unspecified),filterZone!));
     private int page = 1;
     private int totalCount;
     private bool loading;
@@ -159,8 +176,8 @@
         {
             loading = true;
             errorMessage = null;
-            var status = selectedStatus == "ALL" ? null : selectedStatus;
-            var result = await Api.ListAsync(new(searchText, status, priorityFilter, unassignedOnly, page, PageSize, submittedWithinDays));
+            var result = await Api.ListAsync(new(searchText,null,null,applied.Unassigned,page,PageSize,applied.Recent?30:null,
+                applied.Statuses.ToArray(),applied.Priorities.ToArray(),applied.Categories.Select(Guid.Parse).ToArray(),applied.Staff.Select(Guid.Parse).ToArray(),Boundary(applied.From),Boundary(applied.To,true),selectedStatus));
             if (!result.IsSuccess || result.Data is null) { errorMessage = result.Message; items = []; return; }
             items = result.Data.Items;
             totalCount = result.Data.TotalCount;
@@ -178,20 +195,39 @@
     public void Dispose() { disposed = true; Realtime.Changed -= HandleRealtimeChangedAsync; realtimeRefresh?.Dispose(); }
 
     private async Task SelectStatus(string status) { selectedStatus = status; page = 1; await LoadAsync(); }
-    private bool draftUrgent, draftUnassigned, draftRecent;
-    private int ActiveFilterCount => (priorityFilter is null ? 0 : 1) + (unassignedOnly ? 1 : 0) + (submittedWithinDays is null ? 0 : 1);
-    private void OpenFilters() => (draftUrgent, draftUnassigned, draftRecent) = (priorityFilter == "URGENT", unassignedOnly, submittedWithinDays == 30);
-    private void ResetDraft() => draftUrgent = draftUnassigned = draftRecent = false;
+    private int ActiveFilterCount => new[]{applied.Statuses.Count>0,applied.Priorities.Count>0,applied.Categories.Count>0,applied.Staff.Count>0,applied.Unassigned,applied.Recent,applied.From.HasValue||applied.To.HasValue}.Count(x=>x);
+    private async Task OpenFilters()
+    {
+        draft=applied;draftFrom=applied.From;draftTo=applied.To;optionsLoading=true;optionsError=null;filterError=null;
+        try
+        {
+            var result=await Api.FilterOptionsAsync();
+            if(result.IsSuccess && result.Data is {} data && !data.LimitExceeded){CategoryOptions=data.Categories.Select(x=>new PropFlowSelectOption(x.Id.ToString(),x.Label)).ToArray();StaffOptions=data.Staff.Select(x=>new PropFlowSelectOption(x.Id.ToString(),x.Label)).ToArray();}
+            else optionsError=result.Data?.LimitExceeded==true?"Danh mục vượt giới hạn tải an toàn. Chưa thể chọn loại/nhân viên; cần tìm kiếm danh mục phía server.":result.Message??"Không tải được danh mục bộ lọc.";
+            var building=await BuildingApi.GetCurrentBuildingOverviewAsync();
+            if(building.IsSuccess && building.Data is {} current)filterZone=TimeZoneInfo.FindSystemTimeZoneById(current.TimeZoneId);
+        }
+        finally{optionsLoading=false;}
+    }
+    private void ResetDraft(){draft=new([],[],[],[]);draftFrom=draftTo=null;filterError=null;}
+    private void SetUnassigned(string value)=>draft=draft with {Unassigned=value=="true"};
+    private void SetRecent(string value)=>draft=draft with {Recent=value=="30"};
+    private bool ValidateDraft()
+    {
+        filterError=null;
+        if(draftFrom>draftTo)filterError="Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.";
+        else if((draftFrom.HasValue||draftTo.HasValue)&&filterZone is null)filterError="Chưa đọc được múi giờ chung cư. Đóng và mở lại bộ lọc.";
+        else {try{Boundary(draftFrom);Boundary(draftTo,true);}catch(ArgumentException){filterError="Ngày không hợp lệ trong múi giờ chung cư.";}}
+        return filterError is null;
+    }
     private async Task ApplyDraft()
     {
-        var next = (draftUrgent ? "URGENT" : null, draftUnassigned, draftRecent ? (int?)30 : null);
-        if ((priorityFilter, unassignedOnly, submittedWithinDays) == next) return;
-        (priorityFilter, unassignedOnly, submittedWithinDays) = next;
+        applied=draft with {From=draftFrom,To=draftTo};
         page = 1;
         await LoadAsync();
     }
     private async Task ClearSearch() { searchText = null; page = 1; await LoadAsync(); }
-    private async Task ResetFilters() { searchText = null; selectedStatus = "ALL"; priorityFilter = null; unassignedOnly = false; submittedWithinDays = null; page = 1; await LoadAsync(); }
+    private async Task ResetFilters() { searchText = null; selectedStatus = "ALL"; applied=new([],[],[],[]); page = 1; await LoadAsync(); }
     private async Task ChangePageAsync(int target) { page = target; await LoadAsync(); }
     private async Task HandleSearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args) { if (args.Key == "Enter") { page = 1; await LoadAsync(); } }
     private void OpenDetail(Guid id) => Navigation.NavigateTo($"/manager/service-requests/{id}");

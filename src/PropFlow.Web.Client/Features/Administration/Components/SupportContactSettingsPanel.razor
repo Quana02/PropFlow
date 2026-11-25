@@ -1,0 +1,145 @@
+@using PropFlow.Modules.Administration.Contracts
+@using PropFlow.Web.Client.Features.Administration.Services
+@using PropFlow.Web.Client.Shared.Feedback
+@using Microsoft.AspNetCore.Components.Forms
+@implements IDisposable
+@inject ISupportContactApi Api
+@inject ToastService Toasts
+
+<section class="support-settings" aria-busy="@(loading || saving)">
+    <header class="pf-management-header">
+        <div class="pf-management-heading">
+            <span class="pf-management-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v12H9l-5 4V5Z" /><path d="M8 9h8M8 13h5" /></svg></span>
+            <div><h1>Cấu hình hệ thống</h1><p>Quản lý thông tin hỗ trợ công khai của chung cư.</p></div>
+        </div>
+        <button type="button" class="pf-management-secondary" disabled="@(loading || saving || pending is not null)" @onclick="LoadAsync">Tải lại cấu hình</button>
+    </header>
+    <article class="support-panel pf-list-panel" aria-labelledby="support-title">
+        <header class="support-panel-heading"><h2 id="support-title" tabindex="-1" @ref="resultHeading">Liên hệ hỗ trợ</h2><p>Thông tin hiển thị tại <a href="/contact" target="_blank" rel="noopener">Liên hệ</a> và <a href="/help" target="_blank" rel="noopener">Trợ giúp</a>.</p></header>
+        @if (loading) { <p class="support-state" role="status">Đang tải thông tin liên hệ…</p> }
+        @if (error is not null) { <p class="support-error" role="alert">@error</p> }
+        @if (current is not null && !loading)
+        {
+            <EditForm @key="editContext" EditContext="editContext" OnValidSubmit="Confirm" novalidate="novalidate">
+                <DataAnnotationsValidator />
+                <fieldset disabled="@(saving || reloadRequired)">
+                    <legend class="visually-hidden">Thông tin liên hệ hỗ trợ công khai</legend>
+                    @if (current.Email is null && current.Phone is null)
+                    {
+                        <p class="support-unset">Chưa công bố thông tin liên hệ. Nhập kênh hỗ trợ đã được Ban quản lý phê duyệt để công bố.</p>
+                    }
+                    <div class="support-fields">
+                        <div class="support-field">
+                            <label for="support-email">Email hỗ trợ</label>
+                            <input id="support-email" type="email" inputmode="email" maxlength="254" autocomplete="off" placeholder="Nhập email hỗ trợ" value="@form.Email" @oninput="EmailChanged" class="@editContext.FieldCssClass(editContext.Field(nameof(form.Email)))" aria-invalid="@Invalid(nameof(form.Email))" aria-describedby="support-email-error support-unset-hint" />
+                            <div id="support-email-error" role="alert"><ValidationMessage For="() => form.Email" /></div>
+                        </div>
+                        <div class="support-field">
+                            <label for="support-phone">Số điện thoại hỗ trợ</label>
+                            <input id="support-phone" type="tel" inputmode="tel" maxlength="32" autocomplete="off" placeholder="Nhập số điện thoại hỗ trợ" value="@form.Phone" @oninput="PhoneChanged" class="@editContext.FieldCssClass(editContext.Field(nameof(form.Phone)))" aria-invalid="@Invalid(nameof(form.Phone))" aria-describedby="support-phone-hint support-phone-error support-unset-hint" />
+                            <small id="support-phone-hint">8–15 chữ số, có thể bắt đầu bằng +.</small>
+                            <div id="support-phone-error" role="alert"><ValidationMessage For="() => form.Phone" /></div>
+                        </div>
+                    </div>
+                    <p id="support-unset-hint" class="support-hint">Để trống một trường nếu chưa công bố kênh hỗ trợ đó.</p>
+                    <footer class="support-actions">
+                        <span class="support-save-state" role="status">@(saving ? "Đang lưu thông tin…" : HasChanges ? "Có thay đổi chưa lưu" : "Không có thay đổi chưa lưu")</span>
+                        <button type="button" class="pf-management-secondary" disabled="@(!HasChanges || saving || reloadRequired)" @onclick="ResetForm">Hủy thay đổi</button>
+                        <button id="support-save" type="submit" class="pf-management-primary" disabled="@(!HasChanges || saving || reloadRequired)">@(saving ? "Đang lưu…" : "Lưu thay đổi")</button>
+                    </footer>
+                </fieldset>
+            </EditForm>
+        }
+    </article>
+</section>
+@if (pending is not null && current is not null)
+{
+    <PropFlowConfirmationDialog Title="Công bố thông tin hỗ trợ?" ConfirmText="Xác nhận lưu" Busy="saving" OnConfirm="SaveAsync" OnCancel="Cancel">
+        <div class="support-preview">
+            <div><h3>Email hỗ trợ</h3><p><span>Hiện tại</span>@Display(current.Email)</p><p><span>Sau khi lưu</span>@Display(pending.Email)</p></div>
+            <div><h3>Số điện thoại hỗ trợ</h3><p><span>Hiện tại</span>@Display(current.Phone)</p><p><span>Sau khi lưu</span>@Display(pending.Phone)</p></div>
+        </div>
+        <p>Thông tin mới được hiển thị công khai ở lần tải trang tiếp theo.</p>
+    </PropFlowConfirmationDialog>
+}
+
+@code {
+    private readonly CancellationTokenSource lifetime = new();
+    private SupportContactsState? current;
+    private UpdateSupportContacts form = new();
+    private EditContext editContext = default!;
+    private UpdateSupportContacts? pending;
+    private bool loading, saving, reloadRequired;
+    private bool focusResult;
+    private ElementReference resultHeading;
+    private string? error;
+    private bool HasChanges => current is not null && (SupportContactRules.NormalizeEmail(form.Email) != current.Email || SupportContactRules.NormalizePhone(form.Phone) != current.Phone);
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "Chưa công bố" : value;
+    private string Invalid(string name) => editContext.GetValidationMessages(editContext.Field(name)).Any() ? "true" : "false";
+    private void EmailChanged(ChangeEventArgs e) { form.Email = e.Value?.ToString(); editContext.NotifyFieldChanged(editContext.Field(nameof(form.Email))); }
+    private void PhoneChanged(ChangeEventArgs e) { form.Phone = e.Value?.ToString(); editContext.NotifyFieldChanged(editContext.Field(nameof(form.Phone))); }
+    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusResult || lifetime.IsCancellationRequested) return;
+        focusResult = false;
+        await resultHeading.FocusAsync(preventScroll: true);
+    }
+    private void SetForm()
+    {
+        form = new() { Email = current!.Email, Phone = current.Phone, ExpectedVersion = current.Version };
+        editContext = new(form);
+    }
+    private void ResetForm() { if (!saving && !reloadRequired && pending is null) { SetForm(); error = null; } }
+    private async Task LoadAsync()
+    {
+        if (loading || saving || pending is not null) return;
+        loading = true; error = null;
+        try
+        {
+            var result = await Api.ReadAsync(lifetime.Token);
+            if (lifetime.IsCancellationRequested) return;
+            if (!result.IsSuccess || result.Data is null) { error = FailureMessage(result.StatusCode, result.Message); reloadRequired = true; return; }
+            current = result.Data; SetForm(); reloadRequired = false;
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { loading = false; }
+    }
+    private void Confirm()
+    {
+        if (!HasChanges || saving || reloadRequired || pending is not null) return;
+        pending = new() { Email = SupportContactRules.NormalizeEmail(form.Email), Phone = SupportContactRules.NormalizePhone(form.Phone), ExpectedVersion = form.ExpectedVersion };
+    }
+    private void Cancel() { if (!saving) pending = null; }
+    private static string FailureMessage(int? status, string? message) => status switch
+    {
+        401 => "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại trước khi chỉnh sửa.",
+        403 => "Bạn không còn quyền chỉnh sửa cấu hình. Vui lòng tải lại để kiểm tra quyền truy cập.",
+        _ => message ?? "Chưa thể lưu hoặc tải cấu hình hỗ trợ. Vui lòng thử lại."
+    };
+    private async Task SaveAsync()
+    {
+        if (pending is null || saving || reloadRequired) return;
+        saving = true; error = null;
+        try
+        {
+            var result = await Api.UpdateAsync(pending, lifetime.Token);
+            if (lifetime.IsCancellationRequested) return;
+            pending = null;
+            focusResult = true;
+            if (!result.IsSuccess || result.Data is null)
+            {
+                reloadRequired = result.StatusCode is 401 or 403 or 409;
+                error = result.StatusCode == 409 ? "Cấu hình đã thay đổi ở phiên khác. Chọn Tải lại cấu hình trước khi lưu."
+                    : result.ValidationErrors?.Values.SelectMany(x => x).FirstOrDefault() ?? FailureMessage(result.StatusCode, result.Message);
+                Toasts.Error(error); return;
+            }
+            current = result.Data; SetForm();
+            Toasts.Success("Đã lưu thông tin liên hệ hỗ trợ.");
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { saving = false; }
+    }
+    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); }
+}
+

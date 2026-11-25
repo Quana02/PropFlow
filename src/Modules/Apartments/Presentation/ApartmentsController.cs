@@ -13,21 +13,46 @@ namespace PropFlow.Modules.Apartments.Presentation;
 public static class ApartmentsAuthorizationPolicies { public const string Read = "apartments.read"; public const string Manage = "apartments.manage"; }
 
 [ApiController, Route("api/v1/apartments")]
-public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartmentReadSource residents,
+public sealed partial class ApartmentsController(ApartmentsDbContext db, IResidentApartmentReadSource residents,
     IApartmentOwnershipCommand ownerships, IApartmentStatusCommand statuses,
     ICurrentBuildingTimeZone buildingTimeZone, TimeProvider clock, ICurrentBuildingFloorLimit floorLimit) : ControllerBase
 {
     [HttpGet, Authorize(Policy = ApartmentsAuthorizationPolicies.Read)]
     public async Task<ActionResult<PagedApartmentsResponse>> List(string? search, MasterDataStatus? status,
         int? floorNumber, Guid? apartmentUnitTypeId, ApartmentOccupancyFilter? occupancy,
-        int pageIndex = 1, int pageSize = 20, CancellationToken ct = default)
+        int pageIndex = 1, int pageSize = 20, CancellationToken ct = default,
+        [FromQuery] bool? hasOwner = null, [FromQuery] decimal? minArea = null, [FromQuery] decimal? maxArea = null,
+        [FromQuery] MasterDataStatus[]? statuses = null, [FromQuery] int[]? floorNumbers = null,
+        [FromQuery] Guid[]? apartmentUnitTypeIds = null)
     {
+        if(search?.Any(c=>char.IsControl(c)&&!char.IsWhiteSpace(c))==true||search?.Length>200||search?.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries).Length>12||floorNumber<0||minArea<0||maxArea<0||(minArea.HasValue&&maxArea.HasValue&&minArea>maxArea)
+            ||(status.HasValue&&!Enum.IsDefined(status.Value))||(occupancy.HasValue&&!Enum.IsDefined(occupancy.Value)))
+            return BadRequest(new ProblemDetails{Status=400,Title="Bộ lọc không hợp lệ. Tìm tối đa 200 ký tự, 12 từ; tầng và diện tích không âm; khoảng diện tích từ–đến phải hợp lệ."});
+        var selectedStatuses=ApartmentDirectorySelection.Merge(status,statuses);
+        var selectedFloors=ApartmentDirectorySelection.Merge(floorNumber,floorNumbers);
+        var selectedTypes=ApartmentDirectorySelection.Merge(apartmentUnitTypeId,apartmentUnitTypeIds);
+        if(statuses?.Length>100||floorNumbers?.Length>100||apartmentUnitTypeIds?.Length>100
+            ||selectedStatuses.Length>100||selectedFloors.Length>100||selectedTypes.Length>100
+            ||selectedStatuses.Any(x=>!Enum.IsDefined(x))||selectedFloors.Any(x=>x<0)
+            ||apartmentUnitTypeIds?.Contains(Guid.Empty)==true)
+            return BadRequest(new ProblemDetails{Status=400,Title="Bộ lọc căn hộ không hợp lệ. Chọn tối đa 100 giá trị hợp lệ mỗi trường."});
         var today = await TodayAsync(ct);
         var query = db.ApartmentUnits.AsNoTracking().Include(x => x.ApartmentUnitType).AsQueryable();
-        if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim().ToUpper(); query = query.Where(x => x.UnitNumber.ToUpper().Contains(term)); }
-        if (status is not null) query = query.Where(x => x.Status == status);
-        if (floorNumber.HasValue) query = query.Where(x => x.FloorNumber == floorNumber.Value);
-        if (apartmentUnitTypeId.HasValue) query = query.Where(x => x.ApartmentUnitTypeId == apartmentUnitTypeId.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            foreach(var word in search.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries))
+            {
+                var term=word.ToUpperInvariant();var people=await residents.SearchApartmentPeopleAsync(term,today,ct);
+                query=query.Where(x=>x.UnitNumber.ToUpper().Contains(term)||x.ApartmentUnitType.Name.ToUpper().Contains(term)
+                    ||people.OccupiedApartmentIds.Contains(x.Id)||db.ApartmentOwnerships.Any(o=>o.ApartmentUnitId==x.Id&&o.StartDate<=today&&o.EndDate==null&&people.ResidentIds.Contains(o.OwnerResidentId)));
+            }
+        }
+        if (selectedStatuses.Length>0) query = query.Where(x => selectedStatuses.Contains(x.Status));
+        if (selectedFloors.Length>0) query = query.Where(x => selectedFloors.Contains(x.FloorNumber));
+        if (selectedTypes.Length>0) query = query.Where(x => selectedTypes.Contains(x.ApartmentUnitTypeId));
+        if(minArea.HasValue)query=query.Where(x=>x.UsableAreaM2>=minArea.Value);
+        if(maxArea.HasValue)query=query.Where(x=>x.UsableAreaM2<=maxArea.Value);
+        if(hasOwner.HasValue)query=query.Where(x=>db.ApartmentOwnerships.Any(o=>o.ApartmentUnitId==x.Id&&o.StartDate<=today&&o.EndDate==null)==hasOwner.Value);
 
         var activeApartmentIds = await residents.GetActiveApartmentIdsAsync(today, ct);
         if (occupancy == ApartmentOccupancyFilter.OCCUPIED) query = query.Where(x => activeApartmentIds.Contains(x.Id));
@@ -35,24 +60,32 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
 
         pageIndex = Math.Max(pageIndex, 1); pageSize = Math.Clamp(pageSize, 1, 100);
         var total = await query.CountAsync(ct);
+        pageIndex=Math.Min(pageIndex,Math.Max(1,(int)Math.Ceiling(total/(double)pageSize)));
         var occupiedCount = await query.CountAsync(x => activeApartmentIds.Contains(x.Id), ct);
         var inactiveCount = await query.CountAsync(x => x.Status == MasterDataStatus.INACTIVE, ct);
         var units = await query.OrderBy(x => x.FloorNumber).ThenBy(x => x.UnitNumber)
             .Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         var ids = units.Select(x => x.Id).ToArray();
         var currentOwnerships = await db.ApartmentOwnerships.AsNoTracking()
-            .Where(x => ids.Contains(x.ApartmentUnitId) && x.EndDate == null).ToListAsync(ct);
+            .Where(x => ids.Contains(x.ApartmentUnitId) && x.StartDate <= today && x.EndDate == null).ToListAsync(ct);
         var ownerRecords = await residents.GetResidentsAsync(currentOwnerships.Select(x => x.OwnerResidentId).ToArray(), ct);
+        var activeResidents = await residents.GetActiveAssociationsAsync(ids, today, ct);
         var items = units.Select(x =>
         {
             var owners = currentOwnerships.Where(o => o.ApartmentUnitId == x.Id).Select(o => ownerRecords.GetValueOrDefault(o.OwnerResidentId))
-                .Where(o => o is not null).Cast<ResidentLookupItem>().ToList();
+                .Where(o => o is not null).Cast<ResidentLookupItem>().OrderBy(o => o.ResidentCode).ToList();
+            var currentResidents = (activeResidents.GetValueOrDefault(x.Id) ?? [])
+                .Select(r => new ResidentLookupItem(r.ResidentId, r.ResidentCode, r.FullName)).ToArray();
             return new ApartmentListItem(x.Id, x.UnitNumber, x.FloorNumber, x.ApartmentUnitTypeId, x.ApartmentUnitType.Name, x.UsableAreaM2,
-                x.Status.ToString(), owners, activeApartmentIds.Contains(x.Id));
+                x.Status.ToString(), owners, activeApartmentIds.Contains(x.Id), currentResidents);
         }).ToList();
         return Ok(new PagedApartmentsResponse(items, total, pageIndex, pageSize,
             new ApartmentSummary(total, occupiedCount, total - occupiedCount, inactiveCount)));
     }
+
+    [HttpGet("floors"), Authorize(Policy = ApartmentsAuthorizationPolicies.Read)]
+    public async Task<IReadOnlyList<int>> Floors(CancellationToken ct) =>
+        await db.ApartmentUnits.AsNoTracking().Select(x=>x.FloorNumber).Distinct().OrderBy(x=>x).ToArrayAsync(ct);
 
     [HttpGet("me"), Authorize(Roles = "RESIDENT")]
     public async Task<ActionResult<IReadOnlyList<ResidentApartmentSelfItem>>> Me(CancellationToken ct)
@@ -136,23 +169,18 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(71241006)", ct);
-        var floorError = await ValidateFloorAsync(request.FloorNumber, ct);
-        if (floorError is not null) return floorError;
-        var validation = Validate(request.UnitNumber, request.FloorNumber, request.ApartmentUnitTypeId, request.UsableAreaM2, request.BedroomCount, request.BathroomCount);
-        if (validation is not null) return validation;
-        var apartmentType = await db.ApartmentUnitTypes.SingleOrDefaultAsync(x => x.Id == request.ApartmentUnitTypeId, ct);
-        if (apartmentType is null) return BadRequest(Problem("APARTMENT_UNIT_TYPE_NOT_FOUND", "Loại căn hộ không tồn tại."));
-        if (!Enum.TryParse<MasterDataStatus>(request.Status, true, out var status))
-            return BadRequest(Problem("APARTMENT_STATUS_INVALID", "Trạng thái căn hộ không hợp lệ."));
-        if (await db.ApartmentUnits.AnyAsync(x => x.UnitNumber == request.UnitNumber.Trim(), ct)) return Conflict(Problem("APARTMENT_UNIT_NUMBER_DUPLICATE", "Mã căn hộ đã tồn tại."));
-        var apartment = new ApartmentUnit(request.UnitNumber, request.FloorNumber, clock.GetUtcNow(), request.ApartmentUnitTypeId,
-            request.UsableAreaM2, request.BedroomCount, request.BathroomCount, request.HandoverDate, request.Description, Actor());
-        if (status == MasterDataStatus.INACTIVE) apartment.Deactivate(Actor(), clock.GetUtcNow());
-        db.ApartmentUnits.Add(apartment); await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return CreatedAtAction(nameof(Get), new { id = apartment.Id }, new ApartmentDetailResponse(apartment.Id,
-            apartment.UnitNumber, apartment.FloorNumber, apartment.ApartmentUnitTypeId, apartmentType.Name, apartment.UsableAreaM2, apartment.BedroomCount,
-            apartment.BathroomCount, apartment.HandoverDate, apartment.Description, apartment.Status.ToString(), [], [], [], []));
+        try
+        {
+            var creation=new PropFlow.Modules.Apartments.Infrastructure.ApartmentCreation(db,floorLimit,clock);
+            var apartment=await creation.StageAsync(new(request.UnitNumber,request.FloorNumber,request.ApartmentUnitTypeId,request.UsableAreaM2,request.BedroomCount,request.BathroomCount,request.HandoverDate,request.Description,request.Status),Actor(),ct);
+            await db.SaveChangesAsync(ct);await transaction.CommitAsync(ct);
+            var details=await Get(apartment.Id,ct);
+            return CreatedAtAction(nameof(Get),new {id=apartment.Id},(details.Result as OkObjectResult)?.Value??details.Value);
+        }
+        catch(PropFlow.Modules.Apartments.Infrastructure.ApartmentCreationException error)
+        {
+            return StatusCode(error.Status,new ProblemDetails {Status=error.Status,Title=error.Message,Extensions={["code"]=error.Code}});
+        }
     }
 
     [HttpPut("{id:guid}"), Authorize(Policy = ApartmentsAuthorizationPolicies.Manage)]
@@ -218,12 +246,8 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
 
     private ActionResult? Validate(string unitNumber, int floorNumber, Guid apartmentUnitTypeId, decimal usableAreaM2, int? bedroomCount, int? bathroomCount)
     {
-        if (string.IsNullOrWhiteSpace(unitNumber) || unitNumber.Trim().Length > 30) return BadRequest(Problem("APARTMENT_UNIT_NUMBER_REQUIRED", "Mã căn hộ là bắt buộc và tối đa 30 ký tự."));
-        if (floorNumber < 0) return BadRequest(Problem("APARTMENT_FLOOR_NUMBER_INVALID", "Tầng phải lớn hơn hoặc bằng 0."));
-        if (apartmentUnitTypeId == Guid.Empty) return BadRequest(Problem("APARTMENT_UNIT_TYPE_REQUIRED", "Loại căn hộ là bắt buộc."));
-        if (usableAreaM2 < 25 || usableAreaM2 > 99999999.99m || decimal.Round(usableAreaM2, 2) != usableAreaM2) return BadRequest(Problem("APARTMENT_USABLE_AREA_INVALID", "Diện tích sử dụng phải từ 25 m² trở lên, tối đa 99.999.999,99 m² và không quá 2 chữ số thập phân."));
-        if (bedroomCount is < 0 || bathroomCount is < 0) return BadRequest(Problem("APARTMENT_ROOM_COUNT_INVALID", "Số phòng ngủ và phòng tắm phải lớn hơn hoặc bằng 0."));
-        return null;
+        var error=PropFlow.Modules.Apartments.Infrastructure.ApartmentCreation.Validate(unitNumber,floorNumber,apartmentUnitTypeId,usableAreaM2,bedroomCount,bathroomCount);
+        return error is {} issue?BadRequest(Problem(issue.Code,issue.Message)):null;
     }
 
     private ProblemDetails Problem(string code, string detail) => new() { Title = "Dữ liệu căn hộ không hợp lệ", Detail = detail, Status = 400, Extensions = { ["code"] = code } };
@@ -240,7 +264,7 @@ public sealed class ApartmentsController(ApartmentsDbContext db, IResidentApartm
 public enum ApartmentOccupancyFilter { OCCUPIED, VACANT }
 public sealed record ApartmentSummary(int TotalCount, int OccupiedCount, int VacantCount, int InactiveCount);
 public sealed record PagedApartmentsResponse(IReadOnlyList<ApartmentListItem> Items, int TotalCount, int PageIndex, int PageSize, ApartmentSummary Summary);
-public sealed record ApartmentListItem(Guid Id, string UnitNumber, int FloorNumber, Guid ApartmentUnitTypeId, string UnitType, decimal UsableAreaM2, string Status, IReadOnlyList<ResidentLookupItem> Owners, bool IsOccupied);
+public sealed record ApartmentListItem(Guid Id, string UnitNumber, int FloorNumber, Guid ApartmentUnitTypeId, string UnitType, decimal UsableAreaM2, string Status, IReadOnlyList<ResidentLookupItem> Owners, bool IsOccupied, IReadOnlyList<ResidentLookupItem>? CurrentResidents = null);
 public sealed record ApartmentDetailResponse(Guid Id, string UnitNumber, int FloorNumber, Guid ApartmentUnitTypeId, string UnitType, decimal UsableAreaM2,
     int? BedroomCount, int? BathroomCount, DateOnly? HandoverDate, string? Description, string Status,
     IReadOnlyList<ApartmentOwnerItem> Owners, IReadOnlyList<ApartmentOwnershipHistoryItem> OwnershipHistory,
