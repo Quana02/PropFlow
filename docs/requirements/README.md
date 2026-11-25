@@ -7,6 +7,7 @@ Các file Word trong thư mục là đặc tả feature. Các file Markdown dư�
 | [FE-01 — API và triển khai](FE-01-API-and-Deployment.md) | Điều kiện đăng ký, OTP/session, bảo mật, API, secrets, migration và vận hành |
 | [FE-02 — Onboarding cư dân](FE-02-Resident-Onboarding-API.md) | Định danh, ownership/residency, household, ngày hiệu lực và giao dịch |
 | [FE-03 — Loại căn hộ và defaults](FE-03-Apartment-Type-Defaults.md) | CRUD, validation, tự điền, migration và bộ năm loại mẫu có nguồn tham khảo |
+| [FE-04 — Sơ đồ bãi đỗ](FE-04-Parking-Workspace.md) | Scope extension: AI đọc ảnh/PDF, trình vẽ, xuất bản và quản lý trạng thái ô; chưa quản lý xe |
 | [FE-15 — Quản trị và nhật ký](FE-15-Administration.md) | Nhật ký hệ thống, filter popup, audit/privacy, giao diện và phần cấu hình còn cần chốt |
 
 ## Quyết định bổ sung so với đặc tả cũ
