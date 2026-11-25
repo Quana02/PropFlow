@@ -1,0 +1,1 @@
+.parking-editor-host{--app-surface:var(--pf-menu-surface,#fff);--app-bg:var(--pf-list-heading,#eef3f8);--app-text:var(--pf-text,#17243a);--app-muted:var(--pf-muted,#64748b);--app-line:var(--pf-line,#dbe5ef);--app-soft:var(--pf-list-heading,#f4f7fa);position:fixed;inset:0;height:100dvh;min-height:0;overflow:clip;background:var(--app-bg);color:var(--app-text)}

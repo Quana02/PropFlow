@@ -316,6 +316,23 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<ISharedFacilityCatalog, SharedFacilityCatalog>();
 builder.Services.AddScoped<FacilityGuideService>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.IParkingStore, PropFlow.Modules.PropertyAssets.Infrastructure.Parking.EfParkingStore>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.ParkingWorkspace>();
+builder.Services.AddHttpClient("ParkingPlanGemini", (services, client) =>
+{
+    var ai = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    client.BaseAddress = new Uri(ai.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(90); client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
+});
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.IParkingPlanRecognition>(services =>
+{
+    var ai = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    return new PropFlow.Modules.PropertyAssets.Infrastructure.Parking.GeminiParkingPlanRecognition(
+        new PropFlow.Shared.GeminiStructuredClient(services.GetRequiredService<IHttpClientFactory>().CreateClient("ParkingPlanGemini"),
+            ai.ApiKey, builder.Configuration["Parking:Ai:Model"] ?? ai.AnswerModel, ai.Enabled),
+        services.GetRequiredService<ILogger<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.GeminiParkingPlanRecognition>>(),
+        builder.Configuration.GetSection("Parking:Ai").Get<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionOptions>());
+});
 builder.Services.AddScoped<IFacilityGuideSource>(sp => sp.GetRequiredService<FacilityGuideService>());
 builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityRecommendationOptions>()
     .BindConfiguration("FacilityRecommendations")
@@ -572,6 +589,10 @@ builder.Services.AddExceptionHandler<AuthExceptionHandler>();
 builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddPolicy("parking-recognition", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
+            PermitLimit = Math.Clamp(builder.Configuration.GetValue("Parking:Ai:RequestsPerTenMinutes", 4), 1, 30),
+            Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
     options.AddPolicy(SupportChatPolicies.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
             PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));

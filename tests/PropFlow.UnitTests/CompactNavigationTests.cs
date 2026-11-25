@@ -30,12 +30,13 @@ public sealed class CompactNavigationTests
     }
     [Theory]
     [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/admin/dashboard?tab=activity", 5)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/manager/service-requests/123", 14)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/manager/service-requests/123", 15)]
     [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/service-requests/123", 3)]
     [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/knowledge/documents", 5)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/knowledge/documents", 14)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/utility-insights", 14)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/facility-guides", 14)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/knowledge/documents", 15)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/utility-insights", 15)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/facility-guides", 15)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/parking", 15)]
     [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/my-maintenance", 3)]
     [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/complaints", 3)]
     [InlineData("ACCOUNTANT", "", "/finance/invoices", 8)]
@@ -68,7 +69,7 @@ public sealed class CompactNavigationTests
             {
                 "ADMIN" => new[] { "/admin/dashboard?tab=overview", "/admin/dashboard?tab=accounts", "/admin/dashboard?tab=payment", "/admin/dashboard?tab=activity" },
                 "ACCOUNTANT" => new[] { "/finance/utility-insights", "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices", "/finance/payments/bank-transfers" },
-                "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee", "/operations/utility-insights", "/operations/facility-guides" },
+                "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee", "/operations/utility-insights", "/operations/facility-guides", "/operations/parking" },
                 "STAFF" when count > 0 => new[] { "/staff/service-requests", "/my-maintenance", "/staff/complaints" },
                 _ => Array.Empty<string>()
             };
