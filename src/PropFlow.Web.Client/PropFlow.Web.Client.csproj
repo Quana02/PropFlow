@@ -9,6 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Modules/Administration.Contracts/PropFlow.Modules.Administration.Contracts.csproj" />
+    <ProjectReference Include="../Modules/Apartments.Contracts/PropFlow.Modules.Apartments.Contracts.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.27" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.27" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.32" />

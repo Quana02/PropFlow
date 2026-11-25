@@ -7,6 +7,13 @@ namespace PropFlow.Modules.Residents.Infrastructure;
 
 public sealed class ResidentApartmentReadSource(ResidentsDbContext db) : IResidentApartmentReadSource
 {
+    public async Task<ApartmentPeopleSearchMatch> SearchApartmentPeopleAsync(string search, DateOnly date, CancellationToken ct)
+    {
+        var term=search.Trim().ToUpperInvariant();
+        var ids=await db.Residents.AsNoTracking().Where(x=>x.FullName.ToUpper().Contains(term)||x.ResidentCode.ToUpper().Contains(term)).Select(x=>x.Id).ToArrayAsync(ct);
+        var units=await db.ResidentApartments.AsNoTracking().Where(x=>ids.Contains(x.ResidentId)&&x.Status==ResidencyStatus.ACTIVE&&x.StartDate<=date&&(x.EndDate==null||x.EndDate>=date)).Select(x=>x.ApartmentUnitId).Distinct().ToArrayAsync(ct);
+        return new(ids,units);
+    }
     public Task<bool> HasActiveResidenciesAsync(Guid apartmentUnitId, DateOnly date, CancellationToken cancellationToken = default) =>
         db.ResidentApartments.AsNoTracking().AnyAsync(
             x => x.ApartmentUnitId == apartmentUnitId && x.Status == ResidencyStatus.ACTIVE && x.StartDate <= date && (x.EndDate == null || x.EndDate >= date),

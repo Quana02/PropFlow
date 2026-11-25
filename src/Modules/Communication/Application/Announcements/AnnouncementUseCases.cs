@@ -8,10 +8,11 @@ public sealed record PublishAnnouncement(string Title, string Content);
 public sealed record AnnouncementView(Guid Id, string Title, string Content, DateTimeOffset? PublishedAt);
 public sealed record AnnouncementPage(IReadOnlyList<AnnouncementView> Items, int Total, int Page, int PageSize, string? TimeZoneId = null);
 public sealed record AnnouncementResult<T>(int Status, T? Data = default, string? Message = null);
+public sealed record AnnouncementDirectoryFilter(string? Search=null,DateTimeOffset? From=null,DateTimeOffset? To=null);
 public interface IAnnouncementStore
 {
     Task SaveAsync(Announcement announcement, CancellationToken ct);
-    Task<AnnouncementPage> ListAsync(ActiveResidentResidence? residence, bool manager, int page, CancellationToken ct);
+    Task<AnnouncementPage> ListAsync(ActiveResidentResidence? residence, bool manager, int page, CancellationToken ct,AnnouncementDirectoryFilter? filter=null);
     Task<AnnouncementView?> GetAsync(Guid id, ActiveResidentResidence? residence, bool manager, CancellationToken ct);
 }
 
@@ -32,12 +33,14 @@ public sealed class AnnouncementUseCases(IAnnouncementStore store, IResidentResi
         return new(201, new(announcement.Id, announcement.Title, announcement.Content, announcement.PublishedAt));
     }
 
-    public async Task<AnnouncementResult<AnnouncementPage>> ListAsync(Guid actor, bool manager, int page, CancellationToken ct)
+    public async Task<AnnouncementResult<AnnouncementPage>> ListAsync(Guid actor, bool manager, int page, CancellationToken ct,AnnouncementDirectoryFilter? filter=null)
     {
         if (page < 1 || page > 100000) return new(400, Message: "Trang không hợp lệ.");
+        if(filter is not null && (!string.IsNullOrWhiteSpace(filter.Search)||filter.From.HasValue||filter.To.HasValue)&&!manager)return new(403,Message:"Bộ lọc này chỉ dành cho quản lý.");
+        if(filter?.Search?.Length>200||filter?.From>filter?.To)return new(400,Message:"Bộ lọc tìm kiếm hoặc ngày đăng không hợp lệ.");
         var residence = manager ? null : await Residence(actor, ct);
         if (!manager && residence is null) return new(403, Message: "Tài khoản chưa có liên kết cư trú được xác minh.");
-        return new(200, (await store.ListAsync(residence, manager, page, ct)) with { TimeZoneId = await zone.GetAsync(ct) });
+        return new(200, (await store.ListAsync(residence, manager, page, ct,filter)) with { TimeZoneId = await zone.GetAsync(ct) });
     }
     public async Task<AnnouncementResult<AnnouncementView>> GetAsync(Guid actor, bool manager, Guid id, CancellationToken ct)
     {

@@ -26,33 +26,19 @@ Username, email đăng nhập, vai trò, trạng thái và xác minh email hiể
 
 Authentication sở hữu thao tác ghi hồ sơ. FE-01 và FE-15 dùng cùng khóa giao dịch theo tài khoản. Khi có hai yêu cầu cập nhật đồng thời, mỗi lần lưu áp dụng trọn cặp tên và điện thoại, với giá trị cuối theo lần lưu thành công sau cùng. Giao dịch FE-15 ghi audit `internal_account_profile_updated` cùng lần lưu, gồm actor, target, thời điểm, kết quả, correlation ID và tên trường thay đổi. Giá trị tên và số điện thoại được che trong audit. Phiên và quyền đang hiệu lực tiếp tục dùng được sau khi lưu hồ sơ.
 
-## FE-15.8 — Phạm vi cấu hình còn cần chốt
+## FE-15.8 — Liên hệ hỗ trợ công khai
 
-Đã có danh sách/tìm kiếm tài khoản nội bộ, provision Manager/Staff/Accountant, trạng thái truy cập, đổi role cố định, xem permission/effective access và activity. Các ca HTTP hiện có được chạy lại.
+Ngày 24/11/2026: owner chốt P0 trong tối đa ba ngày phát triển. Chỉ hỗ trợ `support.contact_email` và `support.contact_phone`; không generic editor, AI/notification/security/billing/SMTP/Building settings. P1 history/restore chuyên biệt hoãn. Preview trước–sau nằm trong confirmation của form, không có endpoint preview riêng.
 
-Điểm chưa hoàn tất là **FE-15.8 Manage Supported System Configuration**. Có entity/table/DbSet `SystemConfiguration`, nhưng chưa có danh mục settings hỗ trợ, service/API/UI quản trị và consumer sử dụng settings. Cấu hình thanh toán đã duyệt riêng không chứng minh phần cấu hình hành chính chung đã hoàn tất.
-
-### Đề xuất phạm vi tối thiểu để phê duyệt trước triển khai
-
-Khuyến nghị một màn hình **Cấu hình hỗ trợ người dùng**, chỉ Admin sửa, gồm hai key không nhạy cảm:
-
-| Key đề xuất | Kiểm tra | Nơi sử dụng đề xuất |
-| --- | --- | --- |
-| `support.contact_email` | Email hợp lệ, trim, giới hạn độ dài theo schema; không dùng làm email gửi OTP | Liên hệ hỗ trợ ở màn hình đăng nhập/đăng ký và khu vực trợ giúp |
-| `support.contact_phone` | Số điện thoại hợp lệ theo chuẩn hóa hiện hành; giới hạn độ dài | Cùng khu vực liên hệ hỗ trợ |
-
-Đây là **đề xuất chưa triển khai/chưa phê duyệt**, không phải key có sẵn hoặc mặc định ngầm. Không tự lấy email tài khoản Admin làm email hỗ trợ. Nếu không có nhu cầu thực tế, có thể chốt FE-15.8 deferred/N/A trong phạm vi nghiệm thu thay vì tạo settings không được dùng; khi đó không báo đã triển khai FE-15.8.
-
-Sau khi chốt phạm vi, cần hoàn thành:
-
-1. Chốt contract key/type/nullable/default/độ dài, consumer và fixed permission dành riêng Admin. Hiện chưa có permission quản lý system configuration; không tái sử dụng quyền quản lý tài khoản nội bộ và không thêm dynamic RBAC.
-2. Service đọc/cập nhật allowlist key; validation phía server; lưu bền vững vào bảng hiện có, xử lý cập nhật đồng thời và trả conflict rõ ràng. Chốt route/DTO/OpenAPI trước khi nối UI.
-3. Form tải/lưu/xác nhận, trạng thái loading/empty/error, quyền truy cập và hiển thị giá trị đã lưu thật tại consumer. Khi chưa có cấu hình không hiển thị số/email giả.
-4. Ghi audit người sửa/thời điểm/giá trị trước-sau; hiển thị trong activity của FE-15; không log secrets.
-5. Test Admin cho phép, bốn role còn lại bị từ chối sửa; key lạ/giá trị sai bị chặn; đồng thời không ghi đè im lặng; restart vẫn giữ cấu hình; consumer nhận giá trị mới; audit đầy đủ. Nghiệm thu browser thao tác thật.
-
-Không đưa secret/connection string/SMTP password/Cloudinary/JWT/AI credential hoặc quyền RBAC vào màn hình này. Đây là ranh giới trực tiếp của đặc tả FE-15.8.
-
+- ADMIN phải có fixed permission `MANAGE_SYSTEM_CONFIGURATION`, seed chỉ cho ADMIN. Không tái sử dụng quyền quản lý tài khoản. Bốn role còn lại không được đọc API quản trị hoặc sửa.
+- `GET/PUT /api/v1/administration/system-configuration/support-contacts`: typed DTO `email`, `phone`, `expectedVersion` khi PUT; phản hồi `email`, `phone`, `version`. Version là SHA256 của hai row identity/version tokens, không chứa nội dung liên hệ. Trường lạ bị từ chối; body tối đa4096bytes.
+- `GET /api/v1/public/support-contacts`: anonymous, chỉ `email`, `phone`, no-store. Consumer thật ở `/contact` và `/help`; login/register tiếp tục dùng liên kết trợ giúp hiện hữu. Lỗi API khác trạng thái chưa công bố.
+- Email trim, tối đa254ký tự, validation email và không whitespace/control. Phone cho phép dấu cách/chấm/gạch ngang/ngoặc làm dấu phân cách; chuẩn hóa thành8–15chữ số với dấu+ đầu tùy chọn, input tối đa32ký tự. Không tự suy email/số điện thoại từ tài khoản hoặc hồ sơ.
+- Null/whitespace nghĩa là chưa công bố; lưu empty string cho row đã tồn tại, không xóa lịch sử. Chưa từng cấu hình thì không tạo row rỗng. Không thay SMTP/sender/OTP/email đăng nhập/phone cư dân.
+- Reuse `administration.system_configurations`; thêm UUID `version` concurrency token. Update bundle dùng transaction + advisory lock cố định, kiểm expectedVersion sau lock, cập nhật cả hai trường hoặc không trường nào. First creation cũng được khóa. Stale version trả409; no-op không đổi token hay tạo audit thay đổi giả.
+- Audit hiện có ghi actor/time/correlation và trước–sau của đúng hai key public. Key khác vẫn mask, không mở tất cả ConfigValue. Không có trang lịch sử/khôi phục chuyên biệt trong P0; dùng Nhật ký hệ thống hiện hữu.
+- Đọc trực tiếp DB mỗi request, không giữ singleton cache; có hiệu lực lần tải tiếp theo và tồn tại qua host restart. Form ADMIN có validation, loading/error, confirmation/preview, toast và bắt buộc reload sau409.
+- Migration mới `AddSupportContactConfiguration` chỉ thêm version column và fixed permission/grant; không thay dữ liệu Hiyori, secret hoặc tài chính. Chưa apply vào DB ứng dụng/AWS trong tác vụ phát triển.
 
 ## FE-15.9 — Phạm vi nhật ký và dữ liệu
 

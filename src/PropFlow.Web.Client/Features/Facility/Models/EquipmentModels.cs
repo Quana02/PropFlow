@@ -106,6 +106,10 @@ public class SetEquipmentStatusModel
 
 public class EquipmentFilterModel
 {
+    public EquipmentStatus[] Statuses { get; set; } = [];
+    public Guid[] EquipmentTypeIds { get; set; } = [];
+    public Guid[] FacilityIds { get; set; } = [];
+    public bool IncludeBuildingLevel { get; set; }
     public bool BuildingLevelOnly { get; set; }
     public Guid? FacilityId { get; set; }
     public string? SearchKeyword { get; set; }

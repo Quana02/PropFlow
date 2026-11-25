@@ -4,6 +4,7 @@
 @page "/admin/dashboard"
 @layout PropFlow.Web.Client.Layout.AdminLayout
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components
 @using PropFlow.Web.Client.Features.Administration
 @using PropFlow.Web.Client.Features.Administration.Models
@@ -46,6 +47,13 @@ else if (Tab == "activity")
 else if (Tab == "payment")
 {
     <PaymentDestinationSettings />
+}
+else if (Tab == "configuration")
+{
+    <AuthorizeView Policy="@PropFlow.Modules.Administration.Contracts.AdministrationAuthorizationPolicies.ManageSystemConfiguration">
+        <Authorized><SupportContactSettingsPanel /></Authorized>
+        <NotAuthorized><p role="alert">Bạn không có quyền quản lý cấu hình hệ thống.</p></NotAuthorized>
+    </AuthorizeView>
 }
 else
 {
@@ -162,7 +170,7 @@ else
             : item).ToArray();
     }
 
-    protected override async Task OnParametersSetAsync() { if (Tab != "accounts") CloseProfile(); if (Tab == "overview") await LoadOverviewAsync(); else if (Tab == "activity") { } else await LoadAccountsPageAsync(true); }
+    protected override async Task OnParametersSetAsync() { if (Tab != "accounts") CloseProfile(); if (Tab == "overview") await LoadOverviewAsync(); else if (Tab is "activity" or "configuration") { } else await LoadAccountsPageAsync(true); }
     private async Task LoadOverviewAsync() { overviewLoading = true; overviewError = null; overview = null; var result = await AdministrationApi.GetOverviewAsync(); if (result.IsSuccess) overview = result.Data; else overviewError = FriendlyError(result, "Không thể tải chỉ số Tổng quan lúc này. Vui lòng thử lại."); overviewLoading = false; }
     private async Task LoadAccountsPageAsync(bool includeSummary = false) { accountsLoading = true; error = null; if (includeSummary) { var s = await AdministrationApi.GetSummaryAsync(); if (s.IsSuccess) summary = s.Data; else error = FriendlyError(s, "Không thể tải thống kê tài khoản Ban quản lý."); } var result = await AdministrationApi.GetAccountsAsync(role, search, status, page); if (result.IsSuccess) { pageData = result.Data; page = result.Data!.Page; accounts = result.Data.Items; } else { accounts = []; pageData = null; error = FriendlyError(result, "Không thể tải danh sách tài khoản Ban quản lý."); } accountsLoading = false; }
     private async Task SelectRoleAsync(string value) { role = value; page = 1; await LoadAccountsPageAsync(); }

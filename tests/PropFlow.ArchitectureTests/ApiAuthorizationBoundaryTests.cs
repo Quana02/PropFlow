@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using PropFlow.Modules.Authentication.Presentation;
 using PropFlow.Modules.Payments.Presentation;
+using PropFlow.Modules.Administration.Presentation;
 
 namespace PropFlow.ArchitectureTests;
 
@@ -31,6 +32,7 @@ public sealed class ApiAuthorizationBoundaryTests
         };
         var seenPublic = new HashSet<string>(StringComparer.Ordinal);
         var webhookIsPublic = false;
+        var supportContactsIsPublic = false;
 
         foreach (var controller in feature.Controllers)
         {
@@ -46,6 +48,12 @@ public sealed class ApiAuthorizationBoundaryTests
                     {
                         Assert.Contains(action.Name, expectedPublic);
                         seenPublic.Add(action.Name);
+                    }
+                    else if (controller.AsType() == typeof(PublicSupportContactsController))
+                    {
+                        Assert.Equal(nameof(PublicSupportContactsController.Get), action.Name);
+                        Assert.NotNull(action.GetCustomAttribute<HttpGetAttribute>());
+                        supportContactsIsPublic = true;
                     }
                     else
                     {
@@ -63,5 +71,6 @@ public sealed class ApiAuthorizationBoundaryTests
 
         Assert.True(seenPublic.SetEquals(expectedPublic));
         Assert.True(webhookIsPublic);
+        Assert.True(supportContactsIsPublic);
     }
 }

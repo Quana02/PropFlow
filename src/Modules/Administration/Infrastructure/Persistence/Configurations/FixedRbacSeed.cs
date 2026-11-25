@@ -17,6 +17,7 @@ internal static class FixedRbacSeed
         (Guid.Parse("66666666-6666-4666-8666-666666666667"), SystemPermissionCodes.ViewSystemOverview, "Xem tổng quan hệ thống", "Reporting", "Xem chỉ số tổng hợp toàn hệ thống ở chế độ chỉ đọc."),
         (Guid.Parse("66666666-6666-4666-8666-666666666668"), SystemPermissionCodes.ManagePaymentDestination, "Quản lý tài khoản nhận tiền", "Finance", "Cấu hình tài khoản ngân hàng nhận thanh toán sau khi xác minh OTP."),
         (Guid.Parse("66666666-6666-4666-8666-666666666669"), SystemPermissionCodes.ReadResidentAccounts, "Xem tài khoản cư dân", "Authentication", "Xem tài khoản gắn với hồ sơ cư dân trong deployment."),
-        (Guid.Parse("66666666-6666-4666-8666-666666666670"), SystemPermissionCodes.RequestResidentEmailChange, "Yêu cầu đổi email tài khoản cư dân", "Authentication", "Khởi tạo yêu cầu sau khi đối chiếu danh tính cư dân trực tiếp.")
+        (Guid.Parse("66666666-6666-4666-8666-666666666670"), SystemPermissionCodes.RequestResidentEmailChange, "Yêu cầu đổi email tài khoản cư dân", "Authentication", "Khởi tạo yêu cầu sau khi đối chiếu danh tính cư dân trực tiếp."),
+        (Guid.Parse("66666666-6666-4666-8666-666666666671"), SystemPermissionCodes.ManageSystemConfiguration, "Quản lý liên hệ hỗ trợ", "Administration", "Quản lý email và số điện thoại hỗ trợ được công khai.")
     ];
 }

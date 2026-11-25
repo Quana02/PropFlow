@@ -102,6 +102,7 @@ public sealed class ServiceRequestMaintenanceSourceTests
     private sealed class Apartments(params ApartmentReference[] apartments)
         : IApartmentResidentRelationshipSource
     {
+        public Task<ApartmentDirectoryScope> GetDirectoryScopeAsync(int? floorNumber,Guid? apartmentUnitId,DateOnly date,CancellationToken ct,IReadOnlyCollection<int>? floorNumbers=null,IReadOnlyCollection<Guid>? apartmentUnitIds=null) => Task.FromResult(new ApartmentDirectoryScope(apartments.Where(x=>(!floorNumber.HasValue||x.FloorNumber==floorNumber)&&(!apartmentUnitId.HasValue||x.Id==apartmentUnitId)&&(floorNumbers is not {Count:>0}||floorNumbers.Contains(x.FloorNumber))&&(apartmentUnitIds is not {Count:>0}||apartmentUnitIds.Contains(x.Id))).Select(x=>x.Id).ToArray(),[]));
         public Task<IReadOnlyList<ApartmentReference>> SearchApartmentsAsync(
             string? search,
             int take,

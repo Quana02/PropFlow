@@ -18,7 +18,7 @@ public class EquipmentService : IEquipmentService
     public async Task<PagedResult<EquipmentDto>> GetEquipmentsAsync(EquipmentFilterQuery query, CancellationToken cancellationToken = default)
     {
         var page = await _store.EquipmentAsync(query, cancellationToken);
-        return new PagedResult<EquipmentDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.PageIndex, page.PageSize);
+        return new PagedResult<EquipmentDto>(page.Items.Select(MapToDto).ToList(), page.TotalCount, page.PageIndex, page.PageSize, page.Summary);
     }
 
     public async Task<EquipmentDto?> GetEquipmentByIdAsync(Guid id, CancellationToken cancellationToken = default)

@@ -48,6 +48,7 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
         var permissions = FixedRbacSeed.Permissions.ToDictionary(item => item.Code, item => item.Id);
 
         builder.HasData(
+            Seed(admin, permissions[SystemPermissionCodes.ManageSystemConfiguration]),
             Seed(resident, permissions[SystemPermissionCodes.UseResidentServices]),
             Seed(staff, permissions[SystemPermissionCodes.PerformAssignedOperations]),
             Seed(accountant, permissions[SystemPermissionCodes.ManageFinance]),

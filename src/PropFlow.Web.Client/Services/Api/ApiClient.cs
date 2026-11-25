@@ -12,7 +12,7 @@ public sealed record ApiResult<T>(bool IsSuccess, T? Data = default, int? Status
     string? Message = null, string? TraceId = null, IReadOnlyDictionary<string, string[]>? ValidationErrors = null)
     : ApiResult(IsSuccess, StatusCode, Code, Message, TraceId, ValidationErrors);
 public sealed record EmptyResponse;
-public sealed record ApiFileContent(byte[] Bytes, string ContentType);
+public sealed record ApiFileContent(byte[] Bytes, string ContentType, string? FileName = null);
 
 public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
 {
@@ -118,7 +118,9 @@ public class ApiClient(HttpClient http, ILogger<ApiClient> logger)
 
             var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
             var bytes = await response.Content.ReadAsByteArrayAsync(ct);
-            return new(true, new ApiFileContent(bytes, contentType), status);
+            var name=response.Content.Headers.ContentDisposition?.FileNameStar??response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+            name=name is null?null:Path.GetFileName(name.Replace('\\','/'));
+            return new(true, new ApiFileContent(bytes, contentType, name), status);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (OperationCanceledException) { return new(false, Code: "timeout", Message: "Yêu cầu quá thời gian chờ. Vui lòng thử lại."); }

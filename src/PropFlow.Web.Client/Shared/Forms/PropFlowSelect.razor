@@ -5,11 +5,12 @@
 <div @ref="root" class="pf-select pf-select--@Variant.ToLowerInvariant() @(Disabled ? "is-disabled" : null) @(open ? "is-open" : null) @ValidationClass" @attributes="AdditionalAttributes">
     <button id="@Id" type="button" class="pf-select__trigger" disabled="@Disabled" aria-label="@AriaLabel" aria-haspopup="listbox" aria-expanded="@(open ? "true" : "false")" aria-controls="@listboxId" aria-activedescendant="@(open && Options.Count > 0 ? $"{listboxId}-{activeIndex}" : null)" @onclick="ToggleAsync" @onkeydown="HandleKeyDown">
         <span class="pf-select__value @(SelectedOption is null ? "is-placeholder" : null)">@(SelectedOption?.Label ?? Placeholder)</span>
-        <span class="material-symbols-outlined pf-select__chevron" aria-hidden="true">expand_more</span>
+        @if(DirectoryFilter){<svg class="pf-select__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>}else{<span class="material-symbols-outlined pf-select__chevron" aria-hidden="true">expand_more</span>}
     </button>
     @if (open)
     {
         <div id="@listboxId" class="pf-select__menu" role="listbox" aria-label="@AriaLabel" tabindex="-1" popover="manual">
+            @if (DirectoryFilter) { <PropFlowFilterMenuHeading Label="@AriaLabel" /> }
             @if (Searchable)
             {
                 <div class="pf-select__search">
@@ -27,7 +28,7 @@
                 var selected = option.Value == Value;
                 <button @key="option.Value" id="@($"{listboxId}-{index}")" type="button" role="option" class="pf-select__option @(selected ? "is-selected" : null) @(index == activeIndex ? "is-active" : null)" aria-selected="@(selected ? "true" : "false")" disabled="@option.Disabled" @onclick="() => SelectAsync(option)">
                     <span>@option.Label</span>
-                    @if (selected) { <span class="material-symbols-outlined" aria-hidden="true">check</span> }
+                    @if (selected) { @if(DirectoryFilter){<svg class="pf-select-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>}else{<span class="material-symbols-outlined" aria-hidden="true">check</span>} }
                 </button>
             }
         </div>
@@ -47,6 +48,7 @@
     [Parameter] public bool Searchable { get; set; }
     [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
     [CascadingParameter] private EditContext? EditContext { get; set; }
+    [CascadingParameter(Name="PropFlowDirectoryFilter")] private bool DirectoryFilter { get; set; }
 
     private readonly string listboxId = $"pf-select-{Guid.NewGuid():N}";
     private ElementReference root;
@@ -82,7 +84,7 @@
     {
         if (!positionAfterRender) return;
         positionAfterRender = false;
-        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowSelect.razor.js?v=20261015.3");
+        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowSelect.razor.js?v=20261125.3");
         dotNetReference ??= DotNetObjectReference.Create(this);
         await module.InvokeVoidAsync("open", root, dotNetReference);
     }

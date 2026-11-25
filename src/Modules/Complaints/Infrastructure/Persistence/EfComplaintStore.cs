@@ -8,12 +8,18 @@ namespace PropFlow.Modules.Complaints.Infrastructure.Persistence;
 
 public sealed class EfComplaintStore(ComplaintsDbContext db) : IComplaintStore
 {
-    public async Task<ComplaintPage> ListAsync(Guid? residentId, Guid? staffId, string? search, ComplaintStatus? status, int page, CancellationToken ct)
+    public Task<Guid[]> FilterStaffIdsAsync(CancellationToken ct)=>db.ComplaintFollowups.AsNoTracking().Where(x=>x.Status==ComplaintFollowupStatus.ASSIGNED || x.Status==ComplaintFollowupStatus.IN_PROGRESS).Select(x=>x.StaffUserId).Distinct().OrderBy(id=>id).Take(1001).ToArrayAsync(ct);
+    public async Task<ComplaintPage> ListAsync(Guid? residentId, Guid? staffId, string? search, ComplaintStatus? status, int page, CancellationToken ct,ComplaintDirectoryFilter? filters=null)
     {
         var query = db.Complaints.AsNoTracking();
         if (residentId.HasValue) query = query.Where(x => x.ResidentId == residentId);
         if (staffId.HasValue) query = query.Where(x => x.Followups.Any(f => f.StaffUserId == staffId));
-        if (status.HasValue) query = query.Where(x => x.Status == status);
+        var statuses=(filters?.Statuses??[]).Concat(status.HasValue?[status.Value]:[]).Distinct().ToArray();
+        if(statuses.Length>0)query=query.Where(x=>statuses.Contains(x.Status));
+        if(filters?.AssignedStaffUserIds is {Length:>0} staffIds)query=query.Where(x=>x.Followups.Any(f=>(f.Status==ComplaintFollowupStatus.ASSIGNED || f.Status==ComplaintFollowupStatus.IN_PROGRESS)&&staffIds.Contains(f.StaffUserId)));
+        if(filters?.HasActiveFollowup is {} active)query=query.Where(x=>x.Followups.Any(f=>f.Status==ComplaintFollowupStatus.ASSIGNED || f.Status==ComplaintFollowupStatus.IN_PROGRESS)==active);
+        if(filters?.From is {} from)query=query.Where(x=>x.SubmittedAt>=from);
+        if(filters?.To is {} to)query=query.Where(x=>x.SubmittedAt<=to);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().Normalize().ToLowerInvariant();

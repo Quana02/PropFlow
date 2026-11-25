@@ -130,6 +130,7 @@ builder.Services.AddDbContext<AiChatbotDbContext>((services, options) => options
     services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
     npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "ai_chatbot")));
 builder.Services.AddScoped<KnowledgeDocuments>();
+builder.Services.AddScoped<PropFlow.Modules.Administration.Infrastructure.SupportContacts.SupportContactSettings>();
 builder.Services.AddScoped<IKnowledgeDocuments>(services => services.GetRequiredService<KnowledgeDocuments>());
 builder.Services.AddScoped<IPublishedKnowledgeSource>(services => services.GetRequiredService<KnowledgeDocuments>());
 builder.Services.AddOptions<ChatAiOptions>().BindConfiguration("AiChatbot:Gemini")
@@ -520,6 +521,8 @@ builder.Services.AddAuthorization(options =>
         (c.User.IsInRole(SystemRoleCodes.Accountant) && c.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
     options.AddPolicy(AdministrationAuthorizationPolicies.ManageInternalAccounts,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageInternalAccounts));
+    options.AddPolicy(AdministrationAuthorizationPolicies.ManageSystemConfiguration,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageSystemConfiguration));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewAdministrationActivity,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ViewAdministrationActivity));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewSystemOverview,
@@ -670,6 +673,7 @@ builder.Services.AddCors(options =>
             policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
+                  .WithExposedHeaders("Content-Disposition")
                   .AllowCredentials();
         }
     });

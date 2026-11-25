@@ -51,7 +51,7 @@ public sealed class PublicInformationTests
     public async Task ContactContainsRealRoutesAndNoSubmissionForm()
     {
         var html = await Render(typeof(Contact));
-        Assert.Contains("chưa công bố email, số điện thoại hoặc giờ hỗ trợ", html);
+        Assert.Contains("Chưa công bố email hoặc số điện thoại hỗ trợ", html);
         Assert.Contains("href=\"/resident/contact-management\"", html);
         Assert.DoesNotContain("<form", html);
         Assert.DoesNotContain("mailto:", html);
@@ -69,7 +69,8 @@ public sealed class PublicInformationTests
 
     private static async Task<string> Render(Type component, ParameterView? parameters = null)
     {
-        await using var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        await using var services = new ServiceCollection().AddLogging()
+            .AddSingleton<PropFlow.Web.Client.Features.Administration.Services.ISupportContactApi>(new SupportContactTests.FakeApi()).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         return await renderer.Dispatcher.InvokeAsync(async () =>
             WebUtility.HtmlDecode((await renderer.RenderComponentAsync(component, parameters ?? ParameterView.Empty)).ToHtmlString()));

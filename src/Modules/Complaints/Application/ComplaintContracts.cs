@@ -11,6 +11,8 @@ public sealed record FollowupUpdate(bool Complete, string? Result);
 public sealed record OfficialComplaintResponse(string Response);
 public sealed record ComplaintItem(Guid Id, string ComplaintNumber, string Subject, string Status, DateTimeOffset SubmittedAt);
 public sealed record ComplaintPage(IReadOnlyList<ComplaintItem> Items, int Total, int Page, int PageSize);
+public sealed record ComplaintDirectoryFilter(ComplaintStatus[]? Statuses=null,Guid[]? AssignedStaffUserIds=null,
+    DateTimeOffset? From=null,DateTimeOffset? To=null,bool? HasActiveFollowup=null);
 public sealed record ComplaintHistory(string Type, string? FromStatus, string? ToStatus, string? Detail,
     DateTimeOffset CreatedAt, string? ActorLabel = null);
 public sealed record FollowupView(Guid Id, Guid StaffUserId, string Title, string? Instruction, string Status,
@@ -29,7 +31,8 @@ public interface IComplaintCommitter
 
 public interface IComplaintStore
 {
-    Task<ComplaintPage> ListAsync(Guid? residentId, Guid? staffId, string? search, ComplaintStatus? status, int page, CancellationToken ct);
+    Task<ComplaintPage> ListAsync(Guid? residentId, Guid? staffId, string? search, ComplaintStatus? status, int page, CancellationToken ct,ComplaintDirectoryFilter? filters=null);
+    Task<Guid[]> FilterStaffIdsAsync(CancellationToken ct);
     Task<Complaint?> FindAsync(Guid id, CancellationToken ct);
     void Add(Complaint complaint);
     void Add(ComplaintActivity activity);
