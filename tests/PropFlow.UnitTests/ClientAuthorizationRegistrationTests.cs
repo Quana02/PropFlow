@@ -12,6 +12,20 @@ public sealed class ClientAuthorizationRegistrationTests
 {
     [Theory]
     [InlineData("MANAGER", "MANAGE_OPERATIONS", true)]
+    [InlineData("MANAGER", "", false)]
+    [InlineData("STAFF", "MANAGE_OPERATIONS", false)]
+    [InlineData("ADMIN", "MANAGE_OPERATIONS", false)]
+    public async Task Property_management_policy_preserves_manager_permission_gate(string role,string permission,bool allowed)
+    {
+        await using var services=new ServiceCollection().AddLogging().AddClientAuthorization().BuildServiceProvider();
+        var provider=services.GetRequiredService<IAuthorizationPolicyProvider>();
+        var policy=await provider.GetPolicyAsync(PropFlow.Modules.PropertyAssets.Contracts.PropertyAssetsAuthorizationPolicies.Manage);
+        Assert.NotNull(policy);
+        var user=new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role,role),new Claim("permission",permission)],"test"));
+        Assert.Equal(allowed,(await services.GetRequiredService<IAuthorizationService>().AuthorizeAsync(user,null,policy!)).Succeeded);
+    }
+    [Theory]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", true)]
     [InlineData("ACCOUNTANT", "MANAGE_FINANCE", true)]
     [InlineData("MANAGER", "", false)]
     [InlineData("ACCOUNTANT", "", false)]
