@@ -1,4 +1,7 @@
 .pf-date-range { position:relative; width:100%; color:var(--admin-text,#17243a); }
+.pf-date-range--directory .pf-date-range__trigger { height:44px; min-height:44px; padding:10px 12px; border-radius:11px; font-size:.875rem; font-weight:500; line-height:1.4; color:var(--pf-text,#17243a); background:var(--pf-menu-surface,#fff); border-color:var(--pf-line,#d6e4ef); }
+.pf-date-range--directory .pf-date-range__calendar { overflow-y:auto; box-sizing:border-box; scrollbar-width:thin; overscroll-behavior:contain; touch-action:pan-y; }
+.pf-date-range-icon { width:18px; height:18px; flex:none; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .pf-date-range__trigger { display:flex; align-items:center; gap:.5rem; width:100%; min-height:2.65rem; padding:.62rem .75rem; border:1px solid var(--admin-line,#d7e2eb); border-radius:.75rem; background:#fff; color:inherit; font:inherit; font-size:.82rem; text-align:left; cursor:pointer; }
 .pf-date-range__trigger:hover { border-color:#38bdf8; }
 .pf-date-range__trigger:focus,.is-open .pf-date-range__trigger { border-color:var(--pf-accent, #0284c7); outline:0; box-shadow:none; }

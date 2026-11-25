@@ -19,6 +19,7 @@ public record ScheduleModel(Guid Id, string ScheduleCode, Guid? FacilityId, Guid
 
 public sealed class ScheduleFilterModel
 {
+    public MaintenanceDirectorySelection Multi {get;set;}=new();
     public string? SearchKeyword { get; set; }
     public Guid? FacilityId { get; set; }
     public Guid? EquipmentId { get; set; }
@@ -30,6 +31,7 @@ public sealed class ScheduleFilterModel
 }
 public sealed class TaskFilterModel
 {
+    public MaintenanceDirectorySelection Multi {get;set;}=new();
     public string? SearchKeyword { get; set; }
     public MaintenanceTaskStatus? Status { get; set; }
     public Guid? FacilityId { get; set; }
@@ -150,6 +152,7 @@ public sealed class AssignMaintenanceTaskModel
 public sealed class ReviewMaintenanceResultModel { [Required] public string Decision { get; set; } = string.Empty; public string? ReviewNote { get; set; } }
 public sealed class MaintenanceHistoryFilterModel
 {
+    public MaintenanceDirectorySelection Multi {get;set;}=new();
     public string? SearchKeyword { get; set; }
     public MaintenanceTaskStatus? Status { get; set; }
     public Guid? FacilityId { get; set; }

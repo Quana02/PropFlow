@@ -96,14 +96,21 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetRead
         {
             var keyword = query.SearchKeyword.Trim().ToLower();
             source = source.Where(f => f.Code.ToLower().Contains(keyword) || f.Name.ToLower().Contains(keyword) ||
-                (f.FacilityType != null && f.FacilityType.Name.ToLower().Contains(keyword)));
+                (f.FacilityType != null && f.FacilityType.Name.ToLower().Contains(keyword)) ||
+                (f.LocationDescription != null && f.LocationDescription.ToLower().Contains(keyword)));
         }
-        if (query.Status.HasValue) source = source.Where(f => f.Status == query.Status.Value);
-        if (query.FacilityTypeId.HasValue) source = source.Where(f => f.FacilityTypeId == query.FacilityTypeId);
+        var statuses = AssetFilterSelection.Merge(query.Status,query.Statuses);
+        var types = AssetFilterSelection.Merge(query.FacilityTypeId,query.FacilityTypeIds);
+        if (statuses.Length > 0) source = source.Where(f => statuses.Contains(f.Status));
+        if (types.Length > 0) source = source.Where(f => f.FacilityTypeId.HasValue && types.Contains(f.FacilityTypeId.Value));
         var count = await source.CountAsync(ct);
+        var summary = await source.GroupBy(_=>1).Select(g=>new FacilitySummaryDto(g.Count(),
+            g.Count(x=>x.Status==MasterDataStatus.ACTIVE),g.Count(x=>x.Status==MasterDataStatus.UNDER_MAINTENANCE),
+            g.Count(x=>x.Status==MasterDataStatus.INACTIVE),g.Count(x=>x.Status==MasterDataStatus.UNAVAILABLE),
+            g.Count(x=>x.Status==MasterDataStatus.OUT_OF_SERVICE))).SingleOrDefaultAsync(ct) ?? new(0,0,0,0,0,0);
         var items = await source.Include(f => f.FacilityType).OrderByDescending(f => f.CreatedAt).ThenBy(f => f.Code)
             .Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        return new FacilityPage(items, count, pageIndex, pageSize);
+        return new FacilityPage(items, count, pageIndex, pageSize, summary);
     }
 
     public async Task<Facility?> FacilityAsync(Guid id, bool tracking, bool includeEquipment, CancellationToken ct)
@@ -149,18 +156,27 @@ public sealed class EfPropertyAssetsStore(PropertyAssetsDbContext db, IAssetRead
             var keyword = query.SearchKeyword.Trim().ToLower();
             source = source.Where(e => e.Code.ToLower().Contains(keyword) || e.Name.ToLower().Contains(keyword) ||
                 (e.Manufacturer != null && e.Manufacturer.ToLower().Contains(keyword)) ||
-                (e.Model != null && e.Model.ToLower().Contains(keyword)));
+                (e.Model != null && e.Model.ToLower().Contains(keyword)) ||
+                (e.SerialNumber != null && e.SerialNumber.ToLower().Contains(keyword)) ||
+                (e.LocationDescription != null && e.LocationDescription.ToLower().Contains(keyword)));
         }
         if (query.BuildingLevelOnly) source = source.Where(e => e.FacilityId == null);
-        if (query.FacilityId.HasValue) source = source.Where(e => e.FacilityId == query.FacilityId.Value);
-        if (query.Status.HasValue) source = source.Where(e => e.Status == query.Status.Value);
-        if (query.EquipmentTypeId.HasValue) source = source.Where(e => e.EquipmentTypeId == query.EquipmentTypeId.Value);
+        var facilities=AssetFilterSelection.Merge(query.FacilityId,query.FacilityIds);
+        var statuses=AssetFilterSelection.Merge(query.Status,query.Statuses);
+        var types=AssetFilterSelection.Merge(query.EquipmentTypeId,query.EquipmentTypeIds);
+        if (facilities.Length>0 || query.IncludeBuildingLevel)
+            source=source.Where(e=>(e.FacilityId.HasValue && facilities.Contains(e.FacilityId.Value)) || (query.IncludeBuildingLevel && e.FacilityId==null));
+        if (statuses.Length>0) source=source.Where(e=>statuses.Contains(e.Status));
+        if (types.Length>0) source=source.Where(e=>e.EquipmentTypeId.HasValue && types.Contains(e.EquipmentTypeId.Value));
         var count = await source.CountAsync(ct);
+        var summary=await source.GroupBy(_=>1).Select(g=>new EquipmentSummaryDto(g.Count(),g.Count(x=>x.Status==EquipmentStatus.ACTIVE),
+            g.Count(x=>x.Status==EquipmentStatus.UNDER_MAINTENANCE),g.Count(x=>x.Status==EquipmentStatus.INACTIVE),
+            g.Count(x=>x.Status==EquipmentStatus.OUT_OF_SERVICE))).SingleOrDefaultAsync(ct) ?? new(0,0,0,0,0);
         var pageIndex = Math.Max(1, query.PageIndex);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var items = await source.OrderByDescending(e => e.CreatedAt).ThenBy(e => e.Code).Skip((pageIndex - 1) * pageSize)
             .Take(pageSize).ToListAsync(ct);
-        return new EquipmentPage(items, count, pageIndex, pageSize);
+        return new EquipmentPage(items, count, pageIndex, pageSize, summary);
     }
 
     public async Task<EquipmentEntity?> EquipmentAsync(Guid id, bool tracking, CancellationToken ct)

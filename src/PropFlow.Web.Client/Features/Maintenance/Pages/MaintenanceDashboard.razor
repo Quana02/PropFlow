@@ -7,6 +7,7 @@
 @using PropFlow.Web.Client.Features.Facility.Services
 @using PropFlow.Web.Client.Features.Maintenance.Models
 @using PropFlow.Web.Client.Features.Maintenance.Services
+@using PropFlow.Web.Client.Features.Maintenance.Components
 @using PropFlow.Web.Client.Features.ServiceRequests.Services
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Web.Client.Shared.Forms
@@ -116,11 +117,9 @@
                 <input @bind="scheduleSearchText" @bind:event="oninput" @onkeyup="OnSearchKeyUp"
                        placeholder="Tìm theo mã hoặc tên lịch…" aria-label="Tìm lịch bảo trì" />
             </div>
-            <PropFlowFilterPopover ActiveCount="@ScheduleActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenScheduleFilters"
+            <PropFlowFilterPopover Variant="Directory" ActiveCount="@ScheduleActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenScheduleFilters"
                                  OnReset="ResetScheduleDraft" OnApply="ApplyScheduleDraft">
-                <label>Trạng thái<PropFlowSelect Options="ScheduleStatusOptions" @bind-Value="StatusFilter" Variant="Filter" AriaLabel="Trạng thái lịch" /></label>
-                <label>Cơ sở vật chất<PropFlowSelect Options="ScheduleFacilityFilterOptions" @bind-Value="FacilityFilter" Variant="Filter" AriaLabel="Cơ sở vật chất" Searchable="true" /></label>
-                <label>Thiết bị<PropFlowSelect Options="ScheduleEquipmentFilterOptions" @bind-Value="EquipmentFilter" Variant="Filter" AriaLabel="Thiết bị" Searchable="true" /></label>
+                <MaintenanceDirectoryFilters @bind-Value="ScheduleDraft.Multi" Label="lịch bảo trì" StatusOptions="ScheduleStatusOptions" FacilityOptions="ScheduleFacilityFilterOptions" EquipmentOptions="AllEquipmentFilterOptions" />
             </PropFlowFilterPopover>
         </div>
 
@@ -270,13 +269,10 @@
             </div>
             <div class="fe07-filter-row pf-list-toolbar pf-management-toolbar">
                 <div class="fe07-search-inline pf-list-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input @bind="historySearchText" @bind:event="oninput" @onkeyup="OnHistorySearchKeyUp" placeholder="Tìm theo mã hoặc tên công việc..." aria-label="Tìm lịch sử bảo trì" /></div>
-                <PropFlowFilterPopover ActiveCount="@HistoryActiveFilterCount" Disabled="@IsHistoryLoading" OnOpen="OpenHistoryFilters"
+                <PropFlowFilterPopover Variant="Directory" ActiveCount="@HistoryActiveFilterCount" Disabled="@IsHistoryLoading" OnOpen="OpenHistoryFilters"
                                      OnReset="ResetHistoryDraft" Validate="ValidateHistoryDraft" OnApply="ApplyHistoryDraft">
-                    <label>Trạng thái<PropFlowSelect Options="TaskStatusOptions" @bind-Value="HistoryStatusFilter" Variant="Filter" AriaLabel="Trạng thái lịch sử" /></label>
-                    <label>Cơ sở vật chất<PropFlowSelect Options="HistoryFacilityFilterOptions" @bind-Value="HistoryFacilityFilter" Variant="Filter" AriaLabel="Cơ sở vật chất" Searchable="true" /></label>
-                    <label>Thiết bị<PropFlowSelect Options="HistoryEquipmentFilterOptions" @bind-Value="HistoryEquipmentFilter" Variant="Filter" AriaLabel="Thiết bị" Searchable="true" /></label>
-                    <label>Nhân viên từng tham gia<PropFlowSelect Options="HistoryStaffOptions" @bind-Value="HistoryStaffFilter" Variant="Filter" AriaLabel="Nhân viên từng tham gia" Disabled="@IsHistoryStaffLoading" Searchable="true" /></label>
-                    <label>Khoảng thời gian<PropFlowDateRangePicker @bind-Start="HistoryDraftFrom" @bind-End="HistoryDraftTo" AriaLabel="Khoảng thời gian lịch sử bảo trì" /></label>
+                    <MaintenanceDirectoryFilters @bind-Value="HistoryDraft.Multi" Label="lịch sử bảo trì" TaskFilters="true" StatusOptions="TaskStatusOptions" FacilityOptions="HistoryFacilityFilterOptions" EquipmentOptions="AllEquipmentFilterOptions" StaffOptions="HistoryStaffOptions" StaffLoading="IsHistoryStaffLoading" StaffLabel="Nhân viên từng tham gia" PriorityOptions="TaskPriorityOptions" />
+                    <label><span>Khoảng thời gian</span><PropFlowDateRangePicker @bind-Start="HistoryDraftFrom" @bind-End="HistoryDraftTo" AriaLabel="Khoảng thời gian lịch sử bảo trì" /></label>
                     @if (FilterDateError is not null) { <p role="alert">@FilterDateError</p> }
                 </PropFlowFilterPopover>
             </div>
@@ -335,13 +331,10 @@
                     <span class="material-symbols-outlined" aria-hidden="true">search</span>
                     <input type="text" @bind="taskSearchText" @bind:event="oninput" @onkeyup="OnTaskSearchKeyUp" placeholder="Tìm theo mã hoặc tên công việc..." aria-label="Tìm công việc bảo trì" />
                 </div>
-                <PropFlowFilterPopover ActiveCount="@TaskActiveFilterCount" Disabled="@IsTasksLoading" OnOpen="OpenTaskFilters"
+                <PropFlowFilterPopover Variant="Directory" ActiveCount="@TaskActiveFilterCount" Disabled="@IsTasksLoading" OnOpen="OpenTaskFilters"
                                      OnReset="ResetTaskDraft" Validate="ValidateTaskDraft" OnApply="ApplyTaskDraft">
-                    <label>Trạng thái<PropFlowSelect Options="TaskStatusOptions" @bind-Value="TaskStatusFilter" Variant="Filter" AriaLabel="Trạng thái công việc" /></label>
-                    <label>Khoảng thời gian<PropFlowDateRangePicker @bind-Start="TaskDraftFrom" @bind-End="TaskDraftTo" AriaLabel="Khoảng thời gian công việc bảo trì" /></label>
-                    <label>Cơ sở vật chất<PropFlowSelect Options="TaskFacilityFilterOptions" @bind-Value="TaskFacilityFilter" Variant="Filter" AriaLabel="Cơ sở vật chất" Searchable="true" /></label>
-                    <label>Thiết bị<PropFlowSelect Options="TaskEquipmentFilterOptions" @bind-Value="TaskEquipmentFilter" Variant="Filter" AriaLabel="Thiết bị" Searchable="true" /></label>
-                    <label>Nhân viên phụ trách<PropFlowSelect Options="AssignableStaffOptions" @bind-Value="TaskAssignedStaffFilter" Variant="Filter" AriaLabel="Nhân viên phụ trách" Disabled="@IsTaskFilterStaffLoading" Searchable="true" /></label>
+                    <MaintenanceDirectoryFilters @bind-Value="TaskDraft.Multi" Label="công việc bảo trì" TaskFilters="true" StatusOptions="TaskStatusOptions" FacilityOptions="TaskFacilityFilterOptions" EquipmentOptions="AllEquipmentFilterOptions" StaffOptions="AssignableStaffOptions" StaffLoading="IsTaskFilterStaffLoading" PriorityOptions="TaskPriorityOptions" />
+                    <label><span>Khoảng thời gian</span><PropFlowDateRangePicker @bind-Start="TaskDraftFrom" @bind-End="TaskDraftTo" AriaLabel="Khoảng thời gian công việc bảo trì" /></label>
                     @if (FilterDateError is not null) { <p role="alert">@FilterDateError</p> }
                 </PropFlowFilterPopover>
             </div>
@@ -1055,6 +1048,7 @@
     private static readonly IReadOnlyList<PropFlowSelectOption> HistorySortOptions = [new("NEWEST", "Mới nhất"), new("OLDEST", "Cũ nhất")];
     private IReadOnlyList<PropFlowSelectOption> ScheduleFacilityFilterOptions => AssetOptions(Facilities, "Tất cả cơ sở");
     private IReadOnlyList<PropFlowSelectOption> ScheduleEquipmentFilterOptions => AssetOptions(EquipmentForScheduleFilter, "Tất cả thiết bị");
+    private IReadOnlyList<PropFlowSelectOption> AllEquipmentFilterOptions => AssetOptions(Equipment,"Tất cả thiết bị");
     private IReadOnlyList<PropFlowSelectOption> TaskFacilityFilterOptions => AssetOptions(Facilities, "Tất cả cơ sở");
     private IReadOnlyList<PropFlowSelectOption> TaskEquipmentFilterOptions => AssetOptions(EquipmentForTaskFilter, "Tất cả thiết bị");
     private IReadOnlyList<PropFlowSelectOption> HistoryFacilityFilterOptions => AssetOptions(Facilities, "Tất cả cơ sở");
@@ -1089,9 +1083,9 @@
     {
         if (equipmentId is { } id && Equipment.FirstOrDefault(asset => asset.Id == id)?.FacilityId is { } facilityId) setFacility(facilityId);
     }
-    private int ScheduleActiveFilterCount => (Filter.Status is null ? 0 : 1) + (Filter.FacilityId is null ? 0 : 1) + (Filter.EquipmentId is null ? 0 : 1);
-    private int TaskActiveFilterCount => (TaskFilter.Status is null ? 0 : 1) + (TaskFilter.FacilityId is null ? 0 : 1) + (TaskFilter.EquipmentId is null ? 0 : 1) + (TaskFilter.AssignedStaffUserId is null ? 0 : 1) + (TaskFromDate is null && TaskToDate is null ? 0 : 1);
-    private int HistoryActiveFilterCount => (HistoryFilter.Status is null ? 0 : 1) + (HistoryFilter.FacilityId is null ? 0 : 1) + (HistoryFilter.EquipmentId is null ? 0 : 1) + (HistoryFilter.StaffUserId is null ? 0 : 1) + (HistoryFromDate is null && HistoryToDate is null ? 0 : 1);
+    private int ScheduleActiveFilterCount => Filter.Multi.ActiveCount;
+    private int TaskActiveFilterCount => TaskFilter.Multi.ActiveCount + (TaskFromDate is null && TaskToDate is null ? 0 : 1);
+    private int HistoryActiveFilterCount => HistoryFilter.Multi.ActiveCount + (HistoryFromDate is null && HistoryToDate is null ? 0 : 1);
     private bool IsCurrentWeek => WeekStart == StartOfWeek(Today);
     private string WeekNavLabel => IsCurrentWeek
         ? $"Tuần này: {WeekStart:dd/MM} – {WeekEnd.ToString("dd/MM/yyyy", VietnameseCulture)}"
@@ -1245,7 +1239,7 @@
     private ScheduleFilterModel ScheduleDraft = new();
     private void OpenScheduleFilters()
     {
-        ScheduleDraft = new() { Status = Filter.Status, FacilityId = Filter.FacilityId, EquipmentId = Filter.EquipmentId };
+        ScheduleDraft = new() { Status = Filter.Status, FacilityId = Filter.FacilityId, EquipmentId = Filter.EquipmentId,Multi=Filter.Multi };
     }
     private void ResetScheduleDraft()
     {
@@ -1253,7 +1247,8 @@
     }
     private async Task ApplyScheduleDraft()
     {
-        if ((Filter.Status, Filter.FacilityId, Filter.EquipmentId) == (ScheduleDraft.Status, ScheduleDraft.FacilityId, ScheduleDraft.EquipmentId)) return;
+        if ((Filter.Status, Filter.FacilityId, Filter.EquipmentId) == (ScheduleDraft.Status, ScheduleDraft.FacilityId, ScheduleDraft.EquipmentId) && Filter.Multi.Query==ScheduleDraft.Multi.Query) return;
+        Filter.Multi=ScheduleDraft.Multi;
         (Filter.Status, Filter.FacilityId, Filter.EquipmentId) = (ScheduleDraft.Status, ScheduleDraft.FacilityId, ScheduleDraft.EquipmentId);
         await ApplyFilter();
     }
@@ -1276,7 +1271,7 @@
     private DateOnly? TaskDraftFrom, TaskDraftTo;
     private async Task OpenTaskFilters()
     {
-        TaskDraft = new() { Status = TaskFilter.Status, FacilityId = TaskFilter.FacilityId, EquipmentId = TaskFilter.EquipmentId, AssignedStaffUserId = TaskFilter.AssignedStaffUserId };
+        TaskDraft = new() { Status = TaskFilter.Status, FacilityId = TaskFilter.FacilityId, EquipmentId = TaskFilter.EquipmentId, AssignedStaffUserId = TaskFilter.AssignedStaffUserId,Multi=TaskFilter.Multi };
         (TaskDraftFrom, TaskDraftTo) = (TaskFromDate, TaskToDate);
         FilterDateError = null;
         if (AssignableStaff.Count == 0 && !IsTaskFilterStaffLoading) await LoadAssignableStaffForFilter();
@@ -1289,7 +1284,8 @@
     }
     private async Task ApplyTaskDraft()
     {
-        if ((TaskFilter.Status, TaskFilter.FacilityId, TaskFilter.EquipmentId, TaskFilter.AssignedStaffUserId, TaskFromDate, TaskToDate) == (TaskDraft.Status, TaskDraft.FacilityId, TaskDraft.EquipmentId, TaskDraft.AssignedStaffUserId, TaskDraftFrom, TaskDraftTo)) return;
+        if ((TaskFilter.Status, TaskFilter.FacilityId, TaskFilter.EquipmentId, TaskFilter.AssignedStaffUserId, TaskFromDate, TaskToDate) == (TaskDraft.Status, TaskDraft.FacilityId, TaskDraft.EquipmentId, TaskDraft.AssignedStaffUserId, TaskDraftFrom, TaskDraftTo) && TaskFilter.Multi.Query==TaskDraft.Multi.Query) return;
+        TaskFilter.Multi=TaskDraft.Multi;
         (TaskFilter.Status, TaskFilter.FacilityId, TaskFilter.EquipmentId, TaskFilter.AssignedStaffUserId, TaskFromDate, TaskToDate) = (TaskDraft.Status, TaskDraft.FacilityId, TaskDraft.EquipmentId, TaskDraft.AssignedStaffUserId, TaskDraftFrom, TaskDraftTo);
         await ApplyTaskFilter();
     }
@@ -1320,7 +1316,7 @@
     private DateOnly? HistoryDraftFrom, HistoryDraftTo;
     private async Task OpenHistoryFilters()
     {
-        HistoryDraft = new() { Status = HistoryFilter.Status, FacilityId = HistoryFilter.FacilityId, EquipmentId = HistoryFilter.EquipmentId, StaffUserId = HistoryFilter.StaffUserId };
+        HistoryDraft = new() { Status = HistoryFilter.Status, FacilityId = HistoryFilter.FacilityId, EquipmentId = HistoryFilter.EquipmentId, StaffUserId = HistoryFilter.StaffUserId,Multi=HistoryFilter.Multi };
         (HistoryDraftFrom, HistoryDraftTo) = (HistoryFromDate, HistoryToDate);
         FilterDateError = null;
         if (HistoryStaff.Count != 0 || IsHistoryStaffLoading) return;
@@ -1338,7 +1334,8 @@
     }
     private async Task ApplyHistoryDraft()
     {
-        if ((HistoryFilter.Status, HistoryFilter.FacilityId, HistoryFilter.EquipmentId, HistoryFilter.StaffUserId, HistoryFromDate, HistoryToDate) == (HistoryDraft.Status, HistoryDraft.FacilityId, HistoryDraft.EquipmentId, HistoryDraft.StaffUserId, HistoryDraftFrom, HistoryDraftTo)) return;
+        if ((HistoryFilter.Status, HistoryFilter.FacilityId, HistoryFilter.EquipmentId, HistoryFilter.StaffUserId, HistoryFromDate, HistoryToDate) == (HistoryDraft.Status, HistoryDraft.FacilityId, HistoryDraft.EquipmentId, HistoryDraft.StaffUserId, HistoryDraftFrom, HistoryDraftTo) && HistoryFilter.Multi.Query==HistoryDraft.Multi.Query) return;
+        HistoryFilter.Multi=HistoryDraft.Multi;
         (HistoryFilter.Status, HistoryFilter.FacilityId, HistoryFilter.EquipmentId, HistoryFilter.StaffUserId, HistoryFromDate, HistoryToDate) = (HistoryDraft.Status, HistoryDraft.FacilityId, HistoryDraft.EquipmentId, HistoryDraft.StaffUserId, HistoryDraftFrom, HistoryDraftTo);
         await ApplyHistoryFilter();
     }
@@ -1361,6 +1358,7 @@
     }
     private ScheduleFilterModel BuildScheduleQuery() => new()
     {
+        Multi=Filter.Multi,
         SearchKeyword = Filter.SearchKeyword,
         FacilityId = Filter.FacilityId,
         EquipmentId = Filter.EquipmentId,
@@ -1372,6 +1370,7 @@
     };
     private TaskFilterModel BuildTaskQuery() => new()
     {
+        Multi=TaskFilter.Multi,
         SearchKeyword = TaskFilter.SearchKeyword,
         Status = TaskFilter.Status,
         FacilityId = TaskFilter.FacilityId,
@@ -1384,6 +1383,7 @@
     };
     private MaintenanceHistoryFilterModel BuildHistoryQuery() => new()
     {
+        Multi=HistoryFilter.Multi,
         SearchKeyword = HistoryFilter.SearchKeyword,
         Status = HistoryFilter.Status,
         FacilityId = HistoryFilter.FacilityId,

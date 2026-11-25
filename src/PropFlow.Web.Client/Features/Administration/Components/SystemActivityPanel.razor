@@ -155,6 +155,7 @@
         "Complaint" or "Complaints" => "Khiếu nại", "MaintenanceTask" or "Maintenance" => "Công việc bảo trì", "MaintenanceSchedule" => "Lịch bảo trì",
         "Invoice" or "InvoiceItem" => "Hóa đơn", "Payment" => "Thanh toán", "FeeRateRule" => "Cấu hình phí", "Announcement" => "Thông báo", "SystemConfiguration" => "Cấu hình hệ thống", _ => "Dữ liệu phân hệ" };
     private static string? FieldLabel(string value) => value switch {
+        "ConfigKey" => "Mục cấu hình", "ConfigValue" => "Giá trị cấu hình",
         "Status" => "Trạng thái", "FullName" => "Họ tên", "DisplayName" => "Tên hiển thị", "Name" => "Tên", "Email" => "Email", "PhoneNumber" => "Số điện thoại", "IdentityNumber" => "Số giấy tờ",
         "HouseholdRole" => "Vai trò trong hộ", "ResidencyType" => "Hình thức cư trú", "RelationshipToHead" => "Quan hệ với chủ hộ", "StartDate" => "Ngày bắt đầu", "EndDate" => "Ngày kết thúc",
         "IsActive" => "Đang hoạt động", "Area" => "Diện tích", "Bedrooms" => "Số phòng ngủ", "Bathrooms" => "Số phòng tắm", "UnitNumber" => "Số căn hộ", "FloorNumber" => "Tầng",

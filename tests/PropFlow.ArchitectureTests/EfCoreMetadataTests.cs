@@ -321,6 +321,7 @@ public class EfCoreMetadataTests
         Assert.Equal("system_configurations", scEntity.GetTableName());
         Assert.Equal("administration", scEntity.GetSchema());
         Assert.True(scEntity.FindProperty("ConfigKey")!.IsIndex());
+        Assert.True(scEntity.FindProperty("Version")!.IsConcurrencyToken);
 
         // AuditLog
         var alEntity = model.FindEntityType(typeof(AuditLog));
@@ -363,11 +364,14 @@ public class EfCoreMetadataTests
         var designTimePermissionEntity = designTimeModel.FindEntityType(typeof(Permission));
         Assert.NotNull(designTimePermissionEntity);
         var permissionSeedData = designTimePermissionEntity.GetSeedData();
-        Assert.Equal(10, permissionSeedData.Count());
+        Assert.Equal(11, permissionSeedData.Count());
         var designTimeRolePermissionEntity = designTimeModel.FindEntityType(typeof(RolePermission));
         Assert.NotNull(designTimeRolePermissionEntity);
         var rolePermissionSeedData = designTimeRolePermissionEntity.GetSeedData();
-        Assert.Equal(10, rolePermissionSeedData.Count());
+        Assert.Equal(11, rolePermissionSeedData.Count());
+        var configurationPermission = Assert.Single(permissionSeedData, row => Equals(row["Code"], SystemPermissionCodes.ManageSystemConfiguration))["Id"];
+        var configurationGrant = Assert.Single(rolePermissionSeedData, row => Equals(row["PermissionId"], configurationPermission));
+        Assert.Equal(Assert.Single(roleSeedData, row => Equals(row["Code"], SystemRoleCodes.Admin))["Id"], configurationGrant["RoleId"]);
         var managerId = Assert.Single(roleSeedData, row => Equals(row["Code"], SystemRoleCodes.Manager))["Id"];
         foreach (var code in new[] { SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange })
         {

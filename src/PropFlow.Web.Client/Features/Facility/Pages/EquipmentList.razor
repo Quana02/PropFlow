@@ -68,14 +68,23 @@
                     <span class="material-symbols-outlined" aria-hidden="true">search</span>
                     <input type="search" aria-label="Tìm thiết bị"
                            placeholder="Tìm theo Mã thiết bị, Tên thiết bị, Hãng sản xuất, Model..."
-                           @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                           @bind="DirectorySearch" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
                 </label>
 
-                <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
+                <PropFlowFilterPopover Variant="@(IsManager ? "Directory" : "Default")" ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
                                      OnReset="ResetDraft" OnApply="ApplyDraft">
+                    @if(IsManager)
+                    {
+                        <label><span>Cơ sở vật chất</span><PropFlowFilterMultiSelect Options="@(FacilityOptions.Where(x=>x.Value.Length>0).ToArray())" Values="@(draftFilter.FacilityIds.Select(x=>x.ToString()).Concat(draftFilter.IncludeBuildingLevel ? new[]{"building-level"}:Array.Empty<string>()).ToArray())" ValuesChanged="SelectFilterFacilities" Searchable="true" AriaLabel="Lọc theo cơ sở vật chất" /></label>
+                        <label><span>Trạng thái</span><PropFlowFilterMultiSelect Options="@(StatusOptions.Where(x=>x.Value.Length>0).ToArray())" Values="@(draftFilter.Statuses.Select(x=>x.ToString()).ToArray())" ValuesChanged="v=>draftFilter.Statuses=v.Select(Enum.Parse<EquipmentStatus>).ToArray()" AriaLabel="Lọc theo trạng thái" /></label>
+                        <label><span>Loại thiết bị</span><PropFlowFilterMultiSelect Options="@(EquipmentTypeFilterOptions.Where(x=>x.Value.Length>0).ToArray())" Values="@(draftFilter.EquipmentTypeIds.Select(x=>x.ToString()).ToArray())" ValuesChanged="v=>draftFilter.EquipmentTypeIds=v.Select(Guid.Parse).ToArray()" Searchable="true" AriaLabel="Lọc theo loại thiết bị" /></label>
+                    }
+                    else
+                    {
                     <label>Cơ sở vật chất<PropFlowSelect Options="FacilityOptions" @bind-Value="FilterFacilityIdString" Variant="Filter" AriaLabel="Lọc theo cơ sở vật chất" /></label>
                     <label>Trạng thái<PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" Variant="Filter" AriaLabel="Lọc theo trạng thái" /></label>
                     <label>Loại thiết bị<PropFlowSelect Options="EquipmentTypeFilterOptions" @bind-Value="EquipmentTypeFilterString" Variant="Filter" AriaLabel="Lọc theo loại thiết bị" /></label>
+                    }
                 </PropFlowFilterPopover>
             </div>
 
@@ -665,6 +674,8 @@
     private PagedResult<EquipmentModel> PagedResult { get; set; } = new();
     private EquipmentSummaryModel? EquipmentSummary { get; set; }
     private EquipmentFilterModel Filter { get; set; } = new();
+    private string? searchInput;
+    private string? DirectorySearch {get=>IsManager?searchInput:Filter.SearchKeyword;set{if(IsManager)searchInput=value;else Filter.SearchKeyword=value;}}
     private bool IsLoading { get; set; } = true;
     private bool IsFormOpen { get; set; }
     private bool IsDetailOpen { get; set; }
@@ -822,7 +833,7 @@
         {
             var result = await EquipmentApiClient.GetEquipmentsAsync(Filter);
             if (version != listVersion) return;
-            if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
+            if (result.IsSuccess && result.Data != null) { PagedResult = result.Data; if(IsManager && result.Data.Summary is {} s) EquipmentSummary=new() {Total=s.Total,Active=s.Active,Inactive=s.Inactive,UnderMaintenance=s.UnderMaintenance,OutOfService=s.OutOfService}; }
             else ErrorMessage = result.Message ?? "Không thể tải thiết bị.";
         }
         finally { if (version == listVersion) IsLoading = false; }
@@ -830,6 +841,7 @@
 
     private async Task LoadSummaryAsync()
     {
+        if(IsManager) return;
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
         EquipmentSummary = result.IsSuccess ? result.Data?.Equipment : null;
     }
@@ -850,6 +862,7 @@
             }
 
             facilities.AddRange(result.Data.Items);
+            if(IsManager&&facilities.Count>1000){FacilityList=[];ErrorMessage="Danh mục cơ sở vật chất vượt giới hạn tải an toàn. Cần tra cứu danh mục phía server trước khi chọn cơ sở vật chất.";return;}
             if (!result.Data.HasNextPage) break;
             pageIndex++;
         }
@@ -866,16 +879,22 @@
 
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter") await ApplyFilter();
+        if (e.Key == "Enter") {if(IsManager)Filter.SearchKeyword=searchInput;await ApplyFilter();}
     }
 
     private EquipmentFilterModel draftFilter = new();
-    private int ActiveFilterCount => new[] { Filter.FacilityId is not null || Filter.BuildingLevelOnly, Filter.Status is not null, Filter.EquipmentTypeId is not null }.Count(active => active);
-    private void OpenFilters() => draftFilter = new() { FacilityId = Filter.FacilityId, BuildingLevelOnly = Filter.BuildingLevelOnly, Status = Filter.Status, EquipmentTypeId = Filter.EquipmentTypeId };
+    private int ActiveFilterCount => new[] { Filter.FacilityId is not null || Filter.BuildingLevelOnly || Filter.IncludeBuildingLevel || Filter.FacilityIds.Length>0, Filter.Status is not null || Filter.Statuses.Length>0, Filter.EquipmentTypeId is not null || Filter.EquipmentTypeIds.Length>0 }.Count(active => active);
+    private void OpenFilters() => draftFilter = new() { FacilityId = Filter.FacilityId, BuildingLevelOnly = Filter.BuildingLevelOnly, Status = Filter.Status, EquipmentTypeId = Filter.EquipmentTypeId, Statuses=[..Filter.Statuses],EquipmentTypeIds=[..Filter.EquipmentTypeIds],FacilityIds=[..Filter.FacilityIds],IncludeBuildingLevel=Filter.IncludeBuildingLevel };
+    private void SelectFilterFacilities(IReadOnlyList<string> values)
+    {
+        draftFilter.IncludeBuildingLevel=values.Contains("building-level");
+        draftFilter.FacilityIds=values.Where(x=>x!="building-level").Select(Guid.Parse).ToArray();
+    }
     private void ResetDraft() => draftFilter = new();
     private async Task ApplyDraft()
     {
-        if ((Filter.FacilityId, Filter.BuildingLevelOnly, Filter.Status, Filter.EquipmentTypeId) == (draftFilter.FacilityId, draftFilter.BuildingLevelOnly, draftFilter.Status, draftFilter.EquipmentTypeId)) return;
+        if ((Filter.FacilityId, Filter.BuildingLevelOnly, Filter.Status, Filter.EquipmentTypeId) == (draftFilter.FacilityId, draftFilter.BuildingLevelOnly, draftFilter.Status, draftFilter.EquipmentTypeId) && Filter.IncludeBuildingLevel==draftFilter.IncludeBuildingLevel && Filter.Statuses.SequenceEqual(draftFilter.Statuses) && Filter.EquipmentTypeIds.SequenceEqual(draftFilter.EquipmentTypeIds) && Filter.FacilityIds.SequenceEqual(draftFilter.FacilityIds)) return;
+        Filter.IncludeBuildingLevel=draftFilter.IncludeBuildingLevel;Filter.Statuses=[..draftFilter.Statuses];Filter.EquipmentTypeIds=[..draftFilter.EquipmentTypeIds];Filter.FacilityIds=[..draftFilter.FacilityIds];
         (Filter.FacilityId, Filter.BuildingLevelOnly, Filter.Status, Filter.EquipmentTypeId) = (draftFilter.FacilityId, draftFilter.BuildingLevelOnly, draftFilter.Status, draftFilter.EquipmentTypeId);
         await ApplyFilter();
     }

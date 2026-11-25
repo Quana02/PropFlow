@@ -723,7 +723,7 @@ public sealed class ApartmentManagementHttpTests(AuthDatabaseFixture database) :
         {
             "MANAGER" => new[] { SystemPermissionCodes.ManageOperations, SystemPermissionCodes.ReadResidentAccounts, SystemPermissionCodes.RequestResidentEmailChange }, "STAFF" => new[] { SystemPermissionCodes.PerformAssignedOperations },
             "ACCOUNTANT" => new[] { SystemPermissionCodes.ManageFinance }, "RESIDENT" => new[] { SystemPermissionCodes.UseResidentServices },
-            "ADMIN" => new[] { SystemPermissionCodes.ManageInternalAccounts, SystemPermissionCodes.ViewAdministrationActivity, SystemPermissionCodes.ViewSystemOverview, SystemPermissionCodes.ManagePaymentDestination }, _ => []
+            "ADMIN" => new[] { SystemPermissionCodes.ManageInternalAccounts, SystemPermissionCodes.ViewAdministrationActivity, SystemPermissionCodes.ViewSystemOverview, SystemPermissionCodes.ManagePaymentDestination, SystemPermissionCodes.ManageSystemConfiguration }, _ => []
         };
         await using var scope = database.Factory.Services.CreateAsyncScope();
         var auth = scope.ServiceProvider.GetRequiredService<AuthenticationDbContext>();

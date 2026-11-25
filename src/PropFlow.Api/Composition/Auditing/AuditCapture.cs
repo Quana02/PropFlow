@@ -35,8 +35,8 @@ public sealed class AuditCapture(IHttpContextAccessor accessor, TimeProvider clo
         var changes = entity.Properties.Where(p => !IgnoredFields.Contains(p.Metadata.Name)
             && (entity.State != EntityState.Modified || p.IsModified && !Equals(p.OriginalValue, p.CurrentValue)))
             .Select(p => new AuditFieldChange(p.Metadata.Name,
-                entity.State == EntityState.Added ? null : SafeValue(p.Metadata.Name, p.OriginalValue),
-                entity.State == EntityState.Deleted ? null : SafeValue(p.Metadata.Name, p.CurrentValue))).ToArray();
+                entity.State == EntityState.Added ? null : EntityValue(entity, p.Metadata.Name, p.OriginalValue),
+                entity.State == EntityState.Deleted ? null : EntityValue(entity, p.Metadata.Name, p.CurrentValue))).ToArray();
         if (changes.Length == 0) return null;
         var operation = entity.State switch { EntityState.Added => "created", EntityState.Deleted => "deleted", _ => "updated" };
         var idValue = entity.Properties.FirstOrDefault(p => p.Metadata.Name == "Id")?.CurrentValue;
@@ -48,4 +48,12 @@ public sealed class AuditCapture(IHttpContextAccessor accessor, TimeProvider clo
         : !VisibleValues.Contains(field) ? "[Đã ẩn nội dung]"
         : value switch { DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), DateTimeOffset d => d.ToUniversalTime().ToString("O"),
             bool b => b ? "Có" : "Không", IFormattable f => f.ToString(null, CultureInfo.InvariantCulture), _ => value.ToString() };
+
+    private static string? EntityValue(EntityEntry entity, string field, object? value)
+    {
+        if (entity.Entity is PropFlow.Modules.Administration.Domain.SystemConfigurations.SystemConfiguration setting
+            && PropFlow.Modules.Administration.Contracts.SupportContactRules.IsSupportedKey(setting.ConfigKey)
+            && field is "ConfigKey" or "ConfigValue") return value?.ToString();
+        return SafeValue(field, value);
+    }
 }

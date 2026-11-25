@@ -34,9 +34,10 @@ public sealed class ServiceRequestSubmissionStore(ServiceRequestsDbContext db)
         catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } && request.RequestNumber.StartsWith("YC-AI-", StringComparison.Ordinal))
         {
             // SaveChanges rolls back the request, activity and notice together; only detach this attempted write.
-            db.Entry(request).State = EntityState.Detached;
+            // Detach required dependents before their principal, otherwise EF fixup severs a required relationship.
             db.Entry(initialActivity).State = EntityState.Detached;
             if (notice is not null) db.Entry(notice).State = EntityState.Detached;
+            db.Entry(request).State = EntityState.Detached;
             var saved = await FindByRequestNumberAsync(request.RequestNumber, ct);
             if (saved is null) throw;
             return saved;

@@ -58,7 +58,7 @@ public sealed class ResidentEligibilityPostgresTests : IAsyncLifetime
         var controller = new PropFlow.Modules.Residents.Presentation.ResidentsController(r, overview, relationships, residency, null!, null!, TimeProvider.System);
         controller.ControllerContext=new Microsoft.AspNetCore.Mvc.ControllerContext { HttpContext=new Microsoft.AspNetCore.Http.DefaultHttpContext { User=new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role,"MANAGER")],"test")) } };
         async Task<PropFlow.Modules.Residents.Presentation.PagedResidentsResponse> List(int page,string term="matching",HouseholdRole role=HouseholdRole.HOUSEHOLD_MEMBER) {
-            var result=await controller.List(term,ResidentStatus.ACTIVE,unit.Id,PropFlow.Modules.Residents.Presentation.ResidentApartmentRelationshipKind.RESIDENT_ONLY,ResidencyType.TENANT,role,page,20,default);
+            var result=await controller.List(term,ResidentStatus.ACTIVE,unit.Id,PropFlow.Modules.Residents.Contracts.ResidentDirectoryRelationshipFilter.RESIDENT_ONLY,ResidencyType.TENANT,role,page,20,default);
             return Assert.IsType<PropFlow.Modules.Residents.Presentation.PagedResidentsResponse>(Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result).Value);
         }
         var first=await List(1);var second=await List(2);Assert.Equal(23,first.TotalCount);Assert.Equal(23,second.TotalCount);Assert.Equal(20,first.Items.Count);Assert.Equal(3,second.Items.Count);

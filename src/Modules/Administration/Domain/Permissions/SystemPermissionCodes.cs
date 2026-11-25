@@ -12,4 +12,5 @@ public static class SystemPermissionCodes
     public const string ViewAdministrationActivity = "VIEW_ADMINISTRATION_ACTIVITY";
     public const string ViewSystemOverview = "VIEW_SYSTEM_OVERVIEW";
     public const string ManagePaymentDestination = "MANAGE_PAYMENT_DESTINATION";
+    public const string ManageSystemConfiguration = "MANAGE_SYSTEM_CONFIGURATION";
 }

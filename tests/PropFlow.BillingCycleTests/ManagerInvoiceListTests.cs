@@ -26,6 +26,17 @@ public sealed class ManagerInvoiceListTests
         Assert.Empty(ManagerInvoiceList.Filter(Rows(), new(Period: "2026-10", Type: "SERVICE_FEE", Settlement: "PAID"), Today));
     }
     [Fact]
+    public void Multiple_periods_types_and_settlements_use_OR_then_AND_without_duplicating_overdue_partial()
+    {
+        var rows=Rows();
+        var result=ManagerInvoiceList.Filter(rows,new(Periods:["2026-09"],Types:["SERVICE_FEE","MONTHLY_RENTAL"],Settlements:["PAID","UNPAID"]),Today);
+        Assert.Equal("HD-202609-A-0404",Assert.Single(result).Number);
+        var all=ManagerInvoiceList.Filter(rows,new(Period:"2026-10",Periods:["2026-09","2026-09"],Types:["SERVICE_FEE","MONTHLY_RENTAL"],Settlements:["PAID","UNPAID","PARTIAL","OVERDUE"]),Today);
+        Assert.Equal(3,all.Length);Assert.Equal(3,all.Select(x=>x.Id).Distinct().Count());
+        Assert.Single(ManagerInvoiceList.Filter(rows,new(Settlements:["PARTIAL","OVERDUE"]),Today));
+        Assert.Equal(3,ManagerInvoiceList.Filter(rows,new(Periods:[],Types:[],Settlements:[]),Today).Length);
+    }
+    [Fact]
     public void Overdue_filter_excludes_paid_and_due_today_but_includes_partial_debt()
     {
         var rows = Rows().Append(Invoice("HD-DUE-TODAY", "A-1", "Chủ hộ", "SERVICE_FEE", 0, Today)).ToArray();

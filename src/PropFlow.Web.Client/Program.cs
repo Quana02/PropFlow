@@ -49,6 +49,8 @@ builder.Services.AddScoped<IFacilityApiClient, FacilityApiClient>();
 builder.Services.AddScoped<FacilityRecommendationsApi>();
 builder.Services.AddScoped<IEquipmentApiClient, EquipmentApiClient>();
 builder.Services.AddScoped<IAdministrationApiClient, AdministrationApiClient>();
+builder.Services.AddScoped<ISupportContactApi, SupportContactApi>();
+builder.Services.AddScoped<PropFlow.Web.Client.Shared.Spreadsheets.DirectoryExcelApi>();
 builder.Services.AddScoped<IMaintenanceApiClient, MaintenanceApiClient>();
 builder.Services.AddScoped<MaintenanceHubConnectionFactory>();
 builder.Services.AddScoped<IResidentServiceRequestApiClient, ResidentServiceRequestApiClient>();

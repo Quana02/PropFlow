@@ -5,6 +5,7 @@ namespace PropFlow.Web.Client.Features.ServiceRequests.Services;
 
 public interface IManagerServiceRequestApiClient
 {
+    Task<ApiResult<ManagerRequestFilterOptions>> FilterOptionsAsync(CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestListResponse>> ListAsync(ManagerServiceRequestListQuery query, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestDetailResponse>> GetAsync(Guid id, CancellationToken ct = default);
     Task<ApiResult<ManagerServiceRequestClassificationView>> ClassificationAsync(Guid id, CancellationToken ct = default);
@@ -34,6 +35,11 @@ public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) :
         Add(values, "search", query.Search);
         Add(values, "status", query.Status);
         Add(values, "priority", query.Priority);
+        foreach(var value in query.Statuses??[])Add(values,"statuses",value);
+        foreach(var value in query.Priorities??[])Add(values,"priorities",value);
+        foreach(var value in query.CategoryIds??[])Add(values,"categoryIds",value.ToString());
+        foreach(var value in query.AssignedStaffUserIds??[])Add(values,"assignedStaffUserIds",value.ToString());
+        Add(values,"from",query.From?.ToString("O"));Add(values,"to",query.To?.ToString("O"));Add(values,"view",query.View);
         if (query.SubmittedWithinDays.HasValue) values.Add($"submittedWithinDays={query.SubmittedWithinDays.Value}");
         return api.SendAsync<ManagerServiceRequestListResponse>(HttpMethod.Get,
             $"api/v1/manager/service-requests?{string.Join("&", values)}", ct: ct);
@@ -41,6 +47,9 @@ public sealed class ManagerServiceRequestApiClient(AuthenticatedApiClient api) :
 
     public Task<ApiResult<ManagerServiceRequestDetailResponse>> GetAsync(Guid id, CancellationToken ct = default) =>
         api.SendAsync<ManagerServiceRequestDetailResponse>(HttpMethod.Get, $"api/v1/manager/service-requests/{id}", ct: ct);
+
+    public Task<ApiResult<ManagerRequestFilterOptions>> FilterOptionsAsync(CancellationToken ct = default) =>
+        api.SendAsync<ManagerRequestFilterOptions>(HttpMethod.Get,"api/v1/manager/service-requests/filter-options",ct:ct);
 
     public Task<ApiResult<ManagerServiceRequestClassificationView>> ClassificationAsync(Guid id, CancellationToken ct = default) =>
         api.SendAsync<ManagerServiceRequestClassificationView>(HttpMethod.Get, $"api/v1/manager/service-requests/{id}/classification", ct: ct);
