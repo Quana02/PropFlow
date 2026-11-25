@@ -47,4 +47,7 @@
     <Compile Include="../Shared/TestDatabaseSafety.cs" Link="TestDatabaseSafety.cs" />
     <Using Include="PropFlow.Testing" />
   </ItemGroup>
+  <ItemGroup><None Update="Fixtures/parking-46.png" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><None Update="Fixtures/parking-b2/*" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><None Update="Fixtures/parking-quality/*" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

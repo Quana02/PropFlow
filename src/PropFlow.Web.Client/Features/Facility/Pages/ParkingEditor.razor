@@ -1,0 +1,10 @@
+@page "/operations/parking/{AreaId:guid}/editor"
+@attribute [Authorize(Roles="MANAGER",Policy="property-assets.manage")]
+@layout PropFlow.Web.Client.Features.Facility.Components.ParkingEditorLayout
+@using PropFlow.Web.Client.Features.Facility.Components
+
+<ParkingWorkspace @key="AreaId" EditorAreaId="AreaId" />
+
+@code {
+    [Parameter]public Guid AreaId {get;set;}
+}
