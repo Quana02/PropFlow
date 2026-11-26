@@ -9,7 +9,7 @@ public sealed record ElectricityUsageView(Guid ApartmentId, DateOnly UsageMonth,
     decimal? CurrentElectricityReading = null, decimal PreviousWaterReading = 0, decimal? CurrentWaterReading = null);
 public sealed record ResidentInvoice(Guid Id, string Number, string Apartment, string ResidentName,
     DateOnly Period, DateOnly? DueDate, decimal Total, decimal Paid, decimal Outstanding,
-    decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null, string PaymentEnvironment = "LIVE");
+    decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null, string PaymentEnvironment = "LIVE", Guid? SourceServiceRequestId = null);
 public sealed record FinanceDocument(byte[] Content, string ContentType, string FileName);
 public sealed record InvoiceDetailLine(Guid Id, Guid? FeeTypeId, Guid? RateId, string FeeCode, string FeeName,
     string CalculationMethod, decimal Quantity, string? UnitName, decimal UnitRate, decimal Amount, string? Description, int AmountDivisor);

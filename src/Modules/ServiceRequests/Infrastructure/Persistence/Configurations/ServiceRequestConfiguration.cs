@@ -104,6 +104,7 @@ public class ServiceRequestConfiguration : IEntityTypeConfiguration<ServiceReque
         builder.Property(request => request.AdditionalCostRespondedBy).HasColumnName("additional_cost_responded_by");
         builder.Property(request => request.ApprovedAdditionalCost).HasColumnName("approved_additional_cost")
             .HasColumnType("numeric(18,0)").HasDefaultValue(0m).IsRequired();
+        builder.Property(request => request.ReworkCount).HasColumnName("rework_count").HasDefaultValue(0);
         builder.Property(request => request.ServiceInvoiceId).HasColumnName("service_invoice_id");
         builder.HasIndex(request => request.ServiceInvoiceId).IsUnique().HasFilter("service_invoice_id IS NOT NULL");
 

@@ -75,6 +75,7 @@
         </ChildContent>
     </PropFlowConfirmationDialog>
 }
+<FinanceSettlementRefresh Refresh="ReloadAsync" Busy="@(loading || processing is not null || confirming is not null || rejecting is not null)" />
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime rejectFeedback = new();
     private void CancelRejectFeedbackCancelReject() { CancelReject(); if (rejecting is null) rejectFeedback.Invalidate(); }

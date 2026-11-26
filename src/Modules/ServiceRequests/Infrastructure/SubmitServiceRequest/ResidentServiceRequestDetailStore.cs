@@ -4,6 +4,7 @@ using PropFlow.Modules.ServiceRequests.Application.GetResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Contracts;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Infrastructure.Persistence;
+using PropFlow.Modules.ServiceRequests.Application.WorkAssignedServiceRequests;
 
 namespace PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
 
@@ -65,10 +66,25 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
             {
                 activity.Id,
                 activity.ActivityType,
+                activity.AssignmentId,
+                activity.Title,
+                activity.Detail,
                 activity.FromStatus,
                 activity.ToStatus,
                 activity.CreatedAt
             })
+            .ToArrayAsync(ct);
+
+        var approvedResults = activities.Where(x => x.ActivityType == ServiceActivityType.RESOLVED)
+            .Select(approval => activities.Where(x => x.ActivityType == ServiceActivityType.WORK_RESULT_ADDED &&
+                x.AssignmentId == approval.AssignmentId && x.CreatedAt <= approval.CreatedAt)
+                .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).Select(x => x.Id).FirstOrDefault())
+            .Where(x => x != Guid.Empty).Distinct().ToArray();
+        var evidence = await db.ServiceRequestEvidenceFiles.AsNoTracking()
+            .Where(x => x.ServiceRequestId == request.Id && approvedResults.Contains(x.ActivityId))
+            .OrderByDescending(x => x.UploadedAt)
+            .Select(x => new ResidentServiceRequestEvidenceItem(x.Id, x.FileName, x.ContentType, x.UploadedAt,
+                $"/api/v1/resident/service-requests/{request.Id}/evidence/{x.Id}"))
             .ToArrayAsync(ct);
 
         var facility = request.FacilityId is { } facilityId && assets is not null
@@ -98,10 +114,20 @@ public sealed class ResidentServiceRequestDetailStore(ServiceRequestsDbContext d
                 activity.ActivityType,
                 activity.FromStatus?.ToString(),
                 activity.ToStatus?.ToString(),
-                activity.CreatedAt)).ToArray(),
+                activity.CreatedAt) is var item && (activity.ActivityType == ServiceActivityType.CLOSED && activity.Title == "Cư dân đã nghiệm thu" || activity.ActivityType == ServiceActivityType.REWORK_REQUESTED && activity.ToStatus?.ToString() == "SUBMITTED")
+                    ? item with { Title = activity.Title ?? item.Title, Description = activity.Detail ?? item.Description } : item).ToArray(),
             request.BaseServiceCost,
             request.ApprovedAdditionalCost, AdditionalCostConsent: request.AdditionalCostProposalId.HasValue && request.AdditionalCostConsentStatus != "AWAITING_MANAGER" ? new(request.AdditionalCostProposalId.Value, request.ProposedAdditionalCost, request.AdditionalCostNote, request.AdditionalCostConsentStatus, request.AdditionalCostProposedAt, request.AdditionalCostRespondedAt) : null,
-            FacilityName: ServiceRequestAreaCodes.IsCommonArea(request.ServiceAreaCode) ? facility?.Name : null);
+            FacilityName: ServiceRequestAreaCodes.IsCommonArea(request.ServiceAreaCode) ? facility?.Name : null,
+            Evidence: evidence);
+    }
+
+    public async Task<StaffEvidenceMetadata?> EvidenceAsync(Guid residentId, Guid requestId, Guid evidenceId, CancellationToken ct)
+    {
+        var detail = await GetAsync(residentId, requestId, ct);
+        if (detail?.Evidence?.Any(x => x.Id == evidenceId) != true) return null;
+        return await db.ServiceRequestEvidenceFiles.AsNoTracking().Where(x => x.Id == evidenceId && x.ServiceRequestId == requestId)
+            .Select(x => new StaffEvidenceMetadata(x.Id, x.ServiceRequestId, x.ActivityId, x.FileName, x.ContentType, x.SizeBytes, x.StorageKey, x.UploadedBy, x.UploadedAt)).SingleOrDefaultAsync(ct);
     }
 
     private static ResidentServiceRequestActivityItem ToResidentActivity(

@@ -6,7 +6,7 @@ public sealed record PagedPayments(int Total, int Page, int PageSize, IReadOnlyL
 public enum MutationOutcome { Success, NotFound, Conflict, IdempotencyConflict, Overpayment, DuplicateReference }
 public sealed record MutationResult(MutationOutcome Outcome, PaymentRow? Payment = null);
 public sealed record CollectPaymentRequest(Guid InvoiceId, decimal Amount, string PaymentMethodCode,
-    string? ReferenceNumber, string? Note);
+    string? ReferenceNumber, string? Note, bool RequireExactBalance = false);
 public interface IPaymentFinanceStore
 {
     Task<MutationResult> SubmitAsync(CollectPaymentRequest request, string key, Guid actorId, CancellationToken ct) => Task.FromResult(new MutationResult(MutationOutcome.NotFound));

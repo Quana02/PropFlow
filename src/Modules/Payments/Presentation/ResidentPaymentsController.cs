@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using PropFlow.Modules.Payments.Infrastructure.ResidentPayments;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropFlow.Modules.Payments.Application.Finance;
@@ -6,8 +7,22 @@ using PropFlow.Modules.Payments.Application.Finance;
 namespace PropFlow.Modules.Payments.Presentation;
 
 [ApiController, Route("api/v1/resident/payments"), Authorize(Roles = "RESIDENT")]
-public sealed class ResidentPaymentsController(PaymentFinanceUseCases useCases) : ControllerBase
+public sealed class ResidentPaymentsController(PaymentFinanceUseCases useCases, ResidentServiceRequestPayments payments) : ControllerBase
 {
+    [HttpGet("invoices/{invoiceId:guid}")]
+    public async Task<IActionResult> Instructions(Guid invoiceId, CancellationToken ct)
+    {
+        try { return Ok(await payments.GetAsync(invoiceId, Guid.Parse(User.FindFirstValue("sub")!), ct, byInvoice: true)); }
+        catch (ResidentPaymentFailure ex) { return Problem(statusCode: ex.Status, title: ex.Message); }
+    }
+
+    [HttpGet("invoices/{invoiceId:guid}/qr")]
+    public async Task<IActionResult> Qr(Guid invoiceId, CancellationToken ct)
+    {
+        try { return File(await payments.QrAsync(invoiceId, Guid.Parse(User.FindFirstValue("sub")!), ct, byInvoice: true), "image/png"); }
+        catch (ResidentPaymentFailure ex) { return Problem(statusCode: ex.Status, title: ex.Message); }
+    }
+
     [HttpPost]
     public async Task<IActionResult> Submit(CollectPaymentRequest request, [FromHeader(Name = "Idempotency-Key")] string? key, CancellationToken ct)
     {
