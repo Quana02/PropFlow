@@ -1,0 +1,36 @@
+@using PropFlow.Web.Client.Services.Api
+@using PropFlow.Web.Client.Shared.Feedback
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+@inject ToastService Toasts
+
+<button type="button" class="pf-management-secondary excel-export" disabled="@(busy || Disabled)" @onclick="Download">@(busy ? "Đang xuất…" : "Xuất Excel")</button>
+@code {
+    [Parameter,EditorRequired] public Func<CancellationToken,Task<ApiResult<ApiFileContent>>> Export {get;set;}=default!;
+    [Parameter] public bool Disabled {get;set;}
+    private readonly CancellationTokenSource lifetime=new();
+    private bool busy;
+    private IJSObjectReference? module;
+    private async Task Download()
+    {
+        if(busy||Disabled)return;busy=true;
+        try
+        {
+            var response=await Export(lifetime.Token);
+            if(lifetime.IsCancellationRequested)return;
+            if(!response.IsSuccess||response.Data is null){Toasts.Error(response.Message??"Chưa thể xuất Excel. Vui lòng thử lại.");return;}
+            if(module is null)
+            {
+                var imported=await Js.InvokeAsync<IJSObjectReference>("import","./js/finance-documents.js");
+                if(lifetime.IsCancellationRequested){await imported.DisposeAsync();return;}
+                module=imported;
+            }
+            await module.InvokeVoidAsync("download",response.Data.Bytes,response.Data.ContentType,response.Data.FileName??"PropFlow.xlsx");
+        }
+        catch(OperationCanceledException) when(lifetime.IsCancellationRequested) { }
+        catch(JSException){if(!lifetime.IsCancellationRequested)Toasts.Error("Trình duyệt chưa tải được file. Vui lòng thử lại.");}
+        finally{busy=false;}
+    }
+    public async ValueTask DisposeAsync(){lifetime.Cancel();if(module is not null)await module.DisposeAsync();lifetime.Dispose();}
+}

@@ -251,6 +251,17 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                             Module = "Authentication",
                             Name = "Yêu cầu đổi email tài khoản cư dân",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("66666666-6666-4666-8666-666666666671"),
+                            Code = "MANAGE_SYSTEM_CONFIGURATION",
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "Quản lý email và số điện thoại hỗ trợ được công khai.",
+                            IsActive = true,
+                            Module = "Administration",
+                            Name = "Quản lý liên hệ hỗ trợ",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });
 
@@ -384,6 +395,12 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                     b.HasData(
                         new
                         {
+                            RoleId = new Guid("55555555-5555-4555-8555-555555555555"),
+                            PermissionId = new Guid("66666666-6666-4666-8666-666666666671"),
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
                             RoleId = new Guid("11111111-1111-4111-8111-111111111111"),
                             PermissionId = new Guid("66666666-6666-4666-8666-666666666661"),
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 9, 14, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
@@ -495,6 +512,13 @@ namespace PropFlow.Modules.Administration.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasDefaultValue("STRING")
                         .HasColumnName("value_type");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("version")
+                        .HasDefaultValueSql("gen_random_uuid()");
 
                     b.HasKey("Id");
 

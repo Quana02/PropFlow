@@ -18,7 +18,11 @@ public record MaintenanceOverviewDto(
     MaintenanceOverviewScheduleDto? NextSchedule,
     IReadOnlyList<MaintenanceOverviewItemDto> RecentAndUpcomingItems);
 
-public record ScheduleQuery(string? SearchKeyword = null, Guid? FacilityId = null, Guid? EquipmentId = null, MaintenanceScheduleStatus? Status = null, DateTimeOffset? From = null, DateTimeOffset? To = null, int PageIndex = 1, int PageSize = 20);
+public record ScheduleQuery([StringLength(200)] string? SearchKeyword = null, Guid? FacilityId = null, Guid? EquipmentId = null, MaintenanceScheduleStatus? Status = null, DateTimeOffset? From = null, DateTimeOffset? To = null, int PageIndex = 1, int PageSize = 20,
+    [MaxLength(100)] MaintenanceScheduleStatus[]? Statuses=null,[MaxLength(100)] Guid[]? FacilityIds=null,[MaxLength(100)] Guid[]? EquipmentIds=null):IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)=>MaintenanceFilterSelection.Validate(Status,Statuses,From,To,FacilityIds,EquipmentIds);
+}
 public record CreateScheduleCommand([StringLength(512)] string? ScheduleCode, [Required, StringLength(200)] string Title, DateTimeOffset PlannedStartAt, DateTimeOffset? PlannedEndAt = null, Guid? FacilityId = null, Guid? EquipmentId = null, [Required(ErrorMessage = "Mô tả là bắt buộc.")] string? Description = null);
 public record UpdateScheduleCommand([Required, StringLength(200)] string Title, DateTimeOffset PlannedStartAt, DateTimeOffset? PlannedEndAt = null, [Required] Guid? FacilityId = null, Guid? EquipmentId = null, [Required(ErrorMessage = "Mô tả là bắt buộc.")] string? Description = null);
 public record ScheduleStatusCommand([Required] string Action);
@@ -38,7 +42,11 @@ public record RelatedServiceRequestDto(
     string? ContextMatch = null,
     string? ContextWarning = null);
 public record MaintenanceTaskDto(Guid Id, string TaskNumber, Guid? ScheduleId, Guid? FacilityId, Guid? EquipmentId, string Title, string? Description, string? PriorityCode, MaintenanceTaskStatus Status, DateTimeOffset? PlannedStartAt, DateTimeOffset? DueAt, Guid CreatedBy, DateTimeOffset CreatedAt, string? SourceScheduleCode = null, string? SourceScheduleTitle = null, Guid? AssignedStaffUserId = null, string? AssignedStaffDisplayName = null, string? AssignedStaffUsername = null, DateTimeOffset? AssignedAt = null, DateTimeOffset? LastActivityAt = null, MaintenanceActivityType? LastActivityType = null, DateTimeOffset? LastProgressAt = null, MaintenanceActivityType? LastProgressActivityType = null, string? LastProgressContent = null, bool IsOverdue = false, MaintenanceResultDto? LatestResult = null, IReadOnlyList<AssignableMaintenanceStaffDto>? CurrentAssignees = null, Guid? SourceServiceRequestId = null, RelatedServiceRequestDto? RelatedServiceRequest = null);
-public record TaskQuery(string? SearchKeyword = null, MaintenanceTaskStatus? Status = null, Guid? FacilityId = null, Guid? EquipmentId = null, Guid? AssignedStaffUserId = null, DateTimeOffset? From = null, DateTimeOffset? To = null, int PageIndex = 1, int PageSize = 20);
+public record TaskQuery([StringLength(200)] string? SearchKeyword = null, MaintenanceTaskStatus? Status = null, Guid? FacilityId = null, Guid? EquipmentId = null, Guid? AssignedStaffUserId = null, DateTimeOffset? From = null, DateTimeOffset? To = null, int PageIndex = 1, int PageSize = 20,
+    [MaxLength(100)] MaintenanceTaskStatus[]? Statuses=null,[MaxLength(100)] Guid[]? FacilityIds=null,[MaxLength(100)] Guid[]? EquipmentIds=null,[MaxLength(100)] Guid[]? AssignedStaffUserIds=null,[MaxLength(100)] string[]? Priorities=null,bool? IsEmergency=null):IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)=>MaintenanceFilterSelection.Validate(Status,Statuses,From,To,FacilityIds,EquipmentIds,AssignedStaffUserIds).Concat(MaintenanceFilterSelection.ValidatePriorities(Priorities));
+}
 public record MyMaintenanceTaskQuery(string? SearchKeyword = null, MaintenanceTaskStatus? Status = null, string? PriorityCode = null, bool CompletedOnly = false, int PageIndex = 1, int PageSize = 20, bool IncludeCompleted = false);
 public record UpdateMaintenanceProgressCommand([Required, StringLength(2000)] string Content);
 public record SubmitMaintenanceResultCommand(
@@ -78,7 +86,11 @@ public record AssignMaintenanceTaskCommand(Guid? StaffUserId = null, IReadOnlyLi
 public record AssignableMaintenanceStaffDto(Guid UserId, string Username, string DisplayName);
 public record ReviewMaintenanceResultCommand([Required] string Decision, string? ReviewNote = null);
 public enum MaintenanceHistorySort { NEWEST, OLDEST }
-public record MaintenanceHistoryQuery(string? SearchKeyword = null, MaintenanceTaskStatus? Status = null, Guid? FacilityId = null, Guid? EquipmentId = null, Guid? StaffUserId = null, DateTimeOffset? From = null, DateTimeOffset? To = null, MaintenanceHistorySort Sort = MaintenanceHistorySort.NEWEST, int PageIndex = 1, int PageSize = 20);
+public record MaintenanceHistoryQuery([StringLength(200)] string? SearchKeyword = null, MaintenanceTaskStatus? Status = null, Guid? FacilityId = null, Guid? EquipmentId = null, Guid? StaffUserId = null, DateTimeOffset? From = null, DateTimeOffset? To = null, MaintenanceHistorySort Sort = MaintenanceHistorySort.NEWEST, int PageIndex = 1, int PageSize = 20,
+    [MaxLength(100)] MaintenanceTaskStatus[]? Statuses=null,[MaxLength(100)] Guid[]? FacilityIds=null,[MaxLength(100)] Guid[]? EquipmentIds=null,[MaxLength(100)] Guid[]? StaffUserIds=null,[MaxLength(100)] string[]? Priorities=null,bool? IsEmergency=null):IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)=>MaintenanceFilterSelection.Validate(Status,Statuses,From,To,FacilityIds,EquipmentIds,StaffUserIds).Concat(MaintenanceFilterSelection.ValidatePriorities(Priorities));
+}
 public record HistoryParticipantDto(Guid UserId, string? Username, string? DisplayName);
 public record MaintenanceHistoryItemDto(Guid TaskId, string TaskNumber, string Title, string? Description, string? PriorityCode, MaintenanceTaskStatus Status, Guid? FacilityId, Guid? EquipmentId, string? SourceScheduleCode, string? SourceScheduleTitle, DateTimeOffset? PlannedStartAt, DateTimeOffset? DueAt, DateTimeOffset? StartedAt, DateTimeOffset? CompletedAt, DateTimeOffset? ClosedAt, DateTimeOffset HistoryAt, IReadOnlyList<HistoryParticipantDto> Participants, string? ResultSummary, MaintenanceResultStatus? ResultStatus);
 public record MaintenanceHistorySummaryDto(int Total, int Open, int Assigned, int InProgress, int Completed, int Closed, int Cancelled);

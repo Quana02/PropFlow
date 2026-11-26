@@ -28,6 +28,9 @@ public sealed class ManagerServiceRequestsController(
             : ProblemResult(StatusCodes.Status400BadRequest, result.ErrorCode!, result.Message!);
     }
 
+    [HttpGet("filter-options")]
+    public Task<ManagerRequestFilterOptions> FilterOptions(CancellationToken ct) => RequiredReviewHandler().FilterOptionsAsync(ct);
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ManagerServiceRequestDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]

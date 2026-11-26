@@ -1,0 +1,131 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using PropFlow.Modules.Apartments.Contracts
+@using PropFlow.Web.Client.Shared.Feedback
+@using PropFlow.Web.Client.Shared.Spreadsheets
+@implements IAsyncDisposable
+@inject DirectoryExcelApi Api
+@inject IJSRuntime Js
+@inject ToastService Toasts
+
+<PropFlowConfirmationDialog Title="Nhập Excel căn hộ" Wide="true" ConfirmText="@ConfirmLabel" ConfirmDisabled="@(preview?.Ticket is null || checking)" Busy="committing" OnConfirm="Commit" OnCancel="OnCancel">
+    <section class="excel-import" aria-busy="@((checking || committing) ? "true" : "false")">
+        <p>Chỉ tạo căn hộ mới. Không ghi đè căn hộ hiện có hoặc thay đổi chủ sở hữu, cư trú, hóa đơn.</p>
+        <ol class="excel-steps"><li>Tải mẫu và điền dữ liệu</li><li>Chọn file để xem trước</li><li>Xác nhận khi toàn bộ dòng hợp lệ</li></ol>
+        <button type="button" class="excel-template" disabled="@(checking || committing || downloading)" @onclick="Template">@(downloading ? "Đang tải mẫu…" : "Tải file mẫu Excel")</button>
+        <div class="excel-dropzone @(dragging ? "is-dragging" : null) @(checking || committing ? "is-disabled" : null)">
+            <InputFile @ref="filePicker" id="apartment-excel-file" accept=".xlsx" OnChange="Choose" disabled="@(checking || committing)"
+                       aria-label="Chọn hoặc kéo thả một file Excel căn hộ" aria-describedby="excel-file-help"
+                       @ondragenter="DragEnter" @ondragleave="DragLeave" @ondrop="DragLeave" />
+            <span class="excel-upload-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" /></svg></span>
+            <strong>@(dragging ? "Thả file Excel vào đây" : "Kéo thả file Excel vào đây")</strong>
+            <span class="excel-drop-hint">hoặc chọn file từ máy tính của bạn</span>
+            <span class="excel-file-button" aria-hidden="true">@(selectedFileName is null ? "Chọn file Excel" : "Chọn file khác")</span>
+            <span id="excel-file-help" class="excel-file-help">Một file .xlsx · Tối đa 2 MB · 200 dòng</span>
+        </div>
+        @if(selectedFileName is not null)
+        {
+            <div class="excel-selected-file" role="status">
+                <svg class="excel-file-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6M8 13h8M8 17h5" /></svg>
+                <span class="excel-selected-details"><strong>@selectedFileName</strong><small>@selectedFileSize</small></span>
+                <span class="excel-selected-status">@(checking ? "Đang kiểm tra…" : preview?.Ticket is not null ? "Sẵn sàng" : "Đã chọn")</span>
+            </div>
+        }
+        <small>Tối đa 2 MB và 200 dòng. Phiên xem trước có hiệu lực 10 phút và thuộc tài khoản hiện tại.</small>
+        @if(checking){<p role="status">Đang kiểm tra file, chưa ghi dữ liệu…</p>}
+        @if(error is not null){<p class="excel-error" role="alert">@error</p>}
+        @if(preview is not null)
+        {
+            <p class="excel-summary" role="status">Tổng @preview.TotalRows dòng · Hợp lệ @preview.ValidRows · Có lỗi @preview.ErrorRows · Trùng @preview.DuplicateRows</p>
+            @if(preview.Ticket is null){<p class="excel-error">Chưa thể nhập. Sửa các dòng bên dưới rồi chọn lại file. Không có dữ liệu nào được ghi.</p>}
+            else{<p>Toàn bộ dòng hợp lệ ở thời điểm kiểm tra. Khi xác nhận, hệ thống sẽ kiểm tra lại và nhập tất cả hoặc không nhập dòng nào.</p>}
+            <div class="excel-preview" tabindex="0" role="region" aria-label="Bảng xem trước Excel; có thể cuộn ngang">
+                <table class="pf-list-table"><thead><tr><th>Dòng Excel</th>@foreach(var column in preview.Columns){<th>@column</th>}<th>Kết quả kiểm tra</th></tr></thead><tbody>
+                @foreach(var row in preview.Rows)
+                {
+                    <tr><td>@row.ExcelRow</td>@foreach(var value in row.Values){<td>@value</td>}<td>@if(row.Issues.Count==0){<span>Hợp lệ</span>}else{<ul>@foreach(var issue in row.Issues){<li><strong>@issue.Column:</strong> @issue.Message</li>}</ul>}</td></tr>
+                }
+                </tbody></table>
+            </div>
+        }
+    </section>
+</PropFlowConfirmationDialog>
+
+@code {
+    [Parameter] public EventCallback OnCancel {get;set;}
+    [Parameter] public EventCallback OnImported {get;set;}
+    private readonly CancellationTokenSource lifetime=new();
+    private ApartmentExcelPreview? preview;
+    private bool checking,committing,downloading;
+    private bool dragging;
+    private bool restoreFileFocus;
+    private InputFile? filePicker;
+    private string? selectedFileName,selectedFileSize;
+    private string? error;
+    private IJSObjectReference? module;
+    private string ConfirmLabel=>preview?.Ticket is not null?$"Nhập {preview.ValidRows} căn hộ":"Xác nhận nhập";
+    private async Task Template()
+    {
+        if(downloading)return;downloading=true;error=null;
+        try
+        {
+            var result=await Api.TemplateAsync(lifetime.Token);if(lifetime.IsCancellationRequested)return;
+            if(!result.IsSuccess||result.Data is null){error=result.Message??"Không tải được file mẫu.";return;}
+            if(module is null)
+            {
+                var imported=await Js.InvokeAsync<IJSObjectReference>("import","./js/finance-documents.js");
+                if(lifetime.IsCancellationRequested){await imported.DisposeAsync();return;}
+                module=imported;
+            }
+            await module.InvokeVoidAsync("download",result.Data.Bytes,result.Data.ContentType,result.Data.FileName??"PropFlow_MauNhapCanHo.xlsx");
+        }
+        catch(OperationCanceledException) when(lifetime.IsCancellationRequested) { }
+        catch(JSException){if(!lifetime.IsCancellationRequested)error="Trình duyệt chưa tải được file mẫu.";}
+        finally{downloading=false;}
+    }
+    private async Task Choose(InputFileChangeEventArgs args)
+    {
+        if(checking||committing)return;checking=true;dragging=false;preview=null;error=null;
+        try
+        {
+            if(args.FileCount!=1){selectedFileName=null;selectedFileSize=null;error="Chỉ chọn một file Excel mỗi lần.";return;}
+            var file=args.File;
+            selectedFileName=file.Name;
+            selectedFileSize=file.Size<1024?$"{file.Size} B":$"{file.Size/1024d:0.#} KB";
+            if(file.Size is <1 or >2*1024*1024||!file.Name.EndsWith(".xlsx",StringComparison.OrdinalIgnoreCase)){error="Chọn file .xlsx có dữ liệu và không quá 2 MB.";return;}
+            await using var stream=file.OpenReadStream(2*1024*1024,lifetime.Token);
+            using var content=new MultipartFormDataContent();content.Add(new StreamContent(stream),"file",file.Name);
+            var result=await Api.PreviewAsync(content,lifetime.Token);if(lifetime.IsCancellationRequested)return;
+            if(result.IsSuccess&&result.Data is not null)preview=result.Data;
+            else error=result.Message??"Không kiểm tra được file. Vui lòng thử lại.";
+        }
+        catch(OperationCanceledException) when(lifetime.IsCancellationRequested) { }
+        catch(IOException){error="Không đọc được file hoặc file vượt quá 2 MB.";}
+        finally{checking=false;restoreFileFocus=true;}
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(restoreFileFocus&&!lifetime.IsCancellationRequested&&filePicker?.Element is {} element)
+        {
+            restoreFileFocus=false;
+            await element.FocusAsync(preventScroll:true);
+        }
+    }
+    private void DragEnter(){if(!checking&&!committing)dragging=true;}
+    private void DragLeave(){dragging=false;}
+    private async Task Commit()
+    {
+        if(committing||checking||preview?.Ticket is not {} ticket)return;
+        committing=true;error=null;
+        try
+        {
+            var result=await Api.CommitAsync(ticket,lifetime.Token);if(lifetime.IsCancellationRequested)return;
+            if(!result.IsSuccess||result.Data is null){error=result.Message??"Chưa thể nhập file. Vui lòng xem trước lại.";preview=preview with {Ticket=null};return;}
+            Toasts.Success($"Đã tạo {result.Data.CreatedCount} căn hộ mới.");
+            await OnImported.InvokeAsync();
+        }
+        catch(OperationCanceledException) when(lifetime.IsCancellationRequested) { }
+        finally{committing=false;}
+    }
+    public async ValueTask DisposeAsync(){lifetime.Cancel();if(module is not null)await module.DisposeAsync();lifetime.Dispose();}
+}

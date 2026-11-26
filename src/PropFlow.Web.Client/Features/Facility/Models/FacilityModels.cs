@@ -61,6 +61,8 @@ public class UpdateFacilityModel
 
 public class FacilityFilterModel
 {
+    public MasterDataStatus[] Statuses { get; set; } = [];
+    public Guid[] FacilityTypeIds { get; set; } = [];
     public string? SearchKeyword { get; set; }
     public MasterDataStatus? Status { get; set; }
     public Guid? FacilityTypeId { get; set; }

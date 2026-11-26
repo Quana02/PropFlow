@@ -1,0 +1,37 @@
+const assert=require('node:assert/strict');
+exports.verify=async function(h){
+ const {p,navigate,until,evaluate,wait,send,apiRequest,shot,scenarios}=h;
+ await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false},p.session);
+ const click=async text=>{await until(p,`[...document.querySelectorAll('button')].some(x=>x.textContent.trim()===${JSON.stringify(text)}&&!x.disabled)`);await evaluate(p,`[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===${JSON.stringify(text)}&&!x.disabled).click()`);await wait(100)};
+ await navigate(p,'/operations/parking');await until(p,"!!document.querySelector('#parking-new')");
+ await evaluate(p,"(()=>{const e=document.querySelector('#parking-new');e.value='QA Parking real E2E';e.dispatchEvent(new Event('change',{bubbles:true}))})()");await click('+ Tạo bãi đỗ');
+ await until(p,"location.pathname.endsWith('/editor')&&!!document.querySelector('.parking-canvas svg')");
+ const id=await evaluate(p,"location.pathname.split('/')[3]");assert.match(id,/^[a-f0-9-]{36}$/);
+ await evaluate(p,"document.querySelector('button[aria-label=\"Ô đỗ\"]').click()");await wait(120);
+ const r=await evaluate(p,"(()=>{const r=document.querySelector('.parking-canvas').getBoundingClientRect();return {x:r.left+r.width*.35,y:r.top+r.height*.35}})()");
+ await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,...r},p.session);
+ await send('Input.dispatchMouseEvent',{type:'mouseMoved',buttons:1,x:r.x+75,y:r.y+100},p.session);
+ await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,x:r.x+75,y:r.y+100},p.session);
+ await until(p,"document.querySelectorAll('.parking-canvas .kind-space').length===1");
+ await click('Lưu nháp');await until(p,"!document.querySelector('.parking-progress')&&!document.querySelector('.parking-save-dot.is-dirty')");
+ let area=(await apiRequest(p,'GET','/api/v1/parking-areas/'+id)).body;assert.equal(area.draft.shapes.filter(x=>x.kind==='SPACE').length,1);assert.equal(area.published,null);
+ const initialVersion=area.version;
+ await click('Xuất bản sơ đồ');await until(p,"!!document.querySelector('.pf-dialog__primary')");await evaluate(p,"document.querySelector('.pf-dialog__primary').click()");
+ await until(p,"location.pathname==='/operations/parking'&&!!document.querySelector('.parking-stats')&&!document.querySelector('.parking-progress')");
+ area=(await apiRequest(p,'GET','/api/v1/parking-areas/'+id)).body;assert.equal(area.spaces.length,1);assert.equal(area.spaces[0].status,'AVAILABLE');
+ await evaluate(p,"document.querySelector('.parking-canvas .kind-space').scrollIntoView({block:'center'})");await wait(150);
+ const spacePoint=await evaluate(p,"(()=>{const r=document.querySelector('.parking-canvas .kind-space').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()");
+ console.error('parking-hit',JSON.stringify(await evaluate(p,`({point:${JSON.stringify(spacePoint)},hit:document.elementFromPoint(${spacePoint.x},${spacePoint.y})?.outerHTML.slice(0,400),inert:!!document.querySelector('.parking-map-row[inert]')})`)));
+ await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,...spacePoint},p.session);
+ await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,...spacePoint},p.session);
+ await until(p,"!!document.querySelector('button[aria-label=\"Trạng thái ô đỗ\"]')");await evaluate(p,"document.querySelector('button[aria-label=\"Trạng thái ô đỗ\"]').click()");
+ await until(p,"!!document.querySelector('[role=listbox]:popover-open')");await evaluate(p,"[...document.querySelectorAll('[role=listbox]:popover-open [role=option]')].find(x=>x.textContent.includes('Đang sử dụng')).click()");await click('Cập nhật trạng thái');
+ await until(p,"!document.querySelector('.parking-progress')&&document.querySelector('.parking-notice[role=status]')?.textContent.includes('Đã cập nhật')");
+ area=(await apiRequest(p,'GET','/api/v1/parking-areas/'+id)).body;assert.equal(area.spaces[0].status,'IN_USE');
+ const conflict=await apiRequest(p,'PUT','/api/v1/parking-areas/'+id+'/spaces/'+area.spaces[0].id,{expectedVersion:initialVersion,status:'AVAILABLE',note:''});assert.equal(conflict.status,409);
+ await navigate(p,'/operations/parking?area='+id);await until(p,"!!document.querySelector('.parking-stats')&&!document.querySelector('.parking-progress')");assert.equal((await apiRequest(p,'GET','/api/v1/parking-areas/'+id)).body.spaces[0].status,'IN_USE');
+ const history=await apiRequest(p,'GET','/api/v1/parking-areas/'+id+'/history');assert.equal(history.status,200);assert.ok(history.body.some(x=>x.action==='PUBLISHED'));assert.ok(history.body.some(x=>x.action==='SPACE_IN_USE'));
+ for(const width of [1440,768,390])for(const theme of ['light','dark']){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600},p.session);await evaluate(p,`document.documentElement.dataset.theme=${JSON.stringify(theme)};document.documentElement.classList.toggle('dark',${theme==='dark'})`);await wait(200);await shot(p,`parking-real-management-${width}-${theme}`);assert.ok(await evaluate(p,"document.documentElement.scrollWidth<=innerWidth+1"),'Parking management horizontal overflow');}
+ await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false},p.session);
+ scenarios.push('parking-real-ui-login-create-draw-save-publish-space-status-refresh-history-409-responsive-no-api-double');
+};

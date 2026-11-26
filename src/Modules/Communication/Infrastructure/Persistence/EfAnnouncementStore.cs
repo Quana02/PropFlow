@@ -22,9 +22,12 @@ public sealed class EfAnnouncementStore(CommunicationDbContext db) : IAnnounceme
         db.Announcements.Add(announcement);
         await db.SaveChangesAsync(ct);
     }
-    public async Task<AnnouncementPage> ListAsync(ActiveResidentResidence? residence, bool manager, int page, CancellationToken ct)
+    public async Task<AnnouncementPage> ListAsync(ActiveResidentResidence? residence, bool manager, int page, CancellationToken ct,AnnouncementDirectoryFilter? filter=null)
     {
         var query = Visible(residence, manager);
+        if(!string.IsNullOrWhiteSpace(filter?.Search)){var term=filter.Search.Trim().Normalize().ToLowerInvariant();query=query.Where(x=>x.Title.ToLower().Contains(term)||x.Content.ToLower().Contains(term));}
+        if(filter?.From is {} from)query=query.Where(x=>x.PublishedAt>=from);
+        if(filter?.To is {} to)query=query.Where(x=>x.PublishedAt<=to);
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(a => a.PublishedAt).ThenBy(a => a.Id).Skip((page - 1) * 20).Take(20)
             .Select(a => new AnnouncementView(a.Id, a.Title, a.Content, a.PublishedAt)).ToArrayAsync(ct);

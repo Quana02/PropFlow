@@ -75,13 +75,21 @@
                     <span class="material-symbols-outlined" aria-hidden="true">search</span>
                     <input type="search" aria-label="Tìm cơ sở vật chất"
                            placeholder="Tìm theo Mã CSVT, Tên cơ sở vật chất, Vị trí..."
-                           @bind="Filter.SearchKeyword" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
+                           @bind="DirectorySearch" @bind:event="oninput" @onkeyup="HandleSearchKeyUp" />
                 </label>
 
-                <PropFlowFilterPopover ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
+                <PropFlowFilterPopover Variant="@(IsManager ? "Directory" : "Default")" ActiveCount="@ActiveFilterCount" Disabled="@IsLoading" OnOpen="OpenFilters"
                                      OnReset="ResetDraft" OnApply="ApplyDraft">
+                    @if(IsManager)
+                    {
+                        <label><span>Trạng thái</span><PropFlowFilterMultiSelect Options="@(StatusOptions.Where(x=>x.Value.Length>0).ToArray())" Values="@(draftFilter.Statuses.Select(x=>x.ToString()).ToArray())" ValuesChanged="v=>draftFilter.Statuses=v.Select(Enum.Parse<MasterDataStatus>).ToArray()" AriaLabel="Trạng thái cơ sở vật chất" /></label>
+                        <label><span>Loại cơ sở vật chất</span><PropFlowFilterMultiSelect Options="@(FacilityTypeFilterOptions.Where(x=>x.Value.Length>0).ToArray())" Values="@(draftFilter.FacilityTypeIds.Select(x=>x.ToString()).ToArray())" ValuesChanged="v=>draftFilter.FacilityTypeIds=v.Select(Guid.Parse).ToArray()" Searchable="true" AriaLabel="Loại cơ sở vật chất" /></label>
+                    }
+                    else
+                    {
                     <label>Trạng thái<PropFlowSelect Options="StatusOptions" @bind-Value="StatusFilterString" Variant="Filter" AriaLabel="Trạng thái" /></label>
                     <label>Loại cơ sở vật chất<PropFlowSelect Options="FacilityTypeFilterOptions" @bind-Value="FacilityTypeFilterString" Variant="Filter" AriaLabel="Loại cơ sở vật chất" /></label>
+                    }
                 </PropFlowFilterPopover>
             </div>
 
@@ -457,6 +465,8 @@
     private PagedResult<FacilityModel> PagedResult { get; set; } = new();
     private FacilitySummaryModel? FacilitySummary { get; set; }
     private FacilityFilterModel Filter { get; set; } = new();
+    private string? searchInput;
+    private string? DirectorySearch {get=>IsManager?searchInput:Filter.SearchKeyword;set{if(IsManager)searchInput=value;else Filter.SearchKeyword=value;}}
     private bool IsLoading { get; set; } = true;
     private bool IsFormOpen { get; set; }
     private bool IsSaving { get; set; }
@@ -576,7 +586,7 @@
         {
             var result = await FacilityApiClient.GetFacilitiesAsync(Filter);
             if (version != listVersion) return;
-            if (result.IsSuccess && result.Data != null) PagedResult = result.Data;
+            if (result.IsSuccess && result.Data != null) { PagedResult = result.Data; if(IsManager) FacilitySummary=result.Data.Summary; }
             else ErrorMessage = result.Message ?? "Không thể tải cơ sở vật chất.";
         }
         finally { if (version == listVersion) IsLoading = false; }
@@ -584,6 +594,7 @@
 
     private async Task LoadSummaryAsync()
     {
+        if(IsManager) return; // Manager KPIs follow the applied list predicate; Staff keeps its existing scoped overview.
         var result = await BuildingApiClient.GetCurrentBuildingOverviewAsync();
         FacilitySummary = result.IsSuccess ? result.Data?.Facilities : null;
     }
@@ -597,16 +608,17 @@
 
     private async Task HandleSearchKeyUp(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter") await ApplyFilter();
+        if (e.Key == "Enter") {if(IsManager)Filter.SearchKeyword=searchInput;await ApplyFilter();}
     }
 
     private FacilityFilterModel draftFilter = new();
-    private int ActiveFilterCount => new[] { Filter.Status is not null, Filter.FacilityTypeId is not null }.Count(active => active);
-    private void OpenFilters() => draftFilter = new() { Status = Filter.Status, FacilityTypeId = Filter.FacilityTypeId };
+    private int ActiveFilterCount => new[] { Filter.Status is not null || Filter.Statuses.Length>0, Filter.FacilityTypeId is not null || Filter.FacilityTypeIds.Length>0 }.Count(active => active);
+    private void OpenFilters() => draftFilter = new() { Status = Filter.Status, FacilityTypeId = Filter.FacilityTypeId, Statuses=[..Filter.Statuses], FacilityTypeIds=[..Filter.FacilityTypeIds] };
     private void ResetDraft() => draftFilter = new();
     private async Task ApplyDraft()
     {
-        if ((Filter.Status, Filter.FacilityTypeId) == (draftFilter.Status, draftFilter.FacilityTypeId)) return;
+        if ((Filter.Status, Filter.FacilityTypeId) == (draftFilter.Status, draftFilter.FacilityTypeId) && Filter.Statuses.SequenceEqual(draftFilter.Statuses) && Filter.FacilityTypeIds.SequenceEqual(draftFilter.FacilityTypeIds)) return;
+        Filter.Statuses=[..draftFilter.Statuses]; Filter.FacilityTypeIds=[..draftFilter.FacilityTypeIds];
         (Filter.Status, Filter.FacilityTypeId) = (draftFilter.Status, draftFilter.FacilityTypeId);
         await ApplyFilter();
     }

@@ -8,7 +8,8 @@ public record PagedResult<T>(
     IReadOnlyList<T> Items,
     int TotalCount,
     int PageIndex,
-    int PageSize)
+    int PageSize,
+    PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.EquipmentSummaryDto? Summary = null)
 {
     public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
     public bool HasPreviousPage => PageIndex > 1;
@@ -95,7 +96,15 @@ public record EquipmentFilterQuery(
     Guid? EquipmentTypeId = null,
     int PageIndex = 1,
     int PageSize = 10,
-    bool BuildingLevelOnly = false);
+    bool BuildingLevelOnly = false,
+    [MaxLength(100)] EquipmentStatus[]? Statuses = null,
+    [MaxLength(100)] Guid[]? EquipmentTypeIds = null,
+    [MaxLength(100)] Guid[]? FacilityIds = null,
+    bool IncludeBuildingLevel = false) : IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext context) =>
+        AssetFilterSelection.Validate(Status, Statuses, EquipmentTypeIds, FacilityIds);
+}
 
 public record EquipmentTypeDto(Guid Id, string Name, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public record CreateEquipmentTypeCommand([Required, StringLength(100, MinimumLength = 1)] string Name, [property: JsonIgnore] Guid? CreatedBy = null);

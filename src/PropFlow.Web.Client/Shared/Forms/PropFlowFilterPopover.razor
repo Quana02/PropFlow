@@ -1,26 +1,26 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<div class="pf-filter" @ref="root">
+<div class="pf-filter @(DirectoryDrawer ? "pf-filter--directory-drawer" : null)" @ref="root">
     <button type="button" class="pf-filter-trigger" title="Bộ lọc" aria-haspopup="dialog"
             aria-controls="@id" aria-expanded="false" aria-disabled="@((Disabled || applying) ? "true" : "false")"
             popovertarget="@id" disabled="@(controller is null)"
             @onclick="OpenAsync">
-        <span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>Bộ lọc
+        @if(DirectoryDrawer){<svg class="pf-filter-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z" /></svg>}else{<span class="material-symbols-outlined" aria-hidden="true">filter_alt</span>}Bộ lọc
         @if (ActiveCount > 0) { <strong>@ActiveCount</strong> }
     </button>
     <section id="@id" class="pf-filter-popover" popover="auto" role="dialog" aria-labelledby="@titleId">
         <header>
-            <h2 id="@titleId">Bộ lọc</h2>
+            <h2 id="@titleId">@if(DirectoryDrawer){<svg class="pf-filter-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h6m4 0h6M4 12h10m4 0h2M4 18h2m4 0h10M10 3v6m4 0v6m-8 0v6" /></svg>}Bộ lọc</h2>
             <button type="button" class="pf-filter-close" aria-label="Đóng bộ lọc" title="Đóng bộ lọc"
                     popovertarget="@id" popovertargetaction="hide">
-                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                @if(DirectoryDrawer){<svg class="pf-filter-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6" /></svg>}else{<span class="material-symbols-outlined" aria-hidden="true">close</span>}
             </button>
         </header>
         <div class="pf-filter-fields">
             @if (open)
             {
-                <div class="pf-filter-controls" @key="fieldVersion">@ChildContent</div>
+                <div class="pf-filter-controls" @key="fieldVersion"><CascadingValue Name="PropFlowDirectoryFilter" Value="DirectoryDrawer">@ChildContent</CascadingValue></div>
             }
         </div>
         <footer>
@@ -33,6 +33,8 @@
 @code {
     [Parameter] public int ActiveCount { get; set; }
     [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Variant { get; set; } = "Default";
+    private bool DirectoryDrawer => Variant == "Directory";
     [Parameter] public EventCallback OnOpen { get; set; }
     [Parameter] public EventCallback OnReset { get; set; }
     [Parameter] public Func<bool>? Validate { get; set; }
@@ -51,7 +53,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowFilterPopover.razor.js?v=20261112.1");
+        var imported = await JS.InvokeAsync<IJSObjectReference>("import", "./Shared/Forms/PropFlowFilterPopover.razor.js?v=20261125.5");
         if (disposed) { await imported.DisposeAsync(); return; }
         module = imported;
         self = DotNetObjectReference.Create(this);

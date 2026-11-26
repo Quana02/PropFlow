@@ -23,8 +23,10 @@ public sealed class ComplaintsController(ComplaintUseCases useCases, IComplaintC
 
     [HttpGet]
     [ProducesResponseType(typeof(ComplaintPage), 200)]
-    public async Task<IActionResult> List(string? search, string? status, int page = 1, CancellationToken ct = default) =>
-        Map(await useCases.ListAsync(Actor, await ViewerAsync(), search, status, page, ct));
+    public async Task<IActionResult> List(string? search, string? status, int page = 1, CancellationToken ct = default,[FromQuery] ComplaintDirectoryFilter? filters=null) =>
+        Map(await useCases.ListAsync(Actor, await ViewerAsync(), search, status, page, ct,filters));
+    [HttpGet("filter-staff-options"),Authorize(Policy="complaints.manage")]
+    public async Task<IActionResult> FilterStaffOptions(CancellationToken ct)=>Map(await useCases.FilterStaffAsync(ct));
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ComplaintDetail), 200)]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) => Map(await useCases.GetAsync(Actor, await ViewerAsync(), id, ct));

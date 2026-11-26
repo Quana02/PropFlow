@@ -415,6 +415,7 @@ Table administration.user_access_history {
 }
 
 Table administration.system_configurations {
+  version uuid [not null, default: `gen_random_uuid()` , note: 'Optimistic concurrency token for supported system configuration.']
   id uuid [pk, default: `gen_random_uuid()`]
   config_key varchar(150) [not null, unique]
   config_value text [not null]

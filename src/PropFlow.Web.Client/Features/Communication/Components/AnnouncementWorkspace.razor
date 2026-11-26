@@ -54,6 +54,19 @@
     }
     <section class="panel pf-list-panel @(Manager && !Embedded ? "pf-management-list" : null)" aria-labelledby="announcements-title" aria-busy="@loading">
         <header class="panel-heading"><div><h2 id="announcements-title">Danh sách thông báo <span class="count">@(data?.Total.ToString() ?? "—")</span></h2><p>Chọn thông báo để đọc đầy đủ nội dung.</p></div><PropFlowListRefresh OnRefresh="LoadAsync" Busy="@busy" /></header>
+        @if(Manager&&!Embedded)
+        {
+            <div class="pf-list-toolbar pf-management-toolbar">
+                <form class="pf-list-search pf-management-search" @onsubmit="SearchAnnouncements" @onsubmit:preventDefault>
+                    <input type="search" aria-label="Tìm thông báo" placeholder="Tìm tiêu đề hoặc nội dung thông báo…" maxlength="200" @bind="searchInput" @bind:event="oninput" />
+                    <button type="submit" disabled="@busy" aria-label="Tìm thông báo">Tìm</button>
+                </form>
+                <PropFlowFilterPopover Variant="Directory" ActiveCount="@((appliedFrom.HasValue||appliedTo.HasValue)?1:0)" Disabled="busy" OnOpen="OpenAnnouncementFilters" OnReset="ResetAnnouncementDraft" OnApply="ApplyAnnouncementDraft" Validate="ValidateAnnouncementDraft">
+                    <label><span>Ngày đăng</span><PropFlowDateRangePicker @bind-Start="draftFrom" @bind-End="draftTo" AriaLabel="Ngày đăng thông báo" /></label>
+                    @if(filterError is not null){<small role="alert">@filterError</small>}
+                </PropFlowFilterPopover>
+            </div>
+        }
         @if (loading)
         {
             <div class="empty-state" role="status"><span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><h3>Đang tải thông báo…</h3></div>
@@ -117,6 +130,23 @@
     private AnnouncementPage? data;
     private AnnouncementView? selected;
     private int page = 1;
+    private string searchInput="",appliedSearch="";
+    private DateOnly? draftFrom,draftTo,appliedFrom,appliedTo;
+    private string? filterError;
+    private TimeZoneInfo? FilterZone=>data?.TimeZoneId is {} id?TimeZoneInfo.FindSystemTimeZoneById(id):null;
+    private DateTimeOffset? DateBoundary(DateOnly? day,bool end=false)=>day is null||FilterZone is null?null:FilterDateRange.Boundary(day.Value.ToDateTime(TimeOnly.MinValue),FilterZone,end);
+    private void OpenAnnouncementFilters(){draftFrom=appliedFrom;draftTo=appliedTo;filterError=null;}
+    private void ResetAnnouncementDraft(){draftFrom=draftTo=null;filterError=null;}
+    private bool ValidateAnnouncementDraft()
+    {
+        filterError=null;
+        if(draftFrom>draftTo)filterError="Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.";
+        else if((draftFrom.HasValue||draftTo.HasValue)&&FilterZone is null)filterError="Chưa tải được múi giờ chung cư. Tải lại danh sách trước khi lọc ngày.";
+        else {try{DateBoundary(draftFrom);DateBoundary(draftTo,true);}catch(ArgumentException){filterError="Ngày không hợp lệ trong múi giờ chung cư.";}}
+        return filterError is null;
+    }
+    private Task ApplyAnnouncementDraft(){appliedFrom=draftFrom;appliedTo=draftTo;page=1;return LoadAsync();}
+    private Task SearchAnnouncements(){appliedSearch=searchInput.Trim();page=1;return LoadAsync();}
     private bool loading, publishing, composing, preview, mobileReading;
     private bool busy => loading || publishing;
     private bool CanPublish => !string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(content);
@@ -152,7 +182,7 @@
         loading = true; error = null;
         try
         {
-            var result = await Api.ListAsync(page, cancellation.Token);
+            var result = await Api.ListAsync(page, cancellation.Token,Manager?appliedSearch:null,Manager?DateBoundary(appliedFrom):null,Manager?DateBoundary(appliedTo,true):null);
             data = result.IsSuccess ? result.Data : null;
             if (!result.IsSuccess) error = result.Message ?? "Không tải được thông báo.";
             selected = data?.Items.FirstOrDefault(x => x.Id == (selected?.Id ?? RequestedAnnouncement)) ?? data?.Items.FirstOrDefault();

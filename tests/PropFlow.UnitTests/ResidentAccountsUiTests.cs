@@ -160,6 +160,7 @@ public sealed class ResidentAccountsUiTests
             .AddSingleton(new AuthenticatedApiClient(http, NullLogger<ApiClient>.Instance))
             .AddSingleton<AuthenticationService>()
             .AddSingleton<IResidentApiClient, ResidentApiClient>()
+            .AddSingleton<PropFlow.Web.Client.Shared.Spreadsheets.DirectoryExcelApi>()
             .AddSingleton<ToastService>()
             .BuildServiceProvider();
 

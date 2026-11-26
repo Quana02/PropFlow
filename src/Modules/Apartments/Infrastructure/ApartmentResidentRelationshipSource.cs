@@ -7,6 +7,18 @@ namespace PropFlow.Modules.Apartments.Infrastructure;
 public sealed class ApartmentResidentRelationshipSource(ApartmentsDbContext db)
     : IApartmentResidentRelationshipSource
 {
+    public async Task<ApartmentDirectoryScope> GetDirectoryScopeAsync(int? floorNumber, Guid? apartmentUnitId, DateOnly date, CancellationToken ct,
+        IReadOnlyCollection<int>? floorNumbers = null, IReadOnlyCollection<Guid>? apartmentUnitIds = null)
+    {
+        var units=db.ApartmentUnits.AsNoTracking().AsQueryable();
+        if(floorNumber.HasValue)units=units.Where(x=>x.FloorNumber==floorNumber.Value);
+        if(apartmentUnitId.HasValue)units=units.Where(x=>x.Id==apartmentUnitId.Value);
+        if(floorNumbers is {Count:>0})units=units.Where(x=>floorNumbers.Contains(x.FloorNumber));
+        if(apartmentUnitIds is {Count:>0})units=units.Where(x=>apartmentUnitIds.Contains(x.Id));
+        var ids=await units.Select(x=>x.Id).ToArrayAsync(ct);
+        var owners=await db.ApartmentOwnerships.AsNoTracking().Where(x=>ids.Contains(x.ApartmentUnitId)&&x.StartDate<=date&&x.EndDate==null).Select(x=>x.OwnerResidentId).Distinct().ToArrayAsync(ct);
+        return new(ids,owners);
+    }
     public async Task<IReadOnlyList<ApartmentReference>> SearchApartmentsAsync(
         string? search,
         int take,

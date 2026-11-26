@@ -66,7 +66,7 @@ test('filter popover waits for its fields before becoming visible and taking foc
     };
     const closed = [];
     try {
-        const root = { querySelector: selector => selector === '.pf-filter-trigger' ? trigger : panel };
+        const root = { classList: { contains: () => false }, querySelector: selector => selector === '.pf-filter-trigger' ? trigger : panel };
         const controller = connect(root, { invokeMethodAsync: name => closed.push(name) });
         toggle('open');
         assert.equal(attributes.get('aria-expanded'), 'true');

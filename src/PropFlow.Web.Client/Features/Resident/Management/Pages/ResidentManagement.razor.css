@@ -213,3 +213,7 @@
     .resident-kpis { grid-template-columns: minmax(0, 1fr); }
     .resident-header-actions { width: 100%; }
 }
+
+.resident-relationship-cell{min-width:10rem}.resident-table-wrap table{min-width:70rem}
+
+.filter-error { color: var(--pf-danger); font-size: .8rem; margin: 0; }

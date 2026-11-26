@@ -1,0 +1,56 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@using PropFlow.Web.Client.Shared.Forms
+
+<div class="pf-select pf-filter-multi @(open ? "is-open" : null)" @ref="root">
+    <button type="button" class="pf-select__trigger" aria-label="@AriaLabel" aria-haspopup="listbox" aria-expanded="@open.ToString().ToLowerInvariant()" aria-controls="@id" disabled="@Disabled" @onclick="ToggleAsync">
+        <span class="selection-label">@(Values.Count == 0 ? Placeholder : Values.Count == 1 ? Options.FirstOrDefault(x=>x.Value==Values[0])?.Label : $"{Values.Count} mục đã chọn")</span>
+        @if(Values.Count > 0){<span class="selection-count" aria-hidden="true">@Values.Count</span>}
+        <svg class="multi-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+    </button>
+    @if(open)
+    {
+        <div id="@id" class="pf-filter-multi-menu" popover="manual" role="listbox" aria-label="@AriaLabel" aria-multiselectable="true">
+            <PropFlowFilterMenuHeading Label="@AriaLabel" />
+            @if(Searchable){<div class="menu-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" aria-label="@($"Tìm {AriaLabel.ToLowerInvariant()}")" placeholder="Tìm nhanh..." @bind="search" @bind:event="oninput" /></div>}
+            <div class="menu-actions"><span>@Values.Count đã chọn</span>@if(Options.Count <= 100){<button type="button" @onclick="SelectAllAsync">Chọn tất cả</button>}<button type="button" disabled="@(Values.Count==0)" @onclick="ClearAsync">Xóa chọn</button></div>
+            <div class="menu-options">
+                @foreach(var option in VisibleOptions)
+                {
+                    var selected=Values.Contains(option.Value);
+                    <button @key="option.Value" type="button" role="option" aria-selected="@selected.ToString().ToLowerInvariant()" disabled="@option.Disabled" @onclick="()=>SelectAsync(option.Value)">
+                        <span class="option-checkbox @(selected ? "is-checked" : null)" aria-hidden="true">@if(selected){<svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg>}</span><span>@option.Label</span>
+                    </button>
+                }
+                @if(!VisibleOptions.Any()){<p class="empty-options">Không tìm thấy lựa chọn.</p>}
+            </div>
+            @if(Options.Count>100){<p class="selection-limit">Chọn tối đa 100 mục. Bỏ chọn để không giới hạn.</p>}
+            @if(limitReached){<p role="alert" class="selection-limit">Đã chọn tối đa 100 mục.</p>}
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter,EditorRequired] public IReadOnlyList<PropFlowSelectOption> Options {get;set;}=[];
+    [Parameter] public IReadOnlyList<string> Values {get;set;}=[];
+    [Parameter] public EventCallback<string[]> ValuesChanged {get;set;}
+    [Parameter] public string AriaLabel {get;set;}="Bộ lọc";
+    [Parameter] public string Placeholder {get;set;}="Tất cả";
+    [Parameter] public bool Searchable {get;set;}
+    [Parameter] public bool Disabled {get;set;}
+    private readonly string id="pf-multi-"+Guid.NewGuid().ToString("N");
+    private ElementReference root;
+    private IJSObjectReference? module,controller;
+    private DotNetObjectReference<PropFlowFilterMultiSelect>? self;
+    private bool open,positionAfterRender,limitReached;
+    private string search="";
+    private IEnumerable<PropFlowSelectOption> VisibleOptions=>Options.Where(x=>x.Label.Contains(search.Trim(),StringComparison.OrdinalIgnoreCase));
+    private async Task ToggleAsync(){if(Disabled)return;if(open){await CloseAsync();return;}open=true;search="";limitReached=false;positionAfterRender=true;}
+    protected override async Task OnAfterRenderAsync(bool firstRender){if(!positionAfterRender)return;positionAfterRender=false;module??=await JS.InvokeAsync<IJSObjectReference>("import","./Shared/Forms/PropFlowFilterMultiSelect.razor.js?v=20261125.4");self??=DotNetObjectReference.Create(this);controller=await module.InvokeAsync<IJSObjectReference>("open",root,self);}
+    private async Task SelectAsync(string value){if(!Values.Contains(value)&&Values.Count>=100){limitReached=true;return;}limitReached=false;await ValuesChanged.InvokeAsync(Values.Contains(value)?Values.Where(x=>x!=value).ToArray():[..Values,value]);}
+    private Task SelectAllAsync()=>ValuesChanged.InvokeAsync(Options.Where(x=>!x.Disabled).Select(x=>x.Value).ToArray());
+    private Task ClearAsync(){limitReached=false;return ValuesChanged.InvokeAsync([]);}
+    private async Task CloseAsync(){if(controller is not null){await controller.InvokeVoidAsync("disconnect");await controller.DisposeAsync();controller=null;}open=false;}
+    [JSInvokable] public async Task CloseFromOutside(){await CloseAsync();await InvokeAsync(StateHasChanged);}
+    public async ValueTask DisposeAsync(){try{await CloseAsync();if(module is not null)await module.DisposeAsync();}catch(JSDisconnectedException){}finally{self?.Dispose();}}
+}

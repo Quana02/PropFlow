@@ -27,6 +27,7 @@ public class SystemConfiguration
         UpdatedBy = updatedBy;
         CreatedAt = now;
         UpdatedAt = now;
+        Version = Guid.NewGuid();
     }
 
     public Guid Id { get; private set; }
@@ -38,12 +39,14 @@ public class SystemConfiguration
     public Guid? UpdatedBy { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
+    public Guid Version { get; private set; }
 
     public void UpdateValue(string newValue, Guid? updatedBy, DateTimeOffset now)
     {
         ConfigValue = newValue ?? string.Empty;
         UpdatedBy = updatedBy;
         UpdatedAt = now;
+        Version = Guid.NewGuid();
     }
 
     public void ToggleActive(bool isActive, Guid? updatedBy, DateTimeOffset now)
@@ -51,5 +54,6 @@ public class SystemConfiguration
         IsActive = isActive;
         UpdatedBy = updatedBy;
         UpdatedAt = now;
+        Version = Guid.NewGuid();
     }
 }

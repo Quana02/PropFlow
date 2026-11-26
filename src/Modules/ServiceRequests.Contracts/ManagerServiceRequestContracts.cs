@@ -7,7 +7,17 @@ public sealed record ManagerServiceRequestListQuery(
     bool UnassignedOnly = false,
     int Page = 1,
     int PageSize = 20,
-    int? SubmittedWithinDays = null);
+    int? SubmittedWithinDays = null,
+    string[]? Statuses = null,
+    string[]? Priorities = null,
+    Guid[]? CategoryIds = null,
+    Guid[]? AssignedStaffUserIds = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null,
+    string? View = null);
+
+public sealed record ManagerRequestFilterOption(Guid Id,string Label);
+public sealed record ManagerRequestFilterOptions(IReadOnlyList<ManagerRequestFilterOption> Categories,IReadOnlyList<ManagerRequestFilterOption> Staff,bool LimitExceeded=false);
 
 public sealed record ManagerServiceRequestSummary(
     int Total,

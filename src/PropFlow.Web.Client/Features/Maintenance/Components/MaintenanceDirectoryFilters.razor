@@ -1,0 +1,26 @@
+@using PropFlow.Web.Client.Features.Maintenance.Models
+<label><span>Trạng thái</span><PropFlowFilterMultiSelect Options="@Choices(StatusOptions)" Values="Value.Statuses" ValuesChanged="v=>ValueChanged.InvokeAsync(Value with {Statuses=v})" AriaLabel="@($"Trạng thái {Label}")" /></label>
+<label><span>Cơ sở vật chất</span><PropFlowFilterMultiSelect Options="@Choices(FacilityOptions)" Values="Value.Facilities" ValuesChanged="v=>ValueChanged.InvokeAsync(Value with {Facilities=v})" Searchable="true" AriaLabel="@($"Cơ sở vật chất {Label}")" /></label>
+<label><span>Thiết bị</span><PropFlowFilterMultiSelect Options="@Choices(EquipmentOptions)" Values="Value.Equipment" ValuesChanged="v=>ValueChanged.InvokeAsync(Value with {Equipment=v})" Searchable="true" AriaLabel="@($"Thiết bị {Label}")" /></label>
+@if(TaskFilters)
+{
+    <label><span>@StaffLabel</span><PropFlowFilterMultiSelect Options="@Choices(StaffOptions)" Values="Value.Staff" ValuesChanged="v=>ValueChanged.InvokeAsync(Value with {Staff=v})" Searchable="true" Disabled="StaffLoading" AriaLabel="@($"{StaffLabel} {Label}")" /></label>
+    <label><span>Mức ưu tiên</span><PropFlowFilterMultiSelect Options="@Choices(PriorityOptions)" Values="Value.Priorities" ValuesChanged="v=>ValueChanged.InvokeAsync(Value with {Priorities=v})" AriaLabel="@($"Mức ưu tiên {Label}")" /></label>
+    <label><span>Khẩn cấp</span><PropFlowSelect Value="@(Value.IsEmergency?.ToString().ToLowerInvariant()??"")" ValueChanged="SelectEmergency" Options="EmergencyOptions" Variant="Filter" AriaLabel="@($"Khẩn cấp {Label}")" /></label>
+}
+@code{
+    [Parameter] public MaintenanceDirectorySelection Value{get;set;}=new();
+    [Parameter] public EventCallback<MaintenanceDirectorySelection> ValueChanged{get;set;}
+    [Parameter] public string Label{get;set;}="bảo trì";
+    [Parameter] public string StaffLabel{get;set;}="Nhân viên phụ trách";
+    [Parameter] public bool TaskFilters{get;set;}
+    [Parameter] public bool StaffLoading{get;set;}
+    [Parameter] public IReadOnlyList<PropFlowSelectOption> StatusOptions{get;set;}=[];
+    [Parameter] public IReadOnlyList<PropFlowSelectOption> FacilityOptions{get;set;}=[];
+    [Parameter] public IReadOnlyList<PropFlowSelectOption> EquipmentOptions{get;set;}=[];
+    [Parameter] public IReadOnlyList<PropFlowSelectOption> StaffOptions{get;set;}=[];
+    [Parameter] public IReadOnlyList<PropFlowSelectOption> PriorityOptions{get;set;}=[];
+    private static readonly PropFlowSelectOption[] EmergencyOptions=[new("","Tất cả"),new("true","Khẩn cấp"),new("false","Không khẩn cấp")];
+    private static IReadOnlyList<PropFlowSelectOption> Choices(IReadOnlyList<PropFlowSelectOption> source)=>source.Where(x=>x.Value.Length>0).ToArray();
+    private Task SelectEmergency(string v)=>ValueChanged.InvokeAsync(Value with {IsEmergency=bool.TryParse(v,out var flag)?flag:null});
+}

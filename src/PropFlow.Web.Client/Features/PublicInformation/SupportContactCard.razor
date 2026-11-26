@@ -1,0 +1,35 @@
+@using PropFlow.Modules.Administration.Contracts
+@using PropFlow.Web.Client.Features.Administration.Services
+@implements IDisposable
+@inject ISupportContactApi Api
+
+<section class="support-contact-card" aria-label="Thông tin liên hệ hỗ trợ" aria-busy="@loading">
+    @if (loading) { <p role="status">Đang tải thông tin liên hệ…</p> }
+    else if (error is not null) { <p role="alert">@error</p><button type="button" @onclick="LoadAsync">Thử lại</button> }
+    else if (contact?.Email is null && contact?.Phone is null) { <p>Chưa công bố email hoặc số điện thoại hỗ trợ. Vui lòng dùng kênh Ban quản lý đã công bố tại chung cư.</p> }
+    else
+    {
+        <dl><dt>Email hỗ trợ</dt><dd>@if (contact?.Email is { } email) { <a href="@("mailto:" + Uri.EscapeDataString(email))">@email</a> } else { <span>Chưa công bố email hỗ trợ</span> }</dd>
+            <dt>Số điện thoại hỗ trợ</dt><dd>@if (contact?.Phone is { } phone) { <a href="@("tel:" + phone)">@phone</a> } else { <span>Chưa công bố số điện thoại hỗ trợ</span> }</dd></dl>
+    }
+</section>
+
+@code {
+    private readonly CancellationTokenSource lifetime = new();
+    private PublicSupportContacts? contact;
+    private string? error;
+    private bool loading = true;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        loading = true; error = null;
+        try {
+            var result = await Api.PublicAsync(lifetime.Token);
+            if (lifetime.IsCancellationRequested) return;
+            if (result.IsSuccess && result.Data is not null) contact = result.Data;
+            else error = "Chưa thể tải thông tin liên hệ. Vui lòng thử lại.";
+        } catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { loading = false; }
+    }
+    public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); }
+}
