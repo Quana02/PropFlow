@@ -25,19 +25,20 @@ public sealed class ResidentServiceRequestPayments(
     IPaymentAccountProtector protector,
     TimeProvider clock,
     IOptions<SePayOptions>? options = null,
-    IOptions<PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthOptions>? oauth = null)
+    IOptions<PropFlow.Modules.Payments.Infrastructure.PaymentSettings.SePayOAuthOptions>? oauth = null,
+    IInvoiceFinancialSource? invoices = null) : IInvoicePaymentInstructions
 {
-    public async Task<ResidentServiceRequestPaymentView> GetAsync(Guid serviceRequestId, Guid userId, CancellationToken ct)
+    public async Task<ResidentServiceRequestPaymentView> GetAsync(Guid serviceRequestId, Guid userId, CancellationToken ct, bool byInvoice = false)
     {
-        var settlement = await OwnedSettlementAsync(serviceRequestId, userId, ct);
+        var settlement = await OwnedSettlementAsync(serviceRequestId, userId, ct, byInvoice);
         var payment = await LatestAsync(settlement.InvoiceId, userId, ct);
         var destination = await DestinationAsync(settlement.InvoiceId, ct);
         var automatic = await AutomaticAsync(destination, ct);
         var instruction = await db.PaymentInstructions.AsNoTracking().SingleOrDefaultAsync(x => x.InvoiceId == settlement.InvoiceId, ct);
         var qrUrl = settlement.OutstandingAmount > 0 && (automatic || payment?.Status != PaymentStatus.PENDING) && destination is not null
-            ? $"/api/v1/resident/service-requests/{serviceRequestId}/payment/qr"
+            ? byInvoice ? $"/api/v1/resident/payments/invoices/{serviceRequestId}/qr" : $"/api/v1/resident/service-requests/{serviceRequestId}/payment/qr"
             : null;
-        return new(serviceRequestId, settlement.InvoiceId, settlement.InvoiceNumber, settlement.TotalAmount,
+        return new(settlement.ServiceRequestId, settlement.InvoiceId, settlement.InvoiceNumber, settlement.TotalAmount,
             settlement.ConfirmedPaidAmount, settlement.OutstandingAmount, settlement.Status,
             settlement.OutstandingAmount == 0 ? "CONFIRMED" : payment?.Status == PaymentStatus.PENDING ? "PENDING" : settlement.ConfirmedPaidAmount > 0 ? "PARTIAL" : payment?.Status.ToString(),
             payment?.Id, payment?.ReferenceNumber, payment?.RejectionReason,
@@ -45,9 +46,9 @@ public sealed class ResidentServiceRequestPayments(
             destination is null ? null : $"****{destination.AccountNumberLast4}", destination?.AccountName, qrUrl, automatic, instruction?.TransferCode);
     }
 
-    public async Task<byte[]> QrAsync(Guid serviceRequestId, Guid userId, CancellationToken ct)
+    public async Task<byte[]> QrAsync(Guid serviceRequestId, Guid userId, CancellationToken ct, bool byInvoice = false)
     {
-        var settlement = await OwnedSettlementAsync(serviceRequestId, userId, ct);
+        var settlement = await OwnedSettlementAsync(serviceRequestId, userId, ct, byInvoice);
         if (settlement.OutstandingAmount <= 0)
             throw new ResidentPaymentFailure(409, "invoice_already_paid", "Hóa đơn đã được thanh toán.");
         var destination = await DestinationAsync(settlement.InvoiceId, ct)
@@ -60,6 +61,22 @@ public sealed class ResidentServiceRequestPayments(
         var payload = VietQrPayload(destination.BankBin, account, settlement.OutstandingAmount, instruction.TransferCode);
         using var data = QRCodeGenerator.GenerateQrCode(payload, QRCodeGenerator.ECCLevel.M);
         return new PngByteQRCode(data).GetGraphic(10);
+    }
+
+    public async Task<InvoicePaymentInstructions?> ForDocumentAsync(Guid invoiceId, CancellationToken ct)
+    {
+        var invoice = invoices is null ? null : await invoices.FindAsync(invoiceId, ct);
+        if (invoice?.Status != "ISSUED") return null;
+        var paid = await db.Payments.Where(x => x.InvoiceId == invoiceId && x.Status == PaymentStatus.CONFIRMED).SumAsync(x => x.Amount, ct);
+        var amount = invoice.TotalAmount - paid;
+        if (amount <= 0) return null;
+        var destination = await DestinationAsync(invoiceId, ct);
+        if (destination is null) return null;
+        var instruction = await db.PaymentInstructions.AsNoTracking().SingleAsync(x => x.InvoiceId == invoiceId, ct);
+        var payload = VietQrPayload(destination.BankBin, protector.Unprotect(destination.ProtectedAccountNumber), amount, instruction.TransferCode);
+        using var data = QRCodeGenerator.GenerateQrCode(payload, QRCodeGenerator.ECCLevel.M);
+        return new(destination.BankName, destination.AccountName, $"****{destination.AccountNumberLast4}", amount,
+            instruction.TransferCode, new PngByteQRCode(data).GetGraphic(10));
     }
 
     private async Task<bool> AutomaticAsync(PaymentDestination? destination, CancellationToken ct)
@@ -109,8 +126,20 @@ public sealed class ResidentServiceRequestPayments(
         return await GetAsync(serviceRequestId, userId, ct);
     }
 
-    private async Task<ServiceRequestSettlementSnapshot> OwnedSettlementAsync(Guid serviceRequestId, Guid userId, CancellationToken ct)
+    private async Task<ServiceRequestSettlementSnapshot> OwnedSettlementAsync(Guid serviceRequestId, Guid userId, CancellationToken ct, bool byInvoice = false)
     {
+        if (byInvoice)
+        {
+            if (invoices is null || !await invoices.IsRecipientAsync(serviceRequestId, userId, ct))
+                throw new ResidentPaymentFailure(404, "invoice_not_found", "Không tìm thấy hóa đơn của bạn.");
+            var invoice = await invoices.FindAsync(serviceRequestId, ct);
+            if (invoice?.Status != "ISSUED")
+                throw new ResidentPaymentFailure(404, "invoice_not_found", "Không tìm thấy hóa đơn đã phát hành.");
+            var paid = await db.Payments.Where(x => x.InvoiceId == invoice.Id && x.Status == PaymentStatus.CONFIRMED).SumAsync(x => x.Amount, ct);
+            var outstanding = Math.Max(0, invoice.TotalAmount - paid);
+            return new(invoice.SourceServiceRequestId ?? Guid.Empty, invoice.Id, invoice.InvoiceNumber, invoice.TotalAmount,
+                paid, outstanding, outstanding == 0 ? "PAID" : paid > 0 ? "PARTIAL" : "UNPAID");
+        }
         var settlement = await billing.FindForUserAsync(serviceRequestId, userId, ct)
             ?? throw new ResidentPaymentFailure(404, "service_request_invoice_not_found", "Không tìm thấy hóa đơn của yêu cầu này.");
         if (settlement.Status == "CANCELLED") throw new ResidentPaymentFailure(409, "invoice_cancelled", "Hóa đơn đã hủy, không thể thanh toán.");

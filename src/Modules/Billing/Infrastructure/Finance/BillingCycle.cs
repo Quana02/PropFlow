@@ -13,7 +13,7 @@ using PropFlow.Modules.Payments.Contracts;
 
 namespace PropFlow.Modules.Billing.Infrastructure.Finance;
 public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdDirectory directory,
-    IConfirmedPaymentSource totals, IPaymentNoticeSource payments, IFinanceNoticePublisher notices, TimeProvider? clock = null, ICurrentBuildingTimeZone? buildingTimeZone = null, ILogger<BillingCycle>? logger = null) : IBillingCycle
+    IConfirmedPaymentSource totals, IPaymentNoticeSource payments, IFinanceNoticePublisher notices, TimeProvider? clock = null, ICurrentBuildingTimeZone? buildingTimeZone = null, ILogger<BillingCycle>? logger = null, IInvoicePaymentInstructions? paymentInstructions = null) : IBillingCycle
 {
     public const string ServiceFeeCode = "SERVICE_AREA_MONTHLY";
     public const string WaterFeeCode = "WATER_PERSON_MONTHLY";
@@ -135,7 +135,7 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
                 };
                 await PublishAsync(invoice, recipient, $"invoice:{invoice.Id}", title,
                     $"Hóa đơn {invoice.InvoiceNumber} · Căn hộ {recipient.UnitNumber} · Kỳ {invoice.BillingPeriodStart:MM/yyyy}. {charges} Hạn thanh toán: {invoice.DueDate:dd/MM/yyyy}.",
-                    FinanceDocuments.Invoice(invoice, recipient, amount), ct);
+                    await InvoiceHtmlAsync(invoice, recipient, amount, ct), ct);
                 if (invoice.DueDate is { } due && today > due && amount < invoice.TotalAmount) {
                     await RemindOneAsync(invoice, recipient, amount, $"overdue:{invoice.Id}:day:{today:yyyyMMdd}", ct);
                 }
@@ -265,7 +265,7 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
                 var recipient = await DocumentRecipientAsync(i, null, ct);
                 result.Add(new(i.Id, i.InvoiceNumber, recipient?.UnitNumber ?? "Chưa xác định căn hộ", recipient?.FullName ?? "", i.BillingPeriodStart,
                     i.DueDate, i.TotalAmount, amounts.GetValueOrDefault(i.Id), Math.Max(0, i.TotalAmount - amounts.GetValueOrDefault(i.Id)),
-                    i.Items.Where(x => x.FeeCodeSnapshot != RentalPricing.FeeCode).Sum(x => x.LineAmount), i.Items.Where(x => x.FeeCodeSnapshot == RentalPricing.FeeCode).Sum(x => x.LineAmount), recipient?.Capacity ?? "HOUSEHOLD_HEAD", i.Type?.ToString()));
+                    i.Items.Where(x => x.FeeCodeSnapshot != RentalPricing.FeeCode).Sum(x => x.LineAmount), i.Items.Where(x => x.FeeCodeSnapshot == RentalPricing.FeeCode).Sum(x => x.LineAmount), recipient?.Capacity ?? "HOUSEHOLD_HEAD", i.Type?.ToString(), SourceServiceRequestId: i.SourceServiceRequestId));
             }
             return result;
         }
@@ -275,7 +275,7 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
         var rows = await q.ToArrayAsync(ct); var paid = await totals.TotalsAsync(rows.Select(x => x.i.Id).ToArray(), ct);
         var resultRows = rows.Select(x => new ResidentInvoice(x.i.Id, x.i.InvoiceNumber, x.r.UnitNumber, x.r.FullName, x.i.BillingPeriodStart,
             x.i.DueDate, x.i.TotalAmount, paid.GetValueOrDefault(x.i.Id), Math.Max(0, x.i.TotalAmount - paid.GetValueOrDefault(x.i.Id)),
-            x.i.Items.Where(i => i.FeeCodeSnapshot != RentalPricing.FeeCode).Sum(i => i.LineAmount), x.i.Items.Where(i => i.FeeCodeSnapshot == RentalPricing.FeeCode).Sum(i => i.LineAmount), x.r.Capacity, x.i.Type?.ToString())).ToArray();
+            x.i.Items.Where(i => i.FeeCodeSnapshot != RentalPricing.FeeCode).Sum(i => i.LineAmount), x.i.Items.Where(i => i.FeeCodeSnapshot == RentalPricing.FeeCode).Sum(i => i.LineAmount), x.r.Capacity, x.i.Type?.ToString(), SourceServiceRequestId: x.i.SourceServiceRequestId)).ToArray();
         return resultRows;
     }
     public async Task<FinanceDocument?> InvoiceDocumentAsync(Guid id, Guid? userId, CancellationToken ct)
@@ -284,7 +284,7 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
         if (invoice is null) return null;
         var r = await DocumentRecipientAsync(invoice, userId, ct);
         if (r is null) return null;
-        return invoice is null ? null : Document(FinanceDocuments.Invoice(invoice, r, await totals.TotalAsync(id, ct)), invoice.InvoiceNumber);
+        return invoice is null ? null : Document(await InvoiceHtmlAsync(invoice, r, await totals.TotalAsync(id, ct), ct), invoice.InvoiceNumber);
     }
     public async Task<FinanceDocument?> ReceiptAsync(Guid paymentId, Guid? userId, CancellationToken ct)
     {
@@ -322,17 +322,25 @@ public sealed partial class BillingCycle(BillingDbContext db, IBillingHouseholdD
         foreach (var recipient in recipients)
             await PublishAsync(invoice, recipient, sendKey, invoice.Note?.StartsWith("[ĐIỀU CHỈNH]") == true ? "Hóa đơn đã điều chỉnh" : "Hóa đơn đã phát hành",
                 $"Hóa đơn {invoice.InvoiceNumber}, căn hộ {recipient.UnitNumber}, kỳ {invoice.BillingPeriodStart:MM/yyyy}. Tổng {FinanceDocuments.Money(invoice.TotalAmount)}; còn phải thu {FinanceDocuments.Money(Math.Max(0, invoice.TotalAmount - paid))}. Hạn {invoice.DueDate:dd/MM/yyyy}.",
-                FinanceDocuments.Invoice(invoice, recipient, paid), ct);
+                await InvoiceHtmlAsync(invoice, recipient, paid, ct), ct);
         return recipients.Length;
     }
-    private Task RemindOneAsync(Invoice i, InvoiceRecipient r, decimal paid, string key, CancellationToken ct)
+    private async Task RemindOneAsync(Invoice i, InvoiceRecipient r, decimal paid, string key, CancellationToken ct)
     {
         var overdue = i.DueDate is { } due && Today > due;
         var title = overdue ? "Thông báo công nợ quá hạn" : "Thông báo nhắc thanh toán hóa đơn";
         var message = $"Căn hộ {r.UnitNumber}, hóa đơn {i.InvoiceNumber}, kỳ {i.BillingPeriodStart:MM/yyyy}: còn nợ {FinanceDocuments.Money(Math.Max(0, i.TotalAmount - paid))}. Hạn thanh toán: {i.DueDate:dd/MM/yyyy}. "
             + (overdue ? $"Đã quá hạn {Today.DayNumber - i.DueDate!.Value.DayNumber} ngày. Vui lòng thanh toán khoản còn nợ." : "Vui lòng thanh toán đúng hạn.");
-        return PublishAsync(i, r, key, title, message, FinanceDocuments.Invoice(i, r, paid, title, message), ct);
+        await PublishAsync(i, r, key, title, message, await InvoiceHtmlAsync(i, r, paid, ct, title, message), ct);
     }
+    private async Task<string> InvoiceHtmlAsync(Invoice invoice, InvoiceRecipient recipient, decimal paid, CancellationToken ct,
+        string? title = null, string? message = null)
+    {
+        var instructions = paymentInstructions is null || paid >= invoice.TotalAmount ? null
+            : await paymentInstructions.ForDocumentAsync(invoice.Id, ct);
+        return FinanceDocuments.Invoice(invoice, recipient, paid, title, message, instructions);
+    }
+
     private async Task PublishAsync(Invoice i, InvoiceRecipient r, string key, string title, string message, string html, CancellationToken ct) =>
         await notices.PublishAsync(new(FinanceDocuments.EventId(RecipientEventKey(key, r)), r.UserId, await directory.RecipientEmailAsync(r.UserId, r.Email, ct), title, message, html, "INVOICE", i.Id, $"/resident/billing?invoice={i.Id}", PreviousRecipientEventId: PreviousRecipientEventId(key, r)), ct);
     private static Guid? PreviousRecipientEventId(string key, InvoiceRecipient r) => r.UserId is not null && r.ResidentId is not null

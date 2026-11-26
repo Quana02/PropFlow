@@ -9,7 +9,7 @@ public sealed record ElectricityUsageView(Guid ApartmentId, DateOnly UsageMonth,
     decimal? CurrentElectricityReading = null, decimal PreviousWaterReading = 0, decimal? CurrentWaterReading = null);
 public sealed record HouseholdInvoice(Guid Id, string Number, string Apartment, string ResidentName,
     DateOnly Period, DateOnly? DueDate, decimal Total, decimal Paid, decimal Outstanding,
-    decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null, string PaymentEnvironment = "LIVE");
+    decimal ServiceTotal = 0, decimal RentalTotal = 0, string Capacity = "HOUSEHOLD_HEAD", string? InvoiceType = null, string PaymentEnvironment = "LIVE", Guid? SourceServiceRequestId = null);
 public sealed record ResidentPayment(Guid Id, Guid InvoiceId, string Number, decimal Amount, string Method,
     string Status, DateTimeOffset Date, DateTimeOffset? ConfirmedAt, string? RejectionReason);
 public sealed record ResidentNotice(Guid Id, string Title, string Message, string? ActionPath, bool IsRead, DateTimeOffset CreatedAt, string? SourceType = null);

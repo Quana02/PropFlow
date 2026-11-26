@@ -91,6 +91,7 @@ public class ServiceRequest
     public DateTimeOffset? AdditionalCostRespondedAt { get; private set; }
     public Guid? AdditionalCostRespondedBy { get; private set; }
     public bool IsWaitingForCostConsent => AdditionalCostConsentStatus == "PENDING";
+    public int ReworkCount { get; private set; }
     public Guid? ServiceInvoiceId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -160,6 +161,7 @@ public class ServiceRequest
         EnsureMoney(amount, nameof(amount));
         if (Status is not (ServiceRequestStatus.UNDER_REVIEW or ServiceRequestStatus.ASSIGNED))
             throw new InvalidOperationException("Service cost can only be set before work starts.");
+        if (ReworkCount > 0 && amount != 0) throw new InvalidOperationException("Lần làm lại chỉ thu phí mới đã được cư dân chấp thuận.");
         BaseServiceCost = amount;
         UpdatedAt = now;
     }
@@ -258,6 +260,22 @@ public class ServiceRequest
 
         Status = ServiceRequestStatus.RESOLVED;
         ResolvedAt = now;
+        UpdatedAt = now;
+    }
+
+    public void RequestResidentRework(string reason, DateTimeOffset now)
+    {
+        if (Status != ServiceRequestStatus.RESOLVED) throw new InvalidOperationException("Chỉ yêu cầu đã được Manager duyệt mới có thể yêu cầu làm lại.");
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length is < 3 or > 1000)
+            throw new ArgumentException("Nhập lý do làm lại từ 3 đến 1000 ký tự.", nameof(reason));
+        ReworkCount++;
+        Description += $"\n\nYêu cầu làm lại {RequestNumber} (lần {ReworkCount}): {reason.Trim()}";
+        Status = ServiceRequestStatus.SUBMITTED;
+        ResolvedAt = ClosedAt = null; ClosedBy = null;
+        BaseServiceCost = ProposedAdditionalCost = ApprovedAdditionalCost = 0;
+        AdditionalCostNote = null; AdditionalCostProposalId = null; AdditionalCostConsentStatus = "NONE";
+        AdditionalCostProposedAt = AdditionalCostRespondedAt = null; AdditionalCostRespondedBy = null;
+        ServiceInvoiceId = null;
         UpdatedAt = now;
     }
 

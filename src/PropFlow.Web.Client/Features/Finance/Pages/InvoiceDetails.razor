@@ -63,7 +63,18 @@
         </div>
     }
 </section>
+<FinanceSettlementRefresh Refresh="RefreshSettlementAsync" Busy="loading" />
 @code {
+    private async Task RefreshSettlementAsync()
+    {
+        var id = InvoiceId;
+        var result = await Cycle.GetAsync<InvoiceView>($"api/v1/billing/cycle/invoices/{id}");
+        var rows = await Workspace.PaymentsAsync(id);
+        if (id != InvoiceId) return;
+        if (result.IsSuccess && result.Data is not null) invoice = result.Data;
+        if (rows.IsSuccess) payments = rows.Data ?? [];
+    }
+
     [Parameter] public Guid InvoiceId { get; set; }
     private InvoiceView? invoice;
 
