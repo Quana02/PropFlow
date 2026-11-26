@@ -65,4 +65,5 @@ builder.Services.AddScoped<ResidentNotificationConnectionFactory>();
 builder.Services.AddScoped<BillingWorkspaceApi>();
 builder.Services.AddScoped<IResidentApiClient, ResidentApiClient>();
 builder.Services.AddScoped<PropFlow.Web.Client.Features.Apartment.Services.IApartmentApiClient, PropFlow.Web.Client.Features.Apartment.Services.ApartmentApiClient>();
+builder.Services.AddScoped<PropFlow.Web.Client.Features.RemoteOnlineSign.Services.RemoteOnlineSignApiClient>();
 await builder.Build().RunAsync();

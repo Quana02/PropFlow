@@ -11,10 +11,17 @@ public sealed class PrivilegedActionOtp(
     AuthPolicy policy,
     TimeProvider clock) : IPrivilegedActionOtp
 {
+    public Task<PrivilegedActionChallengeResult> RequestAsync(
+        Guid userId,
+        string purpose,
+        string payloadHash,
+        CancellationToken ct) => RequestAsync(userId, purpose, payloadHash, null, ct);
+
     public async Task<PrivilegedActionChallengeResult> RequestAsync(
         Guid userId,
         string purpose,
         string payloadHash,
+        PrivilegedActionEmailContext? emailContext,
         CancellationToken ct)
     {
         var normalizedPurpose = NormalizePurpose(purpose);
@@ -40,7 +47,7 @@ public sealed class PrivilegedActionOtp(
             return (challenge, user.Email, code);
         }, ct);
 
-        await email.SendPrivilegedActionCodeAsync(outgoing.Email!, outgoing.code, policy.OtpMinutes, ct);
+        await email.SendPrivilegedActionCodeAsync(outgoing.Email!, outgoing.code, policy.OtpMinutes, normalizedPurpose, emailContext, ct);
         return new(outgoing.challenge.Id, outgoing.challenge.ExpiresAt, now.AddSeconds(policy.ResendSeconds), MaskEmail(outgoing.Email!));
     }
 

@@ -1,0 +1,54 @@
+<div class="remote-reject-backdrop" role="presentation" @onclick="HandleBackdropAsync">
+    <section class="remote-reject-dialog" role="dialog" aria-modal="true" aria-labelledby="remote-reject-title" @onclick:stopPropagation="true">
+        <header class="remote-reject-dialog__header">
+            <span class="remote-reject-dialog__badge" aria-hidden="true"><span class="material-symbols-outlined">report</span></span>
+            <div class="remote-reject-dialog__heading">
+                <h2 id="remote-reject-title">Từ chối ký hợp đồng</h2>
+                <p>@ContractName · @ContractCode</p>
+            </div>
+            <button type="button" class="remote-reject-dialog__close" aria-label="Đóng" title="Đóng" @onclick="CancelAsync" disabled="@Busy">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </header>
+        <div class="remote-reject-dialog__body">
+            <p class="remote-reject-dialog__subtitle">Vui lòng cung cấp lý do từ chối ký.</p>
+            <label class="remote-reject-dialog__field">
+                <span class="remote-reject-dialog__label">Lý do từ chối <span aria-hidden="true">*</span></span>
+                <textarea class="remote-reject-dialog__input" @bind="reason" @bind:event="oninput" maxlength="500" rows="4" placeholder="Nhập lý do bạn không đồng ý ký hợp đồng này..." disabled="@Busy" aria-invalid="@(ValidationMessage is not null)"></textarea>
+            </label>
+            <div class="remote-reject-dialog__meta">
+                @if (!string.IsNullOrWhiteSpace(ValidationMessage))
+                {
+                    <p class="remote-reject-dialog__error" role="alert">@ValidationMessage</p>
+                }
+                else if (!string.IsNullOrWhiteSpace(Error))
+                {
+                    <p class="remote-reject-dialog__error" role="alert">@Error</p>
+                }
+                <span class="remote-reject-dialog__count">@reason.Trim().Length/500</span>
+            </div>
+            <p class="remote-reject-dialog__note"><span class="material-symbols-outlined" aria-hidden="true">info</span>Lý do từ chối sẽ được gửi đến chủ đầu tư để xem xét và xử lý hợp đồng.</p>
+        </div>
+        <footer class="remote-reject-dialog__footer">
+            <button type="button" class="remote-reject-dialog__secondary" @onclick="CancelAsync" disabled="@Busy">Hủy</button>
+            <button type="button" class="remote-reject-dialog__danger" @onclick="SubmitAsync" disabled="@(Busy || ValidationMessage is not null)">@(Busy ? "Đang gửi…" : "Gửi từ chối")</button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string ContractName { get; set; } = "";
+    [Parameter] public string ContractCode { get; set; } = "";
+    [Parameter] public EventCallback<string> OnSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string reason = "";
+
+    private string? ValidationMessage => string.IsNullOrWhiteSpace(reason) ? "Vui lòng nhập lý do từ chối." : reason.Trim().Length > 500 ? "Lý do từ chối tối đa 500 ký tự." : null;
+
+    private Task CancelAsync() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
+    private Task SubmitAsync() => Busy || ValidationMessage is not null ? Task.CompletedTask : OnSubmit.InvokeAsync(reason.Trim());
+    private Task HandleBackdropAsync() => CancelAsync();
+}
