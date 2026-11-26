@@ -47,6 +47,20 @@ public sealed class ResidentAccountScope(ResidentsDbContext db, IApartmentReside
         db.Residents.Where(r => r.Id == residentId && r.Status == ResidentStatus.ACTIVE)
             .Select(r => r.UserId).SingleOrDefaultAsync(ct);
 
+    public async Task<IReadOnlyDictionary<Guid, ResidentAccountScopeItem>> GetByAccountIdsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct)
+    {
+        var ids = userIds.Where(x => x != Guid.Empty).Distinct().ToArray();
+        if (ids.Length == 0) return new Dictionary<Guid, ResidentAccountScopeItem>();
+        var rows = await db.Residents.AsNoTracking().Where(r => r.UserId != null && ids.Contains(r.UserId.Value))
+            .Select(r => new ResidentAccountScopeItem(r.Id, r.UserId, r.ResidentCode, r.FullName, r.Email,
+                r.Status == ResidentStatus.ACTIVE, Array.Empty<string>()))
+            .ToListAsync(ct);
+        return rows.Where(x => x.UserId is not null).ToDictionary(x => x.UserId!.Value);
+    }
+
+    public Task<bool> IsActiveAccountAsync(Guid userId, CancellationToken ct) =>
+        db.Residents.AsNoTracking().AnyAsync(r => r.UserId == userId && r.Status == ResidentStatus.ACTIVE, ct);
+
     public async Task<bool> LockActiveLinkAsync(Guid residentId, Guid userId, CancellationToken ct) =>
         await db.Database.SqlQuery<Guid>($"""
             SELECT id AS "Value" FROM residents.residents

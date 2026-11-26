@@ -1,0 +1,228 @@
+.remote-reject-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgb(12 27 47 / 45%);
+    backdrop-filter: blur(3px);
+}
+
+.remote-reject-dialog {
+    --reject-surface: #ffffff;
+    --reject-ink: #17243a;
+    --reject-muted: #52647a;
+    --reject-line: #dbe5ef;
+    --reject-soft: #f4f8fc;
+    --reject-danger: #b42318;
+    --reject-danger-soft: #fef3f2;
+    --reject-danger-ink: #b42318;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: min(520px, 100%);
+    max-height: calc(100dvh - 2rem);
+    overflow: hidden;
+    border: 1px solid var(--reject-line);
+    border-radius: 1rem;
+    background: var(--reject-surface);
+    color: var(--reject-ink);
+    box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 30%);
+    font: inherit;
+}
+
+:where(html[data-theme="dark"]) .remote-reject-dialog {
+    color-scheme: dark;
+    --reject-surface: #132238;
+    --reject-ink: #edf5ff;
+    --reject-muted: #b6c9dd;
+    --reject-line: #334b65;
+    --reject-soft: #192e46;
+    --reject-danger: #fda4af;
+    --reject-danger-soft: #3b1d22;
+    --reject-danger-ink: #fda4af;
+}
+
+.remote-reject-dialog__header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .85rem;
+    padding: 1.25rem 1.35rem 1rem;
+    border-bottom: 1px solid var(--reject-line);
+}
+
+.remote-reject-dialog__badge {
+    display: grid;
+    place-items: center;
+    width: 2.65rem;
+    height: 2.65rem;
+    border-radius: .8rem;
+    color: var(--reject-danger-ink);
+    background: var(--reject-danger-soft);
+}
+
+.remote-reject-dialog__badge .material-symbols-outlined { font-size: 1.5rem; }
+
+.remote-reject-dialog__heading h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 750;
+    line-height: 1.3;
+}
+
+.remote-reject-dialog__heading p {
+    margin: .25rem 0 0;
+    color: var(--reject-muted);
+    font-size: .85rem;
+    overflow-wrap: anywhere;
+}
+
+.remote-reject-dialog__close {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: .7rem;
+    color: var(--reject-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.remote-reject-dialog__close:hover { background: var(--reject-soft); }
+
+.remote-reject-dialog__body {
+    display: grid;
+    gap: .85rem;
+    padding: 1.1rem 1.35rem 1.25rem;
+    overflow-y: auto;
+}
+
+.remote-reject-dialog__subtitle {
+    margin: 0;
+    color: var(--reject-muted);
+    font-size: .9375rem;
+}
+
+.remote-reject-dialog__field { display: grid; gap: .4rem; }
+
+.remote-reject-dialog__label {
+    font-size: .85rem;
+    font-weight: 600;
+}
+
+.remote-reject-dialog__input {
+    width: 100%;
+    min-height: 6.5rem;
+    padding: .65rem .8rem;
+    border: 1px solid var(--reject-line);
+    border-radius: .7rem;
+    color: var(--reject-ink);
+    background: var(--reject-surface);
+    font: inherit;
+    font-size: .9rem;
+    line-height: 1.5;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.remote-reject-dialog__input:focus-visible {
+    outline: 2px solid var(--reject-danger);
+    outline-offset: 1px;
+    border-color: var(--reject-danger);
+}
+
+.remote-reject-dialog__input[aria-invalid="true"] { border-color: var(--reject-danger); }
+
+.remote-reject-dialog__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    min-height: 1.4rem;
+}
+
+.remote-reject-dialog__error {
+    margin: 0;
+    color: var(--reject-danger);
+    font-size: .82rem;
+    font-weight: 600;
+}
+
+.remote-reject-dialog__count {
+    margin-left: auto;
+    color: var(--reject-muted);
+    font-size: .78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.remote-reject-dialog__note {
+    display: flex;
+    align-items: flex-start;
+    gap: .45rem;
+    margin: 0;
+    padding: .7rem .85rem;
+    border: 1px solid var(--reject-line);
+    border-radius: .7rem;
+    color: var(--reject-muted);
+    background: var(--reject-soft);
+    font-size: .82rem;
+    line-height: 1.5;
+}
+
+.remote-reject-dialog__note .material-symbols-outlined { font-size: 1.05rem; flex: none; margin-top: .1rem; }
+
+.remote-reject-dialog__footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .65rem;
+    padding: .9rem 1.35rem;
+    border-top: 1px solid var(--reject-line);
+    background: var(--reject-soft);
+}
+
+.remote-reject-dialog__footer button {
+    min-height: 2.6rem;
+    padding: .55rem 1.1rem;
+    border: 1px solid var(--reject-line);
+    border-radius: .7rem;
+    font: inherit;
+    font-size: .875rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.remote-reject-dialog__secondary {
+    color: var(--reject-ink);
+    background: var(--reject-surface);
+}
+
+.remote-reject-dialog__secondary:hover { border-color: var(--reject-danger); }
+
+.remote-reject-dialog__danger {
+    border-color: transparent;
+    color: #fff;
+    background: var(--reject-danger);
+}
+
+:where(html[data-theme="dark"]) .remote-reject-dialog__danger { color: #2b0d0d; }
+
+.remote-reject-dialog__danger:hover { filter: brightness(1.08); }
+
+.remote-reject-dialog button:focus-visible {
+    outline: 2px solid var(--app-accent, #0284c7);
+    outline-offset: 2px;
+}
+
+.remote-reject-dialog button:disabled { opacity: .55; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+    .remote-reject-dialog__header,
+    .remote-reject-dialog__body,
+    .remote-reject-dialog__footer { padding-inline: 1rem; }
+    .remote-reject-dialog__footer { flex-direction: column; }
+    .remote-reject-dialog__footer button { width: 100%; }
+}

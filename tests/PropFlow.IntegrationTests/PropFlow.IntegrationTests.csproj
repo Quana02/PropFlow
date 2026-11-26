@@ -35,6 +35,10 @@
     <ProjectReference Include="..\..\src\Modules\AiClassification\PropFlow.Modules.AiClassification.csproj" />
     <ProjectReference Include="..\..\src\Modules\AiRecommendation\PropFlow.Modules.AiRecommendation.csproj" />
     <ProjectReference Include="..\..\src\Modules\Communication\PropFlow.Modules.Communication.csproj" />
+    <ProjectReference Include="..\..\src\Modules\RemoteOnlineSign\PropFlow.Modules.RemoteOnlineSign.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Administration.Contracts\PropFlow.Modules.Administration.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Authentication.Contracts\PropFlow.Modules.Authentication.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Residents.Contracts\PropFlow.Modules.Residents.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

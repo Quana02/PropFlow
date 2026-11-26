@@ -251,6 +251,14 @@ builder.Services.AddDbContext<ComplaintsDbContext>((services, options) =>
             "__EFMigrationsHistory",
             "complaints")));
 
+builder.Services.AddDbContext<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.RemoteOnlineSignDbContext>((services, options) =>
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
+        services.GetRequiredService<NpgsqlConnection>(),
+        npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "remote_online_sign")));
+builder.Services.AddHttpClient("RemoteContractCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.IRemotePdfStorage, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.CloudinaryRemotePdfStorage>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.IPdfSignatureStamper, PropFlow.Modules.RemoteOnlineSign.Application.PdfSignatureStamper>();
+
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
     options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
@@ -306,6 +314,9 @@ builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintSto
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintCommitter, ComplaintCommitter>();
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintContextSource, ComplaintContextSource>();
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.ComplaintUseCases>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.RemoteContractService>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.IRemoteContractCodeGenerator, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.RemoteContractCodeGenerator>();
+builder.Services.AddHostedService<PropFlow.Modules.RemoteOnlineSign.Application.RemoteOnlineSignSignatureCleanupWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.IAnnouncementStore, EfAnnouncementStore>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.AnnouncementUseCases>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IComplaintClosureNotice, PropFlow.Modules.Communication.Infrastructure.ComplaintClosureNotice>();

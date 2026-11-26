@@ -1,0 +1,37 @@
+<div class="remote-mode-backdrop" role="presentation" @onclick="HandleBackdropAsync">
+    <section class="remote-mode-dialog" role="dialog" aria-modal="true" aria-labelledby="remote-mode-title" @onclick:stopPropagation="true">
+        <header class="remote-mode-dialog__header">
+            <span class="remote-mode-dialog__badge" aria-hidden="true"><span class="material-symbols-outlined">warning</span></span>
+            <div class="remote-mode-dialog__heading">
+                <h2 id="remote-mode-title">Thay đổi chế độ ký?</h2>
+                <p>Hợp đồng này đã được thiết lập vị trí chữ ký.</p>
+            </div>
+            <button type="button" class="remote-mode-dialog__close" aria-label="Đóng" title="Đóng" @onclick="CancelAsync" disabled="@Busy">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </header>
+        <div class="remote-mode-dialog__body">
+            <p class="remote-mode-dialog__warning">Khi thay đổi chế độ ký, các vị trí chữ ký hiện tại sẽ bị xóa.</p>
+            <p class="remote-mode-dialog__note">PDF, tên hợp đồng, mã hợp đồng và hạn ký vẫn được giữ nguyên.</p>
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <p class="remote-mode-dialog__error" role="alert">@Error</p>
+            }
+        </div>
+        <footer class="remote-mode-dialog__footer">
+            <button type="button" class="remote-mode-dialog__secondary" @onclick="CancelAsync" disabled="@Busy">Hủy</button>
+            <button type="button" class="remote-mode-dialog__primary" @onclick="ConfirmAsync" disabled="@Busy">@(Busy ? "Đang xử lý…" : "Xác nhận thay đổi")</button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+
+    private Task CancelAsync() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
+    private Task ConfirmAsync() => Busy ? Task.CompletedTask : OnConfirm.InvokeAsync();
+    private Task HandleBackdropAsync() => CancelAsync();
+}
