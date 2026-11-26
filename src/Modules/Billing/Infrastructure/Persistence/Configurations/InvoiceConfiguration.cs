@@ -26,7 +26,8 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasKey(invoice => invoice.Id);
         builder.Property(invoice => invoice.Type).HasColumnName("invoice_type").HasConversion<string>().HasMaxLength(30);
         builder.Property(invoice => invoice.SourceServiceRequestId).HasColumnName("source_service_request_id");
-        builder.HasIndex(invoice => invoice.SourceServiceRequestId).IsUnique().HasFilter("source_service_request_id IS NOT NULL");
+        builder.Property(invoice => invoice.SourceServiceRequestRound).HasColumnName("source_service_request_round").HasDefaultValue(0);
+        builder.HasIndex(invoice => new { invoice.SourceServiceRequestId, invoice.SourceServiceRequestRound }).IsUnique().HasFilter("source_service_request_id IS NOT NULL");
         builder.Property(invoice => invoice.Id).HasColumnName("id");
 
         builder.Property(invoice => invoice.InvoiceNumber)

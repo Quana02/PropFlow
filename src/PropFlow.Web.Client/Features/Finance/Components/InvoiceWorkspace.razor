@@ -110,7 +110,22 @@ else if (data is not null)
     </section>
 }
 </section>
+<FinanceSettlementRefresh Refresh="RefreshSettlementAsync" Busy="@(busy || loading)" />
 @code {
+    private async Task RefreshSettlementAsync()
+    {
+        if (editing || rejecting.HasValue) return;
+        if (detail is { } current)
+        {
+            var result = await Api.GetAsync<InvoiceView>($"invoices/{current.Id}");
+            var rows = await Api.PaymentsAsync(current.Id);
+            if (detail?.Id != current.Id) return;
+            if (result.IsSuccess && result.Data is not null) detail = result.Data;
+            if (rows.IsSuccess) payments = rows.Data ?? [];
+        }
+        else await Load(page);
+    }
+
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
 
     [Parameter] public bool CanWrite { get; set; }

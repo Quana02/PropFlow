@@ -425,6 +425,7 @@ builder.Services.AddHttpClient<IPaymentBankDirectory, VietQrBankDirectory>(clien
 });
 builder.Services.AddScoped<PaymentDestinationSettings>();
 builder.Services.AddScoped<ResidentServiceRequestPayments>();
+builder.Services.AddScoped<PropFlow.Modules.Payments.Contracts.IInvoicePaymentInstructions>(services => services.GetRequiredService<ResidentServiceRequestPayments>());
 builder.Services.AddOptions<SePayOptions>().BindConfiguration("Payments:SePay")
     .Validate(SePayLiveConfiguration.Valid, "SePay Live cần địa chỉ webhook HTTPS công khai và khóa xác thực hợp lệ (ít nhất 32 ký tự).")
     .ValidateOnStart();
@@ -474,6 +475,8 @@ builder.Services.AddScoped<IResidentServiceRequestDetailStore, ResidentServiceRe
 builder.Services.AddScoped<GetResidentServiceRequestHandler>();
 builder.Services.AddScoped<IResidentServiceRequestFeedbackStore, ResidentServiceRequestFeedbackStore>();
 builder.Services.AddScoped<RateResidentServiceRequestHandler>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.AcceptResidentServiceRequest.IResidentCompletionStore, ResidentCompletionStore>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.AcceptResidentServiceRequest.ResidentCompletionHandler>();
 builder.Services.AddScoped<IServiceRequestMaintenanceSource, ServiceRequestMaintenanceSource>();
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.IManagerServiceRequestStore, ManagerServiceRequestStore>();
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();

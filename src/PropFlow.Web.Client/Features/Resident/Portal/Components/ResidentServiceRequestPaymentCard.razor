@@ -1,3 +1,4 @@
+@inject PropFlow.Web.Client.Services.Api.AuthenticatedApiClient InvoiceApi
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.Payments.Contracts
 @using PropFlow.Web.Client.Features.Resident.Portal.Services
@@ -5,7 +6,8 @@
 @inject IResidentServiceRequestApiClient Api
 
 <section class="resident-payment-card" aria-label="Thanh toán dịch vụ">
-    <header><div><small>THANH TOÁN DỊCH VỤ</small><h3>@(payment?.InvoiceNumber ?? "Hóa đơn dịch vụ")</h3></div><span class="payment-badge @(payment?.SettlementStatus == "PAID" ? "paid" : "")">@StatusLabel</span></header>
+    <header><div><small>THANH TOÁN HÓA ĐƠN</small><h3>@(payment?.InvoiceNumber ?? "Hóa đơn dịch vụ")</h3></div><span class="payment-badge @(payment?.SettlementStatus == "PAID" ? "paid" : "")">@StatusLabel</span></header>
+    @if (payment is not null && InvoiceId is null) { <a href="@($"/resident/billing?invoice={payment.InvoiceId}")">Xem hóa đơn @payment.InvoiceNumber →</a> }
     @if (!Completed) { <p>Chi phí sẽ được chốt và hóa đơn phát hành sau khi Ban quản lý nghiệm thu công việc.</p> }
     else if (loading && payment is null) { <p role="status">Đang tải thông tin thanh toán…</p> }
     else if (payment is not null)
@@ -27,7 +29,7 @@
             <div class="payment-bank"><strong>@payment.BankName · @payment.MaskedAccountNumber</strong><span>@payment.AccountName</span>@if (payment.TransferCode is { } code) { <small>Nội dung chuyển khoản: <code>@(code)</code></small> }</div>
             @if (payment.PaymentStatus == "PENDING")
             { <p class="payment-help" role="status">Đã gửi thông tin chuyển khoản. @(payment.AutomaticConfirmationEnabled ? "Đang chờ thông báo ngân hàng hoặc kế toán đối soát." : "Đang chờ kế toán kiểm tra.") Không cần chuyển lại nếu ngân hàng đã báo thành công.</p> }
-            else
+            else if (InvoiceId is null)
             {
                 <details open="@(!payment.AutomaticConfirmationEnabled)">
                     <summary>@(payment.AutomaticConfirmationEnabled ? "Đã chuyển nhưng chưa được ghi nhận?" : "Báo chuyển khoản cho kế toán")</summary>
@@ -43,6 +45,7 @@
 @code {
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
 
+    [Parameter] public Guid? InvoiceId { get; set; }
     [Parameter] public Guid RequestId { get; set; }
     [Parameter] public bool Completed { get; set; }
     [Parameter] public EventCallback<ResidentServiceRequestPaymentView> Changed { get; set; }
@@ -58,8 +61,8 @@
     protected override void OnInitialized() => _ = WatchAsync();
     protected override async Task OnParametersSetAsync()
     {
-        if (loadedId == RequestId && loadedCompleted == Completed) return;
-        loadedId = RequestId; loadedCompleted = Completed; payment = null; qr = null; qrAmount = null; error = note = null; reference = "";
+        if (loadedId == (InvoiceId ?? RequestId) && loadedCompleted == Completed) return;
+        loadedId = InvoiceId ?? RequestId; loadedCompleted = Completed; payment = null; qr = null; qrAmount = null; error = note = null; reference = "";
         if (Completed) await RefreshAsync();
     }
     private async Task WatchAsync()
@@ -74,17 +77,22 @@
         if (loading || reporting || cancellation.IsCancellationRequested) return;
         loading = true;
         var requestId = RequestId;
+        var invoiceId = InvoiceId;
         try
         {
-            var result = await Api.GetPaymentAsync(requestId, cancellation.Token);
-            if (requestId != RequestId || cancellation.IsCancellationRequested) return;
+            var result = invoiceId is { } id
+                ? await InvoiceApi.SendAsync<ResidentServiceRequestPaymentView>(HttpMethod.Get, $"api/v1/resident/payments/invoices/{id}", ct: cancellation.Token)
+                : await Api.GetPaymentAsync(requestId, cancellation.Token);
+            if (requestId != RequestId || invoiceId != InvoiceId || cancellation.IsCancellationRequested) return;
             if (!result.IsSuccess || result.Data is null) { error = result.Message ?? "Không thể tải thông tin thanh toán."; return; }
             payment = result.Data; error = null;
             if (payment.QrImageUrl is null || payment.OutstandingAmount <= 0) { qr = null; qrAmount = null; }
             else if (qr is null || qrAmount != payment.OutstandingAmount)
             {
-                var image = await Api.GetPaymentQrAsync(requestId, cancellation.Token);
-                if (requestId != RequestId || cancellation.IsCancellationRequested) return;
+                var image = invoiceId is { } qrId
+                    ? await InvoiceApi.GetFileAsync($"api/v1/resident/payments/invoices/{qrId}/qr", cancellation.Token)
+                    : await Api.GetPaymentQrAsync(requestId, cancellation.Token);
+                if (requestId != RequestId || invoiceId != InvoiceId || cancellation.IsCancellationRequested) return;
                 if (image.IsSuccess && image.Data is not null) { qr = $"data:{image.Data.ContentType};base64,{Convert.ToBase64String(image.Data.Bytes)}"; qrAmount = payment.OutstandingAmount; }
                 else { qr = null; error = image.Message ?? "Chưa tải được QR thanh toán."; }
             }
@@ -112,6 +120,6 @@
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         finally { reporting = false; }
     }
-    private static string Money(decimal value) => $"{value:N0} ₫";
+    private static string Money(decimal value) => $"{value.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))} đ";
     public void Dispose() { toastLifetime.Dispose();  cancellation.Cancel(); cancellation.Dispose(); }
 }
