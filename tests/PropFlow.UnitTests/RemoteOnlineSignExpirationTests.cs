@@ -35,6 +35,56 @@ public sealed class RemoteOnlineSignExpirationTests
     }
 
     [Fact]
+    public async Task Due_contract_worker_expires_once_and_publishes_after_transition()
+    {
+        await using var fixture = new Fixture();
+        var contract = await fixture.AddContractAsync(RemoteSigningMode.PRE_SIGNED_INVESTOR,
+            RemoteContractStatus.PENDING_RESIDENT_SIGNATURE, DateTimeOffset.UtcNow.AddMinutes(-1), fixture.Resident);
+
+        Assert.Equal(1, await fixture.Service.ExpireDueContractsAsync(100, default));
+        Assert.Equal(RemoteContractStatus.EXPIRED, (await fixture.Db.Contracts.FindAsync(contract.Id))!.Status);
+        var change = Assert.Single(fixture.Notifier.Changes);
+        Assert.Equal((contract.Id, "PENDING_RESIDENT_SIGNATURE", "EXPIRED"), (change.ContractId, change.PreviousStatus, change.NewStatus));
+
+        Assert.Equal(0, await fixture.Service.ExpireDueContractsAsync(100, default));
+        Assert.Single(fixture.Notifier.Changes);
+        Assert.Equal(1, await fixture.Db.Events.CountAsync(x => x.ContractId == contract.Id && x.Type == "CONTRACT_EXPIRED"));
+    }
+
+    [Fact]
+    public async Task Successful_rejection_publishes_and_notifier_failure_does_not_rollback()
+    {
+        await using var fixture = new Fixture();
+        var contract = await fixture.AddContractAsync(RemoteSigningMode.PRE_SIGNED_INVESTOR,
+            RemoteContractStatus.PENDING_RESIDENT_SIGNATURE, DateTimeOffset.UtcNow.AddDays(1), fixture.Resident);
+
+        fixture.Notifier.Throw = true;
+        await fixture.Service.RejectAsync(fixture.Resident, contract.Id, "Không đồng ý", default);
+
+        Assert.Equal(RemoteContractStatus.REJECTED, (await fixture.Db.Contracts.FindAsync(contract.Id))!.Status);
+        Assert.Single(fixture.Notifier.Changes);
+    }
+
+    [Fact]
+    public async Task Successful_resident_finalization_publishes_completed_but_failed_otp_does_not()
+    {
+        await using var fixture = new Fixture();
+        var contract = await fixture.AddContractAsync(RemoteSigningMode.PRE_SIGNED_INVESTOR,
+            RemoteContractStatus.PENDING_RESIDENT_SIGNATURE, DateTimeOffset.UtcNow.AddDays(1), fixture.Resident);
+        var challenge = await fixture.Service.BeginSigningAsync(fixture.Resident, false, contract.Id,
+            new BeginSignature(SignatureMethod.TYPE, null, "Resident", "Arial"), default);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Service.VerifyAndFinalizeAsync(fixture.Resident, false, contract.Id,
+            new VerifySignature(challenge.SessionId, "000000"), default));
+        Assert.Empty(fixture.Notifier.Changes);
+
+        await fixture.Service.VerifyAndFinalizeAsync(fixture.Resident, false, contract.Id,
+            new VerifySignature(challenge.SessionId, "123456"), default);
+        var change = Assert.Single(fixture.Notifier.Changes);
+        Assert.Equal((contract.Id, "PENDING_RESIDENT_SIGNATURE", "COMPLETED"), (change.ContractId, change.PreviousStatus, change.NewStatus));
+    }
+
+    [Fact]
     public async Task Pending_contract_future_or_null_deadline_does_not_expire()
     {
         await using var fixture = new Fixture();
@@ -253,6 +303,7 @@ public sealed class RemoteOnlineSignExpirationTests
         public RemoteOnlineSignDbContext Db { get; }
         public MemoryStorage Storage { get; } = new();
         public CountingOtp Otp { get; } = new();
+        public RecordingNotifier Notifier { get; } = new();
         public RemoteContractService Service { get; }
 
         public Fixture()
@@ -262,7 +313,7 @@ public sealed class RemoteOnlineSignExpirationTests
                 .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)).Options);
             Service = new(Db, Storage, Otp, new PdfSignatureStamper(), NullLogger<RemoteContractService>.Instance,
                 new RemoteTestAccountAccess(), new RemoteTestAccountDirectory(), new RemoteTestResidentScope(),
-                new RemoteContractCodeGenerator(Db));
+                new RemoteContractCodeGenerator(Db), Notifier);
         }
 
         public Task<RemoteContract> AddContractAsync(RemoteSigningMode mode, RemoteContractStatus status,
@@ -339,6 +390,18 @@ public sealed class RemoteOnlineSignExpirationTests
             if (!challenges.TryGetValue(challengeId, out var c) || c.User != userId || c.Purpose != purpose || c.Binding != payloadHash || code != "123456")
                 throw new InvalidOperationException("OTP rejected");
             challenges.Remove(challengeId);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingNotifier : IRemoteContractStatusNotifier
+    {
+        public List<RemoteContractStatusChanged> Changes { get; } = [];
+        public bool Throw { get; set; }
+        public Task NotifyAsync(RemoteContractStatusChanged change, CancellationToken ct)
+        {
+            Changes.Add(change);
+            if (Throw) throw new InvalidOperationException("delivery unavailable");
             return Task.CompletedTask;
         }
     }

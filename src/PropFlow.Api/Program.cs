@@ -258,6 +258,8 @@ builder.Services.AddDbContext<PropFlow.Modules.RemoteOnlineSign.Infrastructure.P
 builder.Services.AddHttpClient("RemoteContractCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.IRemotePdfStorage, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.CloudinaryRemotePdfStorage>();
 builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.IPdfSignatureStamper, PropFlow.Modules.RemoteOnlineSign.Application.PdfSignatureStamper>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.IRemoteContractStatusNotifier, PropFlow.Modules.RemoteOnlineSign.Presentation.RemoteContractStatusNotifier>();
+builder.Services.AddHostedService<PropFlow.Modules.RemoteOnlineSign.Application.RemoteOnlineSignExpirationWorker>();
 
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
     options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
@@ -329,6 +331,7 @@ builder.Services.AddScoped<ISharedFacilityCatalog, SharedFacilityCatalog>();
 builder.Services.AddScoped<FacilityGuideService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.IParkingStore, PropFlow.Modules.PropertyAssets.Infrastructure.Parking.EfParkingStore>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.ParkingWorkspace>();
+builder.Services.AddSingleton<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionCooldown>();
 builder.Services.AddHttpClient("ParkingPlanGemini", (services, client) =>
 {
     var ai = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
@@ -342,7 +345,8 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.I
         new PropFlow.Shared.GeminiStructuredClient(services.GetRequiredService<IHttpClientFactory>().CreateClient("ParkingPlanGemini"),
             ai.ApiKey, builder.Configuration["Parking:Ai:Model"] ?? ai.AnswerModel, ai.Enabled),
         services.GetRequiredService<ILogger<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.GeminiParkingPlanRecognition>>(),
-        builder.Configuration.GetSection("Parking:Ai").Get<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionOptions>());
+        builder.Configuration.GetSection("Parking:Ai").Get<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionOptions>(),
+        services.GetRequiredService<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionCooldown>());
 });
 builder.Services.AddScoped<IFacilityGuideSource>(sp => sp.GetRequiredService<FacilityGuideService>());
 builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityRecommendationOptions>()
@@ -719,6 +723,7 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PropFlow.Modules.RemoteOnlineSign.Presentation.RemoteOnlineSignHub>("/hubs/remote-online-sign", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.AnnouncementHub>("/hubs/announcements", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true)
     .RequireAuthorization(policy => policy.RequireRole(SystemRoleCodes.Resident));

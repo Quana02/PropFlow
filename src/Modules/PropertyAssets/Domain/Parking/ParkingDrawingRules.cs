@@ -14,7 +14,7 @@ public static class ParkingDrawingRules
     public const int MaxObjects = 1000;
     public const int MaxContourPoints = 300000;
     public const double MaxCoordinate = 1_000_000_000;
-    public static readonly string[] Kinds = ["SPACE", "LANE", "GATE", "WALL", "LABEL", "TRACE", "LINE", "CURVE", "RECT", "SQUARE", "DIVIDER", "WALL_SQUARE", "WALL_CIRCLE", "ENTRANCE", "EXIT"];
+    public static readonly string[] Kinds = ["SPACE", "LANE", "GATE", "WALL", "LABEL", "TRACE", "LINE", "CURVE", "RECT", "SQUARE", "DIVIDER", "WALL_SQUARE", "WALL_CIRCLE", "ENTRANCE", "EXIT", ..ParkingToolCatalog.Additional.Select(tool=>tool.Kind)];
     public static readonly string[] States = ["AVAILABLE", "IN_USE", "MAINTENANCE"];
     public static ParkingDrawing Validate(ParkingDrawing? drawing, bool publishing = false)
     {
@@ -48,9 +48,9 @@ public static class ParkingDrawingRules
                 }
             }
             else if(item.Kind=="TRACE") Fail("Nét nguồn cần có đường bao.");
-            if(item.Kind is "LINE" or "CURVE")
+            if (item.Kind is "LINE" or "DASHED_LINE" or "CURVE")
             {
-                var required=item.Kind=="LINE"?2:3;
+                var required=item.Kind=="CURVE"?3:2;
                 if(item.ControlPoints is not {} controls||controls.Length!=required||item.Outline is not null||item.Contours is not null
                     ||controls.Any(p=>p is null||!double.IsFinite(p.X)||!double.IsFinite(p.Y)||p.X is <0 or >1||p.Y is <0 or >1))
                     Fail("Đường vẽ cần các điểm điều khiển hợp lệ bên trong đối tượng.");
@@ -59,9 +59,9 @@ public static class ParkingDrawingRules
                     Fail("Hai đầu đường vẽ phải cách nhau ít nhất 4 đơn vị.");
             }
             else if(item.ControlPoints is not null) Fail("Chỉ đường thẳng và đường cong được có điểm điều khiển.");
-            if(item.Kind is "SQUARE" or "WALL_SQUARE" or "WALL_CIRCLE")
+            if(ParkingToolCatalog.IsSquare(item.Kind))
                 if(Math.Abs(item.Width-item.Height)>.001||item.Outline is not null) Fail("Hình vuông và vật cản tròn phải có chiều rộng bằng chiều cao.");
-            if(item.Kind is "DIVIDER" or "ENTRANCE" or "EXIT")
+            if(item.Kind is "DIVIDER" or "ENTRANCE" or "EXIT" || ParkingToolCatalog.Additional.Any(tool=>tool.Kind==item.Kind&&!tool.Outline))
                 if(item.Outline is not null) Fail("Ký hiệu sử dụng khung và góc xoay, không dùng đường bao tùy ý.");
             if (item.Outline is { } outline)
             {

@@ -1,0 +1,6 @@
+.parking-listing-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; font-size: .875rem; }
+.parking-listing-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+.parking-listing-legend span::before { content: ""; width: .65rem; height: .65rem; border-radius: 50%; background: var(--parking-status); }
+.available { --parking-status: #22c55e; }
+.processing { --parking-status: #eab308; }
+.sold { --parking-status: #ef4444; }

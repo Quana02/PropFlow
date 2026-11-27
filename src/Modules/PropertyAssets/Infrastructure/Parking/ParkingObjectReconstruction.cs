@@ -4,7 +4,7 @@ using PropFlow.Modules.PropertyAssets.Domain.Parking;
 namespace PropFlow.Modules.PropertyAssets.Infrastructure.Parking;
 
 /// <summary>Reconstructs separate straight-edged objects from structural lines, never pixel contours.</summary>
-internal static class ParkingObjectReconstruction
+internal static partial class ParkingObjectReconstruction
 {
     private readonly record struct Point(double X,double Y)
     {
@@ -20,16 +20,25 @@ internal static class ParkingObjectReconstruction
     }
     private sealed record Cell(Point[] Corners,double Area);
 
-    public static ParkingShape[] Build(byte[] ink,int w,int h,int cw,int ch,CancellationToken ct)
+    public static ParkingShape[] Build(byte[] ink,int w,int h,int cw,int ch,CancellationToken ct,bool includeLinework=false,byte[]? strongInk=null)
     {
-        var lines=DetectLines(ink,w,h,ct);var cells=Combine(FindBandCells(ink,lines,w,h,ct),FindClosedFaces(ink,w,h,ct));
+        var lines=DetectLines(ink,w,h,ct,includeLinework);var cells=Combine(FindBandCells(ink,lines,w,h,ct),FindClosedFaces(ink,w,h,ct));
         cells=RegularizeRows(cells,w,h,ct);
         var result=new List<ParkingShape>();
         foreach(var cell in cells.OrderBy(c=>c.Corners.Min(p=>p.Y)).ThenBy(c=>c.Corners.Min(p=>p.X)))
         {
             var x=cell.Corners.Min(p=>p.X);var y=cell.Corners.Min(p=>p.Y);var width=cell.Corners.Max(p=>p.X)-x;var height=cell.Corners.Max(p=>p.Y)-y;
-            result.Add(new(Guid.NewGuid(),"SPACE",$"P-{result.Count+1:000}",x*cw/w,y*ch/h,width*cw/w,height*ch/h,0,
-                cell.Corners.Select(p=>new ParkingPoint((p.X-x)/width,(p.Y-y)/height)).ToArray(),null,true));
+            // The local pass detects outlines without enough semantic evidence to call them parking bays.
+            result.Add(new(Guid.NewGuid(),includeLinework?"RECT":"SPACE",includeLinework?"":$"P-{result.Count+1:000}",x*cw/w,y*ch/h,width*cw/w,height*ch/h,0,
+                cell.Corners.Select(p=>new ParkingPoint((p.X-x)/width,(p.Y-y)/height)).ToArray(),null,!includeLinework));
+        }
+        if(includeLinework)
+        {
+            var sparseInk = ink.Count(pixel => pixel != 0) < ink.Length * .19;
+            var traced = sparseInk ? TraceOpenLinework(ink,w,h,ct) : [];
+            var hasTrace = traced.Count != 0;
+            AddPreviewMarkings(result,hasTrace ? traced : lines,cells,ink,strongInk??ink,w,h,cw,ch,ct,hasTrace);
+            return result.Take(ParkingDrawingRules.MaxObjects).ToArray();
         }
         if(cells.Count==0)return [];
         var hull=Hull(cells.SelectMany(c=>c.Corners).ToArray());var distance=Math.Max(4,Math.Min(w,h)*.04);
@@ -50,10 +59,178 @@ internal static class ParkingObjectReconstruction
         return result.ToArray();
     }
 
-    private static List<Line> DetectLines(byte[] ink,int w,int h,CancellationToken ct)
+    private static void AddPreviewMarkings(List<ParkingShape> result,List<Line> lines,List<Cell> cells,byte[] ink,byte[] strongInk,
+        int width,int height,int canvasWidth,int canvasHeight,CancellationToken ct,bool traced)
+    {
+        var minimumLength = Math.Max(12, Math.Min(width, height) * (traced ? .033 : .055));
+        var minimumCoverage = traced ? .78 : .86;
+        var directCoverage = traced ? .50 : .62;
+        var flankOffset = Math.Max(4, Math.Min(width,height)*.009);
+        var edges = cells.SelectMany(cell => cell.Corners.Select((point, index) => new Line(point,cell.Corners[(index+1)%cell.Corners.Length],0))).ToArray();
+        var candidates = new List<Line>();
+        foreach (var line in lines.Where(line => line.Length >= minimumLength))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (StrokeCoverage(line.A,line.B,ink,width,height) < minimumCoverage || StrokeCoverage(line.A,line.B,ink,width,height,radius:0) < directCoverage) continue;
+            if (candidates.Any(old => CoversMarking(old,line,4,.13,.72))) continue;
+            var offset = new Point(-line.Direction.Y,line.Direction.X)*flankOffset;
+            var leftFlank = StrokeCoverage(line.A+offset,line.B+offset,ink,width,height,radius:0);
+            var rightFlank = StrokeCoverage(line.A-offset,line.B-offset,ink,width,height,radius:0);
+            if (Math.Min(leftFlank,rightFlank) > .55) continue;
+            candidates.Add(line);
+            if (candidates.Count == 160) break;
+        }
+        var layoutMarkings = WithoutTopDimensions(candidates,ink,width,height);
+        var markings = layoutMarkings.Where(line=>!edges.Any(edge=>CoversMarking(edge,line,2.5,.07,.85))).ToArray();
+        var used = new bool[markings.Length];
+        for (var i = 0; i < markings.Length; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (used[i]) continue;
+            var stem = markings[i];
+            for (var j = 0; j < markings.Length; j++)
+            {
+                if (i == j || used[j]) continue;
+                var bar = markings[j];
+                if (Math.Abs(Dot(stem.Direction,bar.Direction)) > .13 || bar.Length > stem.Length * 1.25) continue;
+                if (!Intersection(stem,bar,out var join) || Distance(join,bar.Center) > Math.Min(6,bar.Length*.17)) continue;
+                if (Distance(join,stem.A) > 6 && Distance(join,stem.B) > 6) continue;
+                var tip = Distance(join,stem.A) < Distance(join,stem.B) ? stem.B : stem.A;
+                var perpendicular = new Point(-stem.Direction.Y,stem.Direction.X);
+                if (Dot(perpendicular,bar.Direction) < 0) perpendicular = perpendicular*-1;
+                var start = join-perpendicular*(bar.Length/2);
+                var end = join+perpendicular*(bar.Length/2);
+                if (Math.Max(Distance(bar.A,start),Distance(bar.B,end)) > 5 || StrokeCoverage(start,end,ink,width,height) < .78) continue;
+
+                if (!Add("DIVIDER","",start,end,tip)) continue;
+                used[i] = used[j] = true;
+                break;
+            }
+        }
+        for (var i = 0; i < markings.Length; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (used[i]) continue;
+            var stroke = markings[i];
+            var startCap = traced ? FindEndCap(new(stroke.B,stroke.A,stroke.Strength),ink,width,height) : null;
+            var endCap = traced ? FindEndCap(stroke,ink,width,height) : null;
+            var divider = endCap ?? startCap;
+            if (divider is not null && Add("DIVIDER","",divider.A,divider.B,endCap is null ? stroke.B : stroke.A))
+            {
+                if (startCap is not null && endCap is not null) Add("LINE","",startCap.A,startCap.B);
+            }
+            else Add("LINE","",stroke.A,stroke.B);
+        }
+
+        if (traced)
+        {
+            var number = 1;
+            var recognized = new List<Point[]>();
+            foreach (var corners in ReadOpenBays(markings,layoutMarkings,cells,ink,strongInk,width,height,ct))
+            {
+                if (!Add("SPACE",$"P-{number:000}",corners)) continue;
+                recognized.Add(corners);
+                number++;
+            }
+            if (recognized.Count != 0) result.RemoveAll(shape=>CoveredPreviewBlock(shape,recognized,width,height,canvasWidth,canvasHeight));
+        }
+
+        bool Add(string kind, string label, params Point[] points)
+        {
+            try
+            {
+                var shape = ParkingVisionGeometry.FromCorners(new(Guid.NewGuid(),kind,label,0,0,0,0,NeedsReview:kind=="SPACE"),
+                    points.Select(point => new ParkingPoint(point.X*canvasWidth/width,point.Y*canvasHeight/height)).ToArray(),new(canvasWidth,canvasHeight,[]));
+                if (kind=="SPACE") result.Insert(0,shape);
+                else result.Add(shape);
+                return true;
+            }
+            catch (ParkingFailure) { return false; }
+        }
+    }
+
+    private static bool CoveredPreviewBlock(ParkingShape shape,List<Point[]> bays,int width,int height,int canvasWidth,int canvasHeight)
+    {
+        if (shape.Kind!="RECT" || shape.Outline is not { Length:4 } outline) return false;
+        var corners = outline.Select(point=>new Point((shape.X+point.X*shape.Width)*width/canvasWidth,
+            (shape.Y+point.Y*shape.Height)*height/canvasHeight)).ToArray();
+        var covered = 0;
+        for (var x = 1; x <= 3; x++)
+        for (var y = 1; y <= 3; y++)
+        {
+            var upper = corners[0]+(corners[1]-corners[0])*(x/4d);
+            var lower = corners[3]+(corners[2]-corners[3])*(x/4d);
+            if (bays.Any(bay=>Inside(upper+(lower-upper)*(y/4d),bay,2))) covered++;
+        }
+        return covered>=6;
+    }
+
+    private static Line[] WithoutTopDimensions(List<Line> markings,byte[] ink,int width,int height)
+    {
+        var borders = markings.Where(line => line.Length > height*.62 && Math.Abs(line.Direction.X) < .06).ToArray();
+        var left = borders.FirstOrDefault(line => line.Center.X < width*.13);
+        var right = borders.FirstOrDefault(line => line.Center.X > width*.87);
+        if (left is null || right is null) return markings.ToArray();
+
+        var startLeft = Math.Min(left.A.Y,left.B.Y);
+        var startRight = Math.Min(right.A.Y,right.B.Y);
+        if (Math.Abs(startLeft-startRight) > height*.04) return markings.ToArray();
+        var firstMarking = Math.Min(startLeft,startRight) - height*.015;
+        var dimensionLine = markings.FirstOrDefault(line => line.Length > width*.65 && Math.Abs(line.Direction.Y) < .025 && Math.Max(line.A.Y,line.B.Y) < firstMarking);
+        if (dimensionLine is null || !HasDimensionTicks(dimensionLine,ink,width,height)) return markings.ToArray();
+        return markings.Where(line => Math.Max(line.A.Y,line.B.Y) >= firstMarking).ToArray();
+    }
+
+    private static bool HasDimensionTicks(Line line,byte[] ink,int width,int height)
+    {
+        var tickDistance = Math.Max(5,(int)Math.Round(height*.012));
+        var ticks = 0;
+        var previous = -tickDistance;
+        var count = (int)line.Length;
+        for (var i = 0; i < count; i++)
+        {
+            var point = line.A+(line.B-line.A)*(i/(double)count);
+            var x = (int)Math.Round(point.X);
+            var y = (int)Math.Round(point.Y);
+            if (x < 0 || x >= width || y < tickDistance || y+tickDistance >= height) continue;
+            if ((ink[(y-tickDistance)*width+x] & ink[(y+tickDistance)*width+x]) == 0) continue;
+            if (i-previous >= tickDistance) ticks++;
+            previous = i;
+        }
+        return ticks >= 3;
+    }
+
+    private static bool CoversMarking(Line edge, Line marking,double tolerance,double angularTolerance,double minimumOverlap)
+    {
+        if (Math.Abs(Cross(edge.Direction,marking.Direction)) > angularTolerance || LineDistance(marking.Center,edge) > tolerance) return false;
+        var a = Dot(edge.A-marking.A,marking.Direction);
+        var b = Dot(edge.B-marking.A,marking.Direction);
+        return Math.Min(marking.Length,Math.Max(a,b)) - Math.Max(0,Math.Min(a,b)) >= marking.Length*minimumOverlap;
+    }
+
+    private static double StrokeCoverage(Point start, Point end, byte[] ink, int width, int height,int radius=1)
+    {
+        const int samples = 24;
+        var hits = 0;
+        for (var sample = 1; sample <= samples; sample++)
+        {
+            var point = start+(end-start)*(sample/(double)(samples+1));
+            var x = (int)Math.Round(point.X);
+            var y = (int)Math.Round(point.Y);
+            var supported = false;
+            for (var dy = Math.Max(0,y-radius); dy <= Math.Min(height-1,y+radius) && !supported; dy++)
+                for (var dx = Math.Max(0,x-radius); dx <= Math.Min(width-1,x+radius) && !supported; dx++)
+                    supported = ink[dy*width+dx]!=0;
+            if (supported) hits++;
+        }
+        return hits/(double)samples;
+    }
+
+    private static List<Line> DetectLines(byte[] ink,int w,int h,CancellationToken ct,bool preview)
     {
         var points=Enumerable.Range(0,ink.Length).Where(i=>ink[i]!=0).Select(i=>new Point(i%w,i/w)).ToArray();
         if(points.Length<16)return [];
+        var densePreview = preview && points.Length > 45_000;
         var diagonal=(int)Math.Ceiling(Math.Sqrt((double)w*w+(double)h*h));var bins=2*diagonal+1;var accumulator=new int[180*bins];
         var cos=Enumerable.Range(0,180).Select(a=>Math.Cos(a*Math.PI/180)).ToArray();var sin=Enumerable.Range(0,180).Select(a=>Math.Sin(a*Math.PI/180)).ToArray();
         for(var angle=0;angle<180;angle++)
@@ -70,7 +247,7 @@ internal static class ParkingObjectReconstruction
             if(maximum)peaks.Add((angle,rho-diagonal,value));
         }
         var lines=new List<Line>();var minimumLength=Math.Max(10,Math.Min(w,h)*.023);var gap=Math.Max(2,Math.Max(w,h)*.0025);
-        foreach(var peak in peaks.OrderByDescending(p=>p.Votes).Take(650))
+        foreach(var peak in peaks.OrderByDescending(p=>p.Votes).Take(densePreview ? 140 : 650))
         {
             ct.ThrowIfCancellationRequested();var normal=new Point(cos[peak.Angle],sin[peak.Angle]);
             var near=points.Where(p=>Math.Abs(Dot(p,normal)-peak.Rho)<=2.5).ToArray();if(near.Length<minimum)continue;
@@ -100,7 +277,7 @@ internal static class ParkingObjectReconstruction
                 start=end+1;
             }
         }
-        return lines.OrderByDescending(l=>l.Length).Take(500).ToList();
+        return lines.OrderByDescending(l=>l.Length).Take(densePreview ? 180 : 500).ToList();
     }
 
     private static List<Cell> FindBandCells(byte[] ink,List<Line> lines,int w,int h,CancellationToken ct)

@@ -37,11 +37,35 @@ public sealed class ParkingArea
         foreach(var id in liveIds) if(Spaces.All(x=>x.Id!=id)) Spaces.Add(new(id,Id));
         PublishedJson=JsonSerializer.Serialize(drawing); PublishedSourceId=DraftSourceId; PublishedAt=now; Touch(actor,now);
     }
+    public void RemovePublishedDrawing(Guid actor, DateTimeOffset now)
+    {
+        if (PublishedJson is null)
+            throw new ParkingFailure(404, "parking_published_drawing_not_found", "Bãi đỗ chưa có sơ đồ đã xuất bản.");
+        if (Spaces.Any(space => !space.Archived && space.Status != "AVAILABLE"))
+            throw new ParkingFailure(409, "parking_space_in_use", "Chuyển các ô đang sử dụng hoặc bảo trì về Trống trước khi xóa sơ đồ.");
+
+        foreach (var space in Spaces)
+            space.Archive(true);
+
+        PublishedJson = null;
+        PublishedSourceId = null;
+        PublishedAt = null;
+        Touch(actor, now);
+    }
     public void ChangeSpace(Guid id,string status,Guid actor,DateTimeOffset now)
     {
-        var space=Spaces.SingleOrDefault(x=>x.Id==id&&!x.Archived)??throw new ParkingFailure(404,"parking_space_not_found","Không tìm thấy ô đỗ trên sơ đồ đang sử dụng.");
-        space.Change(status); Touch(actor,now);
+        PublishedSpace(id).Change(status);
+        Touch(actor,now);
     }
+    public void UpdateSpaceListing(Guid id, decimal? priceVnd, string listingStatus, Guid actor, DateTimeOffset now)
+    {
+        PublishedSpace(id).UpdateListing(priceVnd, listingStatus);
+        Touch(actor, now);
+    }
+
+    private ParkingSpace PublishedSpace(Guid id) =>
+        Spaces.SingleOrDefault(space => space.Id == id && !space.Archived)
+        ?? throw new ParkingFailure(404, "parking_space_not_found", "Không tìm thấy ô đỗ trên sơ đồ đang sử dụng.");
     private void Rename(string name)
     {
         if(string.IsNullOrWhiteSpace(name)||name.Trim().Length>120) throw new ParkingFailure(400,"parking_name_invalid","Tên bãi đỗ cần từ 1 đến 120 ký tự.");
@@ -56,12 +80,24 @@ public sealed class ParkingSpace
     public Guid Id {get;private set;}
     public Guid AreaId {get;private set;}
     public string Status {get;private set;}="AVAILABLE";
+    public decimal? PriceVnd { get; private set; }
+    public string ListingStatus { get; private set; } = ParkingListingStatus.Available;
     public bool Archived {get;private set;}
     internal void Archive(bool archived) {Archived=archived;}
     internal void Change(string status)
     {
         if(!ParkingDrawingRules.States.Contains(status)) throw new ParkingFailure(400,"parking_state_invalid","Trạng thái ô đỗ không hợp lệ.");
         Status=status;
+    }
+    internal void UpdateListing(decimal? priceVnd, string listingStatus)
+    {
+        if (listingStatus is not (ParkingListingStatus.Available or ParkingListingStatus.Processing or ParkingListingStatus.Sold))
+            throw new ParkingFailure(400, "parking_listing_status_invalid", "Trạng thái hiển thị của ô đỗ không hợp lệ.");
+        if (priceVnd is { } price && (price < 0 || price > 999_999_999_999_999_999m || price != decimal.Truncate(price)))
+            throw new ParkingFailure(400, "parking_price_invalid", "Nhập giá ô đỗ bằng số nguyên VND không âm và tối đa 18 chữ số.");
+
+        PriceVnd = priceVnd;
+        ListingStatus = listingStatus;
     }
 }
 public sealed class ParkingSource

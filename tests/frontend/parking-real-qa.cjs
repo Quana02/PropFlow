@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
 exports.verify=async function(h){
- const {p,navigate,until,evaluate,wait,send,apiRequest,shot,scenarios}=h;
+ const {p,newPage,login,navigate,until,evaluate,wait,send,apiRequest,shot,scenarios}=h;
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false},p.session);
  const click=async text=>{await until(p,`[...document.querySelectorAll('button')].some(x=>x.textContent.trim()===${JSON.stringify(text)}&&!x.disabled)`);await evaluate(p,`[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===${JSON.stringify(text)}&&!x.disabled).click()`);await wait(100)};
  await navigate(p,'/operations/parking');await until(p,"!!document.querySelector('#parking-new')");
@@ -24,14 +24,25 @@ exports.verify=async function(h){
  console.error('parking-hit',JSON.stringify(await evaluate(p,`({point:${JSON.stringify(spacePoint)},hit:document.elementFromPoint(${spacePoint.x},${spacePoint.y})?.outerHTML.slice(0,400),inert:!!document.querySelector('.parking-map-row[inert]')})`)));
  await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,...spacePoint},p.session);
  await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,...spacePoint},p.session);
- await until(p,"!!document.querySelector('button[aria-label=\"Trạng thái ô đỗ\"]')");await evaluate(p,"document.querySelector('button[aria-label=\"Trạng thái ô đỗ\"]').click()");
+ await until(p,"!!document.querySelector('button[aria-label=\"Trạng thái vận hành\"]')");await evaluate(p,"document.querySelector('button[aria-label=\"Trạng thái vận hành\"]').click()");
  await until(p,"!!document.querySelector('[role=listbox]:popover-open')");await evaluate(p,"[...document.querySelectorAll('[role=listbox]:popover-open [role=option]')].find(x=>x.textContent.includes('Đang sử dụng')).click()");await click('Cập nhật trạng thái');
  await until(p,"!document.querySelector('.parking-progress')&&document.querySelector('.parking-notice[role=status]')?.textContent.includes('Đã cập nhật')");
  area=(await apiRequest(p,'GET','/api/v1/parking-areas/'+id)).body;assert.equal(area.spaces[0].status,'IN_USE');
+ await evaluate(p,"document.querySelector('details.parking-space-settings').open=true;const input=document.querySelector('#parking-listing-price');input.value='12500000';input.dispatchEvent(new Event('change',{bubbles:true}))");
+ await click('Lưu thông tin ô');await until(p,"!document.querySelector('.parking-progress')");
+ area=(await apiRequest(p,'GET','/api/v1/parking-areas/'+id)).body;
+ assert.equal(area.spaces[0].priceVnd,12500000);assert.equal(area.spaces[0].listingStatus,'AVAILABLE');assert.equal(area.spaces[0].status,'IN_USE');
  const conflict=await apiRequest(p,'PUT','/api/v1/parking-areas/'+id+'/spaces/'+area.spaces[0].id,{expectedVersion:initialVersion,status:'AVAILABLE',note:''});assert.equal(conflict.status,409);
  await navigate(p,'/operations/parking?area='+id);await until(p,"!!document.querySelector('.parking-stats')&&!document.querySelector('.parking-progress')");assert.equal((await apiRequest(p,'GET','/api/v1/parking-areas/'+id)).body.spaces[0].status,'IN_USE');
  const history=await apiRequest(p,'GET','/api/v1/parking-areas/'+id+'/history');assert.equal(history.status,200);assert.ok(history.body.some(x=>x.action==='PUBLISHED'));assert.ok(history.body.some(x=>x.action==='SPACE_IN_USE'));
  for(const width of [1440,768,390])for(const theme of ['light','dark']){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600},p.session);await evaluate(p,`document.documentElement.dataset.theme=${JSON.stringify(theme)};document.documentElement.classList.toggle('dark',${theme==='dark'})`);await wait(200);await shot(p,`parking-real-management-${width}-${theme}`);assert.ok(await evaluate(p,"document.documentElement.scrollWidth<=innerWidth+1"),'Parking management horizontal overflow');}
  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false},p.session);
+ const resident=await newPage('resident-parking');await login(resident,'RESIDENT');
+ const published=await apiRequest(resident,'GET','/api/v1/resident/parking-areas/'+id);assert.equal(published.status,200);assert.equal(published.body.spaces[0].priceVnd,12500000);assert.ok(!('draft' in published.body));
+ assert.equal((await apiRequest(resident,'PUT','/api/v1/parking-areas/'+id+'/spaces/'+area.spaces[0].id+'/listing',{expectedVersion:area.version,priceVnd:1,listingStatus:'SOLD'})).status,403);
+ await navigate(resident,'/resident/parking');await until(resident,"!!document.querySelector('.resident-parking .parking-canvas .kind-space')");
+ await evaluate(resident,"document.querySelector('.resident-parking .parking-canvas .kind-space').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
+ await until(resident,"document.querySelector('.resident-parking-info')?.textContent.includes('12.500.000')");
+ for(const width of [1440,768,390])for(const theme of ['light','dark']){await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600},resident.session);await evaluate(resident,`document.documentElement.dataset.theme=${JSON.stringify(theme)};document.documentElement.classList.toggle('dark',${theme==='dark'})`);await wait(150);await shot(resident,`resident-parking-real-${width}-${theme}`);assert.ok(await evaluate(resident,"document.documentElement.scrollWidth<=innerWidth+1"),'Resident parking overflow');}
  scenarios.push('parking-real-ui-login-create-draw-save-publish-space-status-refresh-history-409-responsive-no-api-double');
 };

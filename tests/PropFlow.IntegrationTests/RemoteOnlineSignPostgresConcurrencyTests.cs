@@ -46,6 +46,34 @@ public sealed class RemoteOnlineSignPostgresConcurrencyTests : IAsyncLifetime
     }
 
     [RemotePostgresFact]
+    public async Task Upload_after_concurrent_draft_deletion_leaves_no_document_or_asset()
+    {
+        var owner = Guid.NewGuid();
+        var contract = new RemoteContract { CreatorId = owner };
+        await using (var seed = CreateDb())
+        {
+            seed.Contracts.Add(contract);
+            await seed.SaveChangesAsync();
+        }
+        var storage = new RacingStorage();
+        storage.BeforePutReturns = async () =>
+        {
+            await using var deletingDb = CreateDb();
+            await CreateService(deletingDb, storage).DeleteDraftAsync(owner, contract.Id, default);
+        };
+        await using var uploadingDb = CreateDb();
+        var pdf = CreatePdf();
+        var error = await Assert.ThrowsAsync<RemoteContractException>(() => CreateService(uploadingDb, storage)
+            .UploadOriginalAsync(owner, contract.Id, new MemoryStream(pdf), pdf.Length, default));
+        Assert.Equal(404, error.Status);
+        await using var verify = CreateDb();
+        Assert.False(await verify.Contracts.AnyAsync(x => x.Id == contract.Id));
+        Assert.False(await verify.Documents.AnyAsync(x => x.ContractId == contract.Id));
+        Assert.False(await verify.Events.AnyAsync(x => x.ContractId == contract.Id && x.Type == "ORIGINAL_PDF_UPLOADED"));
+        Assert.Empty(storage.Stored);
+    }
+
+    [RemotePostgresFact]
     public async Task Concurrent_original_uploads_commit_one_row_and_cleanup_loser_asset()
     {
         var owner = Guid.NewGuid();
@@ -133,6 +161,7 @@ public sealed class RemoteOnlineSignPostgresConcurrencyTests : IAsyncLifetime
 
     private sealed class RacingStorage : IRemotePdfStorage
     {
+        public Func<Task>? BeforePutReturns { get; set; }
         private readonly TaskCompletionSource secondUploadStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int uploads;
         public ConcurrentDictionary<string, byte[]> Stored { get; } = new(StringComparer.Ordinal);
@@ -142,10 +171,14 @@ public sealed class RemoteOnlineSignPostgresConcurrencyTests : IAsyncLifetime
             using var copy = new MemoryStream();
             await content.CopyToAsync(copy, ct);
             var bytes = copy.ToArray();
-            if (Interlocked.Increment(ref uploads) == 2) secondUploadStarted.TrySetResult();
-            await secondUploadStarted.Task.WaitAsync(ct);
+            if (BeforePutReturns is null)
+            {
+                if (Interlocked.Increment(ref uploads) == 2) secondUploadStarted.TrySetResult();
+                await secondUploadStarted.Task.WaitAsync(ct);
+            }
             var key = "test/" + Guid.NewGuid().ToString("N");
             Stored[key] = bytes;
+            if (BeforePutReturns is not null) await BeforePutReturns();
             return new StoredPdf(key, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), bytes.Length);
         }
 

@@ -1,0 +1,23 @@
+.resident-parking { display: grid; gap: 1rem; }
+.resident-parking-header, .resident-parking-controls, .resident-parking-areas, .resident-parking-tools {
+    display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center;
+}
+.resident-parking-header, .resident-parking-controls { justify-content: space-between; }
+.resident-parking h1, .resident-parking h2 { margin: 0; }
+.resident-parking-header a { color: var(--resident-muted); }
+.resident-parking button {
+    color: var(--resident-ink); background: var(--app-surface); border: 1px solid var(--app-line);
+    border-radius: .65rem; padding: .45rem .75rem; cursor: pointer;
+}
+.resident-parking button[aria-pressed="true"] { border-color: var(--pf-accent, #0284c7); }
+.resident-parking button:disabled { opacity: .6; cursor: default; }
+.resident-parking button:focus-visible { outline: 2px solid var(--pf-accent, #0284c7); outline-offset: 2px; }
+.resident-parking-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem); gap: 1rem; align-items: start; }
+.resident-parking-map, .resident-parking-info, .parking-feedback { padding: 1rem; min-width: 0; border-radius: 1rem; }
+.resident-parking-controls { margin: .75rem 0; }
+.resident-parking-tools { gap: .4rem; }
+.resident-parking-info p, .resident-parking-info dt { color: var(--resident-muted); }
+.resident-space-label { display: block; margin-top: .65rem; font-size: 1.15rem; }
+.resident-parking-info dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .75rem; margin: .65rem 0 0; }
+.resident-parking-info dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+@media (max-width: 960px) { .resident-parking-layout { grid-template-columns: minmax(0, 1fr); } }
