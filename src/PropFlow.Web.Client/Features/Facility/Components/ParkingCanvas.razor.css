@@ -27,3 +27,42 @@
 
 .parking-canvas ::deep .parking-smart-guides{color:var(--pf-accent,#0284c7)}.parking-canvas ::deep .parking-alignment-guide{stroke:#a855f7;stroke-width:1.25;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}.parking-canvas ::deep .parking-smart-distance path{fill:none;stroke:currentColor;stroke-width:1;vector-effect:non-scaling-stroke}.parking-canvas ::deep .parking-smart-distance rect{fill:var(--app-surface,#fff);stroke:var(--app-line,#dbe5ef);stroke-width:.5;vector-effect:non-scaling-stroke}.parking-canvas ::deep .parking-smart-distance text{fill:currentColor;font-family:'Segoe UI',Arial,sans-serif;font-weight:600}.parking-canvas ::deep .parking-smart-distance.is-equal{color:#a855f7}
 .parking-canvas ::deep .parking-editing .has-source-issue:not(.is-selected) .parking-body{stroke:#d97706;stroke-dasharray:4 3}
+.parking-canvas ::deep .listing-available { --listing-fill: #dcfce7; --listing-edge: #16a34a; --listing-text: #14532d; }
+.parking-canvas ::deep .listing-processing { --listing-fill: #fef3c7; --listing-edge: #ca8a04; --listing-text: #713f12; }
+.parking-canvas ::deep .listing-sold { --listing-fill: #fee2e2; --listing-edge: #dc2626; --listing-text: #7f1d1d; }
+.parking-canvas ::deep :is(.listing-available, .listing-processing, .listing-sold) .parking-body {
+    fill: var(--listing-fill);
+    stroke: var(--listing-edge);
+    stroke-dasharray: none;
+}
+.parking-canvas ::deep :is(.listing-available, .listing-processing, .listing-sold) text { fill: var(--listing-text); }
+.parking-canvas ::deep :is(.listing-available, .listing-processing, .listing-sold).is-selected .parking-body { stroke-width: 3; stroke-dasharray: 5 3; }
+.parking-canvas ::deep .kind-space[aria-disabled="true"] { cursor: not-allowed; }
+
+.parking-canvas ::deep :is(.kind-sidewalk, .kind-ramp, .kind-wheel_stop, .kind-pillar, .kind-stairs, .kind-elevator, .kind-guard_booth) .parking-body {
+    fill: color-mix(in srgb, var(--app-muted, #64748b) 22%, var(--app-surface, #fff));
+    stroke: var(--app-text, #334155);
+}
+.parking-canvas ::deep :is(.kind-green_island, .kind-tree) .parking-body {
+    fill: color-mix(in srgb, #22c55e 28%, var(--app-surface, #fff));
+    stroke: #15803d;
+}
+.parking-canvas ::deep .kind-tree .parking-body { stroke-width: 2.5; }
+.parking-canvas ::deep .kind-no_parking .parking-body { fill: var(--parking-hatch) !important; stroke: #b45309; }
+.parking-canvas ::deep :is(.kind-crosswalk, .kind-traffic_arrow) .parking-body {
+    fill: color-mix(in srgb, var(--app-text, #334155) 45%, var(--app-surface, #fff));
+    stroke: var(--app-text, #334155);
+}
+.parking-canvas ::deep :is(.kind-dashed_line, .kind-roundabout) .parking-body {
+    fill: none !important;
+    stroke: var(--app-text, #334155);
+    stroke-dasharray: 6 4;
+}
+.parking-canvas ::deep :is(.kind-traffic_sign, .kind-barrier) .parking-body {
+    fill: color-mix(in srgb, #ef4444 12%, var(--app-surface, #fff));
+    stroke: #dc2626;
+}
+.parking-canvas ::deep .kind-light .parking-body {
+    fill: color-mix(in srgb, #facc15 55%, var(--app-surface, #fff));
+    stroke: #a16207;
+}

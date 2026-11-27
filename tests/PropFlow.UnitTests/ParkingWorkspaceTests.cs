@@ -139,13 +139,54 @@ public sealed class ParkingWorkspaceTests
         var scenario=new Scenario();var area=await scenario.Call(x=>x.CreateAsync(new("B1"),Actor,default));var shape=Space();
         area=await scenario.Call(x=>x.SaveAsync(area.Id,new(area.Version,area.Name,Drawing(shape)),Actor,default));
         area=await scenario.Call(x=>x.PublishAsync(area.Id,new(area.Version),Actor,default));
-        scenario.Recognition.Result=new(Drawing(shape,shape with{Id=Guid.NewGuid(),Label="P-002",X=shape.X+10}),"AI đề xuất bản mới.");
+        var overlapping = shape with { Id = Guid.NewGuid(), Label = "P-002", X = shape.X + 10 };
+        scenario.Recognition.Result=new(null, "AI đề xuất bản mới.", Drawing(shape, overlapping));
         var imported=await scenario.Call(x=>x.ImportAsync(area.Id,area.Version,new MemoryStream(Png),"source.png","image/png",1,Actor,default));
         Assert.False(imported.Recognized);Assert.Equal(shape,Assert.Single(imported.Area.Draft.Shapes));Assert.Equal(shape,Assert.Single(imported.Area.Published!.Shapes));
+        Assert.NotNull(imported.ReviewDrawing);
+        Assert.All(imported.ReviewDrawing.Shapes, item => Assert.True(item.NeedsReview));
+        var issue = Assert.Single(imported.ReviewDrawing.RecognitionReview!.Issues);
+        Assert.Equal("overlap", issue.Code);
+        Assert.Equal(new[] { shape.Id, overlapping.Id }, issue.ShapeIds);
         var retry=await scenario.Call(x=>x.RecognizeAsync(area.Id,imported.Area.Version,Actor,default));
         Assert.False(retry.Recognized);Assert.Equal(imported.Area.Version,retry.Area.Version);Assert.Equal(shape,Assert.Single(retry.Area.Draft.Shapes));
-        Assert.Contains("giữ bản nháp",retry.Message);
+        Assert.NotNull(retry.ReviewDrawing);
+        Assert.Contains("AI vừa dựng",retry.Message);
+
+        var unreviewed = retry.ReviewDrawing;
+        var manuallyConfirmed = unreviewed with
+        {
+            Shapes = unreviewed.Shapes.Select(item => item with { NeedsReview = false }).ToArray()
+        };
+        var saved = await scenario.Call(x => x.SaveAsync(area.Id, new(retry.Area.Version, area.Name, manuallyConfirmed), Actor, default));
+        var failure = await Assert.ThrowsAsync<ParkingFailure>(() =>
+            scenario.Call(x => x.PublishAsync(area.Id, new(saved.Version), Actor, default)));
+        Assert.Contains("chồng lên nhau", failure.Message);
+        Assert.Equal(shape, Assert.Single((await scenario.Call(x => x.GetAsync(area.Id, default))).Published!.Shapes));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_partial_drawing_without_overlaps_is_returned_as_an_editable_preview(bool local)
+    {
+        var scenario = new Scenario();
+        var area = await scenario.Call(x => x.CreateAsync(new("B1"), Actor, default));
+        var saved = Space();
+        area = await scenario.Call(x => x.SaveAsync(area.Id, new(area.Version, area.Name, Drawing(saved)), Actor, default));
+        var suggested = Space() with { Id = Guid.NewGuid(), Label = "P-002" };
+        scenario.Recognition.Result = new(null, "Đã dựng trực tiếp từ nét ảnh.", Drawing(suggested), local);
+
+        var result = await scenario.Call(x => x.ImportAsync(area.Id, area.Version, new MemoryStream(Png), "source.png", "image/png", 1, Actor, default));
+
+        Assert.False(result.Recognized);
+        Assert.Equal(local, result.LocalPreview);
+        Assert.Equal(saved, Assert.Single(result.Area.Draft.Shapes));
+        var preview = Assert.Single(Assert.IsType<ParkingDrawing>(result.ReviewDrawing).Shapes);
+        Assert.Equal(suggested.Id, preview.Id);
+        Assert.True(preview.NeedsReview);
+        Assert.Contains(local ? "trực tiếp từ nét ảnh" : "một phần", result.Message);
+    }
+
     [Fact]
     public async Task Concurrent_edit_while_AI_is_reading_is_not_overwritten_and_does_not_leave_an_orphan_source()
     {
@@ -199,12 +240,12 @@ public sealed class ParkingWorkspaceTests
         Assert.True(request.RootElement.GetProperty("generationConfig").GetProperty("responseSchema").GetProperty("properties").GetProperty("objects").GetProperty("items").GetProperty("properties").TryGetProperty("points",out _));
     }
     [Theory][InlineData(503)][InlineData(400)]
-    public async Task Provider_outage_preserves_existing_draft_instead_of_claiming_pixel_regions_are_bays(int status)
+    public async Task Provider_outage_returns_an_editable_local_preview_without_resending_the_image(int status)
     {
         var handler=new FailedProvider(status);var bytes=await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory,"Fixtures","parking-46.png"));
         var result=await Reader(handler).ReadAsync(bytes,"image/png",1,default);
-        Assert.Null(result.Drawing);Assert.Equal(status>=500?3:1,handler.Calls);Assert.Contains(status>=500?"Dịch vụ AI tạm thời không sẵn sàng":"AI chưa",result.Message);
-        var local=ParkingPlanGeometry.Read(bytes,"image/png",1,default).Drawing;Assert.Equal(46,local.Shapes.Count(x=>x.Kind=="SPACE"));Assert.All(local.Shapes.Where(x=>x.Kind=="SPACE"),x=>Assert.True(x.NeedsReview));
+        Assert.Null(result.Drawing);Assert.Equal(1,handler.Calls);Assert.True(result.LocalPreview);Assert.Contains("trực tiếp từ nét ảnh",result.Message);
+        var local=Assert.IsType<ParkingDrawing>(result.ReviewDrawing);Assert.Contains(local.Shapes,x=>x.Kind=="RECT");Assert.DoesNotContain(local.Shapes,x=>x.Kind=="SPACE");
     }
     [Fact]
     public async Task Blank_input_cannot_be_turned_into_a_fake_parking_plan_by_the_provider()
@@ -214,7 +255,7 @@ public sealed class ParkingWorkspaceTests
     {
         var handler=new FailedProvider(503);var reader=new GeminiParkingPlanRecognition(new(new HttpClient(handler){BaseAddress=new("https://generativelanguage.googleapis.com/v1beta/")},"","test-model",false),NullLogger<GeminiParkingPlanRecognition>.Instance);
         var bytes=await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory,"Fixtures","parking-46.png"));
-        var result=await reader.ReadAsync(bytes,"image/png",1,default);Assert.Null(result.Drawing);Assert.Equal(0,handler.Calls);Assert.Equal(46,ParkingPlanGeometry.Read(bytes,"image/png",1,default).Drawing.Shapes.Count(x=>x.Kind=="SPACE"));
+        var result=await reader.ReadAsync(bytes,"image/png",1,default);Assert.Null(result.Drawing);Assert.Equal(0,handler.Calls);Assert.True(result.LocalPreview);Assert.Contains(Assert.IsType<ParkingDrawing>(result.ReviewDrawing).Shapes,x=>x.Kind=="RECT");
         Assert.Equal(400,(await Assert.ThrowsAsync<ParkingFailure>(()=>reader.ReadAsync(bytes.Take(24).ToArray(),"image/png",1,default))).Status);
     }
     [Fact]

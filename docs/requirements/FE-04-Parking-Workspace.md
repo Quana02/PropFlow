@@ -9,8 +9,12 @@ Theo yêu cầu người dùng ngày 24/11/2026. Đây là scope extension của
 3. Manager đối chiếu tệp gốc, sửa bản nháp bằng trình vẽ: thêm/xóa/di chuyển/đổi kích thước/xoay/đổi nhãn, hoàn tác/làm lại, zoom và kéo khung nhìn.
 4. Lưu nháp giữ nguyên sơ đồ đang quản lý. Manager xác nhận xuất bản để đưa bản đã kiểm tra sang màn hình quản lý riêng ngoài trình vẽ.
 5. Trên sơ đồ đã xuất bản, Manager chọn ô và cập nhật thủ công Trống / Đang sử dụng / Bảo trì; không suy ra xe hiện diện từ hình ảnh hoặc cảm biến.
+6. Manager có thể xác nhận **Xóa sơ đồ đã xuất bản** trên màn hình quản lý. Thao tác gỡ bản đang hiển thị và lưu trữ các ô cũ, giữ bản nháp, tệp gốc và lịch sử để tiếp tục chỉnh sửa hoặc xuất bản lại. Cần chuyển tất cả ô đang sử dụng hoặc bảo trì về Trống trước. `DELETE /api/v1/parking-areas/{id}/published?expectedVersion=…` dùng cùng quyền và kiểm tra phiên bản như khi xuất bản.
 
-Chỉ MANAGER có `MANAGE_OPERATIONS`, qua policy `property-assets.manage`; không thêm quyền cho Staff, Resident, Accountant hoặc Admin. Một deployment vẫn là một chung cư. Không thêm chọn chung cư, IoT, thu phí, vé, camera hoặc tự phê duyệt đăng ký xe.
+7. Cư dân mở **Dịch vụ cư dân → Bãi đỗ xe** để xem sơ đồ đang xuất bản, chọn ô xanh (Trống) hoặc vàng (Đang xử lý) và xem giá VND, STT. Ô đỏ (Đã mua) hiện trên sơ đồ và không chọn được bằng chuột hoặc bàn phím. STT theo thứ tự các ô trong bản đã xuất bản.
+8. Manager xem được mọi ô, kể cả ô đỏ, và có thể cập nhật giá niêm yết và trạng thái hiển thị của từng ô. Giá chưa thiết lập hiện «Chưa niêm yết». Ba trạng thái này tách khỏi trạng thái vận hành Trống / Đang sử dụng / Bảo trì; không tạo giao dịch mua hay thanh toán.
+
+Thao tác Manager yêu cầu vai trò MANAGER có `MANAGE_OPERATIONS`, qua policy `property-assets.manage`. Vai trò RESIDENT chỉ có quyền đọc qua `GET /api/v1/resident/parking-areas` và `GET /api/v1/resident/parking-areas/{id}`; dữ liệu không chứa bản nháp, tệp gốc hoặc lịch sử. Một deployment vẫn là một chung cư. Không thêm chọn chung cư, IoT, thu phí, vé, camera hoặc tự phê duyệt đăng ký xe.
 
 ## Lưu trữ và tính toàn vẹn
 
@@ -298,3 +302,54 @@ Phạm vi được người dùng đồng ý: tách đọc ý nghĩa/đối chi�
 Tham chiếu cơ chế retry: [Google Gemini troubleshooting](https://aistudio.google.com/docs/troubleshooting#retry-strategy). Kết quả HTTP và thời gian ở trên là đo trực tiếp trong tác vụ, không suy từ tài liệu.
 
 Kiểm chứng sau sửa: tập hồi quy chọn 173 ca; 172 ca đạt trong lượt tổng, ca còn lại được cập nhật kỳ vọng số request từ 3 lên 4 do chính sách hai retry và chạy lại đạt. 5 integration test HTTP/Swagger và 64 architecture test đạt. API build cấu hình LiveVerification thành công, 0 warning/error. Không sửa giao diện/hợp đồng HTTP, không cần migration, không thay model/secret đang cấu hình. Cần khởi động lại API sau khi build để dùng cơ chế mới.
+
+Ngày 27/11/2026, cùng ảnh thật nhận 503 hai lần từ Hydrogen; lần thứ ba chỉ còn khoảng 5,4 giây và bị hủy. Đối chứng Gemini 3.8 Flash cũng nhận ba lỗi 503. Reader chỉ gửi lại khi sau thời gian chờ còn ít nhất 10 giây, giữ nguyên giới hạn tổng và hiển thị mã 503 nếu lượt thử lại hết giờ. Đây là sửa cách xử lý yêu cầu khi dịch vụ gián đoạn; lượt thử thực tế chưa nhận được bản dựng mới.
+
+#### Mở bản AI vừa tạo để chỉnh các ô chồng
+
+Nếu Gemini đã trả hình học đúng định dạng nhưng sau đối chiếu vẫn còn ô chồng, Manager có thể mở bản AI trực tiếp trong trình vẽ và chọn các ô được đánh dấu. Bản này được trả riêng dưới dạng bản để đối chiếu, giữ bản nháp đã lưu và sơ đồ xuất bản. Chỉ khi bấm **Lưu nháp** nó mới trở thành bản nháp của bãi. Mọi ô AI cần xác nhận và máy chủ kiểm tra giao nhau lại khi xuất bản. Lỗi dịch vụ, dữ liệu sai định dạng và nhận diện không tạo ra đối tượng vẫn không có bản để mở.
+
+### Cổng kiểm chứng nhận diện trước khi phát hành hoặc demo
+
+1. Tái hiện bằng phản hồi mô phỏng trước. Ghi bước lỗi (`đọc`, `đối chiếu` hoặc `đọc vùng`), mã HTTP và số lượt gọi. `503` thuộc nhóm dịch vụ gián đoạn; `429` quota ngày có nhánh riêng; JSON sai, sai hướng và chồng ô là lỗi dữ liệu nhận diện. Giữ ca lỗi thành kiểm thử chạy được mà không gửi ảnh ra ngoài.
+2. Chạy các test tên `Parking` trong `PropFlow.UnitTests` và các test HTTP `ParkingHttpTests` trong `PropFlow.IntegrationTests`. Xác nhận các ca bên dưới cùng với hai hồi quy B2/B3, hình xoay, ảnh nhiều vùng và quyền xuất bản. Khi có sửa giao diện, chạy thêm `node tests/frontend/parking-runtime.browser.cjs`. Build API và Web trước khi kiểm tra môi trường demo.
+3. Chỉ dùng lượt Gemini thật làm kiểm tra cuối. Chạy một lần trên môi trường demo với ảnh được phép gửi. So sánh ảnh gốc với số ô, chiều nghiêng, tường, lối đi và vùng còn thiếu. Kết quả yêu cầu là bản vừa dựng và chỉnh được từng đối tượng; chạy lại ca nhiều vùng nếu demo có giới thiệu khả năng đó. Ghi tổng thời gian, tổng lượt gọi và `TotalTokens` nếu Gemini trả chỉ số sử dụng. Dừng các lần thử live khi gặp 503/429; một lượt 200 chỉ xác nhận môi trường đã hoạt động tại thời điểm kiểm tra.
+
+| Ca kiểm chứng | Tiêu chí đạt |
+| --- | --- |
+| Gemini liên tục trả 503 ở bước đọc | Nhiều nhất hai lần gửi ảnh. Lần thử lại duy nhất phải tôn trọng `Retry-After` và còn đủ thời gian. Khi kết thúc với 503, thao tác mới trong thời gian chờ không gửi thêm ảnh. |
+| 503/timeout ở bước đối chiếu | Lượt đối chiếu lỗi dừng luôn. Bản dựng hợp lệ từ lượt đọc vẫn mở được và được ghi là chưa đối chiếu xong. |
+| Hết quota ngày | Dừng thử lại. Thông báo rõ hạn mức ngày. |
+| Hình học sai, thiếu vùng hoặc chồng ô | Báo phần cần kiểm tra. Bản dựng chồng ô chỉ mở để chỉnh; bản nháp cũ còn nguyên đến khi lưu, và kiểm tra xuất bản vẫn chặn ô chồng. |
+
+Thời gian chờ sau 503 mặc định 30 giây, chỉnh bằng `Parking__Ai__OverloadCooldownSeconds` từ 1 đến 120 giây. Khi `Retry-After` của Gemini dài hơn, dùng thời gian Gemini yêu cầu. Thời gian chờ dùng chung theo model trong mỗi tiến trình API. Một thao tác có tối đa bốn request gồm cả đọc vùng và giới hạn tổng mặc định 75 giây. Chi tiết request và số token dựa trên chỉ số Gemini trả về. Thời gian chờ giới hạn tiêu hao lượt gọi; khả năng sinh bản vẽ live vẫn phụ thuộc dịch vụ Gemini khả dụng. [Hướng dẫn thử lại của Gemini](https://aistudio.google.com/docs/troubleshooting#retry-strategy)
+
+### Công cụ vẽ được phép và bản nhận diện một phần
+
+Gemini chọn loại đối tượng từ danh sách công cụ của trình vẽ. Với chi tiết thực sự nhìn thấy nhưng thiếu ký hiệu, dùng khối có sẵn kèm nhãn, ví dụ chữ nhật ghi “Mặt nước”. `OTHER`, `TRACE` và các loại ngoài thanh công cụ bị loại. Nếu AI trả một phần bản vẽ hoặc vài đối tượng sai định dạng, Manager có thể mở những hình hợp lệ để chỉnh. Bản này cần lưu nháp chủ động và qua kiểm tra xuất bản như các bản khác. Nếu dịch vụ báo lỗi trước khi trả đối tượng, sơ đồ vẫn chưa có dữ liệu AI để mở.
+
+Các mẫu sân đỗ và tầng hầm được dùng để bổ sung ba nhóm công cụ:
+
+| Nhóm | Công cụ |
+| --- | --- |
+| Giao thông | Vạch qua đường, lối đi bộ/vỉa hè, mũi tên lưu thông, vạch đứt, biển báo, vòng xuyến |
+| Dải phân cách và vật cản | Vùng cấm đỗ, gờ chặn bánh, cột kết cấu, đảo/dải cây xanh, cây bóng mát |
+| Hạ tầng | Thanh chắn barie, chốt bảo vệ, dốc, thang bộ, thang máy, đèn chiếu sáng |
+
+Hướng dẫn Gemini có ví dụ phân biệt vạch đỗ, hình xe, gờ chặn, đường kích thước và ký hiệu tầng hầm. Đây là hướng dẫn nhận diện qua ví dụ trong prompt. Với trang có nhiều mặt bằng, AI được yêu cầu chọn một mặt bằng chính. Trường hợp ô dành cho người khuyết tật vẫn dùng `SPACE` và có thể giữ ký hiệu trên nhãn. Chỉ `SPACE` sinh ra ô quản lý và gắn giá khi xuất bản.
+
+Khi Gemini trả 503 hoặc gián đoạn ở lượt đọc và máy chủ dựng được hình từ nét ảnh, trả bản dựng cục bộ ngay. Lượt mới trong thời gian chờ hoặc khi Gemini chưa được cấu hình dùng xử lý cục bộ. API trả cờ `localPreview` kèm bản xem trước để trình vẽ mở thẳng trên khung vẽ và ghi rõ nguồn. Thuật toán giữ các đường bao dưới dạng hình chữ nhật và các nét dài dưới dạng đường thẳng, không tự gán chúng thành ô đỗ. Kết quả chưa lưu, có thể kéo/chỉnh/xóa và đối chiếu ảnh gốc trước khi chọn loại đối tượng và lưu. Máy chủ giới hạn độ phân giải phân tích và thời gian xử lý cho nhánh này. Ảnh không có nét đủ rõ có thể vẫn không cho kết quả. Có thể tắt nhánh cục bộ bằng `Parking__Ai__EnableLocalFallback=false`.
+
+Với hai dãy ô nghiêng đối diện, nhánh cục bộ kiểm tra cặp vạch biên, nhịp ô lặp, độ khớp của bốn cạnh từng ô và khoảng trống giữa hai dãy. Khi các dấu hiệu cùng đạt, dùng `SPACE` cho từng ô, `WALL` cho hai dải biên và `LANE` cho lối đi. Hai dãy khớp góc riêng để giữ hướng nghiêng ngược nhau. Nếu thiếu dấu hiệu hoặc các ô giao nhau, dùng lại hình học xem trước `RECT`/`LINE`. Ô từ nhánh này vẫn cần xác nhận trước xuất bản.
+
+Sơ đồ có vạch hở dùng bản dựng nét bên cạnh phần khối kín đã nhận diện. Với bản vẽ ít mảng tối, thuật toán làm mảnh nét, lần theo các nhánh nối nhau rồi chuyển thành đoạn chỉnh sửa được. Nét có cùng phương và trùng phần lớn được gộp. Giao điểm chữ T được dựng bằng `DIVIDER` khi hình sau khi căn khớp vẫn bám nét gốc. Mốc kích thước phía trên chỉ được bỏ khi phát hiện cặp biên dọc và trục đo có vạch chia. Khi chưa đủ đường bao, giữ vạch bằng `LINE` để Manager đối chiếu thay vì đoán số ô đỗ. Giữ `RECT` cho các vùng kín chưa phân loại được.
+
+Vạch kết thúc ngắn có hai nhánh đối xứng được dùng làm đầu của `DIVIDER` khi các điểm ảnh xác nhận đây là đầu vạch. Với ô hở, kết hợp cạnh đáy, hai vạch bên và dấu kết thúc ở miệng ô để đề xuất `SPACE`. Loại đề xuất nằm trong vùng kín hoặc giao với ô đề xuất khác. Manager xác nhận các ô trong bản nháp và xuất bản, rồi mới đặt giá và trạng thái hiển thị cho cư dân.
+
+Dãy có ít nhất ba vạch phân cách song song với bước lặp và chiều dài tương đương có thể tạo ô hở bằng chính các vạch đó, kể cả khi không có đầu chữ T. Dải lưng chung cắt qua giữa nhiều vạch được dùng để tách hai dãy đối diện. Chỉ suy ra cạnh miệng ô khi phần giữa miệng thực sự hở và không có vạch chia xuyên tâm. Khi ô được dựng, hình chữ nhật tạm bị vùng ô bao phủ sẽ được bỏ để tránh hiện hai lớp cho cùng một vị trí. Ô hở thiếu bằng chứng tiếp tục hiện dưới dạng vạch để người dùng bổ sung.
+
+Trên sơ đồ màu, nhánh cục bộ tìm dải cây liền khối, vạch qua đường, mũi tên theo trục ngang/dọc và ô có vạch trắng song song, cạnh sau và nhịp lặp. Gờ chặn bánh chỉ được đề xuất khi các thanh nhỏ cùng kiểu xuất hiện trong nhiều ô đã nhận diện. Với bản CAD nền tối, ưu tiên nét sáng trung tính để giảm ảnh hưởng của xe và đường kích thước có màu. Ký hiệu nhỏ và chi tiết chưa đủ nét có thể cần Gemini hoặc Manager bổ sung.
+
+Hai hàng ô quay lưng vào nhau được tách khi có vạch ngang thật trên ảnh. Ô kín chỉ được đề xuất khi có đủ bốn cạnh và bằng chứng lặp lại theo dãy. Bộ nhận diện cục bộ cũng tìm biên bãi, vạch đứt, thanh chắn sọc đỏ trắng, dấu hiệu chốt bảo vệ, biển báo tròn, vòng xuyến và vùng gạch chéo vàng. Mã ô và chữ chỉ lối vào/ra được đọc từ vùng chữ có bằng chứng trên ảnh. Mã chưa đọc đủ rõ dùng mã tạm để Manager đối chiếu. Ghi chú ngoài các mẫu chữ cục bộ có thể dùng Gemini khi dịch vụ khả dụng.
+
+Nếu các ô trong kết quả Gemini và bộ nhận diện cục bộ khớp về vị trí, hệ thống bổ sung các ký hiệu và ghi chú bám ảnh mà Gemini bỏ sót. Bước này không gọi thêm Gemini hay tự tạo ô mới trong bản dựng Gemini.

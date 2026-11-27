@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.PropertyAssets.Application.Parking;
 using PropFlow.Modules.PropertyAssets.Contracts;
@@ -18,8 +19,52 @@ public sealed class EfParkingStore(PropertyAssetsDbContext db):IParkingStore
         if(area is null)return null;
         var sources=await db.Set<ParkingSource>().AsNoTracking().Where(x=>x.AreaId==id&&(x.Id==area.DraftSourceId||x.Id==area.PublishedSourceId))
             .Select(x=>new ParkingSourceView(x.Id,x.FileName,x.ContentType,x.Page)).ToArrayAsync(ct);
-        return new(area.Id,area.Name,area.Version,area.Draft,area.Published,sources.SingleOrDefault(x=>x.Id==area.DraftSourceId),
-            sources.SingleOrDefault(x=>x.Id==area.PublishedSourceId),area.Spaces.Where(x=>!x.Archived).Select(x=>new ParkingSpaceView(x.Id,x.Status)).ToArray(),area.PublishedAt);
+        var published = area.Published;
+        var spaces = area.Spaces.Where(x => !x.Archived)
+            .Select(x => new ParkingSpaceView(x.Id, x.Status, 0, x.PriceVnd, x.ListingStatus));
+        return new(area.Id,area.Name,area.Version,area.Draft,published,sources.SingleOrDefault(x=>x.Id==area.DraftSourceId),
+            sources.SingleOrDefault(x=>x.Id==area.PublishedSourceId),NumberSpaces(published, spaces),area.PublishedAt);
+    }
+
+    public Task<PublishedParkingAreaSummary[]> ListPublishedAsync(CancellationToken ct) =>
+        db.Set<ParkingArea>().AsNoTracking().Where(area => area.PublishedJson != null)
+            .OrderBy(area => area.Name).ThenBy(area => area.Id).Take(200)
+            .Select(area => new PublishedParkingAreaSummary(area.Id, area.Name)).ToArrayAsync(ct);
+
+    public async Task<PublishedParkingArea?> ReadPublishedAsync(Guid id, CancellationToken ct)
+    {
+        var area = await db.Set<ParkingArea>().AsNoTracking()
+            .Where(area => area.Id == id && area.PublishedJson != null)
+            .Select(area => new
+            {
+                area.Id,
+                area.Name,
+                area.PublishedJson,
+                Spaces = area.Spaces.Where(space => !space.Archived)
+                    .Select(space => new ParkingSpaceView(space.Id, "", 0, space.PriceVnd, space.ListingStatus)).ToArray()
+            }).SingleOrDefaultAsync(ct);
+        if (area is null) return null;
+
+        var drawing = JsonSerializer.Deserialize<ParkingDrawing>(area.PublishedJson!)!;
+        var spaces = NumberSpaces(drawing, area.Spaces)
+            .Select(space => new PublishedParkingSpace(space.Id, space.Number,
+                space.ListingStatus == ParkingListingStatus.Sold ? null : space.PriceVnd, space.ListingStatus)).ToArray();
+        var residentDrawing = new ParkingDrawing(drawing.Width, drawing.Height,
+            drawing.Shapes.Where(shape => shape.Kind != "TRACE").ToArray(), InfiniteCanvas: drawing.InfiniteCanvas);
+        return new(area.Id, area.Name, residentDrawing, spaces);
+    }
+
+    private static ParkingSpaceView[] NumberSpaces(ParkingDrawing? drawing, IEnumerable<ParkingSpaceView> spaces)
+    {
+        if (drawing is null) return [];
+        var active = spaces.ToDictionary(space => space.Id);
+        var numbered = new List<ParkingSpaceView>();
+        foreach (var shape in drawing.Shapes.Where(shape => shape.Kind == "SPACE"))
+        {
+            if (active.TryGetValue(shape.Id, out var space))
+                numbered.Add(space with { Number = numbered.Count + 1 });
+        }
+        return numbered.ToArray();
     }
     public async Task CreateAsync(ParkingArea area,ParkingAction action,CancellationToken ct)
     {db.Add(area);db.Add(action);await db.SaveChangesAsync(ct);}

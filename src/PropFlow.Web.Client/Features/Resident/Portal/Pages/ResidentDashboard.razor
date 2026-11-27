@@ -181,7 +181,8 @@
         new("OTHER", "Yêu cầu dịch vụ", "Yêu cầu dịch vụ", "Mô tả nhu cầu để Ban quản lý tiếp nhận và điều phối", "sky", ["sửa chữa", "hỏng", "điện", "nước", "vệ sinh", "dịch vụ", "yêu cầu", "thi công", "chuyển đồ"]),
         new("BILLING", "Hóa đơn và thanh toán", "Hóa đơn", "Hỗ trợ phí dịch vụ và thanh toán", "teal", ["phí", "tiền", "thanh toán", "công nợ"]),
         new("CONTACT", "Liên hệ Ban quản lý", "Liên hệ BQL", "Chat trực tiếp với Ban quản lý", "cyan", ["hỗ trợ", "ban quản lý", "hotline", "liên hệ", "chat"]),
-        new("FACILITIES", "Trợ lý tiện ích", "Tiện ích AI", "Nói nhu cầu và khám phá tiện ích phù hợp", "cyan", ["tiện ích", "hồ bơi", "gym", "trẻ em", "đọc sách", "đi bộ"])
+        new("FACILITIES", "Trợ lý tiện ích", "Tiện ích AI", "Nói nhu cầu và khám phá tiện ích phù hợp", "cyan", ["tiện ích", "hồ bơi", "gym", "trẻ em", "đọc sách", "đi bộ"]),
+        new("PARKING", "Sơ đồ bãi đỗ xe", "Bãi đỗ xe", "Xem sơ đồ, giá và trạng thái ô đỗ", "sky", ["bãi đỗ", "bãi xe", "ô đỗ", "đỗ xe"])
     ];
 
     protected override async Task OnInitializedAsync() =>
@@ -296,6 +297,7 @@
         if (categoryCode == "CONTACT") { Navigation.NavigateTo("/resident/contact-management"); return; }
         if (categoryCode == "BILLING") { Navigation.NavigateTo("/resident/billing"); return; }
         if (categoryCode == "FACILITIES") { Navigation.NavigateTo("/resident/facilities"); return; }
+        if (categoryCode == "PARKING") { Navigation.NavigateTo("/resident/parking"); return; }
         _serviceRequestModal?.Open(categoryCode, title);
     }
 
