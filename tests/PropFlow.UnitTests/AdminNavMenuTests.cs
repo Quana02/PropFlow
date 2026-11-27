@@ -67,7 +67,7 @@ public sealed class AdminNavMenuTests
     private static void AssertActive(string html, string tab)
     {
         var links = Regex.Matches(html, "<a\\b[^>]*>").Select(x => x.Value).ToArray();
-        Assert.Equal(5, links.Length);
+        Assert.Equal(6, links.Length);
         Assert.Single(links.Where(x => x.Contains("href=\"/knowledge/documents\"", StringComparison.Ordinal)));
         var current = Assert.Single(links.Where(x => x.Contains("aria-current=\"page\"", StringComparison.Ordinal)));
         Assert.Contains($"tab={tab}", current);

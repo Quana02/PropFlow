@@ -96,17 +96,27 @@ public sealed class RemoteContractService(
     public async Task<IReadOnlyList<RemoteResidentCandidate>> SearchEligibleResidentsAsync(string? search, CancellationToken ct)
     {
         if (search?.Length > 100) throw new RemoteContractException(400, "resident_search_invalid", "Từ khóa tìm kiếm tối đa 100 ký tự.");
-        var page = await residents.SearchAsync(search?.Trim(), 1, 20, ct);
-        var items = page.Items.Where(x => x.IsActive && x.UserId is not null).ToArray();
-        var userIds = items.Select(x => x.UserId!.Value).Distinct().ToArray();
-        var accountRows = await accounts.GetAsync(userIds, ct);
-        var accountById = accountRows.ToDictionary(x => x.Id);
-        var residentIds = (await accountAccess.GetResidentUserIdsAsync(userIds, ct)).ToHashSet();
-        return items.Where(x => accountById.TryGetValue(x.UserId!.Value, out var account)
-                && string.Equals(account.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)
-                && residentIds.Contains(x.UserId.Value))
-            .Select(x => new RemoteResidentCandidate(x.UserId!.Value, x.ResidentId, x.FullName, x.ResidentCode, x.Apartments))
-            .ToArray();
+        const int sourcePageSize = 100;
+        var candidates = new List<RemoteResidentCandidate>();
+        var seen = new HashSet<Guid>();
+        for (var sourcePage = 1; candidates.Count < 20; sourcePage++)
+        {
+            var page = await residents.SearchAsync(search?.Trim(), sourcePage, sourcePageSize, ct);
+            if (page.Items.Count == 0 || page.PageIndex < sourcePage) break;
+            var items = page.Items.Where(x => x.IsActive && x.UserId is not null).ToArray();
+            var userIds = items.Select(x => x.UserId!.Value).Distinct().ToArray();
+            var accountRows = await accounts.GetAsync(userIds, ct);
+            var accountById = accountRows.ToDictionary(x => x.Id);
+            var residentIds = (await accountAccess.GetResidentUserIdsAsync(userIds, ct)).ToHashSet();
+            foreach (var candidate in items.Where(x => accountById.TryGetValue(x.UserId!.Value, out var account)
+                    && string.Equals(account.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase)
+                    && residentIds.Contains(x.UserId.Value))
+                .Select(x => new RemoteResidentCandidate(x.UserId!.Value, x.ResidentId, x.FullName, x.ResidentCode, x.Apartments))
+                .Where(x => seen.Add(x.UserId)).Take(20 - candidates.Count))
+                candidates.Add(candidate);
+            if ((long)page.PageIndex * sourcePageSize >= page.TotalCount) break;
+        }
+        return candidates;
     }
     public async Task<IReadOnlyList<RemoteContractSummary>> ListAsync(Guid actor, bool admin, CancellationToken ct)
     {
@@ -151,11 +161,18 @@ public sealed class RemoteContractService(
 
     public async Task SetFieldsAsync(Guid actor, Guid id, IReadOnlyList<SignatureFieldInput> fields, CancellationToken ct)
     {
-        var item = await OwnedDraftAsync(actor, id, ct); EnsureModeSelected(item);
+        db.ChangeTracker.Clear();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var item = await LockAccessibleAsync(actor, true, id, ct);
+        if (item.Status != RemoteContractStatus.DRAFT) throw new RemoteContractException(409, "contract_not_draft", "Hợp đồng không còn ở bản nháp.");
+        EnsureModeSelected(item);
+        if (await db.SigningSessions.AnyAsync(x => x.ContractId == id && (x.FinalizedAt != null || x.ExpiresAt > DateTimeOffset.UtcNow), ct))
+            throw new RemoteContractException(409, "signing_in_progress", "Hợp đồng đang có hoặc đã có phiên ký. Không thể thay đổi vị trí ký.");
         if (fields.Count == 0 || fields.Any(x => x.Page < 1 || x.X < 0 || x.Y < 0 || x.Width <= 0 || x.Height <= 0) || fields.Select(x => x.Role).Distinct().Count() != fields.Count) throw new RemoteContractException(400, "invalid_signature_fields", "Vị trí ký không hợp lệ.");
         if (item.SigningMode == RemoteSigningMode.INVESTOR_AND_RESIDENT && fields.Select(x => x.Role).Distinct().Count() != 2) throw new RemoteContractException(400, "both_fields_required", "Cần vị trí ký của hai bên.");
         if (item.SigningMode == RemoteSigningMode.PRE_SIGNED_INVESTOR && (fields.Count != 1 || fields[0].Role != SignatureRole.RESIDENT)) throw new RemoteContractException(400, "investor_field_not_allowed", "PDF ký sẵn chỉ có vị trí cư dân.");
         await ValidateCoordinatesAsync(id, fields, ct); db.SignatureFields.RemoveRange(db.SignatureFields.Where(x => x.ContractId == id)); db.SignatureFields.AddRange(fields.Select(x => new ContractSignatureField { ContractId = id, Role = x.Role, Page = x.Page, X = x.X, Y = x.Y, Width = x.Width, Height = x.Height })); await AuditAsync(id, actor, "SIGNATURE_FIELDS_UPDATED"); await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
     public async Task SendAsync(Guid actor, Guid id, SendRemoteContract input, CancellationToken ct)
     {

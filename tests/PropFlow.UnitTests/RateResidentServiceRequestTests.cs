@@ -56,7 +56,7 @@ public sealed class RateResidentServiceRequestTests
         public Guid? RequestId { get; private set; }
 
         public Task<(SaveResidentServiceRequestFeedbackOutcome Outcome, ResidentServiceRequestFeedbackResponse? Response)> SaveAsync(
-            Guid residentId, Guid serviceRequestId, int rating, string comment, DateTimeOffset now, CancellationToken ct)
+            Guid residentId, Guid serviceRequestId, int rating, string comment, DateTimeOffset now, CancellationToken ct, Guid? apartmentUnitId = null)
         {
             ResidentId = residentId;
             RequestId = serviceRequestId;

@@ -339,12 +339,13 @@ async function apiRequest(p,method,route,body,authenticated=true){
   assert.equal(downloads.length,6,"Expected one workbook per successful download, with no extra template download");
   }
   const selectedFeatures=(process.env.PROPFLOW_FILTER_QA_FEATURES||'').split(',').filter(Boolean);
-  const managerGroups=[['assets','manager-assets-filter-qa'],['requests','manager-requests-filter-qa'],['complaints','manager-complaints-filter-qa'],['maintenance','manager-maintenance-filter-qa'],['invoice','manager-finance-filter-qa'],['announcement','manager-announcements-filter-qa'],['parking','parking-real-qa']];
+  const managerGroups=[['assets','manager-assets-filter-qa'],['requests','manager-requests-filter-qa'],['complaints','manager-complaints-filter-qa'],['maintenance','manager-maintenance-filter-qa'],['invoice','manager-finance-filter-qa'],['announcement','manager-announcements-filter-qa'],['parking','parking-real-qa'],['remote','remote-sign-real-qa']];
   assert.ok(selectedFeatures.every(x=>managerGroups.some(([feature])=>feature===x)),'Unknown QA feature');
   for(const [feature,module] of managerGroups){
    if(selectedFeatures.length&&!selectedFeatures.includes(feature))continue;
    await rpc({action:'progress',phase:'manager-'+feature+'-filters'});
-   await require('./'+module+'.cjs').verify({p:manager,navigate,until,evaluate,wait,filters,multi,network,checks,scenarios,apiRequest,send,shot,key,out,fs});
+   const qaPage=feature==='remote'?await newPage('admin-remote'):manager;if(feature==='remote')await login(qaPage,'ADMIN');
+   await require('./'+module+'.cjs').verify({p:qaPage,navigate,until,evaluate,wait,filters,multi,network,checks,scenarios,apiRequest,send,shot,key,out,fs});
   }
   await rpc({action:'db',phase:'final-manager-filter-queries-no-business-writes',count:managerOnly?0:25});
   assert.deepEqual(jsErrors,[]);assert.deepEqual(consoleErrors,[]);
