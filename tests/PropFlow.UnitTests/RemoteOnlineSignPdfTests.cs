@@ -16,6 +16,24 @@ namespace PropFlow.UnitTests;
 public sealed class RemoteOnlineSignPdfTests
 {
     [Fact]
+    public async Task Upload_finishing_after_draft_deletion_rejects_and_removes_uploaded_asset()
+    {
+        await using var fixture = new Fixture();
+        var contract = await fixture.AddDraftAsync();
+        fixture.Storage.BeforePutReturns = () => fixture.Service.DeleteDraftAsync(fixture.Owner, contract.Id, default);
+        var pdf = CreatePdf();
+
+        var error = await Assert.ThrowsAsync<RemoteContractException>(() => fixture.Service.UploadOriginalAsync(
+            fixture.Owner, contract.Id, new MemoryStream(pdf), pdf.Length, default));
+
+        Assert.Equal(404, error.Status);
+        Assert.Empty(fixture.Db.Contracts);
+        Assert.Empty(fixture.Db.Documents);
+        Assert.Empty(fixture.Storage.Stored);
+        Assert.DoesNotContain(fixture.Db.Events, x => x.Type == "ORIGINAL_PDF_UPLOADED");
+    }
+
+    [Fact]
     public async Task Owner_can_upload_a_valid_original_pdf_once()
     {
         await using var fixture = new Fixture();
@@ -435,6 +453,7 @@ public sealed class RemoteOnlineSignPdfTests
 
     private sealed class FakeStorage : IRemotePdfStorage
     {
+        public Func<Task>? BeforePutReturns { get; set; }
         public bool FailPut { get; set; }
         public bool FailDelete { get; set; }
         public byte[]? ReadOverride { get; set; }
@@ -451,6 +470,7 @@ public sealed class RemoteOnlineSignPdfTests
             var bytes = copy.ToArray();
             var key = "test/" + Guid.NewGuid().ToString("N");
             Stored.Add(key, bytes);
+            if (BeforePutReturns is not null) await BeforePutReturns();
             return new StoredPdf(key, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), bytes.Length);
         }
         public Task<StoredPdf> PutDerivedAsync(Guid contractId, string purpose, Stream content, long length, CancellationToken ct) => PutOriginalAsync(contractId, content, length, ct);
