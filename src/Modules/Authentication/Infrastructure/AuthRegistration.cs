@@ -91,6 +91,7 @@ public static class AuthRegistration
                 {
                     if ((context.HttpContext.Request.Path.StartsWithSegments("/hubs/maintenance") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/service-requests") ||
+                         context.HttpContext.Request.Path.StartsWithSegments("/hubs/remote-online-sign") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/resident-notifications") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/notifications") ||
                          context.HttpContext.Request.Path.StartsWithSegments("/hubs/support-chat") ||
