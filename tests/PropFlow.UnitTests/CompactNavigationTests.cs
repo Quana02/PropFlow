@@ -29,19 +29,20 @@ public sealed class CompactNavigationTests
         public ValueTask<T> InvokeAsync<T>(string id, CancellationToken ct, object?[]? args) => InvokeAsync<T>(id, args);
     }
     [Theory]
-    [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/admin/dashboard?tab=activity", 5)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/manager/service-requests/123", 14)]
+    [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/admin/dashboard?tab=activity", 6)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/manager/service-requests/123", 15)]
     [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/service-requests/123", 3)]
-    [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/knowledge/documents", 5)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/knowledge/documents", 14)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/utility-insights", 14)]
-    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/facility-guides", 14)]
+    [InlineData("ADMIN", "MANAGE_INTERNAL_ACCOUNTS", "/knowledge/documents", 6)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/knowledge/documents", 15)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/utility-insights", 15)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/facility-guides", 15)]
+    [InlineData("MANAGER", "MANAGE_OPERATIONS", "/operations/parking", 15)]
     [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/my-maintenance", 3)]
     [InlineData("STAFF", "PERFORM_ASSIGNED_OPERATIONS", "/staff/complaints", 3)]
     [InlineData("ACCOUNTANT", "", "/finance/invoices", 8)]
     [InlineData("ACCOUNTANT", "MANAGE_FINANCE", "/finance/utility-insights", 8)]
     [InlineData("RESIDENT", "", "/resident", 0)]
-    [InlineData("ADMIN", "", "/admin/dashboard", 4)]
+    [InlineData("ADMIN", "", "/admin/dashboard", 5)]
     [InlineData("MANAGER", "", "/buildings", 0)]
     [InlineData("STAFF", "", "/buildings", 0)]
     public async Task Actual_shared_menu_preserves_role_routes_order_permissions_and_active_state(string role, string permission, string route, int count)
@@ -66,9 +67,9 @@ public sealed class CompactNavigationTests
             var routes = links.Select(link => System.Net.WebUtility.HtmlDecode(Regex.Match(link, "href=\"([^\"]+)\"").Groups[1].Value)).ToArray();
             var expected = role switch
             {
-                "ADMIN" => new[] { "/admin/dashboard?tab=overview", "/admin/dashboard?tab=accounts", "/admin/dashboard?tab=payment", "/admin/dashboard?tab=activity" },
+                "ADMIN" => new[] { "/admin/dashboard?tab=overview", "/admin/dashboard?tab=accounts", "/admin/dashboard?tab=payment", "/admin/dashboard?tab=activity", "/remote-contracts" },
                 "ACCOUNTANT" => new[] { "/finance/utility-insights", "/finance/dashboard", "/finance/payments/pending", "/finance/invoices/unpaid", "/finance/payments/overdue", "/finance/payments/confirmed", "/finance/invoices", "/finance/payments/bank-transfers" },
-                "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee", "/operations/utility-insights", "/operations/facility-guides" },
+                "MANAGER" when count > 0 => new[] { "/buildings", "/apartments", "/residents", "/facilities", "/equipment", "/manager/support-chat", "/manager/complaints", "/manager/announcements", "/manager/service-requests", "/maintenance", "/operations/service-fee", "/operations/utility-insights", "/operations/facility-guides", "/operations/parking" },
                 "STAFF" when count > 0 => new[] { "/staff/service-requests", "/my-maintenance", "/staff/complaints" },
                 _ => Array.Empty<string>()
             };

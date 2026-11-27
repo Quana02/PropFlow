@@ -5,8 +5,9 @@ namespace PropFlow.Web.Client.Features.Complaints.Services;
 
 public sealed class ComplaintApiClient(AuthenticatedApiClient api)
 {
-    public Task<ApiResult<ComplaintPage>> ListAsync(string search, string status, int page, CancellationToken ct) =>
-        api.SendAsync<ComplaintPage>(HttpMethod.Get, $"api/v1/complaints?search={Uri.EscapeDataString(search)}&status={Uri.EscapeDataString(status)}&page={page}", ct: ct);
+    public Task<ApiResult<ComplaintPage>> ListAsync(string search, string status, int page, CancellationToken ct,ComplaintManagerFilter? filter=null) =>
+        api.SendAsync<ComplaintPage>(HttpMethod.Get, $"api/v1/complaints?search={Uri.EscapeDataString(search)}&status={Uri.EscapeDataString(status)}&page={page}"+filter?.Query, ct: ct);
+    public Task<ApiResult<IReadOnlyList<ContextOption>>> FilterStaffAsync(CancellationToken ct)=>api.SendAsync<IReadOnlyList<ContextOption>>(HttpMethod.Get,"api/v1/complaints/filter-staff-options",ct:ct);
     public Task<ApiResult<ComplaintDetail>> GetAsync(Guid id, CancellationToken ct) => api.SendAsync<ComplaintDetail>(HttpMethod.Get, $"api/v1/complaints/{id}", ct: ct);
     public Task<ApiResult<ComplaintDetail>> SubmitAsync(string subject, string description, CancellationToken ct) =>
         api.SendAsync<ComplaintDetail>(HttpMethod.Post, "api/v1/complaints", new { subject, description }, ct: ct);

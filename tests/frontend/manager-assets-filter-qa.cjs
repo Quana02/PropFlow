@@ -1,0 +1,48 @@
+const assert=require('node:assert/strict');
+const visual=require('./directory-filter-visual-qa.cjs');
+exports.verify=async function(h){
+ const {p,navigate,until,evaluate,wait,filters,multi,network,checks,scenarios,apiRequest}=h;
+ const criteria=q=>[...new URLSearchParams(q)].filter(([k])=>!['pageIndex','pageSize'].includes(k)).map(x=>x.join('=')).sort();
+ for(const kind of ['facilities','equipment']){
+  const resource=kind==='equipment'?'equipments':kind;
+  await navigate(p,'/'+kind);await until(p,"!!document.querySelector('.pf-filter-trigger:not(:disabled)')&&document.querySelectorAll('.pf-list-table tbody tr').length===10");
+  const entries=()=>network.filter(x=>x.page===p.name&&x.path==='/api/v1/'+resource&&x.status===200);
+  await filters(p);const before=entries().length;
+  await multi(p,kind==='facilities'?'Trạng thái cơ sở vật chất':'Lọc theo trạng thái',['Ngừng hoạt động','Đang hoạt động']);
+  await multi(p,kind==='facilities'?'Loại cơ sở vật chất':'Lọc theo loại thiết bị',kind==='facilities'?['QA Tiện ích A','QA Tiện ích B']:['QA Thiết bị A','QA Thiết bị B']);
+  if(kind==='equipment')await multi(p,'Lọc theo cơ sở vật chất',['Thiết bị cấp chung cư','QA Tiện ích 01']);
+  assert.equal(entries().length,before,'Draft selection unexpectedly queried');
+  await evaluate(p,"[...document.querySelectorAll('.pf-filter-controls .pf-select__trigger')].at(-1).click()");await until(p,"!!document.querySelector('[role=listbox]:popover-open')");await wait(120);
+  const applyPoint=await evaluate(p,"(()=>{const r=document.querySelector('.pf-filter-apply').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()");
+  await h.send('Input.dispatchMouseEvent',{type:'mousePressed',...applyPoint,button:'left',clickCount:1},p.session);await h.send('Input.dispatchMouseEvent',{type:'mouseReleased',...applyPoint,button:'left',clickCount:1},p.session);
+  for(let i=0;i<200&&new URLSearchParams(entries().at(-1)?.query).getAll('statuses').length!==2;i++)await wait(50);
+  const count=kind==='facilities'?24:18;
+  const countText=kind==='facilities'?'/ 24':'trên 18';
+  await until(p,`!document.querySelector('.pf-filter-popover:popover-open')&&document.querySelector('.pf-management-count').textContent.includes(${JSON.stringify(countText)})`);
+  assert.equal(new URLSearchParams(entries().at(-1).query).getAll('statuses').length,2);
+  assert.equal(new URLSearchParams(entries().at(-1).query).getAll(kind==='facilities'?'facilityTypeIds':'equipmentTypeIds').length,2);
+  const oracle=await apiRequest(p,'GET','/api/v1/'+resource+entries().at(-1).query);
+  assert.equal(oracle.status,200);assert.equal(oracle.body.totalCount,count);assert.equal(oracle.body.summary.total,count);
+  assert.equal(await evaluate(p,"document.querySelector('.pf-management-metrics strong').textContent"),String(count),'KPI did not follow applied filter');
+  const snapshot=criteria(entries().at(-1).query);
+  await evaluate(p,"document.querySelector('.table-pagination button[aria-label=\"Trang sau\"]').click()");
+  await until(p,"document.querySelector('.table-pagination .page-number')?.getAttribute('aria-label')?.startsWith('Trang 2 trên')");
+  assert.deepEqual(criteria(entries().at(-1).query),snapshot);
+  await evaluate(p,"(()=>{const e=document.querySelector('.pf-list-search input');e.value='draft-no-match';e.dispatchEvent(new Event('input',{bubbles:true}))})()");await wait(100);
+  const previousCount=entries().length;await evaluate(p,"document.querySelector('.table-pagination button[aria-label=\"Trang trước\"]').click()");
+  for(let i=0;i<200&&entries().length===previousCount;i++)await wait(50);
+  assert.ok(entries().length>previousCount);assert.equal(new URLSearchParams(entries().at(-1).query).get('searchKeyword'),null,'Unsubmitted search leaked into pagination');
+  await filters(p);await evaluate(p,"[...document.querySelector('.pf-filter-popover:popover-open footer').querySelectorAll('button')].find(x=>x.textContent.trim()==='Đặt lại').click()");
+  await h.key(p,'Escape',27);await filters(p);
+  assert.ok((await evaluate(p,"[...document.querySelectorAll('.pf-filter-controls .selection-label')].map(x=>x.textContent)" )).some(x=>x.includes('2')),'Closing reset draft lost applied selection');
+  await h.key(p,'Escape',27);
+  await visual.verifyDirectory({...h,kind:resource,fieldCount:kind==='facilities'?2:3});
+  const searchText=kind==='facilities'?'QA vị trí 1':'QA-SERIAL-01',expected=kind==='facilities'?11:1;
+  await evaluate(p,`(()=>{const e=document.querySelector('.pf-list-search input');e.value=${JSON.stringify(searchText)};e.dispatchEvent(new Event('input',{bubbles:true}))})()`);await wait(100);
+  await evaluate(p,"document.querySelector('.pf-list-search input').dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',bubbles:true}))");
+  for(let i=0;i<200&&new URLSearchParams(entries().at(-1)?.query).get('searchKeyword')!==searchText;i++)await wait(50);
+  await until(p,`document.querySelector('.pf-management-metrics strong').textContent==='${expected}'&&document.querySelectorAll('.pf-list-table tbody tr').length===${Math.min(expected,10)}`);
+  assert.equal(new URLSearchParams(entries().at(-1).query).get('searchKeyword'),searchText);
+  checks.push({page:kind+'-functional',count});scenarios.push('manager-'+kind+'-real-multi-OR-AND-pagination-draft-reset-visual');
+ }
+};

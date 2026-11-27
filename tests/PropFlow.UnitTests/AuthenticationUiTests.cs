@@ -43,11 +43,7 @@ public sealed class AuthenticationUiTests
         var session = new AuthSession(publicApi);
         session.Accept(new SessionResponse("test-token", DateTimeOffset.UtcNow.AddMinutes(15), account));
 
-        await using var services = new ServiceCollection().AddLogging().AddAuthorizationCore(options =>
-        {
-            options.AddPolicy(AssetPermissions.ViewPolicy, policy => policy.RequireAssertion(context => AssetPermissions.CanView(context.User)));
-            options.AddPolicy(KnowledgePolicies.Read, policy => policy.RequireAssertion(context => KnowledgePolicies.CanRead(context.User)));
-        })
+        await using var services = new ServiceCollection().AddLogging().AddClientAuthorization()
             .AddSingleton(session)
             .AddSingleton<AuthenticationStateProvider>(session)
             .AddSingleton<NavigationManager, AccountNavigation>()

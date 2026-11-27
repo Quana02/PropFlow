@@ -130,6 +130,7 @@ builder.Services.AddDbContext<AiChatbotDbContext>((services, options) => options
     services.GetRequiredService<IConfiguration>().GetConnectionString("PropFlowDatabase"),
     npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "ai_chatbot")));
 builder.Services.AddScoped<KnowledgeDocuments>();
+builder.Services.AddScoped<PropFlow.Modules.Administration.Infrastructure.SupportContacts.SupportContactSettings>();
 builder.Services.AddScoped<IKnowledgeDocuments>(services => services.GetRequiredService<KnowledgeDocuments>());
 builder.Services.AddScoped<IPublishedKnowledgeSource>(services => services.GetRequiredService<KnowledgeDocuments>());
 builder.Services.AddOptions<ChatAiOptions>().BindConfiguration("AiChatbot:Gemini")
@@ -250,6 +251,14 @@ builder.Services.AddDbContext<ComplaintsDbContext>((services, options) =>
             "__EFMigrationsHistory",
             "complaints")));
 
+builder.Services.AddDbContext<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.RemoteOnlineSignDbContext>((services, options) =>
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
+        services.GetRequiredService<NpgsqlConnection>(),
+        npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "remote_online_sign")));
+builder.Services.AddHttpClient("RemoteContractCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.IRemotePdfStorage, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.CloudinaryRemotePdfStorage>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.IPdfSignatureStamper, PropFlow.Modules.RemoteOnlineSign.Application.PdfSignatureStamper>();
+
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
     options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
@@ -305,6 +314,9 @@ builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintSto
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintCommitter, ComplaintCommitter>();
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintContextSource, ComplaintContextSource>();
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.ComplaintUseCases>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.RemoteContractService>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.IRemoteContractCodeGenerator, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.RemoteContractCodeGenerator>();
+builder.Services.AddHostedService<PropFlow.Modules.RemoteOnlineSign.Application.RemoteOnlineSignSignatureCleanupWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.IAnnouncementStore, EfAnnouncementStore>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.AnnouncementUseCases>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IComplaintClosureNotice, PropFlow.Modules.Communication.Infrastructure.ComplaintClosureNotice>();
@@ -315,6 +327,23 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Equipment
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Contracts.IMaintenanceAssetSource, PropFlow.Modules.PropertyAssets.Infrastructure.MaintenanceAssetSource>();
 builder.Services.AddScoped<ISharedFacilityCatalog, SharedFacilityCatalog>();
 builder.Services.AddScoped<FacilityGuideService>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.IParkingStore, PropFlow.Modules.PropertyAssets.Infrastructure.Parking.EfParkingStore>();
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.ParkingWorkspace>();
+builder.Services.AddHttpClient("ParkingPlanGemini", (services, client) =>
+{
+    var ai = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    client.BaseAddress = new Uri(ai.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(90); client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
+});
+builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.IParkingPlanRecognition>(services =>
+{
+    var ai = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    return new PropFlow.Modules.PropertyAssets.Infrastructure.Parking.GeminiParkingPlanRecognition(
+        new PropFlow.Shared.GeminiStructuredClient(services.GetRequiredService<IHttpClientFactory>().CreateClient("ParkingPlanGemini"),
+            ai.ApiKey, builder.Configuration["Parking:Ai:Model"] ?? ai.AnswerModel, ai.Enabled),
+        services.GetRequiredService<ILogger<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.GeminiParkingPlanRecognition>>(),
+        builder.Configuration.GetSection("Parking:Ai").Get<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionOptions>());
+});
 builder.Services.AddScoped<IFacilityGuideSource>(sp => sp.GetRequiredService<FacilityGuideService>());
 builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityRecommendationOptions>()
     .BindConfiguration("FacilityRecommendations")
@@ -341,6 +370,22 @@ builder.Services.AddSingleton<PropFlow.Modules.AiRecommendation.Application.Faci
         sp.GetRequiredService<ILogger<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilitySpeech>>());
 });
 builder.Services.AddSingleton<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilitySpeech>();
+builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityLiveOptions>()
+    .BindConfiguration("FacilityRecommendations:Live")
+    .Validate(x => System.Text.RegularExpressions.Regex.IsMatch(x.Model, "^[a-zA-Z0-9._-]{1,100}$") &&
+        x.SessionMinutes is >= 1 and <= 15 && x.MaxOutputTokens is >= 128 and <= 2048 && x.EndOfSpeechSilenceMs is >= 300 and <= 1500 &&
+        (x.ThinkingBudget is null or >= 0 and <= 2048) &&
+        Uri.TryCreate(x.WebSocketUrl, UriKind.Absolute, out var uri) && uri.Scheme == "wss" && uri.Host == "generativelanguage.googleapis.com" && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) && string.IsNullOrEmpty(uri.UserInfo),
+        "Cấu hình hội thoại tiện ích không hợp lệ.").ValidateOnStart();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityLiveOptions>>().Value);
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.IFacilityLiveProvider>(sp => {
+    var configured = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
+    return new PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilityLive(
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient("FacilityGeminiSpeech"), configured.ApiKey, configured.Ready,
+        sp.GetRequiredService<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityLiveOptions>(),
+        sp.GetRequiredService<ILogger<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.GeminiFacilityLive>>());
+});
+builder.Services.AddScoped<PropFlow.Modules.AiRecommendation.Infrastructure.FacilityDiscovery.FacilityLiveSessions>();
 builder.Services.AddScoped<IMaintenanceStaffDirectory, MaintenanceStaffDirectory>();
 builder.Services.AddScoped<MaintenanceService>();
 builder.Services.AddScoped<IMaintenanceAssetTransactionCoordinator, MaintenanceAssetTransactionCoordinator>();
@@ -391,6 +436,7 @@ builder.Services.AddHttpClient<IPaymentBankDirectory, VietQrBankDirectory>(clien
 });
 builder.Services.AddScoped<PaymentDestinationSettings>();
 builder.Services.AddScoped<ResidentServiceRequestPayments>();
+builder.Services.AddScoped<PropFlow.Modules.Payments.Contracts.IInvoicePaymentInstructions>(services => services.GetRequiredService<ResidentServiceRequestPayments>());
 builder.Services.AddOptions<SePayOptions>().BindConfiguration("Payments:SePay")
     .Validate(SePayLiveConfiguration.Valid, "SePay Live cần địa chỉ webhook HTTPS công khai và khóa xác thực hợp lệ (ít nhất 32 ký tự).")
     .ValidateOnStart();
@@ -426,6 +472,7 @@ builder.Services.AddHostedService<PricingChangeWorker>();
 builder.Services.AddScoped<OperationalNoticeDispatcher>();
 builder.Services.AddHostedService<OperationalNoticeWorker>();
 builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("Authentication:Mail"));
+builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("FinanceEmail"));
 builder.Services.AddHostedService<BillingCycleWorker>();
 builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
@@ -440,6 +487,8 @@ builder.Services.AddScoped<IResidentServiceRequestDetailStore, ResidentServiceRe
 builder.Services.AddScoped<GetResidentServiceRequestHandler>();
 builder.Services.AddScoped<IResidentServiceRequestFeedbackStore, ResidentServiceRequestFeedbackStore>();
 builder.Services.AddScoped<RateResidentServiceRequestHandler>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.AcceptResidentServiceRequest.IResidentCompletionStore, ResidentCompletionStore>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.AcceptResidentServiceRequest.ResidentCompletionHandler>();
 builder.Services.AddScoped<IServiceRequestMaintenanceSource, ServiceRequestMaintenanceSource>();
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.IManagerServiceRequestStore, ManagerServiceRequestStore>();
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();
@@ -487,6 +536,8 @@ builder.Services.AddAuthorization(options =>
         (c.User.IsInRole(SystemRoleCodes.Accountant) && c.User.HasClaim("permission", SystemPermissionCodes.ManageFinance))));
     options.AddPolicy(AdministrationAuthorizationPolicies.ManageInternalAccounts,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageInternalAccounts));
+    options.AddPolicy(AdministrationAuthorizationPolicies.ManageSystemConfiguration,
+        policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ManageSystemConfiguration));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewAdministrationActivity,
         policy => policy.RequireRole(SystemRoleCodes.Admin).RequireClaim("permission", SystemPermissionCodes.ViewAdministrationActivity));
     options.AddPolicy(AdministrationAuthorizationPolicies.ViewSystemOverview,
@@ -553,6 +604,10 @@ builder.Services.AddExceptionHandler<AuthExceptionHandler>();
 builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
 builder.Services.AddRateLimiter(options =>
 {
+    options.AddPolicy("parking-recognition", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
+            PermitLimit = Math.Clamp(builder.Configuration.GetValue("Parking:Ai:RequestsPerTenMinutes", 4), 1, 30),
+            Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
     options.AddPolicy(SupportChatPolicies.RateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst("sub")?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions {
             PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
@@ -633,6 +688,7 @@ builder.Services.AddCors(options =>
             policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
                   .AllowAnyMethod()
+                  .WithExposedHeaders("Content-Disposition")
                   .AllowCredentials();
         }
     });

@@ -2,6 +2,11 @@ namespace PropFlow.Web.Client.Features.Complaints.Models;
 
 public sealed record ComplaintItem(Guid Id, string ComplaintNumber, string Subject, string Status, DateTimeOffset SubmittedAt);
 public sealed record ComplaintPage(IReadOnlyList<ComplaintItem> Items, int Total, int Page, int PageSize);
+public sealed record ComplaintManagerFilter(IReadOnlyList<string> Statuses,IReadOnlyList<string> Staff,DateTimeOffset? From=null,DateTimeOffset? To=null,bool? HasActiveFollowup=null)
+{
+    public string Query=>string.Concat(Statuses.Distinct().Select(x=>"&statuses="+Uri.EscapeDataString(x)))+string.Concat(Staff.Distinct().Select(x=>"&assignedStaffUserIds="+Uri.EscapeDataString(x)))+
+        (From.HasValue?"&from="+Uri.EscapeDataString(From.Value.ToString("O")):"")+(To.HasValue?"&to="+Uri.EscapeDataString(To.Value.ToString("O")):"")+(HasActiveFollowup.HasValue?"&hasActiveFollowup="+HasActiveFollowup.Value.ToString().ToLowerInvariant():"");
+}
 public sealed record ComplaintContext(Guid? ApartmentUnitId, Guid? RelatedServiceRequestId, Guid? FacilityId, Guid? EquipmentId);
 public sealed record ComplaintHistory(string Type, string? FromStatus, string? ToStatus, string? Detail,
     DateTimeOffset CreatedAt, string? ActorLabel = null);

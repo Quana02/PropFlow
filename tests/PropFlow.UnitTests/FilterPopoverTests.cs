@@ -134,10 +134,15 @@ public sealed class FilterPopoverTests
             _ => ""
         };
 
+        private RenderTreeFrame[] DescendantFrames(int id) => Frames(id).SelectMany(frame =>
+            frame.FrameType == RenderTreeFrameType.Component
+                ? new[] { frame }.Concat(DescendantFrames(frame.ComponentId))
+                : new[] { frame }).ToArray();
+
         private Task Dispatch<T>(string tag, string name, EventArgs args, Func<RenderTreeFrame[], bool> match, string? text = null) => Dispatcher.InvokeAsync(() =>
         {
             var child = Frames(root).Single(f => f.FrameType == RenderTreeFrameType.Component && f.ComponentType == typeof(T));
-            var frames = Frames(child.ComponentId);
+            var frames = DescendantFrames(child.ComponentId);
             for (var index = 0; index < frames.Length; index++)
             {
                 var frame = frames[index];

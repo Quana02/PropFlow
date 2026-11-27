@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using PropFlow.Modules.ServiceRequests.Application.SubmitServiceRequest;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using PropFlow.Modules.ServiceRequests.Domain.ServiceRequests;
@@ -16,16 +17,30 @@ public sealed class ServiceRequestSubmissionStore(ServiceRequestsDbContext db)
             .Select(category => (Guid?)category.Id)
             .SingleOrDefaultAsync(ct);
 
-    public async Task AddAsync(
+    public Task<ServiceRequest?> FindByRequestNumberAsync(string requestNumber, CancellationToken ct) =>
+        db.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(x => x.RequestNumber == requestNumber, ct);
+
+    public async Task<ServiceRequest> AddAsync(
         ServiceRequest request,
         ServiceRequestActivity initialActivity,
         CancellationToken ct)
     {
         db.ServiceRequests.Add(request);
         db.ServiceRequestActivities.Add(initialActivity);
-        if (request.SubmittedByUserId is { } sender)
-            db.ResidentEvents.Add(new ServiceRequestWorkflowNotice(sender, null, request.RequestNumber)
-                .ToEvent(ServiceRequestWorkflowNotice.Submitted, request.Id, request.SubmittedAt));
-        await db.SaveChangesAsync(ct);
+        var notice = request.SubmittedByUserId is { } sender
+            ? new ServiceRequestWorkflowNotice(sender, null, request.RequestNumber).ToEvent(ServiceRequestWorkflowNotice.Submitted, request.Id, request.SubmittedAt) : null;
+        if (notice is not null) db.ResidentEvents.Add(notice);
+        try { await db.SaveChangesAsync(ct); return request; }
+        catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } && request.RequestNumber.StartsWith("YC-AI-", StringComparison.Ordinal))
+        {
+            // SaveChanges rolls back the request, activity and notice together; only detach this attempted write.
+            // Detach required dependents before their principal, otherwise EF fixup severs a required relationship.
+            db.Entry(initialActivity).State = EntityState.Detached;
+            if (notice is not null) db.Entry(notice).State = EntityState.Detached;
+            db.Entry(request).State = EntityState.Detached;
+            var saved = await FindByRequestNumberAsync(request.RequestNumber, ct);
+            if (saved is null) throw;
+            return saved;
+        }
     }
 }

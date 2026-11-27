@@ -6,6 +6,10 @@
         <AdminTabLink Tab="accounts" href="/admin/dashboard?tab=accounts" class="admin-nav-link" aria-label="Tài khoản Ban quản lý" title="Tài khoản Ban quản lý"><span class="material-symbols-outlined" aria-hidden="true">group</span></AdminTabLink>
         <AdminTabLink Tab="payment" href="/admin/dashboard?tab=payment" class="admin-nav-link" aria-label="Cấu hình thanh toán" title="Cấu hình thanh toán"><span class="material-symbols-outlined" aria-hidden="true">account_balance</span></AdminTabLink>
         <AdminTabLink Tab="activity" href="/admin/dashboard?tab=activity" class="admin-nav-link" aria-label="Nhật ký hệ thống" title="Nhật ký hệ thống"><span class="material-symbols-outlined" aria-hidden="true">history</span></AdminTabLink>
+        <AuthorizeView Policy="@PropFlow.Modules.Administration.Contracts.AdministrationAuthorizationPolicies.ManageSystemConfiguration" Context="configurationAuthorization">
+            <AdminTabLink Tab="configuration" href="/admin/dashboard?tab=configuration" class="admin-nav-link" aria-label="Cấu hình hệ thống" title="Cấu hình hệ thống"><span class="material-symbols-outlined" aria-hidden="true">settings</span></AdminTabLink>
+        </AuthorizeView>
+        <NavLink href="/remote-contracts" class="admin-nav-link" ActiveClass="is-selected" aria-label="Hợp đồng ký từ xa" title="Hợp đồng ký từ xa"><span class="material-symbols-outlined" aria-hidden="true">draw</span></NavLink>
         <AuthorizeView Policy="@PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read" Context="knowledgeAuthorization">
             <NavLink href="/knowledge/documents" class="admin-nav-link" ActiveClass="is-selected" aria-label="Tài liệu chung cư" title="Tài liệu chung cư"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span></NavLink>
         </AuthorizeView>

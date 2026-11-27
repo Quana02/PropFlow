@@ -16,6 +16,7 @@ public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintena
         if (filter.Status.HasValue) query.Add($"status={filter.Status.Value}");
         if (filter.From.HasValue) query.Add($"from={Uri.EscapeDataString(filter.From.Value.ToString("O"))}");
         if (filter.To.HasValue) query.Add($"to={Uri.EscapeDataString(filter.To.Value.ToString("O"))}");
+        query.AddRange(filter.Multi.Parameters());
         return api.SendAsync<Page<ScheduleModel>>(HttpMethod.Get, $"api/v1/maintenance/schedules?{string.Join("&", query)}", ct: ct);
     }
     public Task<ApiResult<IReadOnlyList<AssetModel>>> AssetsAsync(CancellationToken ct = default) => api.SendAsync<IReadOnlyList<AssetModel>>(HttpMethod.Get, "api/v1/maintenance/assets", ct: ct);
@@ -35,6 +36,7 @@ public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintena
         if (filter.AssignedStaffUserId.HasValue) query.Add($"assignedStaffUserId={filter.AssignedStaffUserId}");
         if (filter.From.HasValue) query.Add($"from={Uri.EscapeDataString(filter.From.Value.ToString("O"))}");
         if (filter.To.HasValue) query.Add($"to={Uri.EscapeDataString(filter.To.Value.ToString("O"))}");
+        query.AddRange(filter.Multi.Parameters());
         return api.SendAsync<Page<MaintenanceTaskModel>>(HttpMethod.Get, $"api/v1/maintenance/tasks?{string.Join("&", query)}", ct: ct);
     }
     public Task<ApiResult<Page<MaintenanceTaskModel>>> MyTasksAsync(MyMaintenanceTaskFilterModel filter, CancellationToken ct = default)
@@ -79,6 +81,7 @@ public sealed class MaintenanceApiClient(AuthenticatedApiClient api) : IMaintena
         if (filter.StaffUserId.HasValue) query.Add($"staffUserId={filter.StaffUserId}");
         if (filter.From.HasValue) query.Add($"from={Uri.EscapeDataString(filter.From.Value.ToString("O"))}");
         if (filter.To.HasValue) query.Add($"to={Uri.EscapeDataString(filter.To.Value.ToString("O"))}");
+        query.AddRange(filter.Multi.Parameters("staffUserIds"));
         return api.SendAsync<MaintenanceHistoryListModel>(HttpMethod.Get, $"api/v1/maintenance/history?{string.Join("&", query)}", ct: ct);
     }
     public Task<ApiResult<MaintenanceHistoryListModel>> MyHistoryAsync(MaintenanceHistoryFilterModel filter, CancellationToken ct = default)

@@ -33,7 +33,7 @@ public class FacilityService : IFacilityService
                 f.CreatedAt,
                 f.UpdatedAt)).ToList();
 
-        return new PagedResult<FacilityDto>(items, page.TotalCount, page.PageIndex, page.PageSize);
+        return new PagedResult<FacilityDto>(items, page.TotalCount, page.PageIndex, page.PageSize, page.Summary);
     }
 
     public async Task<FacilityDetailDto?> GetFacilityByIdAsync(Guid id, CancellationToken cancellationToken = default)

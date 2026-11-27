@@ -240,18 +240,18 @@ public sealed class SupportChatDatabaseTests(SupportChatDatabaseFixture database
     }
 
     [Fact]
-    public async Task DraftsStayOutOfSqlAndStopWhenRecipientLosesPermission()
+    public async Task LegacyDraftsNeverReachManagersOrSql()
     {
         var resident = directory.Resident(); var manager = directory.Manager(); await Ready(manager, Guid.NewGuid().ToString());
         var chat = await Start(resident, Guid.NewGuid());
         await using var db = database.CreateDb(); var service = Service(db);
         var before = await db.SupportMessages.CountAsync(x => x.ConversationId == chat.Id);
         await service.DraftAsync(resident, chat.Id, "private-stream", 1, "CHUA_GUI_KHONG_DUOC_LUU", default);
-        Assert.Equal(manager, Assert.Single(push.Drafts).Recipient);
+        Assert.Empty(push.Drafts);
         Assert.Equal(before, await db.SupportMessages.CountAsync(x => x.ConversationId == chat.Id));
         directory.Items.TryRemove(manager, out _);
         await service.DraftAsync(resident, chat.Id, "private-stream", 2, "SAU_KHI_THU_HOI_QUYEN", default);
-        Assert.Single(push.Drafts);
+        Assert.Empty(push.Drafts);
         Assert.DoesNotContain(await db.SupportMessages.Where(x => x.ConversationId == chat.Id).ToArrayAsync(), x => x.Text.Contains("CHUA_GUI"));
     }
 }

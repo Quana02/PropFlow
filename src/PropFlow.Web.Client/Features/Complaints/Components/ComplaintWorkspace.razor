@@ -4,6 +4,7 @@
 @using PropFlow.Web.Client.Features.ServiceRequests.Services
 @inject PropFlow.Web.Client.Features.Complaints.Services.ComplaintApiClient Api
 @inject NavigationManager Navigation
+@inject PropFlow.Web.Client.Features.Facility.Services.IBuildingApiClient BuildingApi
 @implements IAsyncDisposable
 
 <section class="complaint-workspace @(Role is "MANAGER" or "STAFF" ? "internal-workspace" : null)">
@@ -38,7 +39,21 @@
         <header class="list-heading"><div><h2>Danh sách phản ánh</h2><p class="muted">Theo dõi tình trạng xử lý và phản hồi của từng phản ánh.</p></div><span class="total">@(items?.Total.ToString() ?? "—") phản ánh</span></header>
         <form class="filters pf-list-toolbar @(Role is "MANAGER" or "STAFF" ? "pf-management-toolbar" : null)" @onsubmit="SearchAsync" @onsubmit:preventDefault>
             <label>Tìm kiếm<input @bind="search" maxlength="200" placeholder="Mã hoặc tiêu đề" /></label>
-            <label>Trạng thái<PropFlowSelect @bind-Value="status" Options="StatusOptions" Disabled="busy" AriaLabel="Trạng thái phản ánh" /></label>
+            @if(Role=="MANAGER")
+            {
+                <PropFlowFilterPopover Variant="Directory" ActiveCount="ManagerFilterCount" Disabled="busy" OnOpen="OpenManagerFilters" OnReset="ResetManagerDraft" OnApply="ApplyManagerDraft" Validate="ValidateManagerDraft">
+                    <label><span>Trạng thái phản ánh</span><PropFlowFilterMultiSelect Options="@(StatusOptions.Where(x=>x.Value.Length>0).ToArray())" Values="managerDraft.Statuses" ValuesChanged="v=>managerDraft=managerDraft with {Statuses=v}" AriaLabel="Trạng thái phản ánh" /></label>
+                    <label><span>Nhân viên đang xử lý</span><PropFlowFilterMultiSelect Options="managerStaffOptions" Values="managerDraft.Staff" ValuesChanged="v=>managerDraft=managerDraft with {Staff=v}" AriaLabel="Nhân viên đang xử lý phản ánh" Searchable="true" Disabled="@(managerOptionsLoading||managerOptionsError is not null)" /></label>
+                    <label><span>Theo dõi xử lý</span><PropFlowSelect Value="@(managerDraft.HasActiveFollowup?.ToString().ToLowerInvariant()??"")" ValueChanged="SelectManagerFollowup" Options="ManagerFollowupOptions" AriaLabel="Theo dõi xử lý phản ánh" Variant="Filter" /></label>
+                    <div class="pf-filter-range"><label><span>Ngày gửi từ</span><input type="date" @bind="managerDraftFrom" /></label><label><span>Ngày gửi đến</span><input type="date" @bind="managerDraftTo" /></label></div>
+                    @if(managerOptionsError is not null){<small role="alert">@managerOptionsError</small>}
+                    @if(managerFilterError is not null){<small role="alert">@managerFilterError</small>}
+                </PropFlowFilterPopover>
+            }
+            else
+            {
+                <label>Trạng thái<PropFlowSelect @bind-Value="status" Options="StatusOptions" Disabled="busy" AriaLabel="Trạng thái phản ánh" /></label>
+            }
             <button type="submit">Tìm kiếm</button>
             <PropFlowListRefresh OnRefresh="LoadAsync" Busy="@busy" />
         </form>
@@ -156,6 +171,42 @@
     private RealtimeReconciliationPulse? reconciliation;
     private int mutationVersion;
     private int page = 1;
+    private ComplaintManagerFilter managerApplied=new([],[]),managerDraft=new([],[]);
+    private IReadOnlyList<PropFlowSelectOption> managerStaffOptions=[];
+    private DateTime? managerDraftFrom,managerDraftTo,managerAppliedFrom,managerAppliedTo;
+    private TimeZoneInfo? managerZone;
+    private bool managerOptionsLoading;
+    private string? managerOptionsError,managerFilterError;
+    private static readonly PropFlowSelectOption[] ManagerFollowupOptions=[new("","Tất cả"),new("true","Có công việc đang xử lý"),new("false","Không có công việc đang xử lý")];
+    private int ManagerFilterCount=>new[]{managerApplied.Statuses.Count>0,managerApplied.Staff.Count>0,managerApplied.HasActiveFollowup.HasValue,managerApplied.From.HasValue||managerApplied.To.HasValue}.Count(x=>x);
+    private async Task OpenManagerFilters()
+    {
+        managerDraft=managerApplied;managerDraftFrom=managerAppliedFrom;managerDraftTo=managerAppliedTo;managerOptionsLoading=true;managerOptionsError=managerFilterError=null;
+        try
+        {
+            var options=await Api.FilterStaffAsync(cancellation.Token);
+            if(options.IsSuccess)managerStaffOptions=(options.Data??[]).Select(x=>new PropFlowSelectOption(x.Id.ToString(),x.Label)).ToArray();
+            else managerOptionsError=options.Message??"Không tải được nhân viên đang xử lý.";
+            var current=await BuildingApi.GetCurrentBuildingOverviewAsync(cancellation.Token);
+            if(current.IsSuccess&&current.Data is {} building)managerZone=TimeZoneInfo.FindSystemTimeZoneById(building.TimeZoneId);
+        }
+        finally{managerOptionsLoading=false;}
+    }
+    private void SelectManagerFollowup(string value)=>managerDraft=managerDraft with {HasActiveFollowup=bool.TryParse(value,out var flag)?flag:null};
+    private void ResetManagerDraft(){managerDraft=new([],[]);managerDraftFrom=managerDraftTo=null;managerFilterError=null;}
+    private bool ValidateManagerDraft()
+    {
+        managerFilterError=null;
+        if(managerDraftFrom>managerDraftTo)managerFilterError="Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.";
+        else if((managerDraftFrom.HasValue||managerDraftTo.HasValue)&&managerZone is null)managerFilterError="Chưa tải được múi giờ chung cư. Đóng và mở lại bộ lọc.";
+        else if(managerZone is not null){try{FilterDateRange.Boundary(managerDraftFrom,managerZone);FilterDateRange.Boundary(managerDraftTo,managerZone,true);}catch(ArgumentException){managerFilterError="Ngày không hợp lệ trong múi giờ chung cư.";}}
+        return managerFilterError is null;
+    }
+    private async Task ApplyManagerDraft()
+    {
+        managerApplied=managerDraft with {From=managerZone is null?null:FilterDateRange.Boundary(managerDraftFrom,managerZone),To=managerZone is null?null:FilterDateRange.Boundary(managerDraftTo,managerZone,true)};
+        managerAppliedFrom=managerDraftFrom;managerAppliedTo=managerDraftTo;page=1;await LoadAsync();
+    }
     private string search = "", status = "", subject = "", description = "", workTitle = "", instruction = "", response = "", contextSearch = "";
     private Guid? staffId, apartmentId, requestId, facilityId, equipmentId;
     private static string IdValue(Guid? id) => id?.ToString() ?? "";
@@ -203,7 +254,7 @@
             }
             else
             {
-                var result = await Api.ListAsync(search, status, page, cancellation.Token);
+                var result = await Api.ListAsync(search, status, page, cancellation.Token,Role=="MANAGER"?managerApplied:null);
                 items = result.IsSuccess ? result.Data : null;
                 if (!result.IsSuccess) error = result.Message ?? "Không tải được danh sách phản ánh.";
             }

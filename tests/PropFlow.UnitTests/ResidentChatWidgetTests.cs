@@ -22,7 +22,7 @@ public sealed class ResidentChatWidgetTests
         var capture = new Capture();
         using var services = new ServiceCollection().AddSingleton<PropFlow.Web.Client.Shared.Feedback.ToastService>().AddLogging().AddSingleton<IComponentActivator>(capture)
             .AddSingleton<AuthenticatedApiClient>(sp => new(new HttpClient(new Responses()) { BaseAddress = new("https://test.invalid") }, sp.GetRequiredService<ILogger<ApiClient>>()))
-            .AddSingleton<IJSRuntime, NoJavaScript>().AddSingleton<ResidentChatApiClient>().BuildServiceProvider();
+            .AddSingleton<IJSRuntime, NoJavaScript>().AddResidentAssistant().AddSingleton<NavigationManager, FacilityTestNavigation>().BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>
         {
@@ -39,10 +39,19 @@ public sealed class ResidentChatWidgetTests
             Assert.Contains("Chưa cấu hình AI", WebUtility.HtmlDecode(html));
             Assert.Contains("&lt;script&gt;", html); Assert.DoesNotContain("<script>", html);
             Assert.Contains("Đọc tài liệu nguồn", WebUtility.HtmlDecode(html));
+            Assert.Contains("Trò chuyện với tôi", WebUtility.HtmlDecode(html));
+            Assert.Contains("rag-voice-button", html);
+            if (Environment.GetEnvironmentVariable("PROPFLOW_CHAT_PREVIEW_DIR") is { Length: > 0 } previewDirectory)
+                await File.WriteAllTextAsync(Path.Combine(previewDirectory, "propflow-document-chat-answer.html"), html);
             Assert.Contains("v1", WebUtility.HtmlDecode(html));
             Assert.DoesNotContain("v@citation.Revision", html);
             typeof(ResidentChatWidget).GetMethod("Clear", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(widget, null); Refresh(widget);
             Assert.DoesNotContain("Chưa cấu hình AI", WebUtility.HtmlDecode(root.ToHtmlString()));
+            typeof(ResidentChatWidget).GetMethod("TalkAbout", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(widget, ["Hướng dẫn làm đơn"]);
+            Assert.Equal("Hướng dẫn làm đơn", services.GetRequiredService<ResidentAssistantHandoff>().Take());
+            Assert.Null(services.GetRequiredService<ResidentAssistantHandoff>().Take());
+            Assert.Contains("/resident/facilities?conversation=", services.GetRequiredService<NavigationManager>().Uri);
+            Assert.DoesNotContain("Hướng", services.GetRequiredService<NavigationManager>().Uri);
         });
     }
     private static Task Invoke(object component, string method) =>

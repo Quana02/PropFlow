@@ -1,0 +1,118 @@
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="rsotp-backdrop">
+    <section class="rsotp-modal" role="dialog" aria-modal="true" aria-labelledby="rsotp-title">
+        <header>
+            <div>
+                <h2 id="rsotp-title">Xác thực ký hợp đồng</h2>
+                <p>Hoàn tất xác nhận chữ ký của bạn.</p>
+            </div>
+            <button class="rsotp-icon" title="Đóng" aria-label="Đóng" @onclick="OnClose">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </header>
+
+        <div class="rsotp-body">
+            <span class="rsotp-shield material-symbols-outlined">shield_lock</span>
+            <h3>Nhập mã xác thực OTP</h3>
+            <p>Mã xác thực gồm 6 chữ số được gửi đến email đã đăng ký của bạn.</p>
+
+            <dl>
+                <dt>Hợp đồng</dt>
+                <dd>@ContractName</dd>
+                <dt>Mã hợp đồng</dt>
+                <dd>@ContractCode</dd>
+            </dl>
+
+            <div class="rsotp-input-wrap">
+                <input @ref="otpInput" class="rsotp-input" value="@Otp" @oninput="Input" @onkeydown="KeyDown"
+                       inputmode="numeric" autocomplete="one-time-code" maxlength="6" disabled="@Busy"
+                       aria-label="Mã OTP 6 chữ số" />
+                <div class="rsotp-digits" aria-hidden="true">
+                    @for (var i = 0; i < 6; i++)
+                    {
+                        <span>@(i < Otp.Length ? Otp[i].ToString() : "")</span>
+                    }
+                </div>
+            </div>
+
+            <p class="rsotp-expiry">Mã OTP hết hạn sau <strong>@ExpiryRemaining</strong></p>
+            <p class="rsotp-resend">
+                Chưa nhận được mã?
+                @if (CanResend)
+                {
+                    <button @onclick="OnResend" disabled="@Busy">Gửi lại mã OTP</button>
+                }
+                else
+                {
+                    <strong>Gửi lại sau @ResendRemaining</strong>
+                }
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+            {
+                <p class="rsotp-error" role="alert">@ErrorMessage</p>
+            }
+        </div>
+
+        <footer>
+            <button class="rsotp-secondary" @onclick="OnClose" disabled="@Busy">Hủy</button>
+            <button class="rsotp-primary" @onclick="OnConfirm" disabled="@(Busy || Otp.Length != 6 || Expired)">
+                @(Busy ? "Đang xác nhận…" : "Xác nhận và ký")
+            </button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    [Parameter] public string ContractName { get; set; } = "";
+    [Parameter] public string ContractCode { get; set; } = "";
+    [Parameter] public string Otp { get; set; } = "";
+    [Parameter] public string ExpiryRemaining { get; set; } = "--:--";
+    [Parameter] public string ResendRemaining { get; set; } = "--:--";
+    [Parameter] public bool CanResend { get; set; }
+    [Parameter] public bool Expired { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public EventCallback<string> OtpChanged { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnResend { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference otpInput;
+    private string previousOtp = "";
+    private bool focusRequested = true;
+
+    protected override void OnParametersSet()
+    {
+        if (Otp.Length == 0 && previousOtp.Length != 0)
+        {
+            focusRequested = true;
+        }
+
+        previousOtp = Otp;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (focusRequested && !Busy)
+        {
+            focusRequested = false;
+            await otpInput.FocusAsync();
+        }
+    }
+
+    private Task Input(ChangeEventArgs eventArgs)
+    {
+        var digits = new string((eventArgs.Value?.ToString() ?? "").Where(char.IsDigit).Take(6).ToArray());
+        return OtpChanged.InvokeAsync(digits);
+    }
+
+    private async Task KeyDown(KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter" && Otp.Length == 6 && !Busy && !Expired)
+        {
+            await OnConfirm.InvokeAsync();
+        }
+    }
+}

@@ -500,6 +500,12 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("source_service_request_id");
 
+                    b.Property<int>("SourceServiceRequestRound")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("source_service_request_round");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -544,11 +550,11 @@ namespace PropFlow.Modules.Billing.Infrastructure.Persistence.Migrations
                     b.HasIndex("InvoiceNumber")
                         .IsUnique();
 
-                    b.HasIndex("SourceServiceRequestId")
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SourceServiceRequestId", "SourceServiceRequestRound")
                         .IsUnique()
                         .HasFilter("source_service_request_id IS NOT NULL");
-
-                    b.HasIndex("Status");
 
                     b.HasIndex("ApartmentUnitId", "BillingPeriodStart", "BillingPeriodEnd", "Type")
                         .IsUnique()

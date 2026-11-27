@@ -1,4 +1,4 @@
-import { create as createRecognition, isSupported } from './resident-request-voice.js?v=20261112-1';
+import { create as createRecognition, isSupported } from './resident-request-voice.js?v=20261122-1';
 
 const recordings = Object.freeze({ WELCOME: 'welcome-vi.wav', NEW_NEED: 'new-need-vi.wav' });
 const recordingCache = new Map();
@@ -33,7 +33,7 @@ export function showResults() {
 }
 // Fixed greetings are bundled Vietnamese recordings; personalized replies use server-generated audio.
 export function create(dotnet) {
-  const microphone = createRecognition(dotnet);
+  const microphone = createRecognition(dotnet, { silenceMs: 800 });
   let disposed = false, audio = null, audioUrl = null, generation = 0, currentEpoch = 0;
   const notify = (epoch, state) => { if (!disposed) dotnet.invokeMethodAsync('OnAssistantSpeech', epoch, state).catch(() => {}); };
   function release() {
@@ -44,7 +44,7 @@ export function create(dotnet) {
     if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = null; }
   }
   function stopSpeaking() { generation++; release(); }
-  function cancel() { microphone.cancel(); stopSpeaking(); }
+  function cancel(epoch) { if (Number.isInteger(epoch)) currentEpoch = epoch; microphone.cancel(); stopSpeaking(); }
   function pause() { cancel(); notify(currentEpoch, 'paused'); }
   function hide() { if (document.visibilityState === 'hidden') pause(); }
   async function playBlob(blob, epoch, turn) {
@@ -63,7 +63,7 @@ export function create(dotnet) {
   globalThis.addEventListener('pagehide', pause);
   document.addEventListener('visibilitychange', hide);
   return {
-    start(epoch) { if (disposed) return false; currentEpoch = epoch; stopSpeaking(); return microphone.start(epoch); },
+    start(epoch) { if (disposed || document.visibilityState === 'hidden') return false; currentEpoch = epoch; stopSpeaking(); return microphone.start(epoch); },
     stop() { microphone.stop(); },
     async playGreeting(kind, epoch) {
       if (disposed || document.visibilityState === 'hidden' || !capabilities().speech) return false;

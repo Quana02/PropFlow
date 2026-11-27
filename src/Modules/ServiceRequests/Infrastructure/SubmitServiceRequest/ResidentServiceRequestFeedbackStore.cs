@@ -1,3 +1,4 @@
+using PropFlow.Modules.ServiceRequests.Domain.ServiceRequestActivities;
 using Microsoft.EntityFrameworkCore;
 using PropFlow.Modules.ServiceRequests.Application.RateResidentServiceRequest;
 using PropFlow.Modules.ServiceRequests.Contracts;
@@ -11,12 +12,13 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.SubmitServiceRequest;
 public sealed class ResidentServiceRequestFeedbackStore(ServiceRequestsDbContext db, IServiceRequestBilling? billing = null) : IResidentServiceRequestFeedbackStore
 {
     public async Task<(SaveResidentServiceRequestFeedbackOutcome Outcome, ResidentServiceRequestFeedbackResponse? Response)> SaveAsync(
-        Guid residentId, Guid serviceRequestId, int rating, string comment, DateTimeOffset now, CancellationToken ct)
+        Guid residentId, Guid serviceRequestId, int rating, string comment, DateTimeOffset now, CancellationToken ct, Guid? actorId = null)
     {
-        var request = await db.ServiceRequests.AsNoTracking()
+        await using var transaction = await db.BeginWorkflowMutationAsync(serviceRequestId, ct);
+        var request = await db.ServiceRequests
             .SingleOrDefaultAsync(item => item.Id == serviceRequestId && item.ResidentId == residentId, ct);
         if (request is null) return (SaveResidentServiceRequestFeedbackOutcome.RequestNotFound, null);
-        if (request.Status is not (ServiceRequestStatus.RESOLVED or ServiceRequestStatus.CLOSED))
+        if (request.Status != ServiceRequestStatus.CLOSED)
             return (SaveResidentServiceRequestFeedbackOutcome.RequestNotCompleted, null);
         if (request.BaseServiceCost + request.ApprovedAdditionalCost > 0)
         {
@@ -37,6 +39,7 @@ public sealed class ResidentServiceRequestFeedbackStore(ServiceRequestsDbContext
         }
 
         await db.SaveChangesAsync(ct);
+        if (transaction is not null) await transaction.CommitAsync(ct);
         return (SaveResidentServiceRequestFeedbackOutcome.Saved,
             new(feedback.ServiceRequestId, feedback.Rating, feedback.Comment, feedback.SubmittedAt));
     }

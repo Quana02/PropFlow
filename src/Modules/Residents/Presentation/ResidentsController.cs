@@ -6,6 +6,7 @@ using System.Net.Mail;
 using System.Text.RegularExpressions;
 using PropFlow.Modules.Apartments.Contracts;
 using PropFlow.Modules.Residents.Application;
+using PropFlow.Modules.Residents.Contracts;
 using PropFlow.Modules.Residents.Domain.ResidentApartments;
 using PropFlow.Modules.Residents.Domain.Residents;
 using PropFlow.Modules.Residents.Infrastructure.Persistence;
@@ -20,7 +21,7 @@ public static class ResidentsAuthorizationPolicies
 
 [ApiController]
 [Route("api/v1/residents")]
-public sealed class ResidentsController(ResidentsDbContext db, IApartmentOverviewSource apartments,
+public sealed partial class ResidentsController(ResidentsDbContext db, IApartmentOverviewSource apartments,
     IApartmentResidentRelationshipSource apartmentRelationships, ResidentResidencyService residencyService,
     ResidentOnboardingService onboarding, ResidentProfileService profiles, TimeProvider clock) : ControllerBase
 {
@@ -35,49 +36,66 @@ public sealed class ResidentsController(ResidentsDbContext db, IApartmentOvervie
     [HttpGet]
     [Authorize(Policy = ResidentsAuthorizationPolicies.Read)]
     public async Task<ActionResult<PagedResidentsResponse>> List([FromQuery] string? search, [FromQuery] ResidentStatus? status,
-        [FromQuery] Guid? apartmentUnitId, [FromQuery] ResidentApartmentRelationshipKind? relationshipKind,
+        [FromQuery] Guid? apartmentUnitId, [FromQuery] ResidentDirectoryRelationshipFilter? relationshipKind,
         [FromQuery] ResidencyType? residencyType, [FromQuery] HouseholdRole? householdRole,
-        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+        [FromQuery] int pageIndex = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default,
+        [FromQuery] int? floorNumber = null, [FromQuery] bool? hasAccount = null,
+        [FromQuery] ResidentStatus[]? statuses = null, [FromQuery] Guid[]? apartmentUnitIds = null,
+        [FromQuery] int[]? floorNumbers = null, [FromQuery] ResidentDirectoryRelationshipFilter[]? relationshipKinds = null)
     {
+        if(search?.Any(c=>char.IsControl(c)&&!char.IsWhiteSpace(c))==true||search?.Length>200||search?.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries).Length>12||floorNumber<0||(status.HasValue&&!Enum.IsDefined(status.Value))||(relationshipKind.HasValue&&!Enum.IsDefined(relationshipKind.Value))||(residencyType.HasValue&&!Enum.IsDefined(residencyType.Value))||(householdRole.HasValue&&!Enum.IsDefined(householdRole.Value)))
+            return BadRequest(new ProblemDetails{Status=400,Title="Bộ lọc cư dân không hợp lệ. Tầng phải là số nguyên không âm; tìm tối đa 200 ký tự, 12 từ."});
+        var selectedStatuses=ResidentDirectorySelection.Merge(status,statuses);
+        var selectedApartments=ResidentDirectorySelection.Merge(apartmentUnitId,apartmentUnitIds);
+        var selectedFloors=ResidentDirectorySelection.Merge(floorNumber,floorNumbers);
+        var selectedRelationships=ResidentDirectorySelection.Merge(relationshipKind,relationshipKinds);
+        if(ResidentDirectorySelection.InvalidEnum(selectedStatuses)||ResidentDirectorySelection.InvalidEnum(selectedRelationships)
+            ||selectedApartments.Length>100||selectedApartments.Contains(Guid.Empty)||selectedFloors.Length>100||selectedFloors.Any(x=>x<0)
+            ||statuses?.Length>100||apartmentUnitIds?.Length>100||floorNumbers?.Length>100||relationshipKinds?.Length>100)
+            return BadRequest(new ProblemDetails{Status=400,Title="Bộ lọc cư dân không hợp lệ. Chọn tối đa 100 giá trị hợp lệ mỗi trường."});
         pageIndex = Math.Max(1, pageIndex); pageSize = Math.Clamp(pageSize, 1, 100);
         var query = db.Residents.AsNoTracking().AsQueryable();
         var exposeContact = User.IsInRole("MANAGER") || User.IsInRole("STAFF");
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = search.Trim().ToUpper();
-            query = query.Where(r => r.FullName.ToUpper().Contains(term) || r.ResidentCode.ToUpper().Contains(term)
-                || (exposeContact && ((r.Email != null && r.Email.ToUpper().Contains(term))
-                    || (r.PhoneNumber != null && r.PhoneNumber.Contains(term)))));
+            foreach(var word in search.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries))
+            {
+                var term = word.ToUpperInvariant();
+                query = query.Where(r => r.FullName.ToUpper().Contains(term) || r.ResidentCode.ToUpper().Contains(term)
+                    || (exposeContact && ((r.Email != null && r.Email.ToUpper().Contains(term))
+                        || (r.PhoneNumber != null && r.PhoneNumber.Contains(term)))));
+            }
         }
-        if (status is not null) query = query.Where(r => r.Status == status);
+        if (selectedStatuses.Length>0) query = query.Where(r => selectedStatuses.Contains(r.Status));
         var filterDate = await residencyService.BusinessDateAsync(ct);
-        var needsOwnerFilter = apartmentUnitId.HasValue || relationshipKind.HasValue;
-        IReadOnlyList<Guid> currentOwnerIds = [];
-        if (needsOwnerFilter)
+        var scoped=selectedApartments.Length>0||selectedFloors.Length>0;
+        IReadOnlyList<Guid> scopeIds=[];
+        IReadOnlyList<Guid> currentOwnerIds=[];
+        if(scoped)
         {
-            currentOwnerIds = apartmentUnitId.HasValue
-                ? await apartmentRelationships.GetCurrentOwnerResidentIdsAsync(apartmentUnitId.Value, filterDate, ct)
-                : await apartmentRelationships.GetCurrentOwnerResidentIdsAsync(filterDate, ct);
+            var scope=await apartmentRelationships.GetDirectoryScopeAsync(null,null,filterDate,ct,selectedFloors,selectedApartments);
+            scopeIds=scope.ApartmentIds;currentOwnerIds=scope.OwnerResidentIds;
         }
-        if (apartmentUnitId.HasValue)
+        else if(selectedRelationships.Length>0)currentOwnerIds=await apartmentRelationships.GetCurrentOwnerResidentIdsAsync(filterDate,ct);
+        var activeResidencies=db.ResidentApartments.AsNoTracking().Where(a=>a.Status==ResidencyStatus.ACTIVE&&a.StartDate<=filterDate&&(a.EndDate==null||a.EndDate>=filterDate));
+        if(scoped)activeResidencies=activeResidencies.Where(a=>scopeIds.Contains(a.ApartmentUnitId));
+        if(scoped)query=query.Where(r=>currentOwnerIds.Contains(r.Id)||activeResidencies.Any(a=>a.ResidentId==r.Id));
+        if(selectedRelationships.Length>0)
         {
-            query = query.Where(r => currentOwnerIds.Contains(r.Id) || db.ResidentApartments.Any(a =>
-                a.ResidentId == r.Id && a.ApartmentUnitId == apartmentUnitId.Value &&
-                a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate &&
-                (a.EndDate == null || a.EndDate >= filterDate)));
+            var ownerOnly=selectedRelationships.Contains(ResidentDirectoryRelationshipFilter.OWNER_ONLY);
+            var residentOnly=selectedRelationships.Contains(ResidentDirectoryRelationshipFilter.RESIDENT_ONLY);
+            var both=selectedRelationships.Contains(ResidentDirectoryRelationshipFilter.OWNER_AND_RESIDENT);
+            var anyOwner=selectedRelationships.Contains(ResidentDirectoryRelationshipFilter.ANY_OWNER);
+            var anyResident=selectedRelationships.Contains(ResidentDirectoryRelationshipFilter.ANY_RESIDENT);
+            var neither=selectedRelationships.Contains(ResidentDirectoryRelationshipFilter.NONE);
+            query=query.Where(r=>(ownerOnly&&currentOwnerIds.Contains(r.Id)&&!activeResidencies.Any(a=>a.ResidentId==r.Id))
+                ||(residentOnly&&!currentOwnerIds.Contains(r.Id)&&activeResidencies.Any(a=>a.ResidentId==r.Id))
+                ||(both&&currentOwnerIds.Contains(r.Id)&&activeResidencies.Any(a=>a.ResidentId==r.Id))
+                ||(anyOwner&&currentOwnerIds.Contains(r.Id))||(anyResident&&activeResidencies.Any(a=>a.ResidentId==r.Id))
+                ||(neither&&!currentOwnerIds.Contains(r.Id)&&!activeResidencies.Any(a=>a.ResidentId==r.Id)));
         }
-        if (relationshipKind == ResidentApartmentRelationshipKind.OWNER_ONLY)
-            query = query.Where(r => currentOwnerIds.Contains(r.Id) && !db.ResidentApartments.Any(a => a.ResidentId == r.Id && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value) && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate)));
-        else if (relationshipKind == ResidentApartmentRelationshipKind.RESIDENT_ONLY)
-            query = query.Where(r => !currentOwnerIds.Contains(r.Id) && db.ResidentApartments.Any(a => a.ResidentId == r.Id && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value) && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate)));
-        else if (relationshipKind == ResidentApartmentRelationshipKind.OWNER_AND_RESIDENT)
-            query = query.Where(r => currentOwnerIds.Contains(r.Id) && db.ResidentApartments.Any(a => a.ResidentId == r.Id && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value) && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate)));
-        if (residencyType.HasValue || householdRole.HasValue)
-            query = query.Where(r => db.ResidentApartments.Any(a => a.ResidentId == r.Id
-                && (!apartmentUnitId.HasValue || a.ApartmentUnitId == apartmentUnitId.Value)
-                && a.Status == ResidencyStatus.ACTIVE && a.StartDate <= filterDate && (a.EndDate == null || a.EndDate >= filterDate)
-                && (!residencyType.HasValue || a.ResidencyType == residencyType)
-                && (!householdRole.HasValue || a.HouseholdRole == householdRole)));
+        if(residencyType.HasValue||householdRole.HasValue)query=query.Where(r=>activeResidencies.Any(a=>a.ResidentId==r.Id&&(!residencyType.HasValue||a.ResidencyType==residencyType)&&(!householdRole.HasValue||a.HouseholdRole==householdRole)));
+        if(hasAccount.HasValue)query=query.Where(r=>(r.UserId!=null)==hasAccount.Value);
         var total = await query.CountAsync(ct);
         pageIndex = Math.Min(pageIndex, Math.Max(1, (int)Math.Ceiling(total / (double)pageSize)));
         var residents = await query.OrderBy(r => r.FullName).ThenBy(r => r.Id).Skip((pageIndex - 1) * pageSize).Take(pageSize)

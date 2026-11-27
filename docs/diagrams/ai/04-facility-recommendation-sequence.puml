@@ -1,0 +1,110 @@
+@startuml
+title AI 2 - RESIDENT FACILITY DISCOVERY AND SPEECH
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 19
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 240
+skinparam ParticipantPadding 12
+hide footbox
+autonumber
+actor Resident
+boundary "FacilityRecommendationController" as API
+control FacilityRecommendations as Service
+participant "IFacilityGuideSource\n(PropertyAssets)" as Source
+control FacilityNeedMatcher as Matcher
+participant GeminiFacilityNeedAdvisor as Gemini
+database AiRecommendationDbContext as DB
+control FacilitySpeech as Speech
+participant GeminiFacilitySpeech as TTS
+
+note over Resident, API
+  Client plays a static Vietnamese greeting, without waiting for TTS.
+  Input is text or browser Vietnamese speech recognition; microphone requires user action.
+  Client retains supplemental conversation context, up to 1,200 characters.
+end note
+Resident -> API : POST facility-recommendations {need, preferredDate}
+API -> Service : RecommendAsync(actor, request, ct)
+Service -> Service : Check active resident, request limits and building-local date/time
+Service -> Matcher : Redact; Interpret; Clarification; Date
+alt Intent unclear
+  Service --> API : CLARIFY; Suggestions=[]; FollowUp question
+else Initial intent understood
+  Service -> Source : ReadAsync(ct)
+  Source --> Service : Published guides + fingerprint
+  alt Child-related request without age
+    Service --> API : CLARIFY for age and accompaniment
+  else Sufficient information to search
+    Service -> Matcher : Match(window, intent, need, date, localNow)
+    Matcher --> Service : Eligible candidates and valid opening times
+    opt No result for a specified date/time
+      Service -> Matcher : Search next valid dates/times
+      Matcher --> Service : Alternative schedule, or no candidates
+    end
+    alt No candidates
+      Service --> API : NO_MATCH; no fabricated facility
+    else Advisor not ready
+      Service --> API : CATALOGUE: explicitly labeled keyword lookup
+    else Advisor ready
+      Service -> DB : Check per-user fingerprint cache, quota and duplicate in-flight request
+      alt Cache hit
+        DB --> Service : Cached FacilityRecommendationView
+        Service --> API : Cached view
+      else Quota exceeded / request already in progress
+        Service --> API : 429
+      else New permitted AI call
+        Service -> DB : Create FacilityRecommendationRun; Commit
+        Service -> Gemini : RecommendAsync(redactedNeed, candidateChoices, ct)
+        note over Service, Gemini : No open transaction during provider call.\nNo resident/apartment IDs, staff names or contact details sent to the model.
+        Gemini --> Service : Up to 3 candidate keys + flags + clarification code / null
+        Service -> Service : Validate candidate keys and clarification code
+        Service -> Matcher : Recheck eligibility; question only for missing information
+        alt AI asks for genuinely missing information
+          Service -> Service : Build CLARIFY with a server-controlled question
+        else Valid selection
+          Service -> Service : Build cards from guide facts; prioritize open/next opening
+        else AI failure, invalid key or repeated question
+          Service -> Service : Explicit FALLBACK keyword lookup
+        end
+        Service -> Source : Re-read guide fingerprint
+        Service -> Service : Recheck active residence and current local time
+        alt Source/time eligibility changed or resident no longer active
+          Service -> DB : Complete run without cached response
+          Service --> API : 409 / 403; discard stale result
+        else Still valid
+          Service -> DB : Complete run with result JSON, model and token counts
+          Service --> API : FacilityRecommendationView
+        end
+      end
+    end
+  end
+end
+
+alt A successful view exists (including CLARIFY / NO_MATCH)
+  API -> Speech : Prepare(actor, view)
+  Speech --> API : Actor-bound SpeechId, valid 10 minutes
+  API --> Resident : Display view + SpeechId immediately
+  opt Resident has sound enabled or requests replay
+    Resident -> API : POST facility-recommendations/speech {speechId}
+    API -> Service : CatalogueAsync(actor, ct): recheck residence
+    API -> Speech : GetAsync(actor, input, ct)
+    Speech -> Speech : Validate ticket ownership/expiry; check audio cache and quota
+    alt Audio cached
+      Speech --> API : Cached WAV base64
+    else Generation allowed
+      Speech -> TTS : GenerateAsync(server-created transcript, ct)
+      TTS --> Speech : WAV / provider failure
+      Speech --> API : Audio, or 503 if unavailable
+    else Invalid ticket / quota exceeded
+      Speech --> API : 404 / 429
+    end
+    API --> Resident : Play audio, or show replay option while retaining text
+    note over Resident, Speech : Audio failure does not switch off the user's sound preference.\nTTS receives no arbitrary client text, resident query or private contacts.
+  end
+else Request rejected
+  API --> Resident : ProblemDetails; allow correction/retry
+end
+note over Resident, API : Follow-up replies repeat this flow with accumulated context.\nSuggestions do not reserve places or confirm childcare acceptance.
+@enduml
+

@@ -54,6 +54,22 @@ public sealed class ConfirmationDialogTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Busy_state_uses_valid_lowercase_aria_values(bool busy)
+    {
+        await using var services=Services();
+        await using var renderer=new HtmlRenderer(services,services.GetRequiredService<ILoggerFactory>());
+        var html=await renderer.Dispatcher.InvokeAsync(async()=>
+        {
+            var root=await renderer.RenderComponentAsync<PropFlowConfirmationDialog>(ParameterView.FromDictionary(new Dictionary<string,object?>
+            { ["Title"]="AI đang nhận diện sơ đồ",["Busy"]=busy,["Tone"]=DialogTone.Info }));
+            return root.ToHtmlString();
+        });
+        Assert.Contains($"aria-busy=\"{(busy?"true":"false")}\"",html);
+    }
+
+    [Theory]
     [InlineData(DialogTone.Confirm, false, false, 1, 1)]
     [InlineData(DialogTone.Danger, false, false, 1, 1)]
     [InlineData(DialogTone.Info, false, false, 0, 2)]

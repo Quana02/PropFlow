@@ -34,6 +34,7 @@
     <ProjectReference Include="..\Modules\AiChatbot\PropFlow.Modules.AiChatbot.csproj" />
     <ProjectReference Include="..\Modules\Communication\PropFlow.Modules.Communication.csproj" />
     <ProjectReference Include="..\Modules\Reporting\PropFlow.Modules.Reporting.csproj" />
+    <ProjectReference Include="..\Modules\RemoteOnlineSign\PropFlow.Modules.RemoteOnlineSign.csproj" />
   </ItemGroup>
 
 </Project>

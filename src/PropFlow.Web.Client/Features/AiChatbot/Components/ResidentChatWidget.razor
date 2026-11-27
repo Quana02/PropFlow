@@ -4,6 +4,8 @@
 @implements IAsyncDisposable
 @inject ResidentChatApiClient Api
 @inject IJSRuntime JS
+@inject ResidentAssistantHandoff Handoff
+@inject NavigationManager Navigation
 
 <div class="rag-widget" @ref="widgetElement">
     @if (open)
@@ -19,7 +21,8 @@
             @if (source is not null)
             {
                 <section class="rag-source" aria-label="Nội dung tài liệu nguồn"><button type="button" @onclick="() => source = null">← Quay lại hội thoại</button>
-                    <h3>@source.Title</h3><small>Phiên bản @source.Revision · Đang xuất bản cho cư dân</small><pre>@source.Content</pre></section>
+                    <h3>@source.Title</h3><small>Phiên bản @source.Revision · Đang xuất bản cho cư dân</small><pre>@source.Content</pre>
+                    <div class="rag-voice-invite"><p>Muốn hỏi rõ hơn về tài liệu này? Hãy trò chuyện với mình.</p><button type="button" class="rag-voice-button" @onclick="() => TalkAbout(source.Title)"><span aria-hidden="true">◉</span> Trò chuyện với tôi <span aria-hidden="true">↗</span></button></div></section>
             }
             else
             {
@@ -37,6 +40,7 @@
                             <article class="rag-answer"><small>@(turn.Reply.Mode == "AI" ? "AI có dẫn nguồn" : "Trợ lý tài liệu")</small><p>@turn.Reply.Answer</p>
                                 @foreach (var citation in turn.Reply.Sources)
                                 { <details class="rag-citation"><summary>[@citation.Number] @citation.Title · v@(citation.Revision)</summary><blockquote>@citation.Excerpt</blockquote><button type="button" disabled="@loadingSource" @onclick="() => ReadSource(citation)">Đọc tài liệu nguồn</button></details> }
+                                <div class="rag-voice-invite"><p>Muốn hỏi rõ hơn hoặc cùng tạo yêu cầu? Hãy trò chuyện với mình.</p><button type="button" class="rag-voice-button" @onclick="() => TalkAbout(turn.Question)"><span aria-hidden="true">◉</span> Trò chuyện với tôi <span aria-hidden="true">↗</span></button></div>
                             </article>
                         }
                     }
@@ -84,6 +88,11 @@
     private sealed record Turn(string Question, ResidentChatReply? Reply);
     private void Close() { chatFeedback.Invalidate(); open = false; }
     private void Clear() { turns.Clear(); question = ""; error = null; source = null; }
+    private void TalkAbout(string topic)
+    {
+        Handoff.Set(topic); Close();
+        Navigation.NavigateTo("/resident/facilities?conversation=" + Guid.NewGuid().ToString("N"));
+    }
     private async Task Toggle()
     {
         open = !open; if (!open) chatFeedback.Invalidate();

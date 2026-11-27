@@ -1,3 +1,6 @@
+using System.Net.Mime;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Net;
 using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +13,7 @@ using PropFlow.Modules.Communication.Infrastructure.Persistence;
 namespace PropFlow.Modules.Communication.Infrastructure;
 public sealed class FinanceMailOptions
 {
+    public bool Enabled { get; set; } = true;
     public string Host { get; set; } = "";
     public int Port { get; set; } = 587;
     public string From { get; set; } = "";
@@ -21,8 +25,32 @@ public sealed class FinanceMailOptions
 public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<FinanceMailOptions> config,
     ILogger<FinanceEmailWorker> logger) : BackgroundService
 {
+    internal static void AddInlineImages(MailMessage mail, string html)
+    {
+        var resources = new List<LinkedResource>();
+        var body = Regex.Replace(html, "data:image/png;base64,([A-Za-z0-9+/=]+)", match =>
+        {
+            var resource = new LinkedResource(new MemoryStream(Convert.FromBase64String(match.Groups[1].Value)), "image/png")
+            { ContentId = "invoice-qr-" + resources.Count, TransferEncoding = TransferEncoding.Base64 };
+            resources.Add(resource);
+            return "cid:" + resource.ContentId;
+        });
+        if (resources.Count == 0) return;
+        var view = AlternateView.CreateAlternateViewFromString(body, Encoding.UTF8, MediaTypeNames.Text.Html);
+        foreach (var resource in resources) view.LinkedResources.Add(resource);
+        mail.Body = body;
+        mail.AlternateViews.Add(view);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        // Operational switch for finance delivery only. Authentication/OTP uses its own worker.
+        // Leave the durable queue untouched so pausing never claims delivery or loses notices.
+        if (!config.Value.Enabled)
+        {
+            logger.LogInformation("Finance email delivery is disabled; queued messages are retained.");
+            return;
+        }
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Clamp(config.Value.PollSeconds, 1, 600)));
         try { while (await timer.WaitForNextTickAsync(ct)) {
             var options = config.Value;
@@ -39,13 +67,14 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
                         continue;
                     }
                     // Demo accounts use reserved domains and must never send to external mailboxes.
-                    if (address.EndsWith(".example", StringComparison.OrdinalIgnoreCase) || address.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase)) {
+                    if (IsReservedDemoAddress(address)) {
                         item.NextAttemptAt = DateTimeOffset.UtcNow.AddDays(1); continue;
                     }
                     try {
                         using var client = new SmtpClient(options.Host, options.Port) { EnableSsl = options.EnableSsl,
                             Credentials = new NetworkCredential(options.Username, options.Password), Timeout = 15000 };
                         using var mail = new MailMessage(options.From, address) { Subject = item.Subject, Body = item.Html, IsBodyHtml = true };
+                        AddInlineImages(mail, item.Html);
                         mail.Headers.Add("X-PropFlow-Event", item.EventId.ToString());
                         // The complete receipt is rendered in the email body for direct viewing.
                         // Do not attach a duplicate HTML file that mail clients display as source.
@@ -59,5 +88,18 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
             } catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
               catch (Exception ex) { logger.LogWarning("Finance email dispatch failed ({Type}).", ex.GetType().Name); }
         } } catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    private static bool IsReservedDemoAddress(string address)
+    {
+        if (!MailAddress.TryCreate(address, out var parsed)) return false;
+        var host = parsed.Host.TrimEnd('.');
+        return host.Equals("example", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("invalid", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".example", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase)
+            || new[] { "example.com", "example.net", "example.org" }.Any(domain =>
+                host.Equals(domain, StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
     }
 }

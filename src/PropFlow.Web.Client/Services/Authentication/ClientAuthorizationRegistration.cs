@@ -13,6 +13,10 @@ public static class ClientAuthorizationRegistration
         services.AddCascadingAuthenticationState();
         services.AddAuthorizationCore(options =>
         {
+            options.AddPolicy(PropFlow.Modules.PropertyAssets.Contracts.PropertyAssetsAuthorizationPolicies.Manage,
+                policy => policy.RequireAssertion(context => AssetPermissions.CanManage(context.User)));
+            options.AddPolicy(PropFlow.Modules.Administration.Contracts.AdministrationAuthorizationPolicies.ManageSystemConfiguration,
+                policy => policy.RequireRole("ADMIN").RequireClaim("permission", "MANAGE_SYSTEM_CONFIGURATION"));
             options.AddPolicy("billing.read", policy => policy.RequireAssertion(context =>
                 (context.User.IsInRole("MANAGER") && context.User.HasClaim("permission", "MANAGE_OPERATIONS")) ||
                 (context.User.IsInRole("ACCOUNTANT") && context.User.HasClaim("permission", "MANAGE_FINANCE"))));

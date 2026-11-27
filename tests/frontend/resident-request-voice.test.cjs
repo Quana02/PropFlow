@@ -5,10 +5,10 @@ const path = require('node:path');
 const source = fs.readFileSync(path.resolve(__dirname, '../../src/PropFlow.Web.Client/wwwroot/js/resident-request-voice.js'), 'utf8');
 const modulePromise = import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
-async function browser(run) {
+async function browser(run, options) {
   const keys = ['SpeechRecognition', 'webkitSpeechRecognition', 'isSecureContext', 'setTimeout', 'clearTimeout'];
   const previous = Object.fromEntries(keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
-  const instances = [], calls = [], timers = new Map();
+  const instances = [], calls = [], timers = new Map(), delays = [];
   class Recognition {
     constructor() { instances.push(this); this.starts = this.stops = this.aborts = 0; }
     start() { this.starts++; }
@@ -19,11 +19,11 @@ async function browser(run) {
     globalThis.SpeechRecognition = Recognition;
     globalThis.webkitSpeechRecognition = undefined;
     globalThis.isSecureContext = true;
-    globalThis.setTimeout = callback => { const id = timers.size + 1; timers.set(id, callback); return id; };
+    globalThis.setTimeout = (callback, delay) => { delays.push(delay); const id = timers.size + 1; timers.set(id, callback); return id; };
     globalThis.clearTimeout = id => timers.delete(id);
     const module = await modulePromise;
-    const session = module.create({ invokeMethodAsync: async (...args) => { calls.push(args); } });
-    await run({ module, session, instances, calls, timers, flush: () => new Promise(setImmediate) });
+    const session = module.create({ invokeMethodAsync: async (...args) => { calls.push(args); } }, options);
+    await run({ module, session, instances, calls, timers, delays, flush: () => new Promise(setImmediate) });
     session.dispose();
   } finally {
     for (const [key, descriptor] of Object.entries(previous)) {
@@ -71,17 +71,24 @@ test('stop allows the final result to reach the form before the completion callb
   assert.deepEqual(calls, [['OnVoiceResult', 20, 'khách đến sáng mai', ''], ['OnVoiceEnded', 20, '']]);
 }));
 
-test('silence ends a session, while resuming speech clears the pending silence timer', () => browser(async ({ session, instances, timers }) => {
+test('silence ends a session, while resuming speech clears the pending silence timer', () => browser(async ({ session, instances, timers, delays }) => {
   session.start(1);
   const recognition = instances[0];
   recognition.onspeechend();
   assert.equal(timers.size, 1);
+  assert.equal(delays[0], 1500);
   recognition.onspeechstart();
   assert.equal(timers.size, 0);
   recognition.onspeechend();
   [...timers.values()][0]();
   assert.equal(recognition.stops, 1);
 }));
+
+test('amenity conversations can use an 800ms pause without changing request-form defaults', () => browser(async ({ session, instances, delays }) => {
+  session.start(1);
+  instances[0].onspeechend();
+  assert.deepEqual(delays, [800]);
+}, { silenceMs: 800 }));
 
 test('cancelling a dialog aborts recognition and ignores late events from that session', () => browser(async ({ session, instances, calls, flush }) => {
   session.start(1);

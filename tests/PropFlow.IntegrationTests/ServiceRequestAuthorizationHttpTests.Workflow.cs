@@ -345,6 +345,11 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         await Call(staffB, id, "complete", Work);
         await Call(staffB, id, "evidence");
         await Call(manager, id, "resolution/approve", Resolution);
+        DateTimeOffset resolvedAt;
+        using(var completionScope=host.Services.CreateScope())
+            resolvedAt=(await completionScope.ServiceProvider.GetRequiredService<ServiceRequestsDbContext>().ServiceRequests.SingleAsync(x=>x.Id==id)).ResolvedAt!.Value;
+        using(var completion=await Send(residentA.Client,"resident",id,"completion",new ResidentCompletionDecision(resolvedAt,true)))
+            Assert.Equal(HttpStatusCode.NoContent,completion.StatusCode);
         await Reject(residentA, id, "feedback", HttpStatusCode.BadRequest, Feedback with { Rating = 0 });
         await Reject(residentA, id, "feedback", HttpStatusCode.BadRequest, Feedback with { Comment = new string('x', 5000) });
         await Call(residentA, id, "feedback", new
@@ -361,7 +366,7 @@ public sealed partial class ServiceRequestAuthorizationHttpTests
         Assert.Equal(homeA.ResidentId, row.ResidentId);
         Assert.Equal(4, row.Rating);
         Assert.Equal(updated.Comment, row.Comment);
-        Assert.Equal(ServiceRequestStatus.RESOLVED, (await Read(id)).Status);
+        Assert.Equal(ServiceRequestStatus.CLOSED, (await Read(id)).Status);
         await AssertNoPaymentOrInvoice();
     }
 

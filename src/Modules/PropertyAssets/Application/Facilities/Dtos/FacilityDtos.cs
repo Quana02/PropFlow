@@ -58,13 +58,20 @@ public record FacilityFilterQuery(
     MasterDataStatus? Status = null,
     Guid? FacilityTypeId = null,
     int PageIndex = 1,
-    int PageSize = 10);
+    int PageSize = 10,
+    [MaxLength(100)] MasterDataStatus[]? Statuses = null,
+    [MaxLength(100)] Guid[]? FacilityTypeIds = null) : IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext context) =>
+        AssetFilterSelection.Validate(Status, Statuses, FacilityTypeIds);
+}
 
 public record PagedResult<T>(
     IReadOnlyList<T> Items,
     int TotalCount,
     int PageIndex,
-    int PageSize)
+    int PageSize,
+    PropFlow.Modules.PropertyAssets.Application.Buildings.Dtos.FacilitySummaryDto? Summary = null)
 {
     public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
     public bool HasPreviousPage => PageIndex > 1;

@@ -11,6 +11,7 @@ public class SystemConfigurationConfiguration : IEntityTypeConfiguration<SystemC
         builder.ToTable("system_configurations", "administration");
 
         builder.HasKey(sc => sc.Id);
+        builder.Property(sc => sc.Version).HasColumnName("version").HasDefaultValueSql("gen_random_uuid()").IsConcurrencyToken();
 
         builder.Property(sc => sc.Id)
             .HasColumnName("id");

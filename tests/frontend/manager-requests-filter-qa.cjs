@@ -1,0 +1,24 @@
+const assert=require('node:assert/strict');
+const visual=require('./directory-filter-visual-qa.cjs');
+exports.verify=async function(h){
+ const {p,navigate,until,evaluate,wait,filters,multi,network,checks,scenarios,apiRequest,key}=h;
+ await navigate(p,'/manager/service-requests');await until(p,"document.querySelectorAll('.request-table tbody tr').length===20");
+ const entries=()=>network.filter(x=>x.page===p.name&&x.path==='/api/v1/manager/service-requests'&&x.status===200);
+ await filters(p);await until(p,"!document.querySelector('[aria-label=\"Loại yêu cầu\"]').disabled");const before=entries().length;
+ await multi(p,'Trạng thái yêu cầu',['Chờ tiếp nhận','Đã tiếp nhận']);await multi(p,'Mức ưu tiên yêu cầu',['Thấp','Cao']);await multi(p,'Loại yêu cầu',['QA Yêu cầu A','QA Yêu cầu B']);
+ assert.equal(entries().length,before);
+ await evaluate(p,"document.querySelector('.pf-filter-apply').click()");
+ for(let i=0;i<200&&new URLSearchParams(entries().at(-1)?.query).getAll('statuses').length!==2;i++)await wait(50);
+ await until(p,"!document.querySelector('.pf-filter-popover:popover-open')&&document.querySelector('.table-footer')?.textContent.includes('/ 24 yêu cầu')");
+ let query=entries().at(-1).query;assert.equal(new URLSearchParams(query).getAll('statuses').length,2);assert.equal(new URLSearchParams(query).getAll('priorities').length,2);assert.equal(new URLSearchParams(query).getAll('categoryIds').length,2);
+ const oracle=await apiRequest(p,'GET','/api/v1/manager/service-requests'+query);assert.equal(oracle.body.totalCount,24);assert.equal(oracle.body.summary.total,24);
+ const criteria=q=>[...new URLSearchParams(q)].filter(([k])=>k!=='page').map(x=>x.join('=')).sort();
+ await evaluate(p,"document.querySelector('.table-pagination button[aria-label=\"Trang sau\"]').click()");await until(p,"document.querySelectorAll('.request-table tbody tr').length===4");assert.deepEqual(criteria(entries().at(-1).query),criteria(query));
+ await filters(p);await multi(p,'Nhân viên phụ trách yêu cầu',['Fixture STAFF']);await evaluate(p,"document.querySelector('.pf-filter-apply').click()");await until(p,"!document.querySelector('.pf-filter-popover:popover-open')&&document.querySelectorAll('.request-table tbody tr').length===12");
+ assert.equal(new URLSearchParams(entries().at(-1).query).getAll('assignedStaffUserIds').length,1);
+ await filters(p);await evaluate(p,"[...document.querySelector('.pf-filter-popover:popover-open footer').querySelectorAll('button')].find(x=>x.textContent.trim()==='Đặt lại').click()");await key(p,'Escape',27);await filters(p);
+ assert.ok((await evaluate(p,"[...document.querySelectorAll('.pf-filter-controls .selection-label')].map(x=>x.textContent)")).some(x=>x.includes('Fixture STAFF')));
+ await key(p,'Escape',27);
+ await visual.verifyDirectory({...h,kind:'manager-requests',listPath:'/api/v1/manager/service-requests',fieldCount:8});
+ checks.push({page:'manager-service-requests-functional',count:24});scenarios.push('manager-service-requests-real-multi-OR-AND-staff-pagination-draft-visual');
+};

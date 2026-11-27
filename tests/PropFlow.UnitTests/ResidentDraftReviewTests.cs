@@ -14,6 +14,25 @@ namespace PropFlow.UnitTests;
 [Trait("UseCase", "FE-05.1")]
 public sealed class ResidentDraftReviewTests
 {
+    [Theory]
+    [InlineData("Tôi đăng ký chuyển quạt, PC và tủ ra khỏi chung cư.")]
+    [InlineData("Đăng ký chuyển đồ nội thất và đồ gia dụng ra ngoài căn hộ.")]
+    [InlineData("Đăng ký chuyển đồ ra ngoài (dọn nhà): dọn hết đồ cá nhân để chuyển sang chung cư mới, ngày 11/12/2026.")]
+    public async Task Moving_items_already_supplied_are_not_requested_again_even_if_a_model_misflags_them(string description)
+    {
+        using var transport = new GeminiResponse(["moving_items", "moving_direction"], requestKind: "MOVING");
+        var result = await Model(transport).CheckAsync(description, Today, default);
+        Assert.NotNull(result); Assert.Empty(result.MissingFields);
+        Assert.Null(result.PreferredDate); Assert.Null(result.PreferredTimeCode);
+        Assert.Equal(0, transport.Calls);
+    }
+    [Fact]
+    public async Task Moving_from_an_apartment_does_not_mistake_the_preposition_tu_for_a_cabinet()
+    {
+        using var transport = new GeminiResponse(["moving_items", "moving_direction"], requestKind: "MOVING");
+        var result = await Model(transport).CheckAsync("Tôi muốn chuyển đồ từ căn hộ ra ngoài.", Today, default);
+        Assert.Equal(new[] { "moving_items" }, result!.MissingFields); Assert.Equal(1, transport.Calls);
+    }
     private static readonly DateOnly Today = new(2026, 11, 12);
 
     [Theory]
@@ -188,9 +207,11 @@ public sealed class ResidentDraftReviewTests
         string? dateEvidence = null, string? timeEvidence = null, string requestKind = "SERVICE") : HttpMessageHandler
     {
         public string Input { get; private set; } = "";
+        public int Calls { get; private set; }
         public HttpStatusCode Status { get; init; } = HttpStatusCode.OK;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            Calls++;
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             using var input = JsonDocument.Parse(body.RootElement.GetProperty("contents")[0].GetProperty("parts")[0].GetProperty("text").GetString()!);
             Input = input.RootElement.GetProperty("description").GetString()!;

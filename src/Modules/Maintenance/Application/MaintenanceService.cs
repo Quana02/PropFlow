@@ -133,12 +133,18 @@ public sealed class MaintenanceService(
             var key = query.SearchKeyword.Trim().ToLower();
             source = source.Where(x => x.TaskNumber.ToLower().Contains(key) || x.Title.ToLower().Contains(key));
         }
-        if (query.Status.HasValue) source = source.Where(x => x.Status == query.Status);
-        if (query.FacilityId.HasValue) source = source.Where(x => x.FacilityId == query.FacilityId);
-        if (query.EquipmentId.HasValue) source = source.Where(x => x.EquipmentId == query.EquipmentId);
-        if (query.AssignedStaffUserId.HasValue)
+        var statuses=MaintenanceFilterSelection.Merge(query.Status,query.Statuses);
+        var facilities=MaintenanceFilterSelection.Merge(query.FacilityId,query.FacilityIds);
+        var equipment=MaintenanceFilterSelection.Merge(query.EquipmentId,query.EquipmentIds);
+        var selectedStaffIds=MaintenanceFilterSelection.Merge(query.AssignedStaffUserId,query.AssignedStaffUserIds);
+        if(statuses.Length>0)source=source.Where(x=>statuses.Contains(x.Status));
+        if(facilities.Length>0)source=source.Where(x=>x.FacilityId.HasValue&&facilities.Contains(x.FacilityId.Value));
+        if(equipment.Length>0)source=source.Where(x=>x.EquipmentId.HasValue&&equipment.Contains(x.EquipmentId.Value));
+        if(query.Priorities is {Length:>0} priorities)source=source.Where(x=>x.PriorityCode!=null&&priorities.Contains(x.PriorityCode));
+        if(query.IsEmergency is {} emergency)source=source.Where(x=>x.IsEmergency==emergency);
+        if (selectedStaffIds.Length>0)
             source = source.Where(task => task.Assignments.Any(assignment =>
-                assignment.StaffUserId == query.AssignedStaffUserId &&
+                selectedStaffIds.Contains(assignment.StaffUserId) &&
                 (assignment.Status == AssignmentStatus.ASSIGNED || assignment.Status == AssignmentStatus.IN_PROGRESS)));
         // Tasks are included when their known planning interval overlaps the selected range.
         // Tasks without a planned time are excluded only when a time filter is supplied.
@@ -149,7 +155,7 @@ public sealed class MaintenanceService(
         var total = await source.CountAsync(ct);
         var page = Math.Max(1, query.PageIndex);
         var size = Math.Clamp(query.PageSize, 1, 100);
-        var items = await source.OrderByDescending(x => x.CreatedAt).Skip((page - 1) * size).Take(size).ToListAsync(ct);
+        var items = await source.OrderByDescending(x => x.CreatedAt).ThenBy(x=>x.Id).Skip((page - 1) * size).Take(size).ToListAsync(ct);
         var staffById = (await staffDirectory.GetActiveStaffAsync(ct)).ToDictionary(staff => staff.UserId);
         var results = new List<MaintenanceTaskDto>(items.Count);
         foreach (var task in items)
@@ -407,11 +413,16 @@ public sealed class MaintenanceService(
             var key = query.SearchKeyword.Trim().ToLower();
             tasks = tasks.Where(task => task.TaskNumber.ToLower().Contains(key) || task.Title.ToLower().Contains(key));
         }
-        if (query.Status.HasValue) tasks = tasks.Where(task => task.Status == query.Status);
-        if (query.FacilityId.HasValue) tasks = tasks.Where(task => task.FacilityId == query.FacilityId);
-        if (query.EquipmentId.HasValue) tasks = tasks.Where(task => task.EquipmentId == query.EquipmentId);
-        if (query.StaffUserId.HasValue)
-            tasks = tasks.Where(task => db.MaintenanceAssignments.Any(assignment => assignment.MaintenanceTaskId == task.Id && assignment.StaffUserId == query.StaffUserId));
+        var statuses=MaintenanceFilterSelection.Merge(query.Status,query.Statuses);
+        var facilities=MaintenanceFilterSelection.Merge(query.FacilityId,query.FacilityIds);
+        var equipment=MaintenanceFilterSelection.Merge(query.EquipmentId,query.EquipmentIds);
+        var selectedStaffIds=MaintenanceFilterSelection.Merge(query.StaffUserId,query.StaffUserIds);
+        if(statuses.Length>0)tasks=tasks.Where(x=>statuses.Contains(x.Status));
+        if(facilities.Length>0)tasks=tasks.Where(x=>x.FacilityId.HasValue&&facilities.Contains(x.FacilityId.Value));
+        if(equipment.Length>0)tasks=tasks.Where(x=>x.EquipmentId.HasValue&&equipment.Contains(x.EquipmentId.Value));
+        if(query.Priorities is {Length:>0} priorities)tasks=tasks.Where(x=>x.PriorityCode!=null&&priorities.Contains(x.PriorityCode));
+        if(query.IsEmergency is {} emergency)tasks=tasks.Where(x=>x.IsEmergency==emergency);
+        if(selectedStaffIds.Length>0)tasks=tasks.Where(task=>db.MaintenanceAssignments.Any(a=>a.MaintenanceTaskId==task.Id&&selectedStaffIds.Contains(a.StaffUserId)));
 
         var records = tasks.Select(task => new
         {
@@ -547,7 +558,11 @@ public sealed class MaintenanceService(
 
     public async Task<MaintenanceTaskDto> ReviewResultAsync(Guid taskId, Guid resultId, ReviewMaintenanceResultCommand command, Guid actor, CancellationToken ct)
     {
-        var (task, result) = await WithTaskLockAsync(taskId, token => ReviewResultCoreAsync(taskId, resultId, command, actor, token), ct);
+        Task<(MaintenanceTask Task, MaintenanceResult Result)> Review(CancellationToken token) =>
+            WithTaskLockAsync(taskId, locked => ReviewResultCoreAsync(taskId, resultId, command, actor, locked), token);
+        var (task, result) = assetTransaction is null
+            ? await Review(ct)
+            : await assetTransaction.ExecuteAsync(Review, ct);
         await NotifyVisibleAssigneesAsync(task, ct);
         return await ToTaskDtoAsync(task, task.Schedule, await MonitorAsync(task, ct), await ToDtoAsync(result, ct), ct);
     }
@@ -715,13 +730,16 @@ public sealed class MaintenanceService(
         EnsureValidRange(query.From, query.To);
         var source = db.MaintenanceSchedules.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(query.SearchKeyword)) { var key = query.SearchKeyword.Trim().ToLower(); source = source.Where(x => x.ScheduleCode.ToLower().Contains(key) || x.Title.ToLower().Contains(key)); }
-        if (query.FacilityId.HasValue) source = source.Where(x => x.FacilityId == query.FacilityId);
-        if (query.EquipmentId.HasValue) source = source.Where(x => x.EquipmentId == query.EquipmentId);
-        if (query.Status.HasValue) source = source.Where(x => x.Status == query.Status);
+        var facilities=MaintenanceFilterSelection.Merge(query.FacilityId,query.FacilityIds);
+        var equipment=MaintenanceFilterSelection.Merge(query.EquipmentId,query.EquipmentIds);
+        var statuses=MaintenanceFilterSelection.Merge(query.Status,query.Statuses);
+        if(facilities.Length>0)source=source.Where(x=>x.FacilityId.HasValue&&facilities.Contains(x.FacilityId.Value));
+        if(equipment.Length>0)source=source.Where(x=>x.EquipmentId.HasValue&&equipment.Contains(x.EquipmentId.Value));
+        if(statuses.Length>0)source=source.Where(x=>statuses.Contains(x.Status));
         if (query.From.HasValue) source = source.Where(x => x.PlannedStartAt >= query.From);
         if (query.To.HasValue) source = source.Where(x => x.PlannedStartAt <= query.To);
         var total = await source.CountAsync(ct); var page = Math.Max(1, query.PageIndex); var size = Math.Clamp(query.PageSize, 1, 100);
-        var items = await source.OrderByDescending(x => x.PlannedStartAt).Skip((page - 1) * size).Take(size).Select(x => ToDto(x)).ToListAsync(ct);
+        var items = await source.OrderByDescending(x => x.PlannedStartAt).ThenBy(x=>x.Id).Skip((page - 1) * size).Take(size).Select(x => ToDto(x)).ToListAsync(ct);
         return new(items, total, page, size);
     }
 

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PropFlow.Web.Client.Layout.Navigation.Admin;
+using PropFlow.Web.Client.Services.Authentication;
 
 namespace PropFlow.UnitTests;
 
@@ -46,7 +47,7 @@ public sealed class AdminNavMenuTests
     public async Task Query_navigation_updates_exactly_one_active_link_without_recreating_the_menu()
     {
         var navigation = new TestNavigation();
-        using var services = new ServiceCollection().AddLogging().AddAuthorizationCore(options => options.AddPolicy(PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read, policy => policy.RequireAssertion(context => PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.CanRead(context.User))))
+        using var services = new ServiceCollection().AddLogging().AddClientAuthorization()
             .AddSingleton<NavigationManager>(navigation).AddSingleton<AuthenticationStateProvider, AdminAuthentication>().BuildServiceProvider();
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>
@@ -66,7 +67,7 @@ public sealed class AdminNavMenuTests
     private static void AssertActive(string html, string tab)
     {
         var links = Regex.Matches(html, "<a\\b[^>]*>").Select(x => x.Value).ToArray();
-        Assert.Equal(5, links.Length);
+        Assert.Equal(6, links.Length);
         Assert.Single(links.Where(x => x.Contains("href=\"/knowledge/documents\"", StringComparison.Ordinal)));
         var current = Assert.Single(links.Where(x => x.Contains("aria-current=\"page\"", StringComparison.Ordinal)));
         Assert.Contains($"tab={tab}", current);

@@ -25,7 +25,7 @@ public sealed record ManagerServiceRequestCore(
     string? PreferredTimeCode, DateTimeOffset SubmittedAt, DateTimeOffset UpdatedAt,
     Guid? AssignedStaffUserId, Guid? SubmittedByUserId, decimal BaseServiceCost,
     decimal ProposedAdditionalCost, string? AdditionalCostNote,
-    decimal ApprovedAdditionalCost, Guid? ServiceInvoiceId, AdditionalCostConsentView? AdditionalCostConsent = null);
+    decimal ApprovedAdditionalCost, Guid? ServiceInvoiceId, AdditionalCostConsentView? AdditionalCostConsent = null, int ReworkCount = 0);
 
 public sealed record ManagerServiceRequestPage(
     IReadOnlyList<ManagerServiceRequestCore> Items, int TotalCount,
@@ -37,6 +37,7 @@ public sealed record ManagerServiceRequestEvidenceMetadata(
 
 public interface IManagerServiceRequestStore
 {
+    Task<(ManagerRequestFilterOption[] Categories,Guid[] StaffIds)> FilterOptionsAsync(CancellationToken ct);
     Task<ManagerServiceRequestPage> ListAsync(ManagerServiceRequestListQuery query, CancellationToken ct);
     Task<ManagerServiceRequestCore?> GetAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<ManagerServiceRequestActivityItem>> GetActivitiesAsync(Guid id, CancellationToken ct);
@@ -269,7 +270,7 @@ public sealed class ManagerServiceRequestReviewHandler(
                 var settlement = await billing.IssueAsync(new ServiceRequestInvoiceCommand(
                     approved.Id, approved.RequestNumber, apartmentId, approved.ResidentId,
                     approved.SubmittedByUserId, resident?.FullName ?? "Cư dân", approved.BaseServiceCost,
-                    approved.ApprovedAdditionalCost, approved.AdditionalCostNote, managerUserId, now), ct);
+                    approved.ApprovedAdditionalCost, approved.AdditionalCostNote, managerUserId, now, approved.ReworkCount), ct);
                 if (settlement is not null)
                     await store.LinkInvoiceAsync(id, settlement.InvoiceId, now, ct);
             }
@@ -337,7 +338,21 @@ public sealed class ManagerServiceRequestReviewHandler(
         var priority = string.IsNullOrWhiteSpace(query.Priority) ? null : query.Priority.Trim().ToUpperInvariant();
         string[] statuses = ["SUBMITTED", "UNDER_REVIEW", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED", "CANCELLED"];
         if (status is not null && status is not ("ALL" or "ACTIVE") && !statuses.Contains(status)) return null;
-        return query with { Search = query.Search?.Trim(), Status = status == "ALL" ? null : status, Priority = priority };
+        var selectedStatuses=(query.Statuses??[]).Select(x=>x?.Trim().ToUpperInvariant()).ToArray();
+        var selectedPriorities=(query.Priorities??[]).Select(x=>x?.Trim().ToUpperInvariant()).ToArray();
+        if(selectedStatuses.Length>100 || selectedStatuses.Any(x=>!statuses.Contains(x)) || selectedPriorities.Length>100 || selectedPriorities.Any(x=>x is not ("LOW" or "NORMAL" or "HIGH" or "URGENT"))) return null;
+        if(query.CategoryIds?.Length>100 || query.AssignedStaffUserIds?.Length>100 || (query.CategoryIds?.Contains(Guid.Empty)??false) || (query.AssignedStaffUserIds?.Contains(Guid.Empty)??false)) return null;
+        if(query.From>query.To || query.View is not (null or "ALL" or "ACTIVE" or "SUBMITTED" or "RESOLVED"))return null;
+        return query with { Search = query.Search?.Trim(), Status = status == "ALL" ? null : status, Priority = priority,
+            Statuses=selectedStatuses.Select(x=>x!).Distinct().ToArray(),Priorities=selectedPriorities.Select(x=>x!).Distinct().ToArray(),CategoryIds=query.CategoryIds?.Distinct().ToArray(),AssignedStaffUserIds=query.AssignedStaffUserIds?.Distinct().ToArray() };
+    }
+
+    public async Task<ManagerRequestFilterOptions> FilterOptionsAsync(CancellationToken ct)
+    {
+        var (categories,ids)=await store.FilterOptionsAsync(ct);
+        if(categories.Length>1000 || ids.Length>1000)return new([],[],true);
+        var people=await staffDirectory.GetHistoricalStaffAsync(ids,ct);
+        return new(categories,people.OrderBy(x=>x.DisplayName).Select(x=>new ManagerRequestFilterOption(x.UserId,x.DisplayName)).ToArray());
     }
 
     private static ManagerServiceRequestListItem ToListItem(ManagerServiceRequestCore x,

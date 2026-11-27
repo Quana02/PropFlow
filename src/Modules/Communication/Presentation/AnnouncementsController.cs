@@ -18,8 +18,8 @@ public sealed class AnnouncementsController(AnnouncementUseCases useCases, IAuth
     private Guid Actor => Guid.Parse(User.FindFirstValue("sub")!);
     [HttpGet]
     [ProducesResponseType(typeof(AnnouncementPage), 200)]
-    public async Task<IActionResult> List(int page = 1, CancellationToken ct = default) => Map(await useCases.ListAsync(Actor,
-        (await authorization.AuthorizeAsync(User, "announcements.publish")).Succeeded, page, ct));
+    public async Task<IActionResult> List(int page = 1, CancellationToken ct = default,[FromQuery] AnnouncementDirectoryFilter? filter=null) => Map(await useCases.ListAsync(Actor,
+        (await authorization.AuthorizeAsync(User, "announcements.publish")).Succeeded, page, ct,filter));
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(AnnouncementView), 200)]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) => Map(await useCases.GetAsync(Actor,

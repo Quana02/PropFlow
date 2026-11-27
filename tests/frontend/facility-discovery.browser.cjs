@@ -5,13 +5,18 @@ const { once } = require('node:events');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const root = path.resolve(__dirname, '../..');
 const greetingOnly = process.argv.includes('--greeting-only');
+const liveVoice = process.argv.includes('--live-voice');
+const roles = liveVoice ? ['welcome', 'resident', 'manager', 'live-listening', 'live-speaking'] : process.argv.includes('--continuous-voice') ? ['welcome', 'resident', 'manager', 'listening', 'speaking'] : ['welcome', 'resident', 'manager'];
+if (process.argv.includes('--assistant-content')) roles.push('request', 'documents', 'chat-answer');
+if (process.argv.includes('--idle-only')) roles.splice(0, roles.length, 'idle');
+const scopedStyles = [process.env.PROPFLOW_TEST_CONFIGURATION || 'Debug', 'Fe10Verification'].map(configuration => path.join(root, `src/PropFlow.Web.Client/obj/${configuration}/net8.0/scopedcss/projectbundle/PropFlow.Web.Client.bundle.scp.css`)).find(file => fs.existsSync(file));
 const css = fs.readFileSync(path.join(root, 'src/PropFlow.Web/wwwroot/app.css'), 'utf8') + '\n'
-  + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/obj/Fe10Verification/net8.0/scopedcss/projectbundle/PropFlow.Web.Client.bundle.scp.css'), 'utf8')
+  + fs.readFileSync(scopedStyles, 'utf8')
   + '\n' + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/Layout/Shared/AppShell.razor.css'), 'utf8')
   + '\n' + fs.readFileSync(path.join(root, 'src/PropFlow.Web.Client/wwwroot/css/chat-composer.css'), 'utf8');
-const pages = Object.fromEntries((greetingOnly ? ['welcome'] : ['welcome', 'resident', 'manager']).map(role => {
+const pages = Object.fromEntries((greetingOnly ? ['welcome'] : roles).map(role => {
   if(greetingOnly)return [role,'<!doctype html><html lang="vi"><head><meta charset="utf-8"><base href="/"></head><body>Greeting playback test</body></html>'];
-  const file = path.join(os.tmpdir(), `propflow-facility-${role}.html`);
+  const file = path.join(os.tmpdir(), role === 'chat-answer' ? 'propflow-document-chat-answer.html' : `propflow-facility-${role}.html`);
   if (!fs.existsSync(file)) throw Error('Run FacilityDiscoveryUiTests with PROPFLOW_FACILITY_PREVIEW_DIR set to TEMP.');
   return [role, '<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
     + 'body{margin:0;font-family:Segoe UI,Arial,sans-serif}*{box-sizing:border-box}.app-shell{padding:16px}' + css
@@ -24,6 +29,8 @@ let greetingDownloads = 0, speechApiCalls = 0;
 const publicAssets = {
   '/js/facility-assistant-voice.js': ['js/facility-assistant-voice.js','text/javascript'],
   '/js/resident-request-voice.js': ['js/resident-request-voice.js','text/javascript'],
+  '/js/facility-live-voice.js': ['js/facility-live-voice.js','text/javascript'],
+  '/js/facility-live-capture.js': ['js/facility-live-capture.js','text/javascript'],
   '/audio/facility/welcome-vi.wav': ['audio/facility/welcome-vi.wav','audio/wav'],
   '/audio/facility/new-need-vi.wav': ['audio/facility/new-need-vi.wav','audio/wav']
 };
@@ -50,7 +57,7 @@ function send(method, params = {}, sessionId) {
 (async () => {
   try {
     server.listen(0, '127.0.0.1'); await once(server, 'listening'); port = server.address().port;
-    browser = spawn(browserPath, ['--headless=new', '--mute-audio', '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', '--user-data-dir=' + profile, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-sync', 'about:blank'], { windowsHide: true, stdio: 'ignore' });
+    browser = spawn(browserPath, ['--headless=new', '--mute-audio', ...(liveVoice ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] : []), '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1', '--user-data-dir=' + profile, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-sync', 'about:blank'], { windowsHide: true, stdio: 'ignore' });
     console.log(JSON.stringify({ browserPid: browser.pid, serverPort: port }));
     const activePort = path.join(profile, 'DevToolsActivePort'), deadline = Date.now() + 15000;
     while (!fs.existsSync(activePort) && Date.now() < deadline) await wait(50);
@@ -64,17 +71,22 @@ function send(method, params = {}, sessionId) {
     const session = (await send('Target.attachToTarget', { targetId: target.targetId, flatten: true })).sessionId;
     const evaluate = async expression => { const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture:true }, session); if (r.exceptionDetails) throw Error(r.exceptionDetails.text); return r.result.value; };
     const checks = [];
-    for (const role of (greetingOnly ? [] : ['welcome', 'resident', 'manager'])) {
+    for (const role of (greetingOnly ? [] : roles)) {
       await send('Page.navigate', { url: 'http://127.0.0.1:' + port + '/' + role }, session);
-      const selector = role === 'manager' ? '.facility-guides' : '.resident-facility-discovery';
+      const selector = role === 'manager' ? '.facility-guides' : role === 'chat-answer' ? '.rag-widget' : '.resident-facility-discovery';
       for (let i = 0; i < 100 && !await evaluate('!!document.querySelector(' + JSON.stringify(selector) + ')'); i++) await wait(50);
+      if (role === 'idle') await evaluate("document.querySelector('dialog').showModal()");
       for (const width of [1366, 820, 390, 320]) {
         await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false }, session);
         for (const dark of [false, true]) {
           await evaluate(`document.documentElement.classList.toggle('dark',${dark});document.documentElement.dataset.theme='${dark?'dark':'light'}';document.querySelector('.app-shell').classList.toggle('app-shell-dark',${dark})`); await wait(750);
-          const result = await evaluate(`(()=>{const root=document.querySelector(${JSON.stringify(selector)}),bounds=root.getBoundingClientRect(),fields=[...root.querySelectorAll('input:not([type=checkbox]),textarea,select')];return {overflow:document.documentElement.scrollWidth>innerWidth+1,fieldsFit:fields.every(c=>{const r=c.getBoundingClientRect();return r.left>=bounds.left-1&&r.right<=bounds.right+1}),color:getComputedStyle(root).color,hasContent:root.innerText.includes(${JSON.stringify(role === 'resident' ? 'Nhân viên phụ trách' : role === 'welcome' ? 'Chạm để nói' : 'Giờ mở và đóng cửa')})};})()`);
+          const expected = role === 'idle' ? 'Bạn còn muốn trò chuyện không?' : role === 'request' ? 'Cùng xem lại trước khi gửi' : role === 'documents' ? 'Tài liệu chung cư' : role === 'chat-answer' ? 'Trò chuyện với tôi' : role === 'resident' ? 'Nhân viên phụ trách' : role === 'welcome' ? 'Chạm để nói' : role === 'manager' ? 'Giờ mở và đóng cửa' : role.endsWith('listening') ? 'Mình đang nghe bạn' : 'Ngắt lời và nói tiếp';
+          const result = await evaluate(`(()=>{const root=document.querySelector(${JSON.stringify(selector)}),bounds=root.getBoundingClientRect(),fields=[...root.querySelectorAll('input:not([type=checkbox]),textarea,select')];return {overflow:document.documentElement.scrollWidth>innerWidth+1,fieldsFit:fields.every(c=>{const r=c.getBoundingClientRect();return r.left>=bounds.left-1&&r.right<=bounds.right+1}),color:getComputedStyle(root).color,hasContent:root.innerText.includes(${JSON.stringify(expected)})};})()`);
           result.role = role; result.width = width; result.dark = dark;
-          result.passed = !result.overflow && result.fieldsFit && result.hasContent && (dark ? result.color === (role==='manager'?'rgb(241, 247, 255)':'rgb(237, 246, 255)') : result.color === (role !== 'manager' ? 'rgb(20, 39, 66)' : 'rgb(23, 36, 58)')); checks.push(result);
+          result.passed = !result.overflow && result.fieldsFit && result.hasContent && (dark ? result.color === (role==='manager'?'rgb(241, 247, 255)':'rgb(237, 246, 255)') : result.color === (role === 'chat-answer' ? 'rgb(24, 55, 75)' : role !== 'manager' ? 'rgb(20, 39, 66)' : 'rgb(23, 36, 58)'));
+          if (role === 'chat-answer') { result.redCallToAction = await evaluate(`(()=>{const b=document.querySelector('.rag-voice-button'),s=getComputedStyle(b);return s.color==='rgb(255, 255, 255)'&&s.backgroundImage.includes('190, 18, 60')&&b.getBoundingClientRect().height>=44;})()`); result.passed &&= result.redCallToAction; }
+          if (role === 'idle') { result.dialogFits = await evaluate(`(()=>{const d=document.querySelector('dialog'),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&[...d.querySelectorAll('button')].every(b=>{const x=b.getBoundingClientRect();return x.left>=r.left&&x.right<=r.right;})&&d.innerText.includes('30');})()`); result.passed &&= result.dialogFits; }
+          checks.push(result);
           if (width === 1366 || width === 390) {
             const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, session);
             fs.writeFileSync(path.join(os.tmpdir(), `propflow-facility-${role}-${width}-${dark ? 'dark' : 'light'}.png`), Buffer.from(shot.data, 'base64'));
@@ -96,9 +108,43 @@ function send(method, params = {}, sessionId) {
       }finally{control.dispose();}
     })()`);
     greeting.downloads=greetingDownloads;greeting.speechApiCalls=speechApiCalls;
-    greeting.passed=greeting.samples.every(x=>x.played&&x.ms<1000)&&greeting.speakingObserved&&greetingDownloads===1&&speechApiCalls===0;
-    console.log(JSON.stringify({ passed: checks.every(x => x.passed)&&greeting.passed, checks, greeting }));
-    if (checks.some(x => !x.passed)||!greeting.passed) process.exitCode = 1;
+    // Live entry uses the model's audio stream. The legacy bundled-greeting benchmark applies only to legacy runs.
+    greeting.passed=greeting.samples.every(x=>x.played&&(liveVoice||x.ms<1000))&&greeting.speakingObserved&&greetingDownloads===1&&speechApiCalls===0;
+    let live;
+    if(liveVoice){
+      await evaluate(`(async()=>{
+      const module=await import('/js/facility-live-voice.js?browser-test');const original=window.WebSocket;let peer;const sent=[],states=[];
+      class FakeSocket{constructor(){peer=this;this.readyState=1;this.bufferedAmount=0;setTimeout(()=>this.onopen?.(),0);}send(text){const data=JSON.parse(text);sent.push(data);if(data.setup)setTimeout(()=>this.onmessage?.({data:JSON.stringify({setupComplete:{}})}),0);}close(){this.readyState=3;}}
+      window.WebSocket=FakeSocket;const control=module.create({invokeMethodAsync:async(name,epoch,state)=>states.push([name,state])});
+      try{
+        const supported=module.capabilities();const started=await control.start({token:'auth_tokens/test-only',webSocketUrl:'wss://generativelanguage.googleapis.com/ws/test',setup:{model:'models/test-only'},expiresAt:new Date(Date.now()+600000).toISOString()},1);
+        const limit=performance.now()+4000;while(!sent.some(x=>x.realtimeInput?.audio)&&performance.now()<limit)await new Promise(r=>setTimeout(r,50));
+        const pcm=btoa(String.fromCharCode(...new Uint8Array(2400)));peer.onmessage({data:JSON.stringify({serverContent:{modelTurn:{parts:[{inlineData:{data:pcm,mimeType:'audio/pcm;rate=24000'}}]},turnComplete:true}})});
+        await new Promise(r=>setTimeout(r,250));
+        window.propflowLiveProbe={control,peer,sent,states,original,supported,started,before:sent.filter(x=>x.realtimeInput?.audio).length};
+        return started;
+      }catch(error){control.dispose();window.WebSocket=original;throw error;}
+      })()`);
+      const otherTab=await send('Target.createTarget',{url:'about:blank'});
+      await send('Target.activateTarget',{targetId:otherTab.targetId});await wait(700);
+      live=await evaluate(`(async()=>{const p=window.propflowLiveProbe;try{
+        const hidden=document.visibilityState==='hidden',active=p.peer.readyState===1,audioFrames=p.sent.filter(x=>x.realtimeInput?.audio).length;
+        const continuedInBackground=hidden&&active&&audioFrames>p.before&&!p.states.some(x=>x[1]==='paused');
+        p.peer.onmessage({data:JSON.stringify({toolCall:{functionCalls:[{id:'goodbye',name:'end_conversation'}]}})});
+        await new Promise(r=>setTimeout(r,30));
+        // Two seconds leaves room for the browser's one-second background timer batching.
+        const pcm=btoa(String.fromCharCode(...new Uint8Array(24000)).repeat(4));
+        p.peer.onmessage({data:JSON.stringify({serverContent:{outputTranscription:{text:'Tạm biệt bạn!'},modelTurn:{parts:[{inlineData:{data:pcm,mimeType:'audio/pcm;rate=24000'}}]},turnComplete:true}})});
+        await new Promise(r=>setTimeout(r,20));
+        const waitedForGoodbye=!p.states.some(x=>x[0]==='OnLiveEnded');
+        const limit=performance.now()+4000;while(!p.states.some(x=>x[0]==='OnLiveEnded')&&performance.now()<limit)await new Promise(r=>setTimeout(r,50));
+        const farewellCompleted=p.states.filter(x=>x[0]==='OnLiveEnded').length===1;
+        return {passed:p.supported&&p.started&&continuedInBackground&&waitedForGoodbye&&farewellCompleted&&p.peer.readyState===3&&p.states.some(x=>x[1]==='speaking'),supported:p.supported,started:p.started,audioFrames,continuedInBackground,waitedForGoodbye,farewellCompleted,stopped:p.peer.readyState===3};
+      }finally{p.control.dispose();window.WebSocket=p.original;delete window.propflowLiveProbe;}})()`);
+      await send('Target.activateTarget',{targetId:target.targetId});
+    }
+    console.log(JSON.stringify({ passed: checks.every(x => x.passed)&&greeting.passed&&(!liveVoice||live.passed), checks, greeting, live }));
+    if (checks.some(x => !x.passed)||!greeting.passed||(liveVoice&&!live.passed)) process.exitCode = 1;
   } catch (e) { console.error(e.message); process.exitCode = 1; }
   finally {
     if (socket?.readyState === WebSocket.OPEN) { try { await send('Browser.close'); } catch {} socket.close(); }

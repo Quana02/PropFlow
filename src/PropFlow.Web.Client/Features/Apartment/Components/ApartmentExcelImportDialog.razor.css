@@ -1,0 +1,30 @@
+.excel-import { display: grid; gap: .75rem; min-width: 0; }
+.excel-import p, .excel-steps { margin: 0; line-height: 1.6; }
+.excel-steps { padding-left: 1.25rem; }
+.excel-template { justify-self: start; min-height: 2.75rem; padding: .6rem .9rem; border: 1px solid var(--dialog-line); border-radius: .75rem; background: var(--dialog-soft); color: var(--dialog-badge-ink); font: inherit; cursor: pointer; }
+.excel-template:focus-visible, .excel-preview:focus-visible { outline: 2px solid var(--dialog-focus); outline-offset: 2px; }
+.excel-dropzone { position: relative; display: flex; align-items: center; flex-direction: column; gap: .5rem; padding: 1.5rem 1rem; border: 2px dashed var(--dialog-line); border-radius: 1rem; background: var(--dialog-soft); text-align: center; color: var(--dialog-ink); transition: border-color .15s, background .15s; }
+.excel-dropzone:not(.is-disabled):hover, .excel-dropzone.is-dragging { border-color: var(--dialog-accent); background: var(--dialog-badge); }
+.excel-dropzone:focus-within { outline: 2px solid var(--dialog-focus); outline-offset: 3px; }
+.excel-dropzone ::deep input[type=file] { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.excel-dropzone.is-disabled { opacity: .6; }
+.excel-dropzone.is-disabled ::deep input[type=file] { cursor: wait; }
+.excel-upload-icon { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: .85rem; background: var(--dialog-badge); color: var(--dialog-badge-ink); font-size: 1.75rem; }
+.excel-drop-hint, .excel-file-help { color: var(--dialog-muted); font-size: .8125rem; }
+.excel-file-button { margin: .25rem 0; padding: .6rem 1rem; border: 1px solid var(--dialog-line); border-radius: .7rem; background: var(--dialog-surface); color: var(--dialog-badge-ink); font-weight: 700; font-size: .875rem; }
+.excel-selected-file { display: flex; align-items: center; gap: .65rem; min-width: 0; padding: .8rem; border: 1px solid var(--dialog-line); border-radius: .8rem; background: var(--dialog-soft); }
+.excel-file-icon { color: var(--dialog-badge-ink); flex-shrink: 0; }
+.excel-selected-details { display: grid; gap: .2rem; min-width: 0; flex: 1; }
+.excel-selected-details strong { font-size: .875rem; overflow-wrap: anywhere; }
+.excel-selected-details small { color: var(--dialog-muted); }
+.excel-selected-status { color: var(--dialog-muted); font-size: .75rem; flex-shrink: 0; }
+@media (max-width: 480px) { .excel-dropzone { padding: 1.1rem .75rem; } .excel-selected-file { flex-wrap: wrap; } .excel-selected-status { margin-left: 2.15rem; } }
+@media (prefers-reduced-motion: reduce) { .excel-dropzone { transition: none; } }
+.excel-template:disabled { opacity: .55; cursor: not-allowed; }
+.excel-error { color: var(--dialog-danger-ink); overflow-wrap: anywhere; }
+.excel-summary { padding: .75rem; border-radius: .65rem; background: var(--dialog-soft); color: var(--dialog-ink); }
+.excel-preview { max-height: 21rem; max-width: 100%; overflow: auto; border: 1px solid var(--dialog-line); border-radius: .7rem; }
+table { min-width: 70rem; border-collapse: collapse; font-size: .8125rem; }
+th, td { padding: .65rem; border-bottom: 1px solid var(--dialog-line); color: var(--dialog-ink); vertical-align: top; max-width: 16rem; overflow-wrap: anywhere; }
+th { position: sticky; top: 0; background: var(--dialog-soft); text-align: left; }
+ul { margin: 0; padding-left: 1rem; }

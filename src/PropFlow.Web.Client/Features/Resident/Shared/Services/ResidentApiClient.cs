@@ -7,7 +7,7 @@ public interface IResidentApiClient
     Task<ApiResult<ResidentManagementSummary>> GetSummaryAsync(CancellationToken ct = default);
     Task<ApiResult<PagedResidentsResponse>> ListAsync(string? search, string? status, Guid? apartmentUnitId = null,
         string? relationshipKind = null, string? residencyType = null, string? householdRole = null,
-        int page = 1, CancellationToken ct = default);
+        int page = 1, CancellationToken ct = default, int? floorNumber = null, bool? hasAccount = null, ResidentDirectoryMultiFilter? multi = null);
     Task<ApiResult<ResidentDetailResponse>> GetAsync(Guid id, CancellationToken ct = default);
     Task<ApiResult<ResidentDetailResponse>> CreateAsync(CreateResidentRequest request, CancellationToken ct = default);
     Task<ApiResult<EmptyResponse>> UpdateAsync(Guid id, UpdateResidentRequest request, CancellationToken ct = default);
@@ -27,14 +27,14 @@ public sealed class ResidentApiClient(AuthenticatedApiClient api) : IResidentApi
 
     public Task<ApiResult<PagedResidentsResponse>> ListAsync(string? search, string? status, Guid? apartmentUnitId = null,
         string? relationshipKind = null, string? residencyType = null, string? householdRole = null,
-        int page = 1, CancellationToken ct = default) =>
+        int page = 1, CancellationToken ct = default, int? floorNumber = null, bool? hasAccount = null, ResidentDirectoryMultiFilter? multi = null) =>
         api.SendAsync<PagedResidentsResponse>(HttpMethod.Get, $"api/v1/residents?pageIndex={page}&pageSize=20" +
             (string.IsNullOrWhiteSpace(search) ? "" : $"&search={Uri.EscapeDataString(search)}") +
             (string.IsNullOrWhiteSpace(status) ? "" : $"&status={status}") +
             (apartmentUnitId.HasValue ? $"&apartmentUnitId={apartmentUnitId}" : "") +
             (string.IsNullOrWhiteSpace(relationshipKind) ? "" : $"&relationshipKind={relationshipKind}") +
             (string.IsNullOrWhiteSpace(residencyType) ? "" : $"&residencyType={residencyType}") +
-            (string.IsNullOrWhiteSpace(householdRole) ? "" : $"&householdRole={householdRole}"), ct: ct);
+            (string.IsNullOrWhiteSpace(householdRole) ? "" : $"&householdRole={householdRole}") + (floorNumber.HasValue?$"&floorNumber={floorNumber}":"") + (hasAccount.HasValue?$"&hasAccount={hasAccount.Value}":"") + multi?.Query, ct: ct);
     public Task<ApiResult<ResidentDetailResponse>> GetAsync(Guid id, CancellationToken ct = default) => api.SendAsync<ResidentDetailResponse>(HttpMethod.Get, $"api/v1/residents/{id}", ct: ct);
     public Task<ApiResult<ResidentDetailResponse>> CreateAsync(CreateResidentRequest request, CancellationToken ct = default) => api.SendAsync<ResidentDetailResponse>(HttpMethod.Post, "api/v1/residents", request, ct: ct);
     public Task<ApiResult<EmptyResponse>> UpdateAsync(Guid id, UpdateResidentRequest request, CancellationToken ct = default) => api.SendAsync<EmptyResponse>(HttpMethod.Put, $"api/v1/residents/{id}", request, ct: ct);

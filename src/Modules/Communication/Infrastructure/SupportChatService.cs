@@ -193,11 +193,10 @@ public sealed partial class SupportChatService(CommunicationDbContext db, ISuppo
     }
     public async Task DraftAsync(Guid user, Guid id, string stream, long sequence, string text, CancellationToken ct)
     {
-        var actor = await Actor(user, "RESIDENT", ct); var chat = await Conversation(actor, id, ct);
+        var actor = await Actor(user, "RESIDENT", ct); _ = await Conversation(actor, id, ct);
         if (text is null || text.Length > 4000 || sequence < 0 || text.Any(c => char.IsControl(c) && c is not '\n' and not '\r' and not '\t')) throw Invalid("Bản nháp không hợp lệ.");
-        if (chat.Status != "ACTIVE" || chat.ManagerUserId is not Guid manager) return;
-        if (!await Online(manager, ct) || (await actors.FindAsync(manager, ct))?.Role != "MANAGER") return;
-        await realtime.DraftAsync(manager, new(id, stream, sequence, text, Now), ct);
+        // Legacy clients may still invoke ResidentDraft. Validate ownership but never
+        // forward or persist text that the resident has not explicitly sent.
     }
     public async Task TypingAsync(Guid user, Guid id, bool typing, CancellationToken ct)
     {

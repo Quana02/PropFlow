@@ -3,6 +3,7 @@ namespace PropFlow.Modules.Residents.Contracts;
 /// <summary>Public read contract used by Apartments. It never exposes Residents persistence types.</summary>
 public interface IResidentApartmentReadSource
 {
+    Task<ApartmentPeopleSearchMatch> SearchApartmentPeopleAsync(string search, DateOnly date, CancellationToken ct);
     Task<bool> HasActiveResidenciesAsync(Guid apartmentUnitId, DateOnly date, CancellationToken cancellationToken = default);
     Task<bool> HasActiveOwnerOccupiedResidencyAsync(Guid residentId, Guid apartmentUnitId, DateOnly date, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ResidentLookupItem>> SearchResidentsAsync(string? search, int take, CancellationToken cancellationToken = default);
@@ -13,6 +14,8 @@ public interface IResidentApartmentReadSource
     Task<IReadOnlyList<Guid>> GetActiveApartmentIdsAsync(DateOnly date, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Guid>> GetActiveApartmentIdsForUserAsync(Guid userId, DateOnly date, CancellationToken cancellationToken = default);
 }
+
+public sealed record ApartmentPeopleSearchMatch(IReadOnlyList<Guid> ResidentIds, IReadOnlyList<Guid> OccupiedApartmentIds);
 
 public sealed record ResidentLookupItem(Guid ResidentId, string ResidentCode, string FullName);
 public sealed record ActiveResidentAssociation(Guid ResidentId, string ResidentCode, string FullName, string HouseholdRole, string ResidencyType, string? RelationshipToHead, DateOnly StartDate, string ResidencyStatus);

@@ -7,6 +7,7 @@ Các file Word trong thư mục là đặc tả feature. Các file Markdown dư�
 | [FE-01 — API và triển khai](FE-01-API-and-Deployment.md) | Điều kiện đăng ký, OTP/session, bảo mật, API, secrets, migration và vận hành |
 | [FE-02 — Onboarding cư dân](FE-02-Resident-Onboarding-API.md) | Định danh, ownership/residency, household, ngày hiệu lực và giao dịch |
 | [FE-03 — Loại căn hộ và defaults](FE-03-Apartment-Type-Defaults.md) | CRUD, validation, tự điền, migration và bộ năm loại mẫu có nguồn tham khảo |
+| [FE-04 — Sơ đồ bãi đỗ](FE-04-Parking-Workspace.md) | Scope extension: AI đọc ảnh/PDF, trình vẽ, xuất bản và quản lý trạng thái ô; chưa quản lý xe |
 | [FE-15 — Quản trị và nhật ký](FE-15-Administration.md) | Nhật ký hệ thống, filter popup, audit/privacy, giao diện và phần cấu hình còn cần chốt |
 
 ## Quyết định bổ sung so với đặc tả cũ
@@ -31,7 +32,7 @@ Các điểm đã được người dùng chốt ở trên bổ sung cho Word c�
 - Các báo cáo Audit/Recheck ngày 02/11 và Fixes ngày 03/11 đã được gộp vào tài liệu theo feature. Kết luận eligibility cũ đã bị thay thế; không dùng lại để đánh giá FE-01.
 - Đợt 03/11 sau làm rõ FE-01 ghi nhận 213 integration, 11 unit đăng ký đạt; đợt tổng quát trước đó ghi nhận 116 unit và 62 architecture đạt. Đợt audit 04/11 ghi nhận 233 integration, 34 unit và 62 architecture đạt. Đây là các run/phạm vi khác nhau, không cộng thành một tổng test hiện tại hoặc quy đổi thành phần trăm hoàn tất.
 - Lỗi multi-residency/household lifecycle FE-02 và CRUD/defaults FE-03 đã được sửa trong các đợt đó; kiểm chứng cụ thể xem tài liệu feature. Sửa điều hướng 05/11 được xác nhận trên WebAssembly thật, gồm lần bấm đầu và Back/Forward; kịch bản ở `docs/testing`.
-- **FE-15.8 còn cần chốt phạm vi/contract và triển khai:** cấu hình thanh toán riêng không thay thế cấu hình hành chính chung. Các key hỗ trợ email/phone chỉ là đề xuất, chưa phê duyệt.
+- **FE-15.8 đã chốt P0:** hai key liên hệ hỗ trợ công khai, permission ADMIN riêng, validation/audit/concurrency; xem contract FE-15. Không bao gồm AI/SMTP/finance hoặc history/restore chuyên biệt.
 - Bộ tài liệu rà soát trước chưa có `PropFlow_15FE.docx` và SRS Report 3 tổng hợp; không tự tạo consolidated UC ID. Truy vết FE-01 dùng FE-01.1–FE-01.7 theo đặc tả hiện có.
 - Chưa có bằng chứng nghiệm thu đầy đủ SMTP thật, cookie/CORS đa tab, toàn bộ browser matrix năm actor và production deployment. Cần cấu hình secrets/HTTPS/proxy/database/log sink theo môi trường; security log retention 30 ngày do hạ tầng vận hành quản lý, email queue không bền qua restart.
 - Cần contract business date/timezone thống nhất nếu UI phải hoạt động đúng trên máy người dùng ở múi giờ khác. Data-quality item ownership history P302 của `RES-000002` được báo cáo ngày 03/10 chưa có xác nhận xử lý trong bộ tài liệu này; không tự xóa lịch sử.

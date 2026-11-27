@@ -13,6 +13,10 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure;
 
 public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, TimeProvider? clock = null) : IManagerServiceRequestStore
 {
+    public async Task<(ManagerRequestFilterOption[] Categories,Guid[] StaffIds)> FilterOptionsAsync(CancellationToken ct) =>
+        (await db.ServiceRequestCategories.AsNoTracking().OrderBy(x=>x.Name).Select(x=>new ManagerRequestFilterOption(x.Id,x.Name)).Take(1001).ToArrayAsync(ct),
+         await db.ServiceRequests.AsNoTracking().Where(x=>x.Assignments.Any(a=>a.Status==AssignmentStatus.ASSIGNED || a.Status==AssignmentStatus.IN_PROGRESS))
+            .Select(x=>x.Assignments.Where(a=>a.Status==AssignmentStatus.ASSIGNED || a.Status==AssignmentStatus.IN_PROGRESS).OrderByDescending(a=>a.AssignedAt).Select(a=>a.StaffUserId).First()).Distinct().OrderBy(id=>id).Take(1001).ToArrayAsync(ct));
     private readonly TimeProvider timeProvider = clock ?? TimeProvider.System;
 
     public Task<ManagerServiceRequestOutcome> AssignAsync(
@@ -32,12 +36,20 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             requests = requests.Where(x => EF.Functions.ILike(x.RequestNumber, $"%{term}%") ||
                                            EF.Functions.ILike(x.Title, $"%{term}%"));
         }
-        if (query.Status == "ACTIVE")
-            requests = requests.Where(x => x.Status == ServiceRequestStatus.UNDER_REVIEW || x.Status == ServiceRequestStatus.ASSIGNED || x.Status == ServiceRequestStatus.IN_PROGRESS);
-        else if (!string.IsNullOrWhiteSpace(query.Status) && Enum.TryParse<ServiceRequestStatus>(query.Status, out var status))
-            requests = requests.Where(x => x.Status == status);
-        if (!string.IsNullOrWhiteSpace(query.Priority))
-            requests = requests.Where(x => x.FinalPriorityCode == query.Priority);
+        var statuses=(query.Statuses??[]).Select(Enum.Parse<ServiceRequestStatus>).ToList();
+        if(query.Status=="ACTIVE")statuses.AddRange([ServiceRequestStatus.UNDER_REVIEW,ServiceRequestStatus.ASSIGNED,ServiceRequestStatus.IN_PROGRESS]);
+        else if(Enum.TryParse<ServiceRequestStatus>(query.Status,out var legacyStatus))statuses.Add(legacyStatus);
+        var statusSet=statuses.Distinct().ToArray();
+        var priorities=(query.Priorities??[]).Concat(string.IsNullOrWhiteSpace(query.Priority)?[]:new[]{query.Priority}).Distinct().ToArray();
+        if(statusSet.Length>0)requests=requests.Where(x=>statusSet.Contains(x.Status));
+        if(priorities.Length>0)requests=requests.Where(x=>x.FinalPriorityCode!=null && priorities.Contains(x.FinalPriorityCode));
+        if(query.CategoryIds is {Length:>0} categories)requests=requests.Where(x=>x.CategoryId.HasValue && categories.Contains(x.CategoryId.Value));
+        if(query.AssignedStaffUserIds is {Length:>0} staffIds)requests=requests.Where(x=>staffIds.Contains(x.Assignments.Where(a=>a.Status==AssignmentStatus.ASSIGNED || a.Status==AssignmentStatus.IN_PROGRESS).OrderByDescending(a=>a.AssignedAt).Select(a=>a.StaffUserId).FirstOrDefault()));
+        if(query.From is {} from)requests=requests.Where(x=>x.SubmittedAt>=from);
+        if(query.To is {} to)requests=requests.Where(x=>x.SubmittedAt<=to);
+        if(query.View=="ACTIVE")requests=requests.Where(x=>x.Status==ServiceRequestStatus.UNDER_REVIEW || x.Status==ServiceRequestStatus.ASSIGNED || x.Status==ServiceRequestStatus.IN_PROGRESS);
+        else if(query.View=="RESOLVED")requests=requests.Where(x=>x.Status==ServiceRequestStatus.RESOLVED || x.Status==ServiceRequestStatus.CLOSED);
+        else if(query.View=="SUBMITTED")requests=requests.Where(x=>x.Status==ServiceRequestStatus.SUBMITTED);
         if (query.UnassignedOnly)
             requests = requests.Where(x => !x.Assignments.Any(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS));
         if (query.SubmittedWithinDays is { } days)
@@ -49,6 +61,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
         var totalCount = await requests.CountAsync(ct);
         var items = await requests
             .OrderByDescending(x => x.SubmittedAt)
+            .ThenBy(x=>x.Id)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(x => new ManagerServiceRequestCore(
@@ -61,10 +74,10 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
                     .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
                 x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
-                x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null))
+                x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null, x.ReworkCount))
             .ToArrayAsync(ct);
 
-        var summary = await db.ServiceRequests.AsNoTracking().GroupBy(_ => 1).Select(group =>
+        var summary = await requests.GroupBy(_ => 1).Select(group =>
             new ManagerServiceRequestSummary(
                 group.Count(),
                 group.Count(x => x.Status == ServiceRequestStatus.SUBMITTED),
@@ -88,7 +101,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
                 .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
             x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
-            x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null))
+            x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null, x.ReworkCount))
         .SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceRequestActivityItem>> GetActivitiesAsync(Guid id, CancellationToken ct) =>
@@ -238,6 +251,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
     public async Task<ManagerServiceRequestOutcome> CloseAsync(
         Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var request = await db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (request is null) return ManagerServiceRequestOutcome.NotFound;
         if (request.Status != ServiceRequestStatus.RESOLVED) return ManagerServiceRequestOutcome.Conflict;
@@ -253,7 +267,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             detail: note,
             performedBy: managerUserId));
 
-        return await SaveAsync(ct);
+        return await SaveAsync(ct, transaction);
     }
 
     public async Task<ManagerServiceRequestOutcome> LinkInvoiceAsync(
