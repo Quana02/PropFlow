@@ -24,6 +24,82 @@ namespace PropFlow.IntegrationTests;
 public sealed partial class ParkingHttpTests
 {
     [Fact]
+    public async Task Manager_can_remove_a_published_drawing_and_republish_the_preserved_draft()
+    {
+        await using var app = await Start();
+        using var manager = app.GetTestClient();
+        manager.DefaultRequestHeaders.Add("X-Role", "MANAGER");
+        manager.DefaultRequestHeaders.Add("X-Permission", "MANAGE_OPERATIONS");
+        const string root = "/api/v1/parking-areas";
+        using var created = await manager.PostAsJsonAsync(root, new CreateParkingArea("Bãi đỗ B1"));
+        var area = (await created.Content.ReadFromJsonAsync<ParkingAreaView>())!;
+        var url = $"{root}/{area.Id}";
+        string RemovalUrl(Guid version) => $"{url}/published?expectedVersion={version:D}";
+
+        using var upload = new MultipartFormDataContent();
+        var file = new ByteArrayContent(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII="));
+        file.Headers.ContentType = new("image/png");
+        upload.Add(file, "file", "parking.png");
+        upload.Add(new StringContent(area.Version.ToString()), "expectedVersion");
+        using var imported = await manager.PostAsync($"{url}/import", upload);
+        imported.EnsureSuccessStatusCode();
+        area = (await imported.Content.ReadFromJsonAsync<ParkingImportResult>())!.Area;
+
+        using var published = await manager.PostAsJsonAsync($"{url}/publish", new PublishParkingDrawing(area.Version));
+        published.EnsureSuccessStatusCode();
+        area = (await published.Content.ReadFromJsonAsync<ParkingAreaView>())!;
+        Assert.NotNull(area.PublishedSource);
+        var space = Assert.Single(area.Spaces);
+        var publishedVersion = area.Version;
+
+        using var resident = app.GetTestClient();
+        resident.DefaultRequestHeaders.Add("X-Role", "RESIDENT");
+        resident.DefaultRequestHeaders.Add("X-Permission", "MANAGE_OPERATIONS");
+        Assert.Equal(HttpStatusCode.Forbidden, (await resident.DeleteAsync(RemovalUrl(area.Version))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.DeleteAsync($"{url}/published")).StatusCode);
+
+        foreach (var status in new[] { "IN_USE", "MAINTENANCE", "AVAILABLE" })
+        {
+            using var changed = await manager.PutAsJsonAsync($"{url}/spaces/{space.Id}", new ChangeParkingSpace(area.Version, status, ""));
+            changed.EnsureSuccessStatusCode();
+            area = (await changed.Content.ReadFromJsonAsync<ParkingAreaView>())!;
+            if (status != "AVAILABLE")
+                Assert.Equal(HttpStatusCode.Conflict, (await manager.DeleteAsync(RemovalUrl(area.Version))).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.Conflict, (await manager.DeleteAsync(RemovalUrl(publishedVersion))).StatusCode);
+        using var removed = await manager.DeleteAsync(RemovalUrl(area.Version));
+        Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
+        var current = (await manager.GetFromJsonAsync<ParkingAreaView>(url))!;
+        Assert.Null(current.Published);
+        Assert.Null(current.PublishedSource);
+        Assert.Null(current.PublishedAt);
+        Assert.Empty(current.Spaces);
+        Assert.NotEqual(area.Version, current.Version);
+        Assert.Equal(area.DraftSource, current.DraftSource);
+        Assert.Equal(area.Draft.Shapes.Select(shape => shape.Id), current.Draft.Shapes.Select(shape => shape.Id));
+        var summary = Assert.Single((await manager.GetFromJsonAsync<ParkingAreaSummary[]>(root))!);
+        Assert.False(summary.Published);
+        Assert.Equal(0, summary.Total);
+        Assert.Equal(HttpStatusCode.NotFound, (await manager.DeleteAsync(RemovalUrl(current.Version))).StatusCode);
+        var history = (await manager.GetFromJsonAsync<ParkingActionView[]>($"{url}/history"))!;
+        Assert.Single(history, action => action.Action == "PUBLISHED_DRAWING_REMOVED");
+        Assert.Single(history, action => action.Action == "PUBLISHED");
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<PropertyAssetsDbContext>();
+            Assert.Equal(space.Id, (await db.Set<ParkingSpace>().SingleAsync(entry => entry.Archived)).Id);
+            Assert.Equal(area.PublishedSource!.Id, (await db.Set<ParkingRevision>().SingleAsync()).SourceId);
+        }
+
+        using var republished = await manager.PostAsJsonAsync($"{url}/publish", new PublishParkingDrawing(current.Version));
+        republished.EnsureSuccessStatusCode();
+        current = (await republished.Content.ReadFromJsonAsync<ParkingAreaView>())!;
+        Assert.Equal(space, Assert.Single(current.Spaces));
+        await app.StopAsync();
+    }
+
+    [Fact]
     public async Task Manager_can_import_review_publish_and_update_status_other_roles_cannot_read_sources_or_write()
     {
         await using var app=await Start();using var client=app.GetTestClient();const string root="/api/v1/parking-areas";

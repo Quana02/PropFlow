@@ -24,8 +24,17 @@ public sealed class ParkingVisionRecognitionTests
         var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance)
             .ReadAsync(File.ReadAllBytes(Fixture("source.jpg")),"image/jpeg",1,default);
         if(name=="b3")Assert.InRange(handler.Calls,3,4);else Assert.Equal(2,handler.Calls);
-        if(name=="b3"){Assert.Null(result.Drawing);Assert.Contains("chồng",result.Message);return;}
+        if(name=="b3")
+        {
+            Assert.Null(result.Drawing);
+            Assert.Contains("chồng",result.Message);
+            Assert.NotNull(result.ReviewDrawing);
+            Assert.Equal(8, result.ReviewDrawing.Shapes.Count(shape => shape.Kind == "SPACE"));
+            Assert.Contains(result.ReviewDrawing.RecognitionReview!.Issues, issue => issue.Code == "overlap");
+            return;
+        }
         Assert.NotNull(result.Drawing);Assert.Equal(11,result.Drawing.Shapes.Length);
+        Assert.Null(result.ReviewDrawing);
         Assert.Equal(2,result.Drawing.Shapes.Count(s=>s.Kind=="WALL"));Assert.Single(result.Drawing.Shapes.Where(s=>s.Kind=="LANE"));
         foreach(var shape in expected.Shapes)
         {
@@ -88,43 +97,249 @@ public sealed class ParkingVisionRecognitionTests
     {
         var overview=JsonNode.Parse(Plan())!;overview["planBounds"]=JsonSerializer.SerializeToNode(new[]{0,0,1000,1000});
         using var handler=new VisionResponse(overview.ToJsonString(),overview.ToJsonString(),RegionPlan("Cây xanh"),RegionPlan("Mặt nước")){Statuses=[HttpStatusCode.ServiceUnavailable,HttpStatusCode.OK,HttpStatusCode.OK,HttpStatusCode.OK]};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.NotNull(result.Drawing);Assert.Equal(4,handler.Calls);Assert.Contains("2/2 vùng",result.Message);
     }
     [Fact]
     public async Task Daily_quota_exhaustion_stops_without_retrying_or_claiming_a_review_timeout()
     {
         using var handler=new VisionResponse(Plan()){Statuses=[HttpStatusCode.TooManyRequests],DailyQuota=true};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.Null(result.Drawing);Assert.Equal(1,handler.Calls);Assert.Contains("trong ngày",result.Message);Assert.DoesNotContain("lượt đối chiếu",result.Message);
     }
     [Fact]
-    public async Task Two_temporary_outages_can_recover_without_changing_model_or_exceeding_four_requests()
+    public async Task A_second_initial_overload_does_not_send_a_third_full_image()
     {
         using var handler=new VisionResponse(Plan()){Statuses=[HttpStatusCode.ServiceUnavailable,HttpStatusCode.ServiceUnavailable,HttpStatusCode.OK]};
         using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
-        Assert.NotNull(result.Drawing);Assert.Equal(4,handler.Calls);Assert.Contains("AI đã đối chiếu",result.Message);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
+        Assert.Null(result.Drawing);Assert.Equal(2,handler.Calls);Assert.Contains("HTTP 503",result.Message);
     }
     [Fact]
-    public async Task Persistent_overload_stops_after_two_retries_and_identifies_503_instead_of_quota()
+    public async Task Persistent_overload_stops_after_one_retry_and_identifies_503_instead_of_quota()
     {
         using var handler=new VisionResponse(Plan()){Statuses=[HttpStatusCode.ServiceUnavailable]};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
-        Assert.Null(result.Drawing);Assert.Equal(3,handler.Calls);Assert.Contains("503",result.Message);Assert.DoesNotContain("hết hạn mức",result.Message);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
+        Assert.Null(result.Drawing);Assert.Equal(2,handler.Calls);Assert.Contains("503",result.Message);Assert.DoesNotContain("hết hạn mức",result.Message);
     }
     [Fact]
     public async Task A_server_retry_after_beyond_the_read_budget_stops_without_sending_an_early_retry()
     {
         using var handler=new VisionResponse(Plan()){Statuses=[HttpStatusCode.ServiceUnavailable],RetryAfter="120"};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.Null(result.Drawing);Assert.Equal(1,handler.Calls);Assert.Contains("120 giây",result.Message);
+    }
+
+    [Theory]
+    [InlineData(null, 30)]
+    [InlineData("120", 120)]
+    public async Task Overload_cooldown_blocks_new_recognition_scopes_until_the_wait_expires(string? retryAfter, int seconds)
+    {
+        using var handler = new VisionResponse(Plan())
+        {
+            Statuses = [HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK],
+            RetryAfter = retryAfter
+        };
+        using var http = new HttpClient(handler) { BaseAddress = new("https://fixture.invalid/") };
+        var clock = new ParkingVisionClock();
+        var cooldown = new ParkingVisionCooldown(clock);
+        var provider = new GeminiStructuredClient(http, "fixture-key", "fixture-model", true);
+        var options = new ParkingVisionOptions(ReadTimeoutSeconds: 5, EnableLocalFallback: false);
+        var image = Source();
+
+        GeminiParkingPlanRecognition NewScope() => new(provider, NullLogger<GeminiParkingPlanRecognition>.Instance, options, cooldown);
+
+        var initial = await NewScope().ReadAsync(image, "image/png", 1, default);
+        Assert.Null(initial.Drawing);
+        Assert.Contains($"{seconds} giây", initial.Message);
+        Assert.Equal(1, handler.Calls);
+
+        clock.Now = clock.Now.AddSeconds(seconds - 1);
+        var blocked = await NewScope().ReadAsync(image, "image/png", 1, default);
+        Assert.Null(blocked.Drawing);
+        Assert.Contains("HTTP 503", blocked.Message);
+        Assert.Contains("1 giây", blocked.Message);
+        Assert.Equal(1, handler.Calls);
+
+        byte[] truncatedPng = [137, 80, 78, 71, 13, 10, 26, 10];
+        await Assert.ThrowsAsync<ParkingFailure>(() => NewScope().ReadAsync(truncatedPng, "image/png", 1, default));
+        Assert.Equal(1, handler.Calls);
+
+        clock.Now = clock.Now.AddSeconds(1);
+        var recovered = await NewScope().ReadAsync(image, "image/png", 1, default);
+        Assert.NotNull(recovered.Drawing);
+        Assert.Equal(8, recovered.Drawing.Shapes.Count(shape => shape.Kind == "SPACE"));
+        Assert.Equal(3, handler.Calls);
+    }
+
+    private sealed class ParkingVisionClock : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = new(2026, 11, 27, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+    [Theory]
+    [InlineData("source.jpg", false)]
+    [InlineData("complex-source.jpg", false)]
+    [InlineData("source.jpg", true)]
+    public async Task Image_outage_returns_native_shapes_after_one_provider_call_and_zero_during_cooldown(string fixture, bool timeout)
+    {
+        using var handler = new VisionResponse(Plan()) { Statuses = [HttpStatusCode.ServiceUnavailable], TimeoutOnCall = timeout ? 1 : 0 };
+        using var http = new HttpClient(handler) { BaseAddress = new("https://fixture.invalid/"), Timeout = TimeSpan.FromMilliseconds(150) };
+        var reader = new GeminiParkingPlanRecognition(new(http, "fixture", "fixture-model", true), NullLogger<GeminiParkingPlanRecognition>.Instance);
+        var path = fixture == "source.jpg" ? Fixture(fixture) : Path.Combine(AppContext.BaseDirectory, "Fixtures", "parking-quality", fixture);
+        var bytes = await File.ReadAllBytesAsync(path);
+
+        var result = await reader.ReadAsync(bytes, "image/jpeg", 1, default);
+        Assert.Equal(1, handler.Calls);
+        Assert.True(result.LocalPreview);
+        Assert.Null(result.Drawing);
+        var preview = Assert.IsType<ParkingDrawing>(result.ReviewDrawing);
+        Assert.NotEmpty(preview.Shapes);
+        if (fixture == "source.jpg")
+        {
+            var bays = preview.Shapes.Where(shape => shape.Kind == "SPACE").ToArray();
+            Assert.Equal(8, bays.Length);
+            Assert.All(bays, shape => Assert.True(shape.NeedsReview));
+            Assert.Equal(2, preview.Shapes.Count(shape => shape.Kind == "WALL"));
+            Assert.Single(preview.Shapes.Where(shape => shape.Kind == "LANE"));
+            Assert.Equal(11, preview.Shapes.Length);
+            ParkingDrawingRules.ValidateSpaceSeparation(preview);
+            var reference = StoredDrawing("b2").Shapes.Where(shape => shape.Kind == "SPACE").ToArray();
+            foreach (var (actual, expected) in bays.Zip(reference))
+                foreach (var corner in ShapeCorners(expected))
+                    Assert.Contains(ShapeCorners(actual), point => Math.Sqrt(Math.Pow(point.X - corner.X, 2) + Math.Pow(point.Y - corner.Y, 2)) < 135);
+        }
+        else
+        {
+            Assert.Contains(preview.Shapes, shape => shape.Kind == "GREEN_ISLAND");
+            Assert.All(preview.Shapes, shape => Assert.Contains(shape.Kind, new[] { "RECT", "LINE", "DIVIDER", "GREEN_ISLAND", "CROSSWALK", "TRAFFIC_ARROW" }));
+        }
+
+        if (!timeout)
+        {
+            var second = await reader.ReadAsync(bytes, "image/jpeg", 1, default);
+            Assert.Equal(1, handler.Calls);
+            Assert.True(second.LocalPreview);
+        }
+    }
+
+    [Fact]
+    public async Task Asphalt_plan_keeps_real_bay_rows_separate_from_zebra_crossings_and_planted_islands()
+    {
+        using var bitmap = new SKBitmap(600, 380);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.White);
+        using var paint = new SKPaint { Color = new SKColor(73, 75, 75) };
+        canvas.DrawRect(30, 40, 450, 305, paint);
+        paint.Color = new SKColor(103, 156, 48);
+        canvas.DrawRect(44, 45, 50, 273, paint);
+        canvas.DrawRect(200, 265, 193, 42, paint);
+        paint.Color = SKColors.Black;
+        canvas.DrawRect(30, 41, 450, 3, paint);
+        paint.Color = SKColors.White;
+        paint.StrokeWidth = 3;
+        canvas.DrawLine(110, 86, 335, 86, paint);
+        for (var i = 0; i <= 5; i++)
+            canvas.DrawLine(110 + i * 45, 86, 110 + i * 45, 172, paint);
+        for (var i = 0; i < 5; i++)
+        {
+            canvas.DrawRect(119 + i * 45, 92, 26, 4, paint);
+            canvas.DrawRect(147 + i * 10, 202, 5, 36, paint);
+            canvas.DrawRect(414, 203 + i * 10, 36, 5, paint);
+            canvas.DrawRect(524 + i * 10, 202, 5, 36, paint);
+        }
+        canvas.DrawRect(315, 217, 28, 7, paint);
+        using var arrow = new SKPathBuilder();
+        arrow.MoveTo(341, 208);
+        arrow.LineTo(365, 220);
+        arrow.LineTo(341, 232);
+        arrow.Close();
+        using var arrowPath = arrow.Detach();
+        canvas.DrawPath(arrowPath, paint);
+        for (var i = 0; i < 5; i++)
+            canvas.DrawRect(252 + i * 23, 251, 12, 2, paint);
+        using var labelTypeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold);
+        using var labelFont = new SKFont(labelTypeface, 18);
+        paint.IsAntialias = true;
+        for (var i = 0; i < 5; i++)
+            canvas.DrawText($"A 0{i + 1}", 132 + i * 45, 135, SKTextAlign.Center, labelFont, paint);
+        for (var i = 0; i < 5; i++)
+        {
+            paint.Color = i % 2 == 0 ? new SKColor(218, 45, 35) : SKColors.White;
+            canvas.DrawRect(340 + i * 10, 186, 10, 3, paint);
+        }
+        using var image = SKImage.FromBitmap(bitmap);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        using var handler = new VisionResponse(Plan());
+        using var http = new HttpClient(handler) { BaseAddress = new("https://fixture.invalid/") };
+        var reader = new GeminiParkingPlanRecognition(new(http, "", "fixture-model", false),
+            NullLogger<GeminiParkingPlanRecognition>.Instance);
+
+        var result = await reader.ReadAsync(encoded.ToArray(), "image/png", 1, default);
+        Assert.True(result.LocalPreview);
+        Assert.Equal(0, handler.Calls);
+        var drawing = Assert.IsType<ParkingDrawing>(result.ReviewDrawing);
+        Assert.Equal(2, drawing.Shapes.Count(shape => shape.Kind == "GREEN_ISLAND"));
+        Assert.Equal(new double[] { 0, 90 }, drawing.Shapes.Where(shape => shape.Kind == "CROSSWALK").Select(shape => shape.Rotation).Order());
+        Assert.Equal(0, Assert.Single(drawing.Shapes, shape => shape.Kind == "TRAFFIC_ARROW").Rotation);
+        Assert.Equal(5, drawing.Shapes.Count(shape => shape.Kind == "WHEEL_STOP"));
+        Assert.Contains(drawing.Shapes, shape => shape.Kind == "LINE");
+        Assert.Contains(drawing.Shapes, shape => shape.Kind == "DASHED_LINE");
+        Assert.Single(drawing.Shapes, shape => shape.Kind == "BARRIER");
+        var bays = drawing.Shapes.Where(shape => shape.Kind == "SPACE").ToArray();
+        Assert.Equal(5, bays.Length);
+        Assert.Equal(new[] { "A01", "A02", "A03", "A04", "A05" }, bays.Select(shape => shape.Label));
+        Assert.All(bays, bay => Assert.True(bay.NeedsReview));
+        ParkingDrawingRules.ValidateSpaceSeparation(drawing);
+
+        // A valid Gemini draft that omitted the barrier must still get the source-supported symbol.
+        var generated = new
+        {
+            isParkingPlan = true,
+            complete = true,
+            objects = bays.Select(bay => new
+            {
+                kind = bay.Kind,
+                label = bay.Label,
+                evidence = "BAY_MARKINGS",
+                points = ShapeCorners(bay).Select(point => new[] { point.Y * 1000 / drawing.Height, point.X * 1000 / drawing.Width }).ToArray(),
+                uncertain = false
+            })
+        };
+        using var modelHandler = new VisionResponse(JsonSerializer.Serialize(generated));
+        using var modelHttp = new HttpClient(modelHandler) { BaseAddress = new("https://fixture.invalid/") };
+        var modelReader = new GeminiParkingPlanRecognition(new(modelHttp, "fixture-key", "fixture-model", true),
+            NullLogger<GeminiParkingPlanRecognition>.Instance);
+        var hybrid = await modelReader.ReadAsync(encoded.ToArray(), "image/png", 1, default);
+        var hybridDrawing = Assert.IsType<ParkingDrawing>(hybrid.Drawing);
+        Assert.Single(hybridDrawing.Shapes, shape => shape.Kind == "BARRIER");
+        Assert.Equal(5, hybridDrawing.Shapes.Count(shape => shape.Kind == "SPACE"));
+        Assert.Equal(2, modelHandler.Calls);
+    }
+    [Fact]
+    public async Task Overload_does_not_spend_another_request_if_too_little_read_time_remains()
+    {
+        using var handler = new VisionResponse(Plan())
+        {
+            Statuses = [HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK],
+            TimeoutOnCall = 2,
+            RetryAfter = "2"
+        };
+        using var http = new HttpClient(handler) { BaseAddress = new("https://fixture.invalid/") };
+        var recognizer = new GeminiParkingPlanRecognition(new(http, "fixture-key", "fixture-model", true),
+            NullLogger<GeminiParkingPlanRecognition>.Instance, new(5, 5, 10, EnableLocalFallback: false));
+
+        var result = await recognizer.ReadAsync(Source(), "image/png", 1, default);
+
+        Assert.Null(result.Drawing);
+        Assert.Equal(1, handler.Calls);
+        Assert.Contains("HTTP 503", result.Message);
     }
     [Fact]
     public async Task A_recoverable_retry_waits_for_the_server_retry_after_before_sending_again()
     {
         using var handler=new VisionResponse(Plan()){Statuses=[HttpStatusCode.ServiceUnavailable,HttpStatusCode.OK],RetryAfter="2"};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.NotNull(result.Drawing);Assert.Equal(3,handler.Calls);
         Assert.True(System.Diagnostics.Stopwatch.GetElapsedTime(handler.Started[0],handler.Started[1])>=TimeSpan.FromSeconds(2));
     }
@@ -145,7 +360,7 @@ public sealed class ParkingVisionRecognitionTests
     public async Task Configuration_errors_are_not_retried(int status)
     {
         using var handler=new VisionResponse(Plan()){Statuses=[(HttpStatusCode)status]};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.Null(result.Drawing);Assert.Equal(1,handler.Calls);
     }
     [Fact]
@@ -160,14 +375,21 @@ public sealed class ParkingVisionRecognitionTests
         var bays=result.Drawing.Shapes.Where(s=>s.Kind=="SPACE").OrderBy(s=>s.Y+s.Height/2).ThenBy(s=>s.X).ToArray();Assert.Equal(8,bays.Length);Assert.Equal(8,bays.Select(s=>s.Label).Distinct().Count());
         for(var i=0;i<8;i++){Assert.InRange(bays[i].X+bays[i].Width/2,(180+i%4*190)*10-.01,(180+i%4*190)*10+.01);Assert.InRange(bays[i].Y+bays[i].Height/2,(i<4?2600:7400)-.01,(i<4?2600:7400)+.01);}
     }
-    [Fact]
-    public async Task A_partial_region_merge_that_overlaps_keeps_the_valid_overview_with_four_calls_maximum()
+    [Theory]
+    [InlineData(false, 4, "2/3 vùng")]
+    [InlineData(true, 3, "1/3 vùng")]
+    public async Task A_partial_region_merge_that_overlaps_keeps_the_valid_overview_with_four_calls_maximum(bool earlyOverload, int calls, string coverage)
     {
         var overview=JsonNode.Parse(Plan())!;overview["planBounds"]=JsonSerializer.SerializeToNode(new[]{0,0,1000,1000});
-        using var handler=new VisionResponse(overview.ToJsonString(),RegionPlan("Đường đi"),RegionPlan("Cây xanh"),RegionPlan("Mặt nước")){Statuses=[HttpStatusCode.OK,HttpStatusCode.OK,HttpStatusCode.ServiceUnavailable,HttpStatusCode.OK]};
+        using var handler=new VisionResponse(overview.ToJsonString(),RegionPlan("Đường đi"),RegionPlan("Cây xanh"),RegionPlan("Mặt nước"))
+        {
+            Statuses = earlyOverload
+                ? [HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.ServiceUnavailable, HttpStatusCode.OK]
+                : [HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.ServiceUnavailable]
+        };
         using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
         var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
-        Assert.NotNull(result.Drawing);Assert.Equal(4,handler.Calls);Assert.Contains("2/3 vùng",result.Message);Assert.Contains("chưa hoàn tất",result.Message);
+        Assert.NotNull(result.Drawing);Assert.Equal(calls,handler.Calls);Assert.Contains(coverage,result.Message);Assert.Contains("chưa hoàn tất",result.Message);
         Assert.Equal(8,result.Drawing.Shapes.Count(s=>s.Kind=="SPACE"));Assert.Contains(result.Drawing.Shapes,s=>s.Kind=="CURVE");
         ParkingDrawingRules.Validate(result.Drawing with{Shapes=result.Drawing.Shapes.Select(s=>s with{NeedsReview=false}).ToArray()},publishing:true);
     }
@@ -278,17 +500,23 @@ public sealed class ParkingVisionRecognitionTests
         Assert.Null(result.Drawing);Assert.Contains("giữ bản nháp",result.Message);
     }
     [Theory]
-    [InlineData("incomplete")][InlineData("outside")][InlineData("unknown")][InlineData("crossed")]
-    public async Task Invalid_ai_geometry_is_not_replaced_by_unreviewed_pixel_regions(string mode)
+    [InlineData("incomplete",8)][InlineData("outside",7)][InlineData("unknown",7)][InlineData("crossed",7)]
+    [InlineData("trace",7)][InlineData("other",7)]
+    public async Task Invalid_ai_geometry_returns_only_renderable_editor_objects_for_review(string mode,int expectedBays)
     {
         var plan=JsonNode.Parse(Plan())!;
         if(mode=="incomplete")plan["complete"]=false;
         if(mode=="outside")plan["objects"]![0]!["points"]![0]![0]=1200;
         if(mode=="unknown")plan["objects"]![0]!["kind"]="EXECUTE_SCRIPT";
+        if(mode=="trace")plan["objects"]![0]!["kind"]="TRACE";
+        if(mode=="other")plan["objects"]![0]!["kind"]="OTHER";
         if(mode=="crossed"){var points=plan["objects"]![0]!["points"]!;var first=points[0]!.DeepClone();points[0]=points[1]!.DeepClone();points[1]=first;}
         using var handler=new VisionResponse(plan.ToJsonString());using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
         var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
         Assert.Null(result.Drawing);Assert.Equal(2,handler.Calls);
+        Assert.NotNull(result.ReviewDrawing);
+        Assert.Equal(expectedBays,result.ReviewDrawing.Shapes.Count(s=>s.Kind=="SPACE"));
+        Assert.All(result.ReviewDrawing.Shapes,shape=>Assert.Contains(shape.Kind,new[]{"SPACE","CURVE"}));
     }
     [Fact]
     public async Task Review_can_repair_a_bad_initial_proposal_and_unconfigured_ai_preserves_the_draft()
@@ -316,7 +544,7 @@ public sealed class ParkingVisionRecognitionTests
         using var handler=new VisionResponse(Plan()){Statuses=[HttpStatusCode.OK,HttpStatusCode.ServiceUnavailable,HttpStatusCode.ServiceUnavailable]};
         using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
         var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
-        Assert.NotNull(result.Drawing);Assert.Equal(8,result.Drawing.Shapes.Count(s=>s.Kind=="SPACE"));Assert.Equal(4,handler.Calls);
+        Assert.NotNull(result.Drawing);Assert.Equal(8,result.Drawing.Shapes.Count(s=>s.Kind=="SPACE"));Assert.Equal(2,handler.Calls);
         Assert.Contains("chưa hoàn tất",result.Message);Assert.DoesNotContain("AI đã đối chiếu",result.Message);
     }
     [Theory]
@@ -325,14 +553,14 @@ public sealed class ParkingVisionRecognitionTests
     {
         using var handler=new VisionResponse(Plan()){Statuses=[(HttpStatusCode)status,HttpStatusCode.OK,HttpStatusCode.OK]};
         using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.NotNull(result.Drawing);Assert.Equal(3,handler.Calls);Assert.Contains("AI đã đối chiếu",result.Message);
     }
     [Fact]
     public async Task First_pass_timeout_reports_reading_the_plan_rather_than_a_review_that_never_started()
     {
         using var handler=new VisionResponse(Plan()){TimeoutOnCall=1};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/"),Timeout=TimeSpan.FromMilliseconds(150)};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.Null(result.Drawing);Assert.Equal(1,handler.Calls);Assert.Contains("đọc sơ đồ",result.Message);Assert.DoesNotContain("lượt đối chiếu",result.Message);
     }
     [Fact]
@@ -347,8 +575,8 @@ public sealed class ParkingVisionRecognitionTests
     {
         using var handler=new VisionResponse(Plan()){Statuses=[HttpStatusCode.ServiceUnavailable,HttpStatusCode.OK],TimeoutOnCall=2};
         using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/"),Timeout=TimeSpan.FromMilliseconds(150)};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
-        Assert.Null(result.Drawing);Assert.Equal(2,handler.Calls);Assert.Contains("Dịch vụ AI tạm thời không sẵn sàng",result.Message);Assert.DoesNotContain("lượt đối chiếu",result.Message);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance, new(EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
+        Assert.Null(result.Drawing);Assert.Equal(2,handler.Calls);Assert.Contains("HTTP 503",result.Message);Assert.DoesNotContain("lượt đối chiếu",result.Message);
     }
     [Fact]
     public async Task Invalid_review_geometry_does_not_discard_an_existing_valid_unconfirmed_draft()
@@ -363,7 +591,7 @@ public sealed class ParkingVisionRecognitionTests
     public async Task Configured_read_deadline_is_enforced_and_reported_before_any_review_starts()
     {
         using var handler=new VisionResponse(Plan()){TimeoutOnCall=1};using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
-        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance,new(0,0,0)).ReadAsync(Source(),"image/png",1,default);
+        var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance,new(0,0,0, EnableLocalFallback: false)).ReadAsync(Source(),"image/png",1,default);
         Assert.Null(result.Drawing);Assert.Equal(1,handler.Calls);Assert.Contains("bước đọc sơ đồ",result.Message);Assert.DoesNotContain("lượt đối chiếu",result.Message);
     }
     [Fact]
@@ -386,10 +614,10 @@ public sealed class ParkingVisionRecognitionTests
     public async Task Details_without_specialized_tools_become_labeled_editable_blocks_beside_the_bays()
     {
         var plan=JsonNode.Parse(Plan())!;var objects=plan["objects"]!.AsArray();
-        objects.Add(JsonNode.Parse("""{"kind":"OTHER","label":"Cầu đi bộ","evidence":"STRUCTURE","points":[[420,100],[420,400],[440,420],[440,100]],"uncertain":false}"""));
+        objects.Add(JsonNode.Parse("""{"kind":"RECT","label":"Cầu đi bộ","evidence":"STRUCTURE","points":[[420,100],[420,400],[440,420],[440,100]],"uncertain":false}"""));
         objects.Add(JsonNode.Parse("""{"kind":"RECT","label":"Mặt nước","evidence":"STRUCTURE","points":[[450,500],[450,700],[550,700],[550,500]],"uncertain":false}"""));
         objects.Add(JsonNode.Parse("""{"kind":"WALL_CIRCLE","label":"Cây xanh","evidence":"STRUCTURE","points":[[450,800],[450,900],[550,900],[550,800]],"uncertain":false}"""));
-        objects.Add(JsonNode.Parse("""{"kind":"OTHER","label":"","evidence":"STRUCTURE","points":[[450,100],[550,300]],"uncertain":true}"""));
+        objects.Add(JsonNode.Parse("""{"kind":"RECT","label":"Chi tiết cần kiểm tra","evidence":"STRUCTURE","points":[[450,100],[550,300]],"uncertain":true}"""));
         using var handler=new VisionResponse(plan.ToJsonString());using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
         var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
         Assert.NotNull(result.Drawing);Assert.Equal(8,result.Drawing.Shapes.Count(s=>s.Kind=="SPACE"));
@@ -402,25 +630,53 @@ public sealed class ParkingVisionRecognitionTests
     public async Task Generic_only_plans_keep_labels_and_can_publish_without_creating_parking_spaces()
     {
         var plan=JsonNode.Parse(Plan())!;var objects=plan["objects"]!.AsArray();objects.Clear();
-        objects.Add(JsonNode.Parse("""{"kind":"OTHER","label":"Vườn hoa","evidence":"STRUCTURE","points":[[100,100],[300,500]],"uncertain":false}"""));
-        foreach(var evidence in new[]{"VEHICLE","DIMENSION","TEXT","UNKNOWN"})objects.Add(JsonNode.Parse($$"""{"kind":"OTHER","label":"Không dựng","evidence":"{{evidence}}","points":[[400,100],[600,500]],"uncertain":false}"""));
+        objects.Add(JsonNode.Parse("""{"kind":"RECT","label":"Vườn hoa","evidence":"STRUCTURE","points":[[100,100],[300,500]],"uncertain":false}"""));
+        foreach(var evidence in new[]{"VEHICLE","DIMENSION","TEXT","UNKNOWN"})objects.Add(JsonNode.Parse($$"""{"kind":"RECT","label":"Không dựng","evidence":"{{evidence}}","points":[[400,100],[600,500]],"uncertain":false}"""));
         using var handler=new VisionResponse(plan.ToJsonString());using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
         var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
         Assert.NotNull(result.Drawing);var block=Assert.Single(result.Drawing.Shapes);Assert.Equal("RECT",block.Kind);Assert.Equal("Vườn hoa",block.Label);
         ParkingDrawingRules.Validate(result.Drawing,publishing:true);
-        using var request=JsonDocument.Parse(handler.Body);Assert.Contains(request.RootElement.GetProperty("generationConfig").GetProperty("responseSchema").GetProperty("properties").GetProperty("objects").GetProperty("items").GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray(),k=>k.GetString()=="OTHER");
+        using var request=JsonDocument.Parse(handler.Body);
+        var kinds=request.RootElement.GetProperty("generationConfig").GetProperty("responseSchema").GetProperty("properties").GetProperty("objects").GetProperty("items").GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(k=>k.GetString());
+        var originalKinds = new[] {"CURVE","DIVIDER","ENTRANCE","EXIT","GATE","LABEL","LANE","LINE","RECT","SPACE","SQUARE","WALL","WALL_CIRCLE","WALL_SQUARE"};
+        Assert.Equal(originalKinds.Concat(ParkingToolCatalog.Additional.Select(tool => tool.Kind)).OrderBy(kind => kind, StringComparer.Ordinal),
+            kinds.OrderBy(kind => kind, StringComparer.Ordinal));
     }
-    [Theory]
-    [InlineData("outside")][InlineData("crossed")][InlineData("bay")]
-    public async Task Generic_blocks_still_require_valid_geometry_and_structure_evidence(string mode)
+
+    [Fact]
+    public async Task Dedicated_symbols_survive_recognition_and_do_not_create_parking_spaces()
     {
-        var plan=JsonNode.Parse(Plan())!;var item=plan["objects"]![0]!;item["kind"]="OTHER";item["evidence"]="STRUCTURE";
-        if(mode=="outside")item["points"]![0]![0]=1200;
-        if(mode=="crossed"){var p=item["points"]!;var first=p[0]!.DeepClone();p[0]=p[1]!.DeepClone();p[1]=first;}
-        if(mode=="bay")item["evidence"]="BAY_MARKINGS";
+        var objects = ParkingToolCatalog.Additional.Select(tool => new
+        {
+            kind = tool.Kind,
+            label = tool.Kind == "TRAFFIC_SIGN" ? "10" : "",
+            evidence = "STRUCTURE",
+            points = tool.Kind == "DASHED_LINE"
+                ? new[] { new[] { 100, 100 }, new[] { 140, 220 } }
+                : new[] { new[] { 100, 240 }, new[] { 100, 280 }, new[] { 140, 280 }, new[] { 140, 240 } },
+            uncertain = false
+        });
+        var json = JsonSerializer.Serialize(new { isParkingPlan = true, complete = true, objects });
+        using var handler = new VisionResponse(json);
+        using var http = new HttpClient(handler) { BaseAddress = new("https://fixture.invalid/") };
+        var result = await new GeminiParkingPlanRecognition(new(http, "fixture-key", "fixture-model", true),
+            NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(), "image/png", 1, default);
+
+        var drawing = Assert.IsType<ParkingDrawing>(result.Drawing);
+        Assert.Equal(ParkingToolCatalog.Additional.Select(tool => tool.Kind), drawing.Shapes.Select(shape => shape.Kind));
+        Assert.Equal("10", Assert.Single(drawing.Shapes, shape => shape.Kind == "TRAFFIC_SIGN").Label);
+        Assert.Equal(2, Assert.Single(drawing.Shapes, shape => shape.Kind == "DASHED_LINE").ControlPoints!.Length);
+        Assert.DoesNotContain(drawing.Shapes, shape => shape.Kind == "SPACE");
+        ParkingDrawingRules.Validate(drawing, publishing: true);
+    }
+    [Fact]
+    public async Task A_plan_with_only_an_unsupported_tool_has_no_editable_preview()
+    {
+        var plan=JsonNode.Parse(Plan())!;
+        plan["objects"]=JsonNode.Parse("""[{"kind":"OTHER","label":"Hình lạ","evidence":"STRUCTURE","points":[[100,100],[300,500]],"uncertain":false}]""");
         using var handler=new VisionResponse(plan.ToJsonString());using var http=new HttpClient(handler){BaseAddress=new("https://fixture.invalid/")};
         var result=await new GeminiParkingPlanRecognition(new(http,"fixture-key","fixture-model",true),NullLogger<GeminiParkingPlanRecognition>.Instance).ReadAsync(Source(),"image/png",1,default);
-        Assert.Null(result.Drawing);Assert.Equal(2,handler.Calls);
+        Assert.Null(result.Drawing);Assert.Null(result.ReviewDrawing);Assert.Equal(2,handler.Calls);
     }
     [Fact]
     public async Task Other_editor_tools_and_unconfirmed_explicit_dimensions_survive_ai_reconstruction()

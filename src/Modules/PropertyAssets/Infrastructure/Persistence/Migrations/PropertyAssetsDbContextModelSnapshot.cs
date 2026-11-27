@@ -640,6 +640,19 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("area_id");
 
+                    b.Property<string>("ListingStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("AVAILABLE")
+                        .HasColumnName("listing_status");
+
+                    b.Property<decimal?>("PriceVnd")
+                        .HasPrecision(18)
+                        .HasColumnType("numeric(18,0)")
+                        .HasColumnName("price_vnd");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -652,6 +665,10 @@ namespace PropFlow.Modules.PropertyAssets.Infrastructure.Persistence.Migrations
 
                     b.ToTable("parking_spaces", "property_assets", t =>
                         {
+                            t.HasCheckConstraint("ck_parking_space_listing_status", "listing_status IN ('AVAILABLE','PROCESSING','SOLD')");
+
+                            t.HasCheckConstraint("ck_parking_space_price", "price_vnd IS NULL OR price_vnd >= 0");
+
                             t.HasCheckConstraint("ck_parking_space_status", "status IN ('AVAILABLE','IN_USE','MAINTENANCE')");
                         });
                 });

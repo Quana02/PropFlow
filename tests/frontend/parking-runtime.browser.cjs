@@ -6,19 +6,32 @@ const chrome=[process.env.RESIDENT_TEST_BROWSER,'C:/Program Files/Google/Chrome/
 let host,browser,socket,port,debugPort,sequence=0,hostOutput='';const pending=new Map();
 const sourceFixture=process.env.PARKING_GEOMETRY_FIXTURE?JSON.parse(fs.readFileSync(process.env.PARKING_GEOMETRY_FIXTURE,'utf8')):null;
 const expectedSpaces=sourceFixture?sourceFixture.shapes.filter(s=>s.kind==='SPACE').length:2;
+const listingRole=process.env.PARKING_LISTING_ROLE;
 const fakes=`(()=>{
  const sourceFixture=${JSON.stringify(sourceFixture)};
+ const listingRole=${JSON.stringify(listingRole || '')};
  const native=fetch.bind(window),id='083485b5-2dcc-45cb-bae4-92fec9b89625',areas=[],requests=[];window.parkingTest={areas,requests,holdRecognition:${process.env.PARKING_FEEDBACK_ONLY==='1'}};
  const png=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII='),x=>x.charCodeAt(0));
  const shape=(kind,label,x,y,w,h)=>({id:crypto.randomUUID(),kind,label,x,y,width:w,height:h,rotation:0});
+ if(listingRole){
+  const shapes=[shape('SPACE','P-01',100,100,100,180),shape('SPACE','P-02',240,100,100,180),shape('SPACE','P-03',380,100,100,180),shape('WALL','Tường',100,70,380,10)];
+  const drawing={width:600,height:400,shapes,infiniteCanvas:true};
+  const spaces=shapes.slice(0,3).map((item,i)=>({id:item.id,number:i+1,status:'AVAILABLE',listingStatus:['AVAILABLE','PROCESSING','SOLD'][i],priceVnd:[12500000,15000000,17000000][i]}));
+  areas.push({id,name:'Bãi đỗ B1',version:crypto.randomUUID(),draft:drawing,published:drawing,spaces,publishedAt:new Date().toISOString()});
+ }
  window.fetch=async(input,init)=>{
   const url=new URL(typeof input==='string'?input:input.url,location.href),p=url.pathname,method=init?.method||'GET';
   if(p.startsWith('/appsettings'))return new Response(JSON.stringify({Api:{BaseUrl:'https://parking-test.invalid/'}}),{headers:{'Content-Type':'application/json'}});
   if(!p.startsWith('/api/')&&!p.startsWith('/hubs/'))return native(input,init);
   requests.push({path:p,method});let value,status=200;
   if(p.endsWith('/auth/csrf'))value={token:'test-only'};
-  else if(p.endsWith('/auth/refresh'))value={accessToken:'test-only.invalid.signature',expiresAt:new Date(Date.now()+3600000).toISOString(),user:{id,username:'parking-test',displayName:'Manager test',role:'MANAGER',permissions:['MANAGE_OPERATIONS'],emailVerified:true,status:'ACTIVE'}};
+  else if(p.endsWith('/auth/refresh'))value={accessToken:'test-only.invalid.signature',expiresAt:new Date(Date.now()+3600000).toISOString(),user:{id,username:'parking-test',displayName:'Kiểm thử bãi đỗ',role:listingRole||'MANAGER',permissions:listingRole==='RESIDENT'?[]:['MANAGE_OPERATIONS'],emailVerified:true,status:'ACTIVE'}};
   else if(p.includes('/current')&&p.includes('building'))value={id,name:'Test condominium',timeZoneId:'Asia/Ho_Chi_Minh'};
+  else if(p==='/api/v1/resident/parking-areas')value=areas.filter(area=>area.published).map(area=>({id:area.id,name:area.name}));
+  else if(p.startsWith('/api/v1/resident/parking-areas/')){
+   const area=areas.find(item=>p.endsWith(item.id));
+   value={id:area.id,name:area.name,drawing:area.published,spaces:area.spaces.map(({status,...space})=>space.listingStatus==='SOLD'?{...space,priceVnd:null}:space)};
+  }
   else if(p.startsWith('/api/v1/parking-areas')){
    const parts=p.split('/'),area=areas.find(x=>x.id===parts[4]);
    let body;if(init?.body&&!(p.endsWith('/import'))){try{body=JSON.parse(await new Response(init.body).text());}catch{}}
@@ -26,6 +39,16 @@ const fakes=`(()=>{
     if(parkingTest.holdRecognition)await new Promise(resolve=>parkingTest.releaseRecognition=resolve);
     if(parkingTest.recognitionFailure==='http')return new Response(JSON.stringify({title:'Dịch vụ nhận diện chưa sẵn sàng.',detail:'Không thể kết nối dịch vụ AI. Vui lòng thử lại sau.',status:503}),{status:503,headers:{'Content-Type':'application/problem+json'}});
     if(parkingTest.recognitionFailure==='unrecognized')return new Response(JSON.stringify({area,recognized:false,message:'Dịch vụ AI tạm thời không sẵn sàng. Tệp gốc và bản nháp hiện tại được giữ nguyên; bạn có thể thử lại hoặc vẽ thủ công.'}),{headers:{'Content-Type':'application/json'}});
+    if(['overlap','partial','local'].includes(parkingTest.recognitionFailure)){
+     const localPreview=parkingTest.recognitionFailure==='local';
+     const partial=parkingTest.recognitionFailure==='partial'||localPreview;
+     const shapes=localPreview&&sourceFixture?sourceFixture.shapes:partial?[shape('RECT','Mặt nước',100,100,100,180)]:[{...shape('SPACE','P-005',100,100,100,180),needsReview:true},{...shape('SPACE','P-006',185,100,100,180),needsReview:true}];
+     const issues=partial?[]:[{code:'overlap',message:'Ô P-005 và P-006 chồng nhau.',shapeIds:shapes.map(item=>item.id)}];
+     const reviewDrawing={...(localPreview&&sourceFixture?sourceFixture:area.draft),shapes,recognitionReview:{checkedObjects:shapes.length,sourceCheckedObjects:shapes.length,refinedObjects:0,unreadRegions:0,stale:false,issues}};
+     area.draftSource={id:crypto.randomUUID(),fileName:'parking.png',contentType:'image/png',page:1};
+     const message=localPreview?'Đã dựng trực tiếp từ nét ảnh.':partial?'AI đã dựng một phần sơ đồ.':'AI vừa dựng 2 ô đỗ. Bạn có thể mở bản AI để chỉnh.';
+     return new Response(JSON.stringify({area,recognized:false,message,reviewDrawing,localPreview}),{headers:{'Content-Type':'application/json'}});
+    }
    }
    if(parts.length===4&&method==='GET')value=areas.map(a=>({id:a.id,name:a.name,published:!!a.published,total:a.spaces.length,available:a.spaces.filter(x=>x.status==='AVAILABLE').length,inUse:a.spaces.filter(x=>x.status==='IN_USE').length,maintenance:a.spaces.filter(x=>x.status==='MAINTENANCE').length}));
    else if(parts.length===4&&method==='POST'){value={id:crypto.randomUUID(),name:body.name,version:crypto.randomUUID(),draft:{width:1600,height:1000,shapes:[],infiniteCanvas:true,scale:{start:{x:0,y:0},end:{x:100,y:0},length:1,unit:"m",confirmed:true}},published:null,spaces:[],draftSource:null,publishedSource:null,publishedAt:null};areas.push(value);}
@@ -34,7 +57,17 @@ const fakes=`(()=>{
    else if(parts[5]==='history')value=[];
    else if(parts[5]==='draft'){area.draft=structuredClone(body.drawing);area.name=body.name;area.version=crypto.randomUUID();value=area;}
    else if(parts[5]==='publish'){area.published=structuredClone(area.draft);area.spaces=area.published.shapes.filter(x=>x.kind==='SPACE').map(x=>area.spaces.find(s=>s.id===x.id)||{id:x.id,status:'AVAILABLE'});area.version=crypto.randomUUID();area.publishedAt=new Date().toISOString();area.publishedSource=area.draftSource;value=area;}
-   else if(parts[5]==='spaces'){area.spaces.find(x=>x.id===parts[6]).status=body.status;area.version=crypto.randomUUID();value=area;}
+   else if(parts[5]==='published'&&method==='DELETE'){
+    if(url.searchParams.get('expectedVersion')!==area.version){status=409;value={title:'Bãi đỗ đã được cập nhật ở phiên khác.'};}
+    else if(area.spaces.some(s=>s.status!=='AVAILABLE')){status=409;value={title:'Chuyển các ô đang sử dụng hoặc bảo trì về Trống trước khi xóa sơ đồ.'};}
+    else{area.published=null;area.publishedSource=null;area.publishedAt=null;area.spaces=[];area.version=crypto.randomUUID();value=area;}
+   }
+   else if(parts[5]==='spaces'){
+    const space=area.spaces.find(x=>x.id===parts[6]);
+    if(parts[7]==='listing'){space.priceVnd=body.priceVnd;space.listingStatus=body.listingStatus;}
+    else space.status=body.status;
+    area.version=crypto.randomUUID();value=area;
+   }
    else if(parts[5]==='recognize')value={area,recognized:true,message:'Đã dựng bản nháp. Kiểm tra bản gốc trước khi xuất bản.'};
    else if(parts[5]==='import'){area.draft=sourceFixture||{width:1000,height:600,digitization:{sourceWidth:1000,sourceHeight:600,threshold:235,candidates:2,retainedInkRatio:1},shapes:[{...shape('SPACE','A-01',100,100,100,180),needsReview:true,outline:[{x:0,y:0},{x:1,y:.1},{x:1,y:1},{x:0,y:.9}]},{...shape('SPACE','A-02',250,100,100,180),needsReview:true},{...shape('TRACE','',50,400,250,100),contours:[[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}],[{x:.1,y:.1},{x:.1,y:.9},{x:.9,y:.9},{x:.9,y:.1}]]},shape('LANE','Lối đi',50,330,850,100),shape('GATE','Cổng',750,480,150,60),shape('WALL','Tường',30,30,900,15)]};area.draftSource={id:crypto.randomUUID(),fileName:'parking.png',contentType:'image/png',page:1};area.version=crypto.randomUUID();value={area,recognized:true,message:'Đã trích nét nguồn; đối chiếu ô trước khi xuất bản.'};}
    else value=area;
@@ -52,14 +85,116 @@ async function stop(child){if(!child||child.exitCode!==null)return;if(process.pl
  for(let i=0;i<300&&!hostOutput.includes('Now listening on:');i++){if(host.exitCode!==null)throw Error('Host exited');await wait(100);}assert.ok(hostOutput.includes('Now listening on:'));
  browser=spawn(chrome,['--headless=new','--ignore-certificate-errors','--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--user-data-dir='+profile,'--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-sync','about:blank'],{windowsHide:true,stdio:'ignore'});
  const active=path.join(profile,'DevToolsActivePort');for(let i=0;i<300&&!fs.existsSync(active);i++)await wait(50);const info=fs.readFileSync(active,'utf8').trim().split(/\r?\n/);debugPort=Number(info[0]);console.log(JSON.stringify({browserPid:browser.pid,debugPort}));
- socket=new WebSocket('ws://127.0.0.1:'+debugPort+info[1]);await once(socket,'open');socket.addEventListener('message',e=>{const m=JSON.parse(e.data),c=pending.get(m.id);if(c){pending.delete(m.id);m.error?c.reject(Error(m.error.message)):c.resolve(m.result);}});
+ socket=new WebSocket('ws://127.0.0.1:'+debugPort+info[1]);await once(socket,'open');socket.addEventListener('message',e=>{const m=JSON.parse(e.data),c=pending.get(m.id);if(c){pending.delete(m.id);m.error?c.reject(Error(m.error.message)):c.resolve(m.result);}if(listingRole&&m.method==='Runtime.consoleAPICalled'&&m.params.type==='error')console.error(m.params.args.map(arg=>arg.value??arg.description).join(' '));});
  const target=await send('Target.createTarget',{url:'about:blank'}),session=(await send('Target.attachToTarget',{targetId:target.targetId,flatten:true})).sessionId;
  const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,userGesture:true},session);if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value;};
- await send('Page.enable',{},session);await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false},session);await send('Page.addScriptToEvaluateOnNewDocument',{source:fakes},session);await send('Page.navigate',{url:'http://127.0.0.1:'+port+'/operations/parking'},session);
+ await send('Page.enable',{},session);if(listingRole)await send('Runtime.enable',{},session);await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false},session);await send('Page.addScriptToEvaluateOnNewDocument',{source:fakes},session);await send('Page.navigate',{url:'http://127.0.0.1:'+port+(listingRole==='RESIDENT'?'/resident/parking':'/operations/parking')},session);
  async function until(expression){for(let i=0;i<400;i++){if(await evaluate(expression))return;await wait(100);}throw Error('DOM wait timed out: '+expression+'; '+await evaluate('document.body.innerText.slice(-1200)'));}
  const click=async text=>{await until(`[...document.querySelectorAll('button')].some(x=>x.innerText.trim()===${JSON.stringify(text)}&&!x.disabled)`);const ok=await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.innerText.trim()===${JSON.stringify(text)}&&!x.disabled);if(!b)return false;b.click();return true})()`);assert.ok(ok,'Button available: '+text);await wait(180);};
  async function field(selector,value){await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(e instanceof HTMLSelectElement?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('change',{bubbles:true}));})()`);await wait(80);}
+ if(listingRole){
+  await until("document.querySelectorAll('.parking-canvas .kind-space').length===3");
+  const info=listingRole==='RESIDENT'?'.resident-parking-info':'.parking-inspector';
+  const text=()=>evaluate(`document.querySelector('${info}')?.innerText ?? ''`);
+  const select=(selector,key='Enter')=>evaluate(`document.querySelector('${selector}').dispatchEvent(new KeyboardEvent('keydown',{key:${JSON.stringify(key)},bubbles:true}))`);
+  const pointer=selector=>evaluate(`(()=>{const body=document.querySelector('${selector} .parking-body'),r=body.getBoundingClientRect();body.dispatchEvent(new PointerEvent('pointerdown',{button:0,bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2}));})()`);
+  await pointer('.listing-available');await until(`document.querySelector('${info}')?.innerText.includes('P-01')`);
+  assert.match(await text(),/STT ô đỗ\s+1/);assert.match(await text(),/12[.\s]500[.\s]000/);
+  await select('.listing-processing',' ');await until(`document.querySelector('${info}')?.innerText.includes('P-02')`);
+  assert.match(await text(),/STT ô đỗ\s+2/);assert.match(await text(),/Đang xử lý/);
+  await pointer('.listing-sold');await select('.listing-sold');await select('.kind-wall');
+  if(listingRole==='RESIDENT'){
+   assert.match(await text(),/P-02/);assert.doesNotMatch(await text(),/P-03/);
+   assert.equal(await evaluate("document.querySelector('.listing-sold').getAttribute('aria-disabled')"),'true');
+   assert.equal(await evaluate("document.querySelector('.listing-sold').hasAttribute('tabindex')"),false);
+   assert.equal(await evaluate("parkingTest.requests.some(r=>r.path.startsWith('/api/v1/parking-areas'))"),false);
+  }else{
+   await until(`document.querySelector('${info}')?.innerText.includes('P-03')`);
+   assert.match(await text(),/17[.\s]000[.\s]000/);
+   await evaluate("document.querySelector('.parking-space-settings').open=true");
+   await field('#parking-listing-price','18000000');
+   await click('Lưu thông tin ô');
+   await until(`document.querySelector('${info}')?.innerText.includes('18.000.000')`);
+   assert.ok(await evaluate("parkingTest.requests.some(r=>r.method==='PUT'&&r.path.endsWith('/listing'))"));
+  }
+  const palette=await evaluate("['available','processing','sold'].map(state=>getComputedStyle(document.querySelector('.listing-'+state+' .parking-body')).fill)");
+  assert.deepEqual(palette,['rgb(220, 252, 231)','rgb(254, 243, 199)','rgb(254, 226, 226)']);
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false},session);
+  await until("document.documentElement.scrollWidth<=innerWidth+2");
+  console.log(JSON.stringify({passed:true,role:listingRole,accessibleSelection:true,prices:true,statusColors:palette,mobile:true}));return;
+ }
  await until("!!document.querySelector('#parking-new')");await field('#parking-new','Bãi đỗ kiểm thử');await click('+ Tạo bãi đỗ');await until("!!document.querySelector('.parking-canvas svg')");
+ const localReview=process.env.PARKING_LOCAL_REVIEW_ONLY==='1';
+ const partialReview=localReview||process.env.PARKING_PARTIAL_REVIEW_ONLY==='1';
+ if(partialReview||process.env.PARKING_OVERLAP_REVIEW_ONLY==='1'){
+  const actualLocal=localReview&&sourceFixture;
+  const localKind=sourceFixture?.shapes.find(shape=>shape.kind==='CROSSWALK')?.kind||sourceFixture?.shapes.find(shape=>shape.kind!=='TRACE')?.kind;
+  const selector=actualLocal?`.kind-${localKind.toLowerCase()}`:partialReview?'.kind-rect':'.kind-space';
+  await evaluate(`parkingTest.recognitionFailure='${localReview?'local':partialReview?'partial':'overlap'}';document.querySelector('.parking-import').open=true`);
+  const fixture=path.join(profile,'parking.png');
+  fs.writeFileSync(fixture,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64'));
+  const doc=await send('DOM.getDocument',{},session);
+  const input=await send('DOM.querySelector',{nodeId:doc.root.nodeId,selector:'.parking-import input[type=file]'},session);
+  await send('DOM.setFileInputFiles',{nodeId:input.nodeId,files:[fixture]},session);
+  await click('Tải tệp và nhận diện');
+  if(localReview){
+   await until("!document.querySelector('dialog[open]')&&document.querySelector('.parking-notice[role=status]')?.textContent.includes('trực tiếp từ nét ảnh')");
+  }else{
+   await until("document.querySelector('dialog[open]')?.textContent.includes('Cần kiểm tra')");
+   assert.equal(await evaluate(`document.querySelectorAll('${selector}').length`),0);
+   await click('Mở bản AI để chỉnh');
+  }
+  await until(actualLocal?`document.querySelectorAll('.parking-canvas .parking-shape').length===${sourceFixture.shapes.length}`:partialReview?"document.querySelectorAll('.kind-rect').length===1":"document.querySelectorAll('.kind-space.has-source-issue').length===2");
+  assert.equal(await evaluate("parkingTest.areas[0].draft.shapes.length"),0);
+  if(actualLocal){
+   for(const kind of new Set(sourceFixture.shapes.map(shape=>shape.kind)))
+    assert.equal(await evaluate(`document.querySelectorAll('.kind-${kind.toLowerCase()}').length`),sourceFixture.shapes.filter(shape=>shape.kind===kind).length);
+   const expectedNotes=sourceFixture.shapes.filter(shape=>shape.kind==='LABEL').map(shape=>shape.label).sort();
+   const visibleNotes=await evaluate("[...document.querySelectorAll('.kind-label text')].filter(label=>getComputedStyle(label).visibility==='visible'&&Number(label.getAttribute('font-size'))*Math.hypot(label.getScreenCTM().a,label.getScreenCTM().b)>10).map(label=>label.textContent).sort()");
+   assert.deepEqual(visibleNotes,expectedNotes);
+   if(process.env.PARKING_SCREENSHOT_DIR){
+    fs.mkdirSync(process.env.PARKING_SCREENSHOT_DIR,{recursive:true});
+    const screenshot=await send('Page.captureScreenshot',{format:'png'},session);
+    fs.writeFileSync(path.join(process.env.PARKING_SCREENSHOT_DIR,'editor.png'),Buffer.from(screenshot.data,'base64'));
+   }
+   await evaluate(`document.querySelector('${selector}').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
+   await until(`!!document.querySelector('${selector}.is-selected')`);
+  }else if(partialReview){
+   await evaluate("(()=>{const body=document.querySelector('.kind-rect .parking-body'),r=body.getBoundingClientRect();body.dispatchEvent(new PointerEvent('pointerdown',{button:0,bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2}));})()");
+   await until("!!document.querySelector('.kind-rect.is-selected')");
+  }else{
+   await click('Chọn đối tượng cần kiểm tra');await until("document.querySelectorAll('.kind-space.is-selected').length===2");
+  }
+  await click('Xuất bản sơ đồ');
+  await until("document.querySelector('[role=alert]')?.textContent.includes('lưu nháp trước khi xuất bản')");
+  assert.equal(await evaluate("parkingTest.requests.some(r=>r.path.endsWith('/publish')||r.path.endsWith('/draft'))"),false);
+  await click('Về bản nháp đã lưu');await until(`document.querySelectorAll('${selector}').length===0`);
+  console.log(JSON.stringify({passed:true,localReview,partialReview,resultSelectable:true,publishBlocked:true,savedDraftPreserved:true}));return;
+ }
+ if(process.env.PARKING_REMOVE_PUBLISHED_ONLY==='1'){
+  await evaluate(`(()=>{
+   const area=parkingTest.areas[0],id=crypto.randomUUID();
+   area.draft.shapes=[{id,kind:'SPACE',label:'P-001',x:100,y:100,width:100,height:180,rotation:0}];
+   area.published=structuredClone(area.draft);area.publishedAt=new Date().toISOString();
+   area.spaces=[{id,status:'IN_USE'}];
+   document.querySelector('button[aria-label="Về màn hình quản lý"]').click();
+  })()`);
+  await until("!!document.querySelector('.parking-map .kind-space')");
+  await click('Xóa sơ đồ đã xuất bản');await until("!!document.querySelector('dialog[open]')");
+  await click('Hủy');await until("!document.querySelector('dialog[open]')");
+  assert.equal(await evaluate("parkingTest.requests.filter(r=>r.method==='DELETE').length"),0);
+
+  await click('Xóa sơ đồ đã xuất bản');await until("!!document.querySelector('dialog[open]')");
+  await click('Xóa sơ đồ');await until("document.querySelector('.parking-notice.is-error')?.textContent.includes('về Trống')");
+  assert.ok(await evaluate("!!document.querySelector('.parking-map .kind-space')"));
+
+  await evaluate("parkingTest.areas[0].spaces[0].status='AVAILABLE'");
+  await click('Tải lại');await click('Xóa sơ đồ đã xuất bản');await until("!!document.querySelector('dialog[open]')");
+  await click('Xóa sơ đồ');await until("document.querySelector('.parking-notice[role=status]')?.textContent.includes('Đã xóa sơ đồ')");
+  assert.ok(await evaluate("!document.querySelector('.parking-map')&&document.querySelector('.parking-lot.active').textContent.includes('Chưa xuất bản sơ đồ')"));
+  await click('Mở trình vẽ');await until("!!document.querySelector('.parking-studio-editor .kind-space')");
+  console.log(JSON.stringify({passed:true,cancellationPreservedDrawing:true,conflictShown:true,removedDrawing:true,draftPreserved:true}));return;
+ }
  if(process.env.PARKING_GUIDES_ONLY==='1'){
   const clientPoints=async(a,b)=>evaluate(`(()=>{const m=document.querySelector('.parking-canvas svg').getScreenCTM(),a=new DOMPoint(${a.x},${a.y}).matrixTransform(m),b=new DOMPoint(${b.x},${b.y}).matrixTransform(m);return {a:{x:a.x,y:a.y},b:{x:b.x,y:b.y}}})()`);
   let held;const begin=async(a,b,alt=false)=>{held={...(await clientPoints(a,b)),modifiers:alt?1:0};await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,modifiers:held.modifiers,...held.a},session);await send('Input.dispatchMouseEvent',{type:'mouseMoved',buttons:1,modifiers:held.modifiers,...held.b},session);await wait(100);};const release=async()=>{await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,modifiers:held.modifiers,...held.b},session);await wait(120);};const drag=async(a,b,alt=false)=>{await begin(a,b,alt);await release();};
@@ -76,11 +211,36 @@ async function stop(child){if(!child||child.exitCode!==null)return;if(process.pl
   console.log(JSON.stringify({passed:true,liveAlignment:true,liveMetres:true,altBypass:true,toggleGuides:true,equalGaps:true,groupSnap:true,undo:true,persists:true}));return;
  }
  await click('Căn thông minh');
- if(process.env.PARKING_MANUAL_ONLY==='1'){
+ if(process.env.PARKING_MANUAL_ONLY==='1'||process.env.PARKING_SYMBOLS_ONLY==='1'){
   assert.ok(await evaluate("location.pathname.endsWith('/editor')"),'Editing has its own route');
   assert.equal(await evaluate("document.querySelectorAll('.app-shell,.app-header,nav,footer,.parking-lots').length"),0,'Studio has no application header, navigation, footer or lot list');
   const workspace=await evaluate("(()=>{const b=document.querySelector('.parking-canvas').getBoundingClientRect();return {height:b.height,bodyScroll:document.documentElement.scrollHeight-innerHeight}})()");assert.ok(workspace.height>500&&workspace.bodyScroll<=2,'Canvas occupies the viewport without page scrolling');
   const gesture=async(a,b)=>{await evaluate("document.querySelector('.parking-canvas').scrollIntoView({block:'center',behavior:'instant'})");await wait(80);const p=await evaluate(`(()=>{const m=document.querySelector('.parking-canvas svg').getScreenCTM(),a=new DOMPoint(${a.x},${a.y}).matrixTransform(m),b=new DOMPoint(${b.x},${b.y}).matrixTransform(m);return {a:{x:a.x,y:a.y},b:{x:b.x,y:b.y}}})()`);await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,...p.a},session);await send('Input.dispatchMouseEvent',{type:'mouseMoved',buttons:1,...p.b},session);await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,...p.b},session);};
+  if(process.env.PARKING_SYMBOLS_ONLY==='1'){
+   const symbols=[
+    ['CROSSWALK','Vạch qua đường','path'],['SIDEWALK','Lối đi bộ / vỉa hè','rect'],
+    ['TRAFFIC_ARROW','Mũi tên lưu thông','path'],['DASHED_LINE','Vạch đứt nét','path'],['TRAFFIC_SIGN','Biển báo','ellipse'],
+    ['ROUNDABOUT','Vòng xuyến','ellipse'],['NO_PARKING','Vùng cấm đỗ','rect'],['WHEEL_STOP','Gờ chặn bánh','path'],
+    ['PILLAR','Cột kết cấu','rect'],['GREEN_ISLAND','Đảo / dải cây xanh','rect'],['TREE','Cây bóng mát','ellipse'],
+    ['BARRIER','Thanh chắn barie','path'],['GUARD_BOOTH','Chốt bảo vệ','path'],['RAMP','Dốc lên / xuống','rect'],
+    ['STAIRS','Thang bộ','path'],['ELEVATOR','Thang máy','path'],['LIGHT','Đèn chiếu sáng','ellipse']
+   ];
+   for(const [index,[kind,label,tag]] of symbols.entries()){
+    await click(label);
+    const x=100+(index%6)*210,y=110+Math.floor(index/6)*245;
+    await gesture({x,y},{x:x+140,y:y+100});
+    const selector=`.kind-${kind.toLowerCase()}.is-selected .parking-body`;
+    await until(`document.querySelector('${selector}')?.localName==='${tag}'`);
+   }
+   await click('Lưu nháp');
+   await until(`parkingTest.areas[0].draft.shapes.length===${symbols.length}`);
+   assert.deepEqual(await evaluate('parkingTest.areas[0].draft.shapes.map(s=>s.kind)'),symbols.map(([kind])=>kind));
+   assert.equal(await evaluate("parkingTest.areas[0].draft.shapes.find(s=>s.kind==='DASHED_LINE').controlPoints.length"),2);
+   await click('Xuất bản sơ đồ');await until("!!document.querySelector('dialog[open]')");await click('Xuất bản');
+   await until(`parkingTest.areas[0].published?.shapes.length===${symbols.length}`);
+   assert.equal(await evaluate('parkingTest.areas[0].spaces.length'),0);
+   console.log(JSON.stringify({passed:true,editableSymbols:symbols.length,published:true,managedSpaces:0}));return;
+  }
   const tools=[['Đường thẳng','LINE',80,100,300,100],['Đường cong','CURVE',400,180,620,180],['Chữ nhật','RECT',700,80,920,220],['Hình vuông','SQUARE',1000,80,1160,220],['Phân cách chữ T','DIVIDER',180,320,280,470],['Vật cản chữ nhật','WALL',400,300,620,470],['Vật cản vuông','WALL_SQUARE',720,320,850,450],['Vật cản tròn','WALL_CIRCLE',1000,320,1140,450],['Lối vào','ENTRANCE',120,620,310,710],['Lối ra','EXIT',430,620,620,710],['Cổng','GATE',750,580,1000,730]];
   let count=0;for(const [name,kind,x,y,ex,ey] of tools){await click(name);await gesture({x,y},{x:ex,y:ey});count++;await until(`document.querySelectorAll('.parking-canvas [data-id]').length===${count}`);assert.equal(await evaluate(`document.querySelectorAll('.parking-canvas .kind-${kind.toLowerCase()}').length`),1);}
   const shiftPick=async(kind,shift=true)=>{const p=await evaluate(`(()=>{const b=document.querySelector('.parking-canvas .kind-${kind} .parking-body'),r=b.getBBox(),p=new DOMPoint(r.x+r.width/2,r.y+r.height/2).matrixTransform(b.getScreenCTM());return {x:p.x,y:p.y}})()`);await send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',buttons:1,clickCount:1,modifiers:shift?8:0,...p},session);await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',buttons:0,clickCount:1,modifiers:shift?8:0,...p},session);};

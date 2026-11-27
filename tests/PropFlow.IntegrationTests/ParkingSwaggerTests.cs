@@ -28,6 +28,11 @@ public sealed partial class ParkingHttpTests
         Assert.Contains(properties.EnumerateObject(),x=>x.Name.Equals("expectedVersion",StringComparison.OrdinalIgnoreCase));
         Assert.Contains(properties.EnumerateObject(),x=>x.Name.Equals("page",StringComparison.OrdinalIgnoreCase));
         Assert.True(paths.GetProperty("/api/v1/parking-areas/{id}/publish").TryGetProperty("post",out _));
+        var removal = paths.GetProperty("/api/v1/parking-areas/{id}/published").GetProperty("delete");
+        Assert.Contains(removal.GetProperty("parameters").EnumerateArray(), parameter =>
+            parameter.GetProperty("name").GetString() == "expectedVersion" && parameter.GetProperty("in").GetString() == "query");
+        Assert.True(paths.GetProperty("/api/v1/parking-areas/{id}/spaces/{space}/listing").TryGetProperty("put", out _));
+        Assert.True(paths.GetProperty("/api/v1/resident/parking-areas/{id}").TryGetProperty("get", out _));
         await app.StopAsync();
     }
 

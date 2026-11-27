@@ -45,3 +45,8 @@
 @keyframes parking-ai-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.parking-ai-spinner{animation:none}}
 .parking-quality-review{display:grid;gap:8px;padding:12px;border:1px solid var(--app-line,#dbe5ef);border-radius:12px;background:var(--app-soft,var(--app-surface,#fff))}.parking-quality-review p{margin:0}.parking-quality-review ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}.parking-quality-review li{padding-top:10px;border-top:1px solid var(--app-line,#dbe5ef)}.parking-quality-review li button{margin-top:6px}.parking-quality-warning{color:var(--app-text,#17243a);font-weight:650}
+.parking-listing-details { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .4rem .75rem; margin: .8rem 0; }
+.parking-listing-details dt { color: var(--app-muted); }
+.parking-listing-details dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.parking-space-settings { border-top: 1px solid var(--app-line); padding-top: .75rem; margin-top: .75rem; }
+.parking-space-settings summary { cursor: pointer; font-weight: 600; margin-bottom: .5rem; }

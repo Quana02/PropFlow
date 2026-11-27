@@ -6,7 +6,7 @@ using SkiaSharp;
 
 namespace PropFlow.Modules.PropertyAssets.Infrastructure.Parking;
 
-public sealed record ParkingGeometryResult(ParkingDrawing Drawing, byte[] Preview, byte[] Ink, int PixelWidth, int PixelHeight);
+public sealed record ParkingGeometryResult(ParkingDrawing Drawing, byte[] Preview, byte[] Ink, int PixelWidth, int PixelHeight, byte[]? StrongInk = null);
 
 /// <summary>Decodes the reference and reconstructs clean, independently editable diagram objects.</summary>
 public static class ParkingPlanGeometry
@@ -17,18 +17,149 @@ public static class ParkingPlanGeometry
         ct.ThrowIfCancellationRequested();
         using var bitmap=Rasterize(content,mime,page);
         var w=bitmap.Width;var h=bitmap.Height;var pixels=bitmap.Pixels;
-        var ink=new byte[w*h];const int threshold=235;
+        var ink=new byte[w*h];var strongInk=new byte[w*h];const int threshold=235;
         for(var i=0;i<ink.Length;i++)
         {
             if((i&65535)==0)ct.ThrowIfCancellationRequested();
             var p=pixels[i];var gray=(p.Red*299+p.Green*587+p.Blue*114)/1000;
-            ink[i]=(byte)((gray*p.Alpha/255+255-p.Alpha)<threshold?1:0);
+            var onWhite=gray*p.Alpha/255+255-p.Alpha;
+            ink[i]=(byte)(onWhite<threshold?1:0);
+            strongInk[i]=(byte)(onWhite<192?1:0);
         }
         var canvasWidth=(int)Math.Round(w*10000d/Math.Max(w,h));var canvasHeight=(int)Math.Round(h*10000d/Math.Max(w,h));
-        var shapes=reconstruct?ParkingObjectReconstruction.Build(ink,w,h,canvasWidth,canvasHeight,ct):[];
-        var drawing=ParkingDrawingRules.Validate(new(canvasWidth,canvasHeight,shapes,null,new(w,h,threshold,shapes.Count(x=>x.Kind=="SPACE"),0)));
+        var drawing=ParkingDrawingRules.Validate(new(canvasWidth,canvasHeight,[],null,new(w,h,threshold,0,0)));
         using var image=SKImage.FromBitmap(bitmap);using var encoded=image.Encode(SKEncodedImageFormat.Png,100);
-        return new(drawing,encoded.ToArray(),ink,w,h);
+        var source = new ParkingGeometryResult(drawing,encoded.ToArray(),ink,w,h,strongInk);
+        return reconstruct ? source with { Drawing = Reconstruct(source, ct) } : source;
+    }
+
+    internal static ParkingDrawing Reconstruct(ParkingGeometryResult source, CancellationToken ct, bool includeLinework = false)
+    {
+        var drawing = source.Drawing;
+        var (ink, strongInk, width, height) = includeLinework ? PreviewInk(source, ct) : (source.Ink, source.Ink, source.PixelWidth, source.PixelHeight);
+        var (colorShapes, cadInk) = includeLinework ? ParkingColorSymbols.Read(source.Preview, drawing, width, height, ct) : (Array.Empty<ParkingShape>(), null);
+        if (cadInk is not null) ink = strongInk = cadInk;
+        var paintedBays = colorShapes.Count(shape => shape.Kind == "SPACE");
+        var angledRows = includeLinework && paintedBays < 4 ? new ParkingAngledRowRecognition(ink, width, height, drawing).Recognize(ct) : null;
+        ParkingShape[] shapes;
+        if (paintedBays >= 4 && cadInk is null)
+            shapes = colorShapes.Take(ParkingDrawingRules.MaxObjects).ToArray();
+        else if (angledRows is not null)
+            shapes = angledRows;
+        else
+        {
+            var linework = ParkingObjectReconstruction.Build(ink, width, height, drawing.Width, drawing.Height, ct, includeLinework, strongInk);
+            if (paintedBays >= 4)
+            {
+                var bays = colorShapes.Where(shape => shape.Kind == "SPACE").ToArray();
+                linework = linework.Where(shape => shape.Kind != "SPACE" &&
+                    !bays.Any(bay => shape.X >= bay.X - 5 && shape.Y >= bay.Y - 5 &&
+                        shape.X + shape.Width <= bay.X + bay.Width + 5 && shape.Y + shape.Height <= bay.Y + bay.Height + 5)).ToArray();
+                shapes = colorShapes.Concat(linework).Take(ParkingDrawingRules.MaxObjects).ToArray();
+            }
+            else
+                shapes = linework.Concat(colorShapes.Where(shape => shape.Kind is not ("SPACE" or "WHEEL_STOP")))
+                    .Take(ParkingDrawingRules.MaxObjects).ToArray();
+        }
+        return ParkingDrawingRules.Validate(drawing with
+        {
+            Shapes = shapes,
+            Digitization = drawing.Digitization is { } info ? info with { Candidates = shapes.Count(shape => shape.Kind == "SPACE") } : null
+        });
+    }
+
+    internal static ParkingDrawing AddSourceDetails(ParkingDrawing drawing, ParkingGeometryResult source, double[]? planBounds, CancellationToken ct)
+    {
+        var existingBays = drawing.Shapes.Where(shape => shape.Kind == "SPACE").ToArray();
+        if (existingBays.Length < 4) return drawing;
+        var ratio = Math.Min(1, 700d / Math.Max(source.PixelWidth, source.PixelHeight));
+        var width = (int)Math.Round(source.PixelWidth * ratio);
+        var height = (int)Math.Round(source.PixelHeight * ratio);
+        var (observed, _) = ParkingColorSymbols.Read(source.Preview, drawing, width, height, ct);
+        var observedBays = observed.Where(shape => shape.Kind == "SPACE").ToArray();
+        if (observedBays.Length < 4) return drawing;
+        var matches = observedBays.Select(bay => (Local: bay, Existing: existingBays.FirstOrDefault(known =>
+            SimilarFootprint(known, bay, .65)))).Where(pair => pair.Existing is not null).ToArray();
+        if (matches.Length < Math.Max(4, Math.Min(observedBays.Length, existingBays.Length) * .65)) return drawing;
+
+        var result = drawing.Shapes.ToList();
+        var labels = existingBays.Select(shape => shape.Label).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var reported = drawing.RecognitionReview?.Issues.SelectMany(issue => issue.ShapeIds).ToHashSet() ?? [];
+        foreach (var (local, existing) in matches)
+        {
+            if (existing!.Label.Length != 5 || !existing.Label.StartsWith("P-", StringComparison.Ordinal) ||
+                !existing.Label.Skip(2).All(char.IsAsciiDigit) || local.Label.StartsWith("P-", StringComparison.Ordinal) ||
+                reported.Contains(existing.Id) || !labels.Add(local.Label)) continue;
+            var index = result.FindIndex(shape => shape.Id == existing.Id);
+            result[index] = existing with { Label = local.Label };
+        }
+        foreach (var shape in observed)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (result.Count >= ParkingDrawingRules.MaxObjects) break;
+            if (shape.Kind is not ("BARRIER" or "GUARD_BOOTH" or "WHEEL_STOP" or "TRAFFIC_SIGN" or "ROUNDABOUT" or "NO_PARKING" or "LABEL" or "DASHED_LINE") ||
+                !InsidePlan(shape) || result.Any(old => (old.Kind == shape.Kind || old.Kind is "RECT" or "SQUARE" or "WALL" or "GATE") &&
+                    SimilarFootprint(old, shape, .35))) continue;
+            result.Add(shape);
+        }
+        if (drawing.Shapes.SequenceEqual(result)) return drawing;
+        var report = drawing.RecognitionReview;
+        return ParkingDrawingRules.Validate(drawing with
+        {
+            Shapes = result.ToArray(),
+            RecognitionReview = report is null ? null : report with { CheckedObjects = result.Count }
+        });
+
+        bool InsidePlan(ParkingShape shape)
+        {
+            if (!ParkingSceneRegion.CanTile(source, planBounds)) return true;
+            var x = (shape.X + shape.Width / 2) * 1000 / drawing.Width;
+            var y = (shape.Y + shape.Height / 2) * 1000 / drawing.Height;
+            return y >= planBounds![0] && x >= planBounds[1] && y <= planBounds[2] && x <= planBounds[3];
+        }
+    }
+
+    private static bool SimilarFootprint(ParkingShape a, ParkingShape b, double threshold)
+    {
+        var first = Bounds(a);
+        var second = Bounds(b);
+        var intersection = Math.Max(0, Math.Min(first.Right, second.Right) - Math.Max(first.Left, second.Left)) *
+            Math.Max(0, Math.Min(first.Bottom, second.Bottom) - Math.Max(first.Top, second.Top));
+        return intersection >= threshold * ((first.Right - first.Left) * (first.Bottom - first.Top) +
+            (second.Right - second.Left) * (second.Bottom - second.Top) - intersection);
+
+        static (double Left, double Top, double Right, double Bottom) Bounds(ParkingShape shape)
+        {
+            if (shape.Rotation == 0 && shape.Outline is null)
+                return (shape.X, shape.Y, shape.X + shape.Width, shape.Y + shape.Height);
+            var corners = ParkingSourceGeometry.Corners(shape);
+            return (corners.Min(point => point.X), corners.Min(point => point.Y), corners.Max(point => point.X), corners.Max(point => point.Y));
+        }
+    }
+
+    private static (byte[] Ink, byte[] StrongInk, int Width, int Height) PreviewInk(ParkingGeometryResult source, CancellationToken ct)
+    {
+        const int maxPreviewSide = 700;
+        var ratio = (double)maxPreviewSide / Math.Max(source.PixelWidth, source.PixelHeight);
+        var sourceStrongInk=source.StrongInk??source.Ink;
+        if (ratio >= 1) return (source.Ink, sourceStrongInk, source.PixelWidth, source.PixelHeight);
+
+        var width = Math.Max(1, (int)Math.Round(source.PixelWidth * ratio));
+        var height = Math.Max(1, (int)Math.Round(source.PixelHeight * ratio));
+        var ink = new byte[width * height];
+        var strongInk = new byte[ink.Length];
+        for (var y = 0; y < height; y++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var row = (int)((y + .5) * source.PixelHeight / height) * source.PixelWidth;
+            for (var x = 0; x < width; x++)
+            {
+                var pixel=row+(int)((x+.5)*source.PixelWidth/width);
+                ink[y*width+x]=source.Ink[pixel];
+                strongInk[y*width+x]=sourceStrongInk[pixel];
+            }
+        }
+        return (ink,strongInk,width,height);
     }
 
     private static SKBitmap Rasterize(byte[] content,string mime,int page)

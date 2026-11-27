@@ -19,7 +19,14 @@ public sealed class ParkingSpaceConfiguration:IEntityTypeConfiguration<ParkingSp
 {
     public void Configure(EntityTypeBuilder<ParkingSpace> b)
     {
-        b.ToTable("parking_spaces",x=>x.HasCheckConstraint("ck_parking_space_status","status IN ('AVAILABLE','IN_USE','MAINTENANCE')"));
+        b.ToTable("parking_spaces", table =>
+        {
+            table.HasCheckConstraint("ck_parking_space_status", "status IN ('AVAILABLE','IN_USE','MAINTENANCE')");
+            table.HasCheckConstraint("ck_parking_space_listing_status", "listing_status IN ('AVAILABLE','PROCESSING','SOLD')");
+            table.HasCheckConstraint("ck_parking_space_price", "price_vnd IS NULL OR price_vnd >= 0");
+        });
+        b.Property(x => x.PriceVnd).HasPrecision(18, 0);
+        b.Property(x => x.ListingStatus).HasMaxLength(20).IsRequired().HasDefaultValue("AVAILABLE");
         b.HasKey(x=>x.Id);b.Property(x=>x.Id).ValueGeneratedNever();b.HasIndex(x=>new{x.AreaId,x.Archived});b.Property(x=>x.Status).HasMaxLength(20).IsRequired();Names.Apply(b);
     }
 }
