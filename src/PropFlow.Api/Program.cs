@@ -258,6 +258,8 @@ builder.Services.AddDbContext<PropFlow.Modules.RemoteOnlineSign.Infrastructure.P
 builder.Services.AddHttpClient("RemoteContractCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.IRemotePdfStorage, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.CloudinaryRemotePdfStorage>();
 builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.IPdfSignatureStamper, PropFlow.Modules.RemoteOnlineSign.Application.PdfSignatureStamper>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.IRemoteContractStatusNotifier, PropFlow.Modules.RemoteOnlineSign.Presentation.RemoteContractStatusNotifier>();
+builder.Services.AddHostedService<PropFlow.Modules.RemoteOnlineSign.Application.RemoteOnlineSignExpirationWorker>();
 
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
     options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
@@ -719,6 +721,7 @@ app.UseRateLimiter();
 app.MapControllers();
 app.MapHub<PropFlow.Modules.Maintenance.Presentation.Hubs.MaintenanceHub>("/hubs/maintenance", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.ServiceRequests.Presentation.Hubs.ServiceRequestHub>("/hubs/service-requests", options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PropFlow.Modules.RemoteOnlineSign.Presentation.RemoteOnlineSignHub>("/hubs/remote-online-sign", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.AnnouncementHub>("/hubs/announcements", options => options.CloseOnAuthenticationExpiration = true);
 app.MapHub<PropFlow.Modules.Communication.Presentation.ResidentNotificationHub>("/hubs/resident-notifications", options => options.CloseOnAuthenticationExpiration = true)
     .RequireAuthorization(policy => policy.RequireRole(SystemRoleCodes.Resident));

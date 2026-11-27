@@ -40,7 +40,8 @@ public sealed class RemoteContractService(
     ILogger<RemoteContractService> logger,
     IAccountAccess accountAccess,
     IInternalAccountDirectory accounts,
-    IResidentAccountScope residents, IRemoteContractCodeGenerator codes)
+    IResidentAccountScope residents, IRemoteContractCodeGenerator codes,
+    IRemoteContractStatusNotifier? statusNotifier = null)
 {
     private const string OtpPurpose = "REMOTE_ONLINE_SIGN";
     private const int MaxPdfBytes = 20 * 1024 * 1024;
@@ -182,6 +183,25 @@ public sealed class RemoteContractService(
         if (c.SigningMode == RemoteSigningMode.PRE_SIGNED_INVESTOR && (roles.Count != 1 || roles[0] != SignatureRole.RESIDENT)) throw new RemoteContractException(400, "resident_field_required", "PDF ký sẵn cần đúng một vùng ký cư dân.");
         c.Status = RemoteContractStatus.PENDING_RESIDENT_SIGNATURE; await AuditAsync(id, actor, c.SigningMode == RemoteSigningMode.INVESTOR_AND_RESIDENT ? "CONTRACT_SENT_FOR_RESIDENT_SIGNATURE" : "CONTRACT_SENT_FOR_INVESTOR_SIGNATURE"); await db.SaveChangesAsync(ct);
     }
+    public async Task DeleteDraftAsync(Guid actor, Guid id, CancellationToken ct)
+    {
+        db.ChangeTracker.Clear();
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var contract = await LockAccessibleAsync(actor, true, id, ct);
+        if (contract.Status != RemoteContractStatus.DRAFT) throw new RemoteContractException(409, "contract_not_draft", "Chỉ hợp đồng bản nháp mới có thể xóa.");
+        if (await db.SigningSessions.AnyAsync(x => x.ContractId == id && x.FinalizedAt != null, ct)
+            || await db.Documents.AnyAsync(x => x.ContractId == id && x.IsFinal, ct))
+            throw new RemoteContractException(409, "contract_not_draft", "Hợp đồng đã có chữ ký hoặc tài liệu hoàn tất, không thể xóa.");
+        var documentKeys = await db.Documents.Where(x => x.ContractId == id).Select(x => x.StorageKey).ToListAsync(ct);
+        await AuditAsync(id, actor, "CONTRACT_DRAFT_DELETED");
+        db.SigningSessions.RemoveRange(await db.SigningSessions.Where(x => x.ContractId == id).ToListAsync(ct));
+        db.SignatureFields.RemoveRange(await db.SignatureFields.Where(x => x.ContractId == id).ToListAsync(ct));
+        db.Documents.RemoveRange(await db.Documents.Where(x => x.ContractId == id).ToListAsync(ct));
+        db.Contracts.Remove(contract);
+        try { await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); }
+        catch (DbUpdateConcurrencyException) { throw new RemoteContractException(409, "metadata_concurrency_conflict", "Dữ liệu hợp đồng đã thay đổi. Vui lòng tải lại."); }
+        foreach (var key in documentKeys) await CleanupAsync(key, ct);
+    }
     public async Task<SigningChallenge> BeginSigningAsync(Guid actor, bool isAdmin, Guid id, BeginSignature input, CancellationToken ct)
     {
         ValidateSignature(input); var snapshot = await AccessibleAsync(actor, isAdmin, id, ct); EnsureModeSelected(snapshot); EnsureSigningDeadline(snapshot); var role = RequiredRole(snapshot, isAdmin); var source = await LoadVerifiedSourceAsync(snapshot, ct); Guid sessionId; string binding; uint contractVersion; DateTimeOffset requestMarker;
@@ -212,10 +232,12 @@ public sealed class RemoteContractService(
         if (contract.Status != RemoteContractStatus.PENDING_RESIDENT_SIGNATURE) throw new RemoteContractException(409, "contract_not_pending", "Hợp đồng chưa sẵn sàng để từ chối.");
         EnsureSigningDeadline(contract);
         contract.Status = RemoteContractStatus.REJECTED;
+        contract.MetadataUpdatedAt = DateTimeOffset.UtcNow;
         await InvalidateUnfinishedSessionsAsync(id, ct);
         await AuditAsync(id, actor, "CONTRACT_REJECTED", JsonSerializer.Serialize(new { reason = trimmed, residentUserId = actor, previousStatus = RemoteContractStatus.PENDING_RESIDENT_SIGNATURE.ToString(), deadline = contract.Deadline }));
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        await NotifyStatusChangedAsync(contract, RemoteContractStatus.PENDING_RESIDENT_SIGNATURE, ct);
     }
     public async Task<RemoteContractSummary> ReassignResidentAsync(Guid actor, Guid id, ReassignRemoteResident input, CancellationToken ct)
     {
@@ -327,6 +349,7 @@ public sealed class RemoteContractService(
             {
                 db.Documents.Add(new ContractDocument { ContractId = lockedContract.Id, StorageKey = stored.Key, Sha256 = stored.Sha256, Size = stored.Length, MimeType = "application/pdf", IsFinal = true });
                 lockedContract.Status = RemoteContractStatus.COMPLETED;
+                lockedContract.MetadataUpdatedAt = DateTimeOffset.UtcNow;
                 await AuditAsync(lockedContract.Id, lockedSession.SignerId, "RESIDENT_SIGNATURE_FINALIZED");
                 await AuditAsync(lockedContract.Id, lockedSession.SignerId, "CONTRACT_COMPLETED");
             }
@@ -335,6 +358,8 @@ public sealed class RemoteContractService(
             lockedSession.ClearSignaturePayload();
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
+            if (role == SignatureRole.RESIDENT)
+                await NotifyStatusChangedAsync(lockedContract, RemoteContractStatus.PENDING_RESIDENT_SIGNATURE, ct);
             return ToSummary(lockedContract);
         }
         catch
@@ -359,9 +384,11 @@ public sealed class RemoteContractService(
             || contract.Deadline is not { } deadline || deadline > DateTimeOffset.UtcNow) return;
         var previous = contract.Status;
         contract.Status = RemoteContractStatus.EXPIRED;
+        contract.MetadataUpdatedAt = DateTimeOffset.UtcNow;
         await AuditAsync(contract.Id, contract.CreatorId, "CONTRACT_EXPIRED", JsonSerializer.Serialize(new { previousStatus = previous.ToString(), deadline }));
         await InvalidateUnfinishedSessionsAsync(contract.Id, ct);
         await db.SaveChangesAsync(ct);
+        await NotifyStatusChangedAsync(contract, previous, ct);
     }
     private async Task ExpireOverdueAsync(Guid actor, bool admin, CancellationToken ct)
     {
@@ -369,14 +396,55 @@ public sealed class RemoteContractService(
         var overdue = await db.Contracts.Where(x => x.Deadline != null && x.Deadline <= now
             && (x.Status == RemoteContractStatus.PENDING_INVESTOR_SIGNATURE || x.Status == RemoteContractStatus.PENDING_RESIDENT_SIGNATURE)
             && (admin ? x.CreatorId == actor : x.ResidentId == actor)).ToListAsync(ct);
+        var changes = new List<(RemoteContract Contract, RemoteContractStatus Previous)>();
         foreach (var contract in overdue)
         {
             var previous = contract.Status;
             contract.Status = RemoteContractStatus.EXPIRED;
+            contract.MetadataUpdatedAt = DateTimeOffset.UtcNow;
+            changes.Add((contract, previous));
             await AuditAsync(contract.Id, contract.CreatorId, "CONTRACT_EXPIRED", JsonSerializer.Serialize(new { previousStatus = previous.ToString(), contract.Deadline }));
             await InvalidateUnfinishedSessionsAsync(contract.Id, ct);
         }
-        if (overdue.Count != 0) await db.SaveChangesAsync(ct);
+        if (overdue.Count != 0)
+        {
+            await db.SaveChangesAsync(ct);
+            foreach (var (contract, previous) in changes)
+                await NotifyStatusChangedAsync(contract, previous, ct);
+        }
+    }
+    public async Task<int> ExpireDueContractsAsync(int batchSize, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ids = await db.Contracts.AsNoTracking()
+            .Where(x => x.Deadline != null && x.Deadline <= now
+                && (x.Status == RemoteContractStatus.PENDING_INVESTOR_SIGNATURE || x.Status == RemoteContractStatus.PENDING_RESIDENT_SIGNATURE))
+            .OrderBy(x => x.Deadline).Select(x => x.Id).Take(batchSize).ToListAsync(ct);
+        var expired = 0;
+        foreach (var id in ids)
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var contract = db.Database.IsRelational()
+                ? await db.Contracts.FromSqlInterpolated($"SELECT c.*, c.xmin FROM remote_online_sign.contracts AS c WHERE c.\"Id\" = {id} FOR UPDATE").SingleOrDefaultAsync(ct)
+                : await db.Contracts.SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (contract is null || contract.Deadline is not { } deadline || deadline > DateTimeOffset.UtcNow
+                || contract.Status is not (RemoteContractStatus.PENDING_INVESTOR_SIGNATURE or RemoteContractStatus.PENDING_RESIDENT_SIGNATURE))
+            {
+                await transaction.CommitAsync(ct);
+                continue;
+            }
+            var previous = contract.Status;
+            contract.Status = RemoteContractStatus.EXPIRED;
+            contract.MetadataUpdatedAt = DateTimeOffset.UtcNow;
+            await AuditAsync(contract.Id, contract.CreatorId, "CONTRACT_EXPIRED", JsonSerializer.Serialize(new { previousStatus = previous.ToString(), contract.Deadline }));
+            await InvalidateUnfinishedSessionsAsync(contract.Id, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            expired++;
+            await NotifyStatusChangedAsync(contract, previous, ct);
+        }
+        return expired;
     }
     public async Task<RemoteContractSummary> RenewDeadlineAsync(Guid actor, Guid id, RenewRemoteDeadline input, CancellationToken ct)
     {
@@ -435,6 +503,18 @@ public sealed class RemoteContractService(
     {
         var staleSessions = await db.SigningSessions.Where(x => x.ContractId == contractId && x.FinalizedAt == null).ToListAsync(ct);
         foreach (var session in staleSessions) { session.ExpiresAt = DateTimeOffset.UtcNow; session.ClearSignaturePayload(); }
+    }
+    private async Task NotifyStatusChangedAsync(RemoteContract contract, RemoteContractStatus previous, CancellationToken ct)
+    {
+        if (statusNotifier is null || previous == contract.Status) return;
+        try
+        {
+            await statusNotifier.NotifyAsync(new(contract.Id, previous.ToString(), contract.Status.ToString(), contract.Revision, contract.MetadataUpdatedAt.ToUniversalTime()), ct);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Remote contract status notification deferred for {ContractId}.", contract.Id);
+        }
     }
     private async Task<RemoteContractStatus> StatusBeforeExpiryAsync(RemoteContract contract, CancellationToken ct)
     {

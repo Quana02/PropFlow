@@ -47,3 +47,10 @@
 .remote-reassign-item:disabled{opacity:.55;cursor:not-allowed}
 
 .remote-reassign-badge{display:inline-block;margin-left:.45rem;padding:.1rem .45rem;border-radius:999px;font-size:.68rem;font-style:normal;font-weight:700;color:var(--pf-accent,#0284c7);background:color-mix(in srgb,var(--pf-accent,#0284c7) 12%,transparent);vertical-align:middle}
+
+.remote-delete-action{color:var(--pf-danger,#b42318)}
+.remote-delete-action:hover{color:var(--pf-danger,#b42318);background:color-mix(in srgb,var(--pf-danger,#b42318) 10%,transparent)}
+.remote-delete-danger{border:0;border-radius:.6rem;padding:.55rem 1rem;font-weight:600;color:#fff;background:var(--pf-danger,#b42318);cursor:pointer}
+.remote-delete-danger:hover:not(:disabled){filter:brightness(1.08)}
+.remote-delete-danger:disabled{opacity:.55;cursor:not-allowed}
+:where(html[data-theme="dark"]) .remote-delete-danger{color:#2b0d0d}
