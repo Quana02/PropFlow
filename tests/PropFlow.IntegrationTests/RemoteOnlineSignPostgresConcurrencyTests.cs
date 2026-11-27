@@ -80,6 +80,28 @@ public sealed class RemoteOnlineSignPostgresConcurrencyTests : IAsyncLifetime
     private RemoteOnlineSignDbContext CreateDb() => new(new DbContextOptionsBuilder<RemoteOnlineSignDbContext>()
         .UseNpgsql(connectionString!, x => x.MigrationsHistoryTable("__EFMigrationsHistory", "remote_online_sign")).Options);
 
+    [RemotePostgresFact]
+    public async Task Field_update_waits_for_contract_lock_and_rejects_active_signing_session()
+    {
+        var owner=Guid.NewGuid();var contract=new RemoteContract {CreatorId=owner,SigningMode=RemoteSigningMode.INVESTOR_AND_RESIDENT};
+        await using(var seed=CreateDb())
+        {
+            seed.Contracts.Add(contract);
+            seed.SigningSessions.Add(new(){ContractId=contract.Id,SignerId=owner,Role=SignatureRole.INVESTOR,ExpiresAt=DateTimeOffset.UtcNow.AddMinutes(5)});
+            await seed.SaveChangesAsync();
+        }
+        await using var locker=CreateDb();await using var transaction=await locker.Database.BeginTransactionAsync();
+        await locker.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM remote_online_sign.contracts WHERE \"Id\"={contract.Id} FOR UPDATE");
+        await using var writer=CreateDb();
+        var update=CreateService(writer,new RacingStorage()).SetFieldsAsync(owner,contract.Id,
+            [new(SignatureRole.INVESTOR,1,10,10,100,30),new(SignatureRole.RESIDENT,1,10,50,100,30)],default);
+        await Task.Delay(300);Assert.False(update.IsCompleted);
+        await transaction.CommitAsync();
+        var error=await Assert.ThrowsAsync<RemoteContractException>(()=>update);
+        Assert.Equal("signing_in_progress",error.Code);
+        Assert.Empty(await writer.SignatureFields.AsNoTracking().ToArrayAsync());
+    }
+
     private static RemoteContractService CreateService(RemoteOnlineSignDbContext db, RacingStorage storage) =>
         new(db, storage, new FakeOtp(), new PdfSignatureStamper(), NullLogger<RemoteContractService>.Instance,
             new ResidentAccess(), new Accounts(), new Residents(), new RemoteContractCodeGenerator(db));

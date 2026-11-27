@@ -398,7 +398,8 @@ public class ModuleBoundaryTests
             "../Modules/AiRecommendation/PropFlow.Modules.AiRecommendation.csproj",
             "../Modules/AiChatbot/PropFlow.Modules.AiChatbot.csproj",
             "../Modules/Communication/PropFlow.Modules.Communication.csproj",
-            "../Modules/Reporting/PropFlow.Modules.Reporting.csproj"
+            "../Modules/Reporting/PropFlow.Modules.Reporting.csproj",
+            "../Modules/RemoteOnlineSign/PropFlow.Modules.RemoteOnlineSign.csproj"
         };
 
         Assert.Equal(expectedReferences.Length, projectReferences.Count);

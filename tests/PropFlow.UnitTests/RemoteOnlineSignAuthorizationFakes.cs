@@ -37,7 +37,7 @@ internal sealed class RemoteTestResidentScope(Func<Guid, bool>? active = null, I
     public Task<IReadOnlyDictionary<Guid, ResidentAccountScopeItem>> GetByAccountIdsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken ct) =>
         Task.FromResult<IReadOnlyDictionary<Guid, ResidentAccountScopeItem>>(userIds.Where(active).Distinct().ToDictionary(id => id, id => new ResidentAccountScopeItem(Guid.NewGuid(), id, "TEST", "Test resident", null, true, [])));
     public Task<ResidentAccountScopePage> SearchAsync(string? search, int pageIndex, int pageSize, CancellationToken ct) =>
-        Task.FromResult(new ResidentAccountScopePage(items.Where(x => string.IsNullOrWhiteSpace(search) || x.FullName.Contains(search, StringComparison.OrdinalIgnoreCase) || x.ResidentCode.Contains(search, StringComparison.OrdinalIgnoreCase) || x.ContactEmail?.Contains(search, StringComparison.OrdinalIgnoreCase) == true).Take(pageSize).ToArray(), items.Count, pageIndex));
+        Task.FromResult(new ResidentAccountScopePage(items.Where(x => string.IsNullOrWhiteSpace(search) || x.FullName.Contains(search, StringComparison.OrdinalIgnoreCase) || x.ResidentCode.Contains(search, StringComparison.OrdinalIgnoreCase) || x.ContactEmail?.Contains(search, StringComparison.OrdinalIgnoreCase) == true).Skip((pageIndex-1)*pageSize).Take(pageSize).ToArray(), items.Count, pageIndex));
     public Task<Guid?> FindActiveAccountAsync(Guid residentId, CancellationToken ct) => Task.FromResult<Guid?>(null);
     public Task<bool> LockActiveLinkAsync(Guid residentId, Guid userId, CancellationToken ct) => Task.FromResult(false);
 }

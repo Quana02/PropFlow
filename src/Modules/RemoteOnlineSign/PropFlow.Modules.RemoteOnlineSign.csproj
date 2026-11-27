@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net8.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Fonts/Allura.ttf" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../Administration.Contracts/PropFlow.Modules.Administration.Contracts.csproj" />
     <ProjectReference Include="../Authentication.Contracts/PropFlow.Modules.Authentication.Contracts.csproj" />

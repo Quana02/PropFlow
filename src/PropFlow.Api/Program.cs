@@ -472,6 +472,7 @@ builder.Services.AddHostedService<PricingChangeWorker>();
 builder.Services.AddScoped<OperationalNoticeDispatcher>();
 builder.Services.AddHostedService<OperationalNoticeWorker>();
 builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("Authentication:Mail"));
+builder.Services.Configure<PropFlow.Modules.Communication.Infrastructure.FinanceMailOptions>(builder.Configuration.GetSection("FinanceEmail"));
 builder.Services.AddHostedService<BillingCycleWorker>();
 builder.Services.AddHostedService<PropFlow.Modules.Communication.Infrastructure.FinanceEmailWorker>();
 builder.Services.AddPropFlowAuthentication(builder.Configuration);
