@@ -42,6 +42,14 @@ public sealed class ParkingPostgresTests
             Assert.Equal(409,(await Assert.ThrowsAsync<ParkingFailure>(()=>Call(x=>x.PublishAsync(area.Id,new(area.Version),actor,default)))).Status);
             var saved=await Call(x=>x.GetAsync(area.Id,default));Assert.Equal(shape.Id,Assert.Single(saved.Published!.Shapes.Where(x=>x.Kind=="SPACE")).Id);Assert.Equal("IN_USE",Assert.Single(saved.Spaces).Status);Assert.Equal(scale,saved.Published.Scale);
             await using(var db=new PropertyAssetsDbContext(options)){Assert.Equal(1,await db.Set<ParkingRevision>().CountAsync());Assert.Equal(5,await db.Set<ParkingAction>().CountAsync());}
+            var listing = await Call(x => x.UpdateListingAsync(area.Id, shape.Id,
+                new(saved.Version, 12_500_000m, ParkingListingStatus.Processing), actor, default));
+            Assert.Equal("IN_USE", Assert.Single(listing.Spaces).Status);
+            var residentDrawing = await Call(x => x.GetPublishedAsync(area.Id, default));
+            Assert.NotNull(residentDrawing);
+            Assert.Equal(new PublishedParkingSpace(shape.Id, 1, 12_500_000m, ParkingListingStatus.Processing),
+                Assert.Single(residentDrawing.Spaces));
+            Assert.DoesNotContain(residentDrawing.Drawing.Shapes, item => item.Kind == "TRACE");
         }
         finally{await TestDatabaseSafety.DropAsync(admin,name);}
     }

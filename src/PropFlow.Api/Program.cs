@@ -318,6 +318,7 @@ builder.Services.AddScoped<ISharedFacilityCatalog, SharedFacilityCatalog>();
 builder.Services.AddScoped<FacilityGuideService>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.IParkingStore, PropFlow.Modules.PropertyAssets.Infrastructure.Parking.EfParkingStore>();
 builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.ParkingWorkspace>();
+builder.Services.AddSingleton<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionCooldown>();
 builder.Services.AddHttpClient("ParkingPlanGemini", (services, client) =>
 {
     var ai = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatAiOptions>>().Value;
@@ -331,7 +332,8 @@ builder.Services.AddScoped<PropFlow.Modules.PropertyAssets.Application.Parking.I
         new PropFlow.Shared.GeminiStructuredClient(services.GetRequiredService<IHttpClientFactory>().CreateClient("ParkingPlanGemini"),
             ai.ApiKey, builder.Configuration["Parking:Ai:Model"] ?? ai.AnswerModel, ai.Enabled),
         services.GetRequiredService<ILogger<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.GeminiParkingPlanRecognition>>(),
-        builder.Configuration.GetSection("Parking:Ai").Get<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionOptions>());
+        builder.Configuration.GetSection("Parking:Ai").Get<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionOptions>(),
+        services.GetRequiredService<PropFlow.Modules.PropertyAssets.Infrastructure.Parking.ParkingVisionCooldown>());
 });
 builder.Services.AddScoped<IFacilityGuideSource>(sp => sp.GetRequiredService<FacilityGuideService>());
 builder.Services.AddOptions<PropFlow.Modules.AiRecommendation.Application.FacilityDiscovery.FacilityRecommendationOptions>()

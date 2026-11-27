@@ -1,0 +1,142 @@
+@page "/resident/parking"
+@attribute [Authorize(Roles = "RESIDENT")]
+@layout PropFlow.Web.Client.Features.Resident.Portal.Components.ResidentPortalLayout
+@using PropFlow.Modules.PropertyAssets.Contracts
+@using PropFlow.Web.Client.Features.Facility.Components
+@using PropFlow.Web.Client.Features.Facility.Models
+@using PropFlow.Web.Client.Features.Facility.Services
+@inject ParkingApi Api
+@implements IDisposable
+
+<PageTitle>Bãi đỗ xe — PropFlow</PageTitle>
+
+<section class="resident-parking" aria-busy="@(loading ? "true" : "false")">
+    <header class="resident-parking-header">
+        <div>
+            <a href="/resident">← Dịch vụ cư dân</a>
+            <h1>Bãi đỗ xe</h1>
+        </div>
+        <button type="button" disabled="@loading" @onclick="ReloadAsync">Tải lại</button>
+    </header>
+
+    @if (error is not null) { <p role="alert" class="parking-feedback glass-panel">@error</p> }
+    @if (loading) { <p role="status" class="parking-feedback glass-panel">Đang tải sơ đồ…</p> }
+    else if (error is null && areas.Length == 0) { <p class="parking-feedback glass-panel">Ban quản lý chưa xuất bản sơ đồ bãi đỗ.</p> }
+
+    @if (areas.Length > 1)
+    {
+        <div class="resident-parking-areas" role="group" aria-label="Chọn bãi đỗ xe">
+            @foreach (var item in areas)
+            {
+                <button type="button" aria-pressed="@(item.Id == current?.Id ? "true" : "false")" disabled="@loading"
+                        @onclick="() => LoadAsync(item.Id)">@item.Name</button>
+            }
+        </div>
+    }
+
+    @if (current is { } area)
+    {
+        <div class="resident-parking-layout">
+            <section class="resident-parking-map glass-panel" aria-label="Sơ đồ bãi đỗ">
+                <h2>@area.Name</h2>
+                <div class="resident-parking-controls">
+                    <ParkingListingLegend />
+                    <div class="resident-parking-tools" role="group" aria-label="Khung nhìn sơ đồ">
+                        <button type="button" aria-label="Thu nhỏ" @onclick='() => MapAction("zoom-out")'>−</button>
+                        <button type="button" aria-label="Phóng to" @onclick='() => MapAction("zoom-in")'>+</button>
+                        <button type="button" @onclick='() => MapAction("fit")'>Vừa khung</button>
+                        <button type="button" @onclick='() => MapAction("tool", "pan")'>Kéo bản đồ</button>
+                        <button type="button" @onclick='() => MapAction("tool", "select")'>Chọn ô</button>
+                    </div>
+                </div>
+                <ParkingCanvas @key="area.Id" @ref="canvas" Drawing="area.Drawing" Spaces="mapSpaces"
+                               ShowListings="true" BlockSoldSpaces="true" Selected="SelectSpace" Failure="ShowCanvasError" />
+            </section>
+            <aside class="resident-parking-info glass-panel" aria-live="polite">
+                <h2>Thông tin ô đỗ</h2>
+                @if (selected is { } space)
+                {
+                    <strong class="resident-space-label">@area.Drawing.Shapes.First(shape => shape.Id == space.Id).Label</strong>
+                    <dl>
+                        <dt>STT ô đỗ</dt><dd>@space.Number</dd>
+                        <dt>Giá niêm yết</dt><dd>@ParkingListingPresentation.Price(space.PriceVnd)</dd>
+                        <dt>Trạng thái</dt><dd>@ParkingListingPresentation.Label(space.ListingStatus)</dd>
+                    </dl>
+                }
+                else if (area.Spaces.Length == 0) { <p>Sơ đồ này chưa có ô đỗ.</p> }
+                else if (area.Spaces.All(space => space.ListingStatus == ParkingListingStatus.Sold)) { <p>Tất cả các ô đã được mua.</p> }
+                else { <p>Chọn một ô màu xanh hoặc vàng để xem giá và số thứ tự.</p> }
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    private readonly CancellationTokenSource lifetime = new();
+    private PublishedParkingAreaSummary[] areas = [];
+    private PublishedParkingArea? current;
+    private PublishedParkingSpace? selected;
+    private ParkingSpaceView[] mapSpaces = [];
+    private ParkingCanvas? canvas;
+    private bool loading;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private Task ReloadAsync() => LoadAsync(current?.Id, refreshList: true);
+
+    private async Task LoadAsync(Guid? id, bool refreshList = false)
+    {
+        if (loading) return;
+        loading = true;
+        error = null;
+        selected = null;
+        current = null;
+
+        try
+        {
+            if (refreshList)
+            {
+                var list = await Api.ListPublishedAsync(lifetime.Token);
+                if (!list.IsSuccess || list.Data is null)
+                {
+                    error = list.Message ?? "Chưa tải được danh sách bãi đỗ.";
+                    return;
+                }
+                areas = list.Data;
+                if (!areas.Any(area => area.Id == id)) id = areas.FirstOrDefault()?.Id;
+            }
+
+            if (id is not { } areaId) return;
+            var result = await Api.GetPublishedAsync(areaId, lifetime.Token);
+            if (!result.IsSuccess || result.Data is null)
+            {
+                error = result.Message ?? "Chưa tải được sơ đồ. Vui lòng tải lại.";
+                return;
+            }
+
+            current = result.Data;
+            mapSpaces = current.Spaces.Select(space =>
+                new ParkingSpaceView(space.Id, "", space.Number, space.PriceVnd, space.ListingStatus)).ToArray();
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        finally { loading = false; }
+    }
+
+    private void SelectSpace(Guid? id)
+    {
+        if (loading || current is null) return;
+        selected = current.Spaces.SingleOrDefault(space => space.Id == id && space.ListingStatus != ParkingListingStatus.Sold);
+    }
+
+    private Task MapAction(string action, string? value = null) =>
+        canvas?.ActionAsync(action, value) ?? Task.CompletedTask;
+
+    private void ShowCanvasError(string message) => error = message;
+
+    public void Dispose()
+    {
+        lifetime.Cancel();
+        lifetime.Dispose();
+    }
+}

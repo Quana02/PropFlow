@@ -1,9 +1,18 @@
 // Numeric diagram geometry only; no arbitrary SVG or executable content is stored in drawings.
 export const shapeNames = { SPACE: 'Ô đỗ', LANE: 'Lối đi', LINE: 'Đường thẳng', CURVE: 'Đường cong', RECT: 'Chữ nhật', SQUARE: 'Hình vuông', DIVIDER: 'Phân cách chữ T', WALL: 'Vật cản chữ nhật', WALL_SQUARE: 'Vật cản vuông', WALL_CIRCLE: 'Vật cản tròn', ENTRANCE: 'Lối vào', EXIT: 'Lối ra', GATE: 'Cổng', LABEL: 'Chú thích' };
-export const squareKinds = new Set(['SQUARE', 'WALL_SQUARE', 'WALL_CIRCLE']);
-export const pathKinds = new Set(['LINE', 'CURVE', 'DIVIDER', 'GATE', 'ENTRANCE', 'EXIT']);
+Object.assign(shapeNames, {
+  CROSSWALK: 'Vạch qua đường', SIDEWALK: 'Lối đi bộ / vỉa hè', TRAFFIC_ARROW: 'Mũi tên lưu thông',
+  DASHED_LINE: 'Vạch đứt nét', TRAFFIC_SIGN: 'Biển báo', ROUNDABOUT: 'Vòng xuyến',
+  NO_PARKING: 'Vùng cấm đỗ', WHEEL_STOP: 'Gờ chặn bánh', PILLAR: 'Cột kết cấu',
+  GREEN_ISLAND: 'Đảo / dải cây xanh', TREE: 'Cây bóng mát', BARRIER: 'Thanh chắn barie',
+  GUARD_BOOTH: 'Chốt bảo vệ', RAMP: 'Dốc lên / xuống', STAIRS: 'Thang bộ', ELEVATOR: 'Thang máy', LIGHT: 'Đèn chiếu sáng'
+});
+export const ellipseKinds = new Set(['WALL_CIRCLE', 'TREE', 'ROUNDABOUT', 'TRAFFIC_SIGN', 'LIGHT']);
+export const squareKinds = new Set(['SQUARE', 'WALL_SQUARE', ...ellipseKinds]);
+export const twoPointKinds = new Set(['LINE', 'DASHED_LINE']);
+export const pathKinds = new Set([...twoPointKinds, 'CURVE', 'DIVIDER', 'GATE', 'ENTRANCE', 'EXIT', 'TRAFFIC_ARROW', 'CROSSWALK', 'WHEEL_STOP', 'BARRIER', 'GUARD_BOOTH', 'STAIRS', 'ELEVATOR']);
 export const normalizeAngle = value => ((value % 360) + 360) % 360;
-export const overlayKinds = new Set(['LABEL','ENTRANCE','EXIT','GATE','LANE']);
+export const overlayKinds = new Set(['LABEL','ENTRANCE','EXIT','GATE','LANE','CROSSWALK','TRAFFIC_ARROW','DASHED_LINE','TRAFFIC_SIGN','ROUNDABOUT','LIGHT','WHEEL_STOP']);
 export const maxCoordinate = 1e9;
 export function worldPoint(shape, point) {
   const a = shape.rotation * Math.PI / 180, x = (point.x - .5) * shape.width, y = (point.y - .5) * shape.height;
@@ -18,7 +27,7 @@ export function pointFrame(points) {
   return { x, y, width, height, rotation: 0, controlPoints: points.map(p => ({ x: (p.x - x) / width, y: (p.y - y) / height })) };
 }
 export function drawnGeometry(kind, start, end, canvasWidth, canvasHeight, infinite = false) {
-  if (kind === 'LINE' || kind === 'CURVE') {
+  if (twoPointKinds.has(kind) || kind === 'CURVE') {
     if (Math.hypot(end.x - start.x, end.y - start.y) < 4) return null;
     const points = [start, end];
     if (kind === 'CURVE') {
@@ -46,12 +55,29 @@ export function boundedPointFrame(points, canvasWidth, canvasHeight, infinite = 
 }
 export function shapePath(shape) {
   const { x, y, width: w, height: h } = shape;
-  if (shape.kind === 'LINE' || shape.kind === 'CURVE') {
+  if (twoPointKinds.has(shape.kind) || shape.kind === 'CURVE') {
     const points = shape.controlPoints.map(p => ({ x: x + p.x * w, y: y + p.y * h }));
-    return shape.kind === 'LINE' ? `M${points[0].x} ${points[0].y}L${points[1].x} ${points[1].y}` : `M${points[0].x} ${points[0].y}Q${points[1].x} ${points[1].y} ${points[2].x} ${points[2].y}`;
+    return twoPointKinds.has(shape.kind) ? `M${points[0].x} ${points[0].y}L${points[1].x} ${points[1].y}` : `M${points[0].x} ${points[0].y}Q${points[1].x} ${points[1].y} ${points[2].x} ${points[2].y}`;
   }
   if (shape.kind === 'DIVIDER') return `M${x} ${y}H${x + w}M${x + w / 2} ${y}V${y + h}`;
   if (shape.kind === 'GATE') return `M${x + w * .08} ${y + h}V${y + h * .15}H${x + w * .18}V${y + h}ZM${x + w * .82} ${y + h}V${y + h * .65}H${x + w * .92}V${y + h}ZM${x + w * .18} ${y + h * .18}L${x + w * .88} ${y}L${x + w * .9} ${y + h * .12}L${x + w * .18} ${y + h * .3}Z`;
+  const point = (u, v) => `${x + u * w} ${y + v * h}`;
+  const segment = (a, b, c, d) => `M${point(a, b)}L${point(c, d)}`;
+  const box = (a = 0, b = 0, c = 1, d = 1) => `M${point(a, b)}H${x + c * w}V${y + d * h}H${x + a * w}Z`;
+  switch (shape.kind) {
+    case 'CROSSWALK':
+      return Array.from({ length: 5 }, (_, i) => box(i * .21, 0, i * .21 + .16, 1)).join('');
+    case 'WHEEL_STOP':
+      return box() + segment(.14, 0, .14, 1) + segment(.86, 0, .86, 1);
+    case 'BARRIER':
+      return box(0, 0, .10, 1) + box(.10, .08, 1, .52) + [.28, .48, .68, .88].map(u => segment(u, .08, u - .10, .52)).join('');
+    case 'GUARD_BOOTH':
+      return box() + segment(.15, .3, .85, .3) + `M${point(.35, 1)}V${y + h * .56}H${x + w * .65}V${y + h}`;
+    case 'STAIRS':
+      return box() + [1, 2, 3, 4, 5].map(i => segment(0, i / 6, 1, i / 6)).join('');
+    case 'ELEVATOR':
+      return box() + box(.18, .13, .82, .87) + segment(.50, .13, .50, .87);
+  }
   const points = [[0, .32], [.62, .32], [.62, 0], [1, .5], [.62, 1], [.62, .68], [0, .68]];
   return points.map(([u, v], i) => `${i ? 'L' : 'M'}${x + (shape.kind === 'EXIT' ? 1 - u : u) * w} ${y + v * h}`).join('') + 'Z';
 }
@@ -78,7 +104,7 @@ export function selectInRectangle(shapes, start, end) {
 }
 export function shapeBounds(shape) {
     let points;
-    if (shape.kind === 'WALL_CIRCLE') points = [{x:shape.x,y:shape.y+shape.height/2},{x:shape.x+shape.width,y:shape.y+shape.height/2},{x:shape.x+shape.width/2,y:shape.y},{x:shape.x+shape.width/2,y:shape.y+shape.height}];
+    if (ellipseKinds.has(shape.kind)) points = [{x:shape.x,y:shape.y+shape.height/2},{x:shape.x+shape.width,y:shape.y+shape.height/2},{x:shape.x+shape.width/2,y:shape.y},{x:shape.x+shape.width/2,y:shape.y+shape.height}];
     else if (shape.controlPoints) {
       const controls = shape.controlPoints.map(p => worldPoint(shape, p));
       points = [controls[0], controls.at(-1)];
