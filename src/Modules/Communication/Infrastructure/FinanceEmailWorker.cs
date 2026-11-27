@@ -10,6 +10,7 @@ using PropFlow.Modules.Communication.Infrastructure.Persistence;
 namespace PropFlow.Modules.Communication.Infrastructure;
 public sealed class FinanceMailOptions
 {
+    public bool Enabled { get; set; } = true;
     public string Host { get; set; } = "";
     public int Port { get; set; } = 587;
     public string From { get; set; } = "";
@@ -23,6 +24,13 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        // Operational switch for finance delivery only. Authentication/OTP uses its own worker.
+        // Leave the durable queue untouched so pausing never claims delivery or loses notices.
+        if (!config.Value.Enabled)
+        {
+            logger.LogInformation("Finance email delivery is disabled; queued messages are retained.");
+            return;
+        }
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Clamp(config.Value.PollSeconds, 1, 600)));
         try { while (await timer.WaitForNextTickAsync(ct)) {
             var options = config.Value;
@@ -39,7 +47,7 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
                         continue;
                     }
                     // Demo accounts use reserved domains and must never send to external mailboxes.
-                    if (address.EndsWith(".example", StringComparison.OrdinalIgnoreCase) || address.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase)) {
+                    if (IsReservedDemoAddress(address)) {
                         item.NextAttemptAt = DateTimeOffset.UtcNow.AddDays(1); continue;
                     }
                     try {
@@ -59,5 +67,18 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
             } catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
               catch (Exception ex) { logger.LogWarning("Finance email dispatch failed ({Type}).", ex.GetType().Name); }
         } } catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    private static bool IsReservedDemoAddress(string address)
+    {
+        if (!MailAddress.TryCreate(address, out var parsed)) return false;
+        var host = parsed.Host.TrimEnd('.');
+        return host.Equals("example", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("invalid", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".example", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase)
+            || new[] { "example.com", "example.net", "example.org" }.Any(domain =>
+                host.Equals(domain, StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
     }
 }
