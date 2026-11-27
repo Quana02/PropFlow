@@ -14,15 +14,19 @@ public sealed class ServiceRequestBilling(
 {
     public async Task<ServiceRequestSettlementSnapshot?> IssueAsync(ServiceRequestInvoiceCommand command, CancellationToken ct)
     {
+        if (command.ReworkCount < 0 || command.ReworkCount > 0 && command.BaseAmount != 0)
+            throw new ArgumentException("Lần làm lại chỉ phát hành phí mới đã được chấp thuận.");
         var total = command.BaseAmount + command.AdditionalAmount;
         if (total <= 0) return null;
 
-        var existing = await FindAsync(command.ServiceRequestId, null, null, ct);
+        var existing = await FindAsync(command.ServiceRequestId, null, null, ct, command.ReworkCount);
         if (existing is not null) return existing;
 
         var date = DateOnly.FromDateTime(command.ApprovedAt.UtcDateTime);
+        var number = $"DV-{command.RequestNumber}";
+        if (command.ReworkCount > 0) number += $"-R{command.ReworkCount}";
         var invoice = new Invoice(
-            $"DV-{command.RequestNumber}"[..Math.Min(40, 3 + command.RequestNumber.Length)],
+            number,
             command.ApartmentUnitId,
             date,
             date,
@@ -32,7 +36,7 @@ public sealed class ServiceRequestBilling(
             dueDate: date.AddDays(7),
             note: $"Chi phí xử lý yêu cầu {command.RequestNumber}",
             invoiceType: InvoiceType.SERVICE_REQUEST,
-            sourceServiceRequestId: command.ServiceRequestId);
+            sourceServiceRequestId: command.ServiceRequestId, sourceServiceRequestRound: command.ReworkCount);
 
         if (command.BaseAmount > 0)
             invoice.AddItem("SERVICE_REQUEST_BASE", "Chi phí dịch vụ", "FIXED", 1, command.BaseAmount,
@@ -60,7 +64,7 @@ public sealed class ServiceRequestBilling(
         catch (DbUpdateException)
         {
             db.ChangeTracker.Clear();
-            var raced = await FindAsync(command.ServiceRequestId, null, null, ct);
+            var raced = await FindAsync(command.ServiceRequestId, null, null, ct, command.ReworkCount);
             if (raced is not null) return raced;
             throw;
         }
@@ -77,15 +81,27 @@ public sealed class ServiceRequestBilling(
         Guid serviceRequestId, Guid userId, CancellationToken ct) =>
         FindAsync(serviceRequestId, null, userId, ct);
 
+    public async Task<IReadOnlyList<ServiceRequestSettlementSnapshot>> ListForResidentAsync(Guid serviceRequestId, Guid residentId, CancellationToken ct)
+    {
+        var rounds = await db.Invoices.AsNoTracking().Where(x => x.SourceServiceRequestId == serviceRequestId &&
+            db.InvoiceRecipients.Any(r => r.InvoiceId == x.Id && r.ResidentId == residentId))
+            .OrderBy(x => x.SourceServiceRequestRound).Select(x => x.SourceServiceRequestRound).ToArrayAsync(ct);
+        var result = new List<ServiceRequestSettlementSnapshot>();
+        foreach (var round in rounds)
+            if (await FindAsync(serviceRequestId, residentId, null, ct, round) is { } item) result.Add(item);
+        return result;
+    }
+
     private async Task<ServiceRequestSettlementSnapshot?> FindAsync(
-        Guid serviceRequestId, Guid? residentId, Guid? userId, CancellationToken ct)
+        Guid serviceRequestId, Guid? residentId, Guid? userId, CancellationToken ct, int? round = null)
     {
         var invoice = await db.Invoices.AsNoTracking()
-            .Where(x => x.SourceServiceRequestId == serviceRequestId &&
+            .Where(x => x.SourceServiceRequestId == serviceRequestId && (!round.HasValue || x.SourceServiceRequestRound == round) &&
                 (!residentId.HasValue || db.InvoiceRecipients.Any(r => r.InvoiceId == x.Id && r.ResidentId == residentId)) &&
                 (!userId.HasValue || db.InvoiceRecipients.Any(r => r.InvoiceId == x.Id && r.UserId == userId)))
+            .OrderByDescending(x => x.SourceServiceRequestRound)
             .Select(x => new { x.Id, x.InvoiceNumber, x.TotalAmount, x.Status })
-            .SingleOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct);
         if (invoice is null) return null;
         var paid = await payments.TotalAsync(invoice.Id, ct);
         var outstanding = Math.Max(0, invoice.TotalAmount - paid);

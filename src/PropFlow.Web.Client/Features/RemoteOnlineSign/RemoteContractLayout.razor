@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using PropFlow.Web.Client.Features.Resident.Portal.Components
+@using PropFlow.Web.Client.Layout
+
+<AuthorizeView>
+    <Authorized Context="auth">
+        @if (auth.User.IsInRole("RESIDENT"))
+        {
+            <div class="remote-contract-host">
+                <ResidentPortalLayout>@Body</ResidentPortalLayout>
+            </div>
+        }
+        else
+        {
+            <MainLayout>@Body</MainLayout>
+        }
+    </Authorized>
+</AuthorizeView>

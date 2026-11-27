@@ -108,11 +108,12 @@ public sealed class SePayWebhook(PaymentsDbContext db, IInvoiceFinancialSource i
         }
         if (!bankMatches || !string.Equals(protector.Unprotect(destination.ProtectedAccountNumber), transfer.AccountNumber?.Trim(), StringComparison.Ordinal))
             return new("ACCOUNT_MISMATCH", instruction.InvoiceId);
-        if (await invoices.FindAsync(instruction.InvoiceId, ct) is null) return new("INVOICE_UNAVAILABLE", instruction.InvoiceId);
+        var invoice = await invoices.FindAsync(instruction.InvoiceId, ct);
+        if (invoice is null) return new("INVOICE_UNAVAILABLE", instruction.InvoiceId);
         // CollectAsync uses the same invoice lock as accountant confirmations and deduplicates provider retries.
         var amount = allocation?.Amount ?? transfer.TransferAmount;
         var result = await payments.CollectVerifiedBankAsync(new(instruction.InvoiceId, amount, "BANK_TRANSFER",
-            $"SEPAY-{transfer.Id}", $"SePay {transfer.Id}; bank reference: {transfer.ReferenceCode}"),
+            $"SEPAY-{transfer.Id}", $"SePay {transfer.Id}; bank reference: {transfer.ReferenceCode}", RequireExactBalance: allocation is null && invoice.InvoiceType == "SERVICE_REQUEST"),
             $"sepay:{transfer.Id}", allocation?.Actor ?? SePayOptions.AuditActor, ct);
         if (result.Outcome != MutationOutcome.Success) return new(result.Outcome.ToString(), instruction.InvoiceId);
         return new("CONFIRMED", instruction.InvoiceId, result.Payment?.Id, amount);

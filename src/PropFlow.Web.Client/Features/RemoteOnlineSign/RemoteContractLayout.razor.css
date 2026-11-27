@@ -1,0 +1,18 @@
+.remote-contract-host {
+    --app-surface: #ffffff;
+    --app-text: #17243a;
+    --app-muted: #52647a;
+    --app-line: rgba(71, 126, 176, 0.16);
+    --app-accent: #0284c7;
+    --app-on-accent: #ffffff;
+    min-height: 100dvh;
+}
+
+:where(html[data-theme="dark"]) .remote-contract-host {
+    --app-surface: #111c2b;
+    --app-text: #f1f7ff;
+    --app-muted: #b4c3d5;
+    --app-line: rgba(148, 180, 220, 0.18);
+    --app-accent: #67e8f9;
+    --app-on-accent: #041e2a;
+}

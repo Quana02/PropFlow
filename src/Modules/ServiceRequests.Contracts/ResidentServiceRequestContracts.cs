@@ -74,7 +74,10 @@ public sealed record ResidentServiceRequestDetailResponse(
     decimal ApprovedAdditionalCost = 0,
     ResidentServiceRequestSettlement? Settlement = null,
     AdditionalCostConsentView? AdditionalCostConsent = null,
-    string? FacilityName = null);
+    string? FacilityName = null,
+    IReadOnlyList<ResidentServiceRequestEvidenceItem>? Evidence = null);
+
+public sealed record ResidentServiceRequestEvidenceItem(Guid Id, string FileName, string ContentType, DateTimeOffset UploadedAt, string Url);
 
 public sealed record ResidentServiceRequestSettlement(
     Guid InvoiceId,
@@ -83,6 +86,8 @@ public sealed record ResidentServiceRequestSettlement(
     decimal ConfirmedPaidAmount,
     decimal OutstandingAmount,
     string Status);
+
+public sealed record ResidentCompletionDecision(DateTimeOffset ExpectedResolvedAt, bool Accepted, string? Reason = null);
 
 public sealed record RateResidentServiceRequestRequest(int Rating, string Comment);
 

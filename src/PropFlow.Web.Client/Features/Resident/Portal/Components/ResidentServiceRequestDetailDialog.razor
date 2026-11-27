@@ -1,3 +1,5 @@
+@inject PropFlow.Web.Client.Services.Api.AuthenticatedApiClient Files
+@using PropFlow.Web.Client.Shared.Feedback
 @inject PropFlow.Web.Client.Shared.Feedback.ToastService Toasts
 @using PropFlow.Modules.ServiceRequests.Contracts
 @using PropFlow.Modules.Payments.Contracts
@@ -84,6 +86,33 @@
                         <ResidentServiceRequestPaymentCard @key="_requestId" RequestId="_requestId" Completed="IsCompleted" Changed="PaymentChanged" />
                     }
 
+                    @if (_request.Evidence is { Count: > 0 })
+                    {
+                        <section class="request-feedback-section">
+                            <h3>Ảnh kết quả xử lý</h3>
+                            <p>Xem ảnh kết quả trước khi nghiệm thu và đánh giá.</p>
+                            @foreach (var evidence in _request.Evidence)
+                            {
+                                <button class="resident-muted-action" type="button" @onclick="() => PreviewAsync(evidence)">
+                                    @if (thumbnails.TryGetValue(evidence.Id, out var source)) { <img src="@source" alt="@evidence.FileName" width="120" height="90" style="object-fit:cover;border-radius:8px" /> }
+                                    @evidence.FileName · @FormatDateTime(evidence.UploadedAt) · Xem ảnh
+                                </button>
+                            }
+                        </section>
+                    }
+                    @if (_request.Status == "RESOLVED")
+                    {
+                        <section class="request-feedback-section">
+                            <h3>Xác nhận kết quả xử lý</h3>
+                            <p>Xem ảnh và kiểm tra kết quả trước khi xác nhận. Nếu chưa đạt, bạn có thể yêu cầu làm lại trên chính yêu cầu này.</p>
+                            @if (!CanDecide) { <p>Vui lòng thanh toán đầy đủ chi phí đã duyệt trước khi phản hồi kết quả.</p> }
+                            <button class="service-submit-button" type="button" disabled="@(_saving || !CanDecide)" @onclick="() => DecideAsync(true)">Xác nhận hoàn thành</button>
+                            <label for="reworkReason">Lý do yêu cầu làm lại (bắt buộc)</label>
+                            <textarea id="reworkReason" maxlength="1000" @bind="reworkReason" @bind:event="oninput" disabled="@_saving"></textarea>
+                            <button class="resident-muted-action" type="button" disabled="@(_saving || !CanDecide || reworkReason.Trim().Length < 3)" @onclick="() => DecideAsync(false)">Yêu cầu làm lại</button>
+                            @if (completionError is not null) { <p role="alert" class="request-feedback-error">@completionError</p> }
+                        </section>
+                    }
                     @if (CanRate)
                     {
                         <section class="request-feedback-section">
@@ -104,7 +133,7 @@
                     }
                     else
                     {
-                        <div class="resident-request-state">@(IsCompleted && HasCharge ? "Bạn có thể đánh giá sau khi hóa đơn được ghi nhận thanh toán đầy đủ." : "Bạn có thể đánh giá sau khi yêu cầu được hoàn thành.")</div>
+                        <div class="resident-request-state">@(IsCompleted && HasCharge ? "Bạn có thể đánh giá sau khi hóa đơn được ghi nhận thanh toán đầy đủ." : "Bạn có thể đánh giá sau khi xác nhận hoàn thành.")</div>
                     }
                 }
             </div>
@@ -112,7 +141,28 @@
     </div>
 }
 
+@if (previewOpen)
+{
+    <PropFlowConfirmationDialog Title="Ảnh kết quả xử lý" Message="@previewName" Tone="DialogTone.Info" Wide OnCancel="() => previewOpen = false">
+        <ChildContent>
+            @if (previewSource is not null) { <img src="@previewSource" alt="@previewName" style="max-width:100%;max-height:70vh;object-fit:contain" /> }
+            else { <p role="status">@previewMessage</p> }
+        </ChildContent>
+    </PropFlowConfirmationDialog>
+}
+
 @code {
+    private readonly Dictionary<Guid, string> thumbnails = new();
+    private bool previewOpen;
+    private string? previewName, previewSource, previewMessage;
+    private async Task PreviewAsync(ResidentServiceRequestEvidenceItem evidence)
+    {
+        previewOpen = true; previewName = evidence.FileName; previewSource = null; previewMessage = "Đang tải ảnh…";
+        var result = await Files.GetFileAsync(evidence.Url.TrimStart('/'));
+        if (result.IsSuccess && result.Data is { } file) previewSource = $"data:{file.ContentType};base64,{Convert.ToBase64String(file.Bytes)}";
+        else previewMessage = result.Message ?? "Không thể tải ảnh. Vui lòng thử lại.";
+    }
+
     private readonly PropFlow.Web.Client.Shared.Feedback.ToastLifetime toastLifetime = new();
 
     [Parameter] public EventCallback FeedbackSaved { get; set; }
@@ -129,7 +179,26 @@
     private PropFlow.Web.Client.Features.ServiceRequests.Services.RealtimeRefreshQueue? _refreshQueue;
     private bool IsCompleted => _request?.Status is "RESOLVED" or "CLOSED";
     private bool HasCharge => (_request?.BaseServiceCost ?? 0) + (_request?.ApprovedAdditionalCost ?? 0) > 0;
-    private bool CanRate => IsCompleted && (!HasCharge || _request?.Settlement?.OutstandingAmount == 0);
+    private bool CanRate => _request?.Status == "CLOSED" && (!HasCharge || _request?.Settlement?.OutstandingAmount == 0);
+
+    private string reworkReason = "";
+    private string? completionError;
+    private bool CanDecide => _request?.Status == "RESOLVED" && (!HasCharge || _request.Settlement?.OutstandingAmount == 0);
+    private async Task DecideAsync(bool accepted)
+    {
+        if (_saving || !CanDecide || _request?.ResolvedAt is not { } resolvedAt) return;
+        _saving = true; completionError = null;
+        try
+        {
+            var result = await Api.CompleteAsync(_requestId, new(resolvedAt, accepted, accepted ? null : reworkReason.Trim()));
+            if (!result.IsSuccess) { completionError = result.Message ?? "Không thể lưu phản hồi."; return; }
+            reworkReason = "";
+            await LoadAsync();
+            await FeedbackSaved.InvokeAsync();
+            Toasts.Success(accepted ? "Đã xác nhận hoàn thành. Bạn có thể đánh giá dịch vụ." : "Đã gửi yêu cầu làm lại để Ban quản lý tiếp nhận và phân công lại.");
+        }
+        finally { _saving = false; }
+    }
 
     protected override void OnInitialized() =>
         _refreshQueue = new(
@@ -139,6 +208,7 @@
     public async Task OpenAsync(Guid requestId)
     {
         _requestId = requestId;
+        reworkReason = ""; completionError = null; thumbnails.Clear();
         _request = null;
         _open = true;
         await LoadAsync();
@@ -169,6 +239,12 @@
             _rating = _request.Rating ?? 0;
             _comment = _request.FeedbackComment ?? string.Empty;
             _feedbackError = null;
+            foreach (var evidence in _request.Evidence ?? [])
+            {
+                if (thumbnails.ContainsKey(evidence.Id)) continue;
+                var image = await Files.GetFileAsync(evidence.Url.TrimStart('/'));
+                if (image.IsSuccess && image.Data is { } file) thumbnails[evidence.Id] = $"data:{file.ContentType};base64,{Convert.ToBase64String(file.Bytes)}";
+            }
         }
         catch
         {
@@ -199,17 +275,20 @@
                 FeedbackComment = result.Data.Comment,
                 FeedbackSubmittedAt = result.Data.SubmittedAt
             };
+            await LoadAsync();
             operationFeedback.Publish(() => Toasts.Success("Đã lưu đánh giá của bạn."));
             { if (operationFeedback.IsCurrent) await FeedbackSaved.InvokeAsync(); }
         }
         finally { _saving = false; }
     }
 
-    private void PaymentChanged(ResidentServiceRequestPaymentView payment)
+    private async Task PaymentChanged(ResidentServiceRequestPaymentView payment)
     {
+        var changed = _request?.Settlement?.ConfirmedPaidAmount != payment.ConfirmedPaidAmount;
         if (_request is not null && _request.Id == payment.ServiceRequestId)
             _request = _request with { Settlement = new(payment.InvoiceId, payment.InvoiceNumber, payment.TotalAmount,
                 payment.ConfirmedPaidAmount, payment.OutstandingAmount, payment.SettlementStatus) };
+        if (changed) await LoadAsync();
     }
 
     private void Close()

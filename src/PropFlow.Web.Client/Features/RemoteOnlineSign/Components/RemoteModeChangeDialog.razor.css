@@ -1,0 +1,178 @@
+.remote-mode-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgb(12 27 47 / 45%);
+    backdrop-filter: blur(3px);
+}
+
+.remote-mode-dialog {
+    --mode-surface: #ffffff;
+    --mode-ink: #17243a;
+    --mode-muted: #52647a;
+    --mode-line: #dbe5ef;
+    --mode-soft: #f4f8fc;
+    --mode-accent: #b45309;
+    --mode-accent-soft: #fef3c7;
+    --mode-accent-ink: #92400e;
+    --mode-danger: #b42318;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: min(460px, 100%);
+    max-height: calc(100dvh - 2rem);
+    overflow: hidden;
+    border: 1px solid var(--mode-line);
+    border-radius: 1rem;
+    background: var(--mode-surface);
+    color: var(--mode-ink);
+    box-shadow: 0 1.5rem 4rem rgb(15 23 42 / 30%);
+    font: inherit;
+}
+
+:where(html[data-theme="dark"]) .remote-mode-dialog {
+    color-scheme: dark;
+    --mode-surface: #132238;
+    --mode-ink: #edf5ff;
+    --mode-muted: #b6c9dd;
+    --mode-line: #334b65;
+    --mode-soft: #192e46;
+    --mode-accent: #fbbf24;
+    --mode-accent-soft: #3b2f14;
+    --mode-accent-ink: #fcd34d;
+    --mode-danger: #fda4af;
+}
+
+.remote-mode-dialog__header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .85rem;
+    padding: 1.25rem 1.35rem 1rem;
+    border-bottom: 1px solid var(--mode-line);
+}
+
+.remote-mode-dialog__badge {
+    display: grid;
+    place-items: center;
+    width: 2.65rem;
+    height: 2.65rem;
+    border-radius: .8rem;
+    color: var(--mode-accent-ink);
+    background: var(--mode-accent-soft);
+}
+
+.remote-mode-dialog__badge .material-symbols-outlined { font-size: 1.5rem; }
+
+.remote-mode-dialog__heading h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 750;
+    line-height: 1.3;
+}
+
+.remote-mode-dialog__heading p {
+    margin: .25rem 0 0;
+    color: var(--mode-muted);
+    font-size: .85rem;
+}
+
+.remote-mode-dialog__close {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: .7rem;
+    color: var(--mode-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.remote-mode-dialog__close:hover { background: var(--mode-soft); }
+
+.remote-mode-dialog__body {
+    display: grid;
+    gap: .85rem;
+    padding: 1.1rem 1.35rem 1.25rem;
+    color: var(--mode-muted);
+    font-size: .9375rem;
+    line-height: 1.55;
+}
+
+.remote-mode-dialog__warning,
+.remote-mode-dialog__note,
+.remote-mode-dialog__error { margin: 0; }
+
+.remote-mode-dialog__warning {
+    padding: .75rem .9rem;
+    border: 1px solid var(--mode-accent);
+    border-radius: .7rem;
+    color: var(--mode-accent-ink);
+    background: var(--mode-accent-soft);
+    font-weight: 600;
+}
+
+.remote-mode-dialog__error {
+    padding: .7rem .9rem;
+    border: 1px solid var(--mode-danger);
+    border-radius: .7rem;
+    color: var(--mode-danger);
+    background: color-mix(in srgb, var(--mode-danger) 8%, transparent);
+}
+
+.remote-mode-dialog__footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .65rem;
+    padding: .9rem 1.35rem;
+    border-top: 1px solid var(--mode-line);
+    background: var(--mode-soft);
+}
+
+.remote-mode-dialog__footer button {
+    min-height: 2.6rem;
+    padding: .55rem 1.1rem;
+    border: 1px solid var(--mode-line);
+    border-radius: .7rem;
+    font: inherit;
+    font-size: .875rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.remote-mode-dialog__secondary {
+    color: var(--mode-ink);
+    background: var(--mode-surface);
+}
+
+.remote-mode-dialog__secondary:hover { border-color: var(--mode-accent); }
+
+.remote-mode-dialog__primary {
+    border-color: transparent;
+    color: #fff;
+    background: var(--app-accent, #0284c7);
+}
+
+:where(html[data-theme="dark"]) .remote-mode-dialog__primary { color: #082f49; }
+
+.remote-mode-dialog__primary:hover { filter: brightness(1.08); }
+
+.remote-mode-dialog button:focus-visible {
+    outline: 2px solid var(--app-accent, #0284c7);
+    outline-offset: 2px;
+}
+
+.remote-mode-dialog button:disabled { opacity: .55; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+    .remote-mode-dialog__header,
+    .remote-mode-dialog__body,
+    .remote-mode-dialog__footer { padding-inline: 1rem; }
+    .remote-mode-dialog__footer { flex-direction: column; }
+    .remote-mode-dialog__footer button { width: 100%; }
+}

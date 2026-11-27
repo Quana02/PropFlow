@@ -73,7 +73,7 @@ else if (_detail is not null)
             <section class="detail-card request-overview">
                 @if (!HasCharge || _detail.Settlement?.OutstandingAmount == 0)
                 {
-                    <h2>Đánh giá dịch vụ</h2><button type="button" @onclick="OpenFeedbackAsync">@(_detail.Rating.HasValue ? "Cập nhật đánh giá" : "Gửi đánh giá")</button>
+                    <h2>Đánh giá dịch vụ</h2><button type="button" @onclick="OpenFeedbackAsync">@(_detail.Rating.HasValue ? "Cập nhật đánh giá" : "Xem ảnh và phản hồi kết quả")</button>
                 }
                 else { <p>Bạn có thể đánh giá sau khi hóa đơn được thanh toán đầy đủ.</p> }
             </section>

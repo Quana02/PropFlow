@@ -1,0 +1,32 @@
+@using PropFlow.Web.Client.Features.RemoteOnlineSign.Models
+
+@if (Open && Contract is not null)
+{
+    <div class="remote-history-backdrop" role="presentation" @onclick="Close">
+        <section class="remote-history-modal" role="dialog" aria-modal="true" aria-labelledby="remote-history-title" @onclick:stopPropagation="true">
+            <header>
+                <div><h2 id="remote-history-title">Lịch sử hợp đồng</h2><p>@Contract.ContractName</p><small>@Contract.ContractCode</small></div>
+                <button type="button" aria-label="Đóng lịch sử hợp đồng" title="Đóng" @onclick="Close"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+            </header>
+            <div class="remote-history-modal__body">
+                @if (Loading) { <p class="remote-history-state" role="status">Đang tải lịch sử hợp đồng…</p> }
+                else if (!string.IsNullOrWhiteSpace(Error)) { <p class="remote-history-state is-error" role="alert">@Error</p> }
+                else if (Events.Count == 0) { <p class="remote-history-state">Chưa có sự kiện lịch sử.</p> }
+                else { <ol class="remote-history-timeline">@foreach (var item in Events.OrderByDescending(x => x.OccurredAt)) { <li><strong>@RemoteContractHistoryLabels.For(item.Type)</strong><time>@FormatTime(item.OccurredAt)</time></li> }</ol> }
+            </div>
+            <footer><button type="button" class="remote-secondary-button" @onclick="Close">Đóng</button></footer>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public RemoteContractSummary? Contract { get; set; }
+    [Parameter] public IReadOnlyList<RemoteAuditEvent> Events { get; set; } = [];
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    private Task Close() => OnClose.InvokeAsync();
+    private static string FormatTime(DateTimeOffset value) => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(value, OperatingSystem.IsWindows() ? "SE Asia Standard Time" : "Asia/Ho_Chi_Minh").ToString("dd/MM/yyyy HH:mm");
+    private static string Label(string type) => type switch { "CONTRACT_CREATED" => "Đã tạo hợp đồng", "ORIGINAL_PDF_UPLOADED" => "Đã tải PDF gốc", "RESIDENT_ASSIGNED" => "Đã gán cư dân", "SIGNATURE_FIELDS_UPDATED" => "Đã cập nhật vùng ký", "CONTRACT_METADATA_UPDATED" => "Đã cập nhật thông tin hợp đồng", "SIGNATURE_OTP_REQUESTED" => "Đã yêu cầu OTP", "SIGNATURE_OTP_VERIFIED" => "OTP đã được xác nhận", "INVESTOR_SIGNATURE_FINALIZED" => "Chủ đầu tư đã ký", "RESIDENT_SIGNATURE_FINALIZED" => "Cư dân đã ký", "CONTRACT_COMPLETED" => "Đã hoàn thành hợp đồng", "CONTRACT_EXPIRED" => "Hợp đồng hết hạn", "CONTRACT_DEADLINE_RENEWED" => "Đã gia hạn hợp đồng", "RESIDENT_REASSIGNED" => "Chuyển cư dân ký", "CONTRACT_RESENT_TO_RESIDENT" => "Gửi lại hợp đồng cho cư dân", "CONTRACT_CANCELLED" => "Hợp đồng đã hủy", _ => type };
+}

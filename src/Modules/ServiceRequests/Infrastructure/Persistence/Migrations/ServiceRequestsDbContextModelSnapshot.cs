@@ -442,6 +442,12 @@ namespace PropFlow.Modules.ServiceRequests.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("resolved_at");
 
+                    b.Property<int>("ReworkCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rework_count");
+
                     b.Property<string>("ServiceAreaCode")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")

@@ -119,6 +119,9 @@ public sealed class PaymentFinanceStore(PaymentsDbContext db, IInvoiceFinancialS
         var paid = await db.Payments.Where(x => x.InvoiceId == request.InvoiceId && x.Status == PaymentStatus.CONFIRMED).SumAsync(x => x.Amount, ct);
         var amount = decimal.Round(request.Amount, 0, MidpointRounding.AwayFromZero);
         if (amount <= 0 || amount > invoice.TotalAmount - paid) return new(MutationOutcome.Overpayment);
+        // Check the current balance under the invoice lock, after retry deduplication.
+        if (verifiedBank && request.RequireExactBalance && amount != invoice.TotalAmount - paid)
+            return new(MutationOutcome.Conflict);
         var now = DateTimeOffset.UtcNow;
         var number = $"PT-{now:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..20]}";
         var p = new Payment(number, request.InvoiceId, amount,

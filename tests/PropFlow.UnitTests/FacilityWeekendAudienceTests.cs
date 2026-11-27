@@ -32,6 +32,8 @@ public sealed class FacilityWeekendAudienceTests
     {
         public Task<ResidentAccountScopePage> SearchAsync(string? search,int pageIndex,int pageSize,CancellationToken ct)=>Task.FromResult(new ResidentAccountScopePage(items,items.Length,pageIndex));
         public Task<Guid?> FindActiveAccountAsync(Guid id,CancellationToken ct)=>throw new NotSupportedException();
+        public Task<IReadOnlyDictionary<Guid,ResidentAccountScopeItem>> GetByAccountIdsAsync(IReadOnlyCollection<Guid> users,CancellationToken ct)=>Task.FromResult<IReadOnlyDictionary<Guid,ResidentAccountScopeItem>>(items.Where(item=>item.UserId is not null&&users.Contains(item.UserId.Value)).ToDictionary(item=>item.UserId!.Value));
+        public Task<bool> IsActiveAccountAsync(Guid userId,CancellationToken ct)=>Task.FromResult(items.Any(item=>item.UserId==userId&&item.IsActive));
         public Task<bool> LockActiveLinkAsync(Guid resident,Guid user,CancellationToken ct)=>throw new NotSupportedException();
     }
     private sealed class Roles(Guid[] users):IAccountAccess

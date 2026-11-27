@@ -57,6 +57,8 @@ public interface IAuthEmail
 {
     Task SendCodeAsync(string email, string code, bool recovery, int expiryMinutes, CancellationToken ct);
     Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct);
+    Task SendPrivilegedActionCodeAsync(string email, string code, int expiryMinutes, string purpose, PrivilegedActionEmailContext? context, CancellationToken ct) =>
+        SendPrivilegedActionCodeAsync(email, code, expiryMinutes, ct);
     Task SendEmailChangeCodeAsync(string email, string code, int expiryMinutes, CancellationToken ct);
 }
 public sealed class AuthFailure(int status, string code, string message) : Exception(message)

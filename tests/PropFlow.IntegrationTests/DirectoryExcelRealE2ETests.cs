@@ -281,7 +281,8 @@ public sealed class DirectoryExcelRealE2ETests
             Context<MaintenanceDbContext>(connection,"maintenance"),Context<BillingDbContext>(connection,"billing"),
             Context<PaymentsDbContext>(connection,"payments"),Context<AiClassificationDbContext>(connection,"ai_classification"),
             Context<AiRecommendationDbContext>(connection,"ai_recommendation"),Context<AiChatbotDbContext>(connection,"ai_chatbot"),
-            Context<CommunicationDbContext>(connection,"communication") })
+            Context<CommunicationDbContext>(connection,"communication"),
+            Context<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.RemoteOnlineSignDbContext>(connection,"remote_online_sign") })
             await using(db) await db.Database.MigrateAsync();
         foreach(var role in new[]{"ADMIN","ADMIN2","MANAGER","STAFF","ACCOUNTANT","RESIDENT"})
         {
@@ -301,6 +302,9 @@ public sealed class DirectoryExcelRealE2ETests
         // Nonempty, synthetic protected records make preservation checks stronger than zero row counts.
         var existingUnit=await apartments.ApartmentUnits.SingleAsync(x=>x.UnitNumber=="OTHER-E2E");
         var existingPerson=await residents.Residents.SingleAsync(x=>x.ResidentCode=="OTHER-PERSON");
+        if ((Environment.GetEnvironmentVariable("PROPFLOW_FILTER_QA_FEATURES")??"").Split(',').Contains("remote"))
+            residents.Residents.Add(new PropFlow.Modules.Residents.Domain.Residents.Resident("REMOTE-LINKED","Z Cư dân ký hợp đồng",DateTimeOffset.UtcNow,userId:users["RESIDENT"],email:"remote@example.invalid"));
+        await residents.SaveChangesAsync();
         var now=DateTimeOffset.UtcNow;var today=DateOnly.FromDateTime(now.UtcDateTime);
         var ft1=new PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityType("QA Tiện ích A",users["MANAGER"],now);
         var ft2=new PropFlow.Modules.PropertyAssets.Domain.Facilities.FacilityType("QA Tiện ích B",users["MANAGER"],now);

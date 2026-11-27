@@ -72,6 +72,8 @@ public sealed record PrivilegedActionChallengeResult(
     DateTimeOffset ResendAfter,
     string MaskedEmail);
 
+public sealed record PrivilegedActionEmailContext(string? ContractName = null);
+
 public interface IPrivilegedActionOtp
 {
     Task<PrivilegedActionChallengeResult> RequestAsync(
@@ -79,6 +81,13 @@ public interface IPrivilegedActionOtp
         string purpose,
         string payloadHash,
         CancellationToken ct);
+
+    Task<PrivilegedActionChallengeResult> RequestAsync(
+        Guid userId,
+        string purpose,
+        string payloadHash,
+        PrivilegedActionEmailContext emailContext,
+        CancellationToken ct) => RequestAsync(userId, purpose, payloadHash, ct);
 
     Task VerifyAsync(
         Guid userId,

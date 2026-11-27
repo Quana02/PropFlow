@@ -25,7 +25,7 @@ public sealed record ManagerServiceRequestCore(
     string? PreferredTimeCode, DateTimeOffset SubmittedAt, DateTimeOffset UpdatedAt,
     Guid? AssignedStaffUserId, Guid? SubmittedByUserId, decimal BaseServiceCost,
     decimal ProposedAdditionalCost, string? AdditionalCostNote,
-    decimal ApprovedAdditionalCost, Guid? ServiceInvoiceId, AdditionalCostConsentView? AdditionalCostConsent = null);
+    decimal ApprovedAdditionalCost, Guid? ServiceInvoiceId, AdditionalCostConsentView? AdditionalCostConsent = null, int ReworkCount = 0);
 
 public sealed record ManagerServiceRequestPage(
     IReadOnlyList<ManagerServiceRequestCore> Items, int TotalCount,
@@ -270,7 +270,7 @@ public sealed class ManagerServiceRequestReviewHandler(
                 var settlement = await billing.IssueAsync(new ServiceRequestInvoiceCommand(
                     approved.Id, approved.RequestNumber, apartmentId, approved.ResidentId,
                     approved.SubmittedByUserId, resident?.FullName ?? "Cư dân", approved.BaseServiceCost,
-                    approved.ApprovedAdditionalCost, approved.AdditionalCostNote, managerUserId, now), ct);
+                    approved.ApprovedAdditionalCost, approved.AdditionalCostNote, managerUserId, now, approved.ReworkCount), ct);
                 if (settlement is not null)
                     await store.LinkInvoiceAsync(id, settlement.InvoiceId, now, ct);
             }

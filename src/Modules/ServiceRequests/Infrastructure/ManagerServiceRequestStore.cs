@@ -74,7 +74,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
                 x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
                     .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
                 x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
-                x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null))
+                x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null, x.ReworkCount))
             .ToArrayAsync(ct);
 
         var summary = await requests.GroupBy(_ => 1).Select(group =>
@@ -101,7 +101,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             x.Assignments.Where(a => a.Status == AssignmentStatus.ASSIGNED || a.Status == AssignmentStatus.IN_PROGRESS)
                 .OrderByDescending(a => a.AssignedAt).Select(a => (Guid?)a.StaffUserId).FirstOrDefault(),
             x.SubmittedByUserId, x.BaseServiceCost, x.ProposedAdditionalCost, x.AdditionalCostNote,
-            x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null))
+            x.ApprovedAdditionalCost, x.ServiceInvoiceId, x.AdditionalCostProposalId.HasValue ? new AdditionalCostConsentView(x.AdditionalCostProposalId.Value, x.ProposedAdditionalCost, x.AdditionalCostNote, x.AdditionalCostConsentStatus, x.AdditionalCostProposedAt, x.AdditionalCostRespondedAt) : null, x.ReworkCount))
         .SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<ManagerServiceRequestActivityItem>> GetActivitiesAsync(Guid id, CancellationToken ct) =>
@@ -251,6 +251,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
     public async Task<ManagerServiceRequestOutcome> CloseAsync(
         Guid id, Guid managerUserId, string? note, DateTimeOffset now, CancellationToken ct)
     {
+        await using var transaction = await db.BeginWorkflowMutationAsync(id, ct);
         var request = await db.ServiceRequests.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (request is null) return ManagerServiceRequestOutcome.NotFound;
         if (request.Status != ServiceRequestStatus.RESOLVED) return ManagerServiceRequestOutcome.Conflict;
@@ -266,7 +267,7 @@ public sealed class ManagerServiceRequestStore(ServiceRequestsDbContext db, Time
             detail: note,
             performedBy: managerUserId));
 
-        return await SaveAsync(ct);
+        return await SaveAsync(ct, transaction);
     }
 
     public async Task<ManagerServiceRequestOutcome> LinkInvoiceAsync(
