@@ -18,6 +18,17 @@ namespace PropFlow.UnitTests;
 public sealed class RemoteOnlineSignWorkflowTests
 {
     [Fact]
+    public async Task Signature_fields_cannot_change_while_an_otp_signing_session_is_active()
+    {
+        await using var fixture=new Fixture();
+        var contract=await fixture.AddModeAContractAsync();
+        await fixture.Service.BeginSigningAsync(fixture.Owner,true,contract.Id,new BeginSignature(SignatureMethod.TYPE,null,"Investor","Arial"),default);
+        var error=await Assert.ThrowsAsync<RemoteContractException>(()=>fixture.Service.SetFieldsAsync(fixture.Owner,contract.Id,
+            [new(SignatureRole.INVESTOR,1,20,20,100,30),new(SignatureRole.RESIDENT,1,20,60,100,30)],default));
+        Assert.Equal(409,error.Status);
+        Assert.Equal("signing_in_progress",error.Code);
+    }
+    [Fact]
     public async Task Mode_a_draft_without_resident_allows_admin_to_request_otp()
     {
         await using var fixture = new Fixture();

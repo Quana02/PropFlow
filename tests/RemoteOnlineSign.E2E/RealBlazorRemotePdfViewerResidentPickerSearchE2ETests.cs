@@ -67,6 +67,6 @@ public sealed partial class RealBlazorRemotePdfViewerE2ETests
         var diagnostics = new List<string>(); var page = await context!.NewPageAsync(); page.PageError += (_, error) => diagnostics.Add("pageerror: " + error); page.Console += (_, message) => { if (message.Type == "error") diagnostics.Add("console: " + message.Text); };
         await page.AddInitScriptAsync("window.__remotePdfTelemetry={stage:'bootstrap',events:[]};"); await InstallApiBoundaryAsync(page);
         await page.GotoAsync($"https://127.0.0.1:{port}/remote-contracts/{contractId}", new() { WaitUntil = WaitUntilState.DOMContentLoaded });
-        await page.Locator(".remote-pdf-stage canvas").WaitForAsync(new() { Timeout = 15_000 }); return (page, diagnostics);
+        await page.Locator(".remote-pdf-stage canvas").First.WaitForAsync(new() { Timeout = 15_000 }); return (page, diagnostics);
     }
 }

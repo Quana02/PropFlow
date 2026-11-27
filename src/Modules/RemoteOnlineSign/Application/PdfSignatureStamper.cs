@@ -11,6 +11,11 @@ public interface IPdfSignatureStamper
 
 public sealed class PdfSignatureStamper : IPdfSignatureStamper
 {
+    static PdfSignatureStamper()
+    {
+        if (OperatingSystem.IsLinux())
+            PdfSharpCore.Fonts.GlobalFontSettings.FontResolver = new RemoteSignatureFontResolver();
+    }
     private static readonly HashSet<string> Fonts = new(StringComparer.Ordinal) { "Arial", "Times New Roman", "Courier New" };
 
     public Task<byte[]> StampAsync(Stream source, ContractSignatureField field, ContractSigningSession session, CancellationToken ct)

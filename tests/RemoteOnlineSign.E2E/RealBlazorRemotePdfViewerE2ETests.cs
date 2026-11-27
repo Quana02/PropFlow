@@ -17,7 +17,13 @@ namespace PropFlow.RemoteOnlineSign.E2E;
 public sealed partial class RealBlazorRemotePdfViewerE2ETests : IAsyncLifetime
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private readonly string repo = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
+    private readonly string repo = FindRepository();
+    private static string FindRepository()
+    {
+        for(var directory=new DirectoryInfo(AppContext.BaseDirectory);directory is not null;directory=directory.Parent)
+            if(File.Exists(Path.Combine(directory.FullName,"PropFlow.sln")))return directory.FullName;
+        throw new DirectoryNotFoundException("PropFlow repository root not found.");
+    }
     private readonly string chrome = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe");
     private readonly Guid contractId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private readonly Guid adminId = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -36,15 +42,20 @@ public sealed partial class RealBlazorRemotePdfViewerE2ETests : IAsyncLifetime
         var certificatePassword = Guid.NewGuid().ToString("N");
         CreateCertificate(certificatePath, certificatePassword);
         var project = Path.Combine(repo, "src", "PropFlow.Web", "PropFlow.Web.csproj");
-        var start = new ProcessStartInfo("dotnet", $"run --no-build --no-launch-profile --project \"{project}\" --urls https://127.0.0.1:{port}")
+        var publishedWeb=Environment.GetEnvironmentVariable("PROPFLOW_REMOTE_E2E_WEB_DLL");
+        var arguments=string.IsNullOrWhiteSpace(publishedWeb)
+            ? $"run --no-build --no-launch-profile --project \"{project}\" --urls https://127.0.0.1:{port}"
+            : $"\"{Path.GetFullPath(publishedWeb)}\" --urls https://127.0.0.1:{port}";
+        var start = new ProcessStartInfo("dotnet", arguments)
         {
-            WorkingDirectory = repo, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true,
+            WorkingDirectory = string.IsNullOrWhiteSpace(publishedWeb) ? repo : Path.GetDirectoryName(Path.GetFullPath(publishedWeb))!, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true,
         };
         start.Environment["ASPNETCORE_ENVIRONMENT"] = "Testing";
         start.Environment["E2E__DataProtectionKeyRing"] = keyRing;
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Path"] = certificatePath;
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Password"] = certificatePassword;
         web = Process.Start(start) ?? throw new InvalidOperationException("Could not start the real PropFlow.Web host.");
+        File.WriteAllText(Path.Combine(temporaryRoot,"owned-process.json"),JsonSerializer.Serialize(new {pid=web.Id,port,startedAt=web.StartTime}));
         hostStdout = web.StandardOutput.ReadToEndAsync();
         hostStderr = web.StandardError.ReadToEndAsync();
         await WaitForHostAsync();
@@ -79,7 +90,7 @@ public sealed partial class RealBlazorRemotePdfViewerE2ETests : IAsyncLifetime
         // availability is not a prerequisite for the WASM feature, so network-idle
         // would make this browser test depend on unrelated external connections.
         await page.GotoAsync($"https://127.0.0.1:{port}/remote-contracts/{contractId}", new() { WaitUntil = WaitUntilState.DOMContentLoaded });
-        try { await page.Locator(".remote-pdf-stage canvas").WaitForAsync(new() { Timeout = 15_000 }); }
+        try { await page.Locator(".remote-pdf-stage canvas").First.WaitForAsync(new() { Timeout = 15_000 }); }
         catch (TimeoutException)
         {
             var timeoutArtifact = Path.Combine(repo, "tests", "RemoteOnlineSign.E2E", "artifacts", "real-blazor-canvas-timeout.png");
@@ -129,7 +140,7 @@ public sealed partial class RealBlazorRemotePdfViewerE2ETests : IAsyncLifetime
         // still re-renders through its production client and must remove edit affordances.
         await page.ReloadAsync();
         await page.RouteAsync("**/api/v1/remote-online-sign/11111111-1111-1111-1111-111111111111", route => route.FulfillAsync(JsonResponse(new { id = contractId, creatorId = adminId, residentId = Guid.Parse("33333333-3333-3333-3333-333333333333"), status = "PENDING_INVESTOR_SIGNATURE", signingMode = "INVESTOR_AND_RESIDENT", deadline = (DateTimeOffset?)null, revision = 1 })));
-        await page.ReloadAsync(); await page.Locator(".remote-pdf-stage canvas").WaitForAsync(new() { Timeout = 15_000 });
+        await page.ReloadAsync(); await page.Locator(".remote-pdf-stage canvas").First.WaitForAsync(new() { Timeout = 15_000 });
         Assert.Equal(0, await page.Locator(".remote-pdf-field .resize").CountAsync());
         Assert.True(diagnostics.Count == 0,
             "Browser diagnostics:\n" + string.Join("\n", diagnostics) +
@@ -144,6 +155,8 @@ public sealed partial class RealBlazorRemotePdfViewerE2ETests : IAsyncLifetime
             var path = new Uri(route.Request.Url).AbsolutePath;
             if (path.EndsWith("/auth/csrf", StringComparison.Ordinal))
                 await route.FulfillAsync(JsonResponse(new { token = "e2e-csrf-token" }));
+            else if (path is "/api/v1/residents/me" or "/api/v1/resident/weather" or "/api/v1/emergency-calls/active")
+                await route.FulfillAsync(new() { Status = 204 });
             else if (path.EndsWith("/auth/refresh", StringComparison.Ordinal))
             {
                 await route.FulfillAsync(JsonResponse(new { accessToken = "a.eyJzaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAifQ.c", expiresAt = DateTimeOffset.UtcNow.AddMinutes(20), user = new { id = adminId, username = "e2e-admin", displayName = "E2E Admin", email = "admin@example.test", phoneNumber = (string?)null, status = "ACTIVE", emailVerified = true, role = "ADMIN", permissions = Array.Empty<string>(), avatarVersion = (Guid?)null } }));

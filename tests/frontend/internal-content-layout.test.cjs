@@ -8,7 +8,7 @@ const read = file => fs.readFileSync(path.join(client, file), 'utf8');
 
 test('internal role layouts delegate the content gutter to AppShell', () => {
     for (const layout of ['MainLayout', 'AdminLayout', 'AccountantLayout']) {
-        assert.match(read(`Layout/${layout}.razor`), /<AppShell>[\s\S]*@Body[\s\S]*<\/AppShell>/);
+        assert.match(read(`Layout/${layout}.razor`), /<AppShell>[\s\S]*(?:@Body|@\(ChildContent \?\? Body\))[\s\S]*<\/AppShell>/);
     }
 
     assert.match(read('Layout/Shared/AppShell.razor'), /class="app-page-body">@ChildContent/);

@@ -38,7 +38,7 @@ public sealed partial class RealBlazorRemotePdfViewerE2ETests
         // DOMContentLoaded only proves prerendered markup is available. The existing
         // real-viewer test uses canvas creation as the InteractiveWebAssembly-ready
         // condition, so wait for the same production lifecycle before dispatching input.
-        await page.Locator(".remote-pdf-stage canvas").WaitForAsync(new() { Timeout = 15_000 });
+        await page.Locator(".remote-pdf-stage canvas").First.WaitForAsync(new() { Timeout = 15_000 });
         var search = page.Locator("input[placeholder='Tên, mã cư dân hoặc email']");
         await search.WaitForAsync(new() { State = WaitForSelectorState.Visible });
         await page.EvaluateAsync("""() => { const input=document.querySelector("input[placeholder='Tên, mã cư dân hoặc email']"); window.__residentPickerEvents=[]; for(const type of ['focus','input','change','blur']) input?.addEventListener(type, e => window.__residentPickerEvents.push({type,value:e.target.value})); }""");

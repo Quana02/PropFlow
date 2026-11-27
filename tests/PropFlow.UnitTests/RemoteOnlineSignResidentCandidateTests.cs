@@ -11,6 +11,15 @@ namespace PropFlow.UnitTests;
 public sealed class RemoteOnlineSignResidentCandidateTests
 {
     [Fact]
+    public async Task Search_fills_candidates_after_source_pages_of_unlinked_profiles()
+    {
+        var eligible=Guid.NewGuid();
+        var items=Enumerable.Range(0,120).Select(i=>new ResidentAccountScopeItem(Guid.NewGuid(),null,$"RS-{i:000}",$"Unlinked {i}",null,true,[]))
+            .Append(new ResidentAccountScopeItem(Guid.NewGuid(),eligible,"RS-eligible","Eligible",null,true,[])).ToArray();
+        await using var fixture=new Fixture(items,_=>"ACTIVE",_=>true);
+        Assert.Equal(eligible,Assert.Single(await fixture.Service.SearchEligibleResidentsAsync(null,default)).UserId);
+    }
+    [Fact]
     public async Task Search_returns_only_active_linked_accounts_with_resident_role_and_preserves_user_id()
     {
         var eligibleUser = Guid.NewGuid(); var eligibleResident = Guid.NewGuid();
