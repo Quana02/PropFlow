@@ -1,3 +1,4 @@
+using PropFlow.Modules.ServiceRequests.Application.AcceptResidentServiceRequest;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,7 +20,7 @@ public sealed class ResidentServiceRequestsController(
     SubmitServiceRequestHandler submitHandler,
     ListResidentServiceRequestsHandler listHandler,
     GetResidentServiceRequestHandler detailHandler,
-    RateResidentServiceRequestHandler rateHandler) : ControllerBase
+    RateResidentServiceRequestHandler rateHandler, ResidentCompletionHandler completionHandler) : ControllerBase
 {
     [HttpGet("facility-options")]
     public Task<IReadOnlyList<ResidentServiceRequestFacility>> FacilityOptions(CancellationToken ct) =>
@@ -67,6 +68,15 @@ public sealed class ResidentServiceRequestsController(
         };
     }
 
+    [HttpGet("{id:guid}/evidence/{evidenceId:guid}")]
+    [Produces("image/jpeg", "image/png", "image/webp")]
+    public async Task<IActionResult> Evidence(Guid id, Guid evidenceId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var userId)) return Unauthorized();
+        var file = await detailHandler.DownloadEvidenceAsync(userId, id, evidenceId, ct);
+        return file is null ? NotFound() : File(file.Content, file.ContentType, file.FileName);
+    }
+
     [HttpPost]
     [EnableRateLimiting("resident-service-request-submit")]
     [ProducesResponseType(typeof(ResidentServiceRequestCreatedResponse), StatusCodes.Status201Created)]
@@ -91,6 +101,26 @@ public sealed class ResidentServiceRequestsController(
             SubmitServiceRequestOutcome.ResidentResidenceNotFound =>
                 Problem(StatusCodes.Status403Forbidden, result.ErrorCode!, result.Message!),
             _ => Problem(StatusCodes.Status409Conflict, result.ErrorCode!, result.Message!)
+        };
+    }
+
+    [HttpPost("{id:guid}/completion")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Completion(Guid id, ResidentCompletionDecision input, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue("sub"), out var userId)) return Unauthorized();
+        return await completionHandler.HandleAsync(userId, id, input, ct) switch
+        {
+            ResidentCompletionOutcome.Success => NoContent(),
+            ResidentCompletionOutcome.InvalidInput => Problem(400, "invalid_completion", "Nhập lý do làm lại từ 3 đến 1000 ký tự và tải lại kết quả mới nhất."),
+            ResidentCompletionOutcome.NotFound => Problem(404, "request_not_found", "Không tìm thấy yêu cầu của bạn."),
+            ResidentCompletionOutcome.ResidenceNotFound => Problem(403, "active_residence_not_found", "Không tìm thấy căn hộ đang cư trú."),
+            ResidentCompletionOutcome.PaymentRequired => Problem(409, "payment_required", "Vui lòng hoàn tất thanh toán chi phí đã duyệt trước khi phản hồi kết quả."),
+            _ => Problem(409, "completion_changed", "Yêu cầu đã thay đổi. Vui lòng tải lại trước khi phản hồi.")
         };
     }
 

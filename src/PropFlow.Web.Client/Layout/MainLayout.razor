@@ -4,5 +4,9 @@
 
 <AppShell>
     <AuthorizeView Roles="MANAGER"><PropFlow.Web.Client.Features.Communication.SupportChat.ManagerSupportPresence /></AuthorizeView>
-    @Body
+    @(ChildContent ?? Body)
 </AppShell>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

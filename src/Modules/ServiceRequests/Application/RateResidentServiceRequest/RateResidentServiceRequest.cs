@@ -17,7 +17,7 @@ public sealed record RateResidentServiceRequestResult(
 public interface IResidentServiceRequestFeedbackStore
 {
     Task<(SaveResidentServiceRequestFeedbackOutcome Outcome, ResidentServiceRequestFeedbackResponse? Response)> SaveAsync(
-        Guid residentId, Guid serviceRequestId, int rating, string comment, DateTimeOffset now, CancellationToken ct);
+        Guid residentId, Guid serviceRequestId, int rating, string comment, DateTimeOffset now, CancellationToken ct, Guid? actorId = null);
 }
 
 public sealed class RateResidentServiceRequestHandler(
@@ -42,7 +42,7 @@ public sealed class RateResidentServiceRequestHandler(
         if (residence is null)
             return new(RateResidentServiceRequestOutcome.ResidentResidenceNotFound, ErrorCode: "active_residence_not_found", Message: "Tài khoản chưa được liên kết với căn hộ đang cư trú.");
 
-        var saved = await store.SaveAsync(residence.ResidentId, serviceRequestId, command.Rating, comment, now, ct);
+        var saved = await store.SaveAsync(residence.ResidentId, serviceRequestId, command.Rating, comment, now, ct, userId);
         if (saved.Outcome == SaveResidentServiceRequestFeedbackOutcome.Saved && realtime is not null)
             await realtime.NotifyChangedAsync(serviceRequestId, userId, CancellationToken.None);
         return saved.Outcome switch

@@ -9,6 +9,7 @@
         <AuthorizeView Policy="@PropFlow.Modules.Administration.Contracts.AdministrationAuthorizationPolicies.ManageSystemConfiguration" Context="configurationAuthorization">
             <AdminTabLink Tab="configuration" href="/admin/dashboard?tab=configuration" class="admin-nav-link" aria-label="Cấu hình hệ thống" title="Cấu hình hệ thống"><span class="material-symbols-outlined" aria-hidden="true">settings</span></AdminTabLink>
         </AuthorizeView>
+        <NavLink href="/remote-contracts" class="admin-nav-link" ActiveClass="is-selected" aria-label="Hợp đồng ký từ xa" title="Hợp đồng ký từ xa"><span class="material-symbols-outlined" aria-hidden="true">draw</span></NavLink>
         <AuthorizeView Policy="@PropFlow.Modules.AiChatbot.Contracts.KnowledgePolicies.Read" Context="knowledgeAuthorization">
             <NavLink href="/knowledge/documents" class="admin-nav-link" ActiveClass="is-selected" aria-label="Tài liệu chung cư" title="Tài liệu chung cư"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span></NavLink>
         </AuthorizeView>

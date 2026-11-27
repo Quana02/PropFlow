@@ -2,7 +2,7 @@ namespace PropFlow.Modules.Billing.Contracts;
 
 public sealed record InvoiceFinancialSnapshot(Guid Id, string InvoiceNumber, Guid ApartmentUnitId,
     DateOnly BillingPeriodStart, DateOnly BillingPeriodEnd, DateOnly? IssueDate, DateOnly? DueDate,
-    decimal TotalAmount, string Status, string? InvoiceType = null, string? ApartmentNumber = null, string? ResidentName = null);
+    decimal TotalAmount, string Status, string? InvoiceType = null, string? ApartmentNumber = null, string? ResidentName = null, Guid? SourceServiceRequestId = null);
 
 public interface IInvoiceFinancialSource
 {
@@ -28,7 +28,7 @@ public sealed record ServiceRequestInvoiceCommand(
     decimal AdditionalAmount,
     string? AdditionalNote,
     Guid ApprovedBy,
-    DateTimeOffset ApprovedAt);
+    DateTimeOffset ApprovedAt, int ReworkCount = 0);
 
 public sealed record ServiceRequestSettlementSnapshot(
     Guid ServiceRequestId,
@@ -41,6 +41,11 @@ public sealed record ServiceRequestSettlementSnapshot(
 
 public interface IServiceRequestBilling
 {
+    async Task<IReadOnlyList<ServiceRequestSettlementSnapshot>> ListForResidentAsync(Guid serviceRequestId, Guid residentId, CancellationToken ct)
+    {
+        var current = await FindForResidentAsync(serviceRequestId, residentId, ct);
+        return current is null ? [] : [current];
+    }
     Task<ServiceRequestSettlementSnapshot?> IssueAsync(ServiceRequestInvoiceCommand command, CancellationToken ct);
     Task<ServiceRequestSettlementSnapshot?> FindForResidentAsync(Guid serviceRequestId, Guid residentId, CancellationToken ct);
     Task<ServiceRequestSettlementSnapshot?> FindForUserAsync(Guid serviceRequestId, Guid userId, CancellationToken ct);

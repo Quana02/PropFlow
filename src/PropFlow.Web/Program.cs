@@ -1,8 +1,22 @@
 using PropFlow.Web.Components;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Components.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsEnvironment("Testing"))
+{
+    // The development host loads referenced WASM static-asset manifests automatically.
+    // E2E uses Testing, so opt in only there; published/production asset behavior stays unchanged.
+    builder.WebHost.UseStaticWebAssets();
+    // Browser E2E hosts run in a restricted process profile.  Keep their ephemeral
+    // key ring out of the user profile without changing any production key policy.
+    var testKeyRing = builder.Configuration["E2E:DataProtectionKeyRing"];
+    if (!string.IsNullOrWhiteSpace(testKeyRing))
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(testKeyRing))
+            .SetApplicationName("PropFlow.E2E");
+}
 var knownProxyAddresses = builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>() ?? [];
 builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
 {
@@ -35,6 +49,9 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();
+
+if (app.Environment.IsEnvironment("Testing"))
+    app.MapGet("/__e2e/ready", () => Results.Text("ready", "text/plain"));
 
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()

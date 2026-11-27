@@ -251,6 +251,14 @@ builder.Services.AddDbContext<ComplaintsDbContext>((services, options) =>
             "__EFMigrationsHistory",
             "complaints")));
 
+builder.Services.AddDbContext<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.RemoteOnlineSignDbContext>((services, options) =>
+    options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
+        services.GetRequiredService<NpgsqlConnection>(),
+        npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", "remote_online_sign")));
+builder.Services.AddHttpClient("RemoteContractCloudinary", client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.IRemotePdfStorage, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Storage.CloudinaryRemotePdfStorage>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.IPdfSignatureStamper, PropFlow.Modules.RemoteOnlineSign.Application.PdfSignatureStamper>();
+
 builder.Services.AddDbContext<MaintenanceDbContext>((services, options) =>
     options.AddInterceptors(services.GetRequiredService<SystemAuditInterceptor>()).UseNpgsql(
         services.GetRequiredService<NpgsqlConnection>(),
@@ -306,6 +314,9 @@ builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintSto
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintCommitter, ComplaintCommitter>();
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.IComplaintContextSource, ComplaintContextSource>();
 builder.Services.AddScoped<PropFlow.Modules.Complaints.Application.ComplaintUseCases>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Application.RemoteContractService>();
+builder.Services.AddScoped<PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.IRemoteContractCodeGenerator, PropFlow.Modules.RemoteOnlineSign.Infrastructure.Persistence.RemoteContractCodeGenerator>();
+builder.Services.AddHostedService<PropFlow.Modules.RemoteOnlineSign.Application.RemoteOnlineSignSignatureCleanupWorker>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.IAnnouncementStore, EfAnnouncementStore>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.Announcements.AnnouncementUseCases>();
 builder.Services.AddScoped<PropFlow.Modules.Communication.Application.IComplaintClosureNotice, PropFlow.Modules.Communication.Infrastructure.ComplaintClosureNotice>();
@@ -425,6 +436,7 @@ builder.Services.AddHttpClient<IPaymentBankDirectory, VietQrBankDirectory>(clien
 });
 builder.Services.AddScoped<PaymentDestinationSettings>();
 builder.Services.AddScoped<ResidentServiceRequestPayments>();
+builder.Services.AddScoped<PropFlow.Modules.Payments.Contracts.IInvoicePaymentInstructions>(services => services.GetRequiredService<ResidentServiceRequestPayments>());
 builder.Services.AddOptions<SePayOptions>().BindConfiguration("Payments:SePay")
     .Validate(SePayLiveConfiguration.Valid, "SePay Live cần địa chỉ webhook HTTPS công khai và khóa xác thực hợp lệ (ít nhất 32 ký tự).")
     .ValidateOnStart();
@@ -475,6 +487,8 @@ builder.Services.AddScoped<IResidentServiceRequestDetailStore, ResidentServiceRe
 builder.Services.AddScoped<GetResidentServiceRequestHandler>();
 builder.Services.AddScoped<IResidentServiceRequestFeedbackStore, ResidentServiceRequestFeedbackStore>();
 builder.Services.AddScoped<RateResidentServiceRequestHandler>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.AcceptResidentServiceRequest.IResidentCompletionStore, ResidentCompletionStore>();
+builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.AcceptResidentServiceRequest.ResidentCompletionHandler>();
 builder.Services.AddScoped<IServiceRequestMaintenanceSource, ServiceRequestMaintenanceSource>();
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.IManagerServiceRequestStore, ManagerServiceRequestStore>();
 builder.Services.AddScoped<PropFlow.Modules.ServiceRequests.Application.ReviewManagerServiceRequests.ManagerServiceRequestReviewHandler>();

@@ -13,19 +13,19 @@ public sealed class InvoiceFinancialSource(BillingDbContext db) : IInvoiceFinanc
         .Where(x => x.Id == invoiceId).Select(x => new InvoiceFinancialSnapshot(x.Id, x.InvoiceNumber, x.ApartmentUnitId,
             x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString(), x.Type == null ? null : x.Type.ToString(),
                 db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.UnitNumber).FirstOrDefault(),
-                db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.FullName).FirstOrDefault())).SingleOrDefaultAsync(ct);
+                db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.FullName).FirstOrDefault(), x.SourceServiceRequestId)).SingleOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<InvoiceFinancialSnapshot>> FindManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
         await db.Invoices.AsNoTracking().Where(x => ids.Contains(x.Id))
             .Select(x => new InvoiceFinancialSnapshot(x.Id, x.InvoiceNumber, x.ApartmentUnitId,
                 x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString(), x.Type == null ? null : x.Type.ToString(),
                 db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.UnitNumber).FirstOrDefault(),
-                db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.FullName).FirstOrDefault())).ToArrayAsync(ct);
+                db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.FullName).FirstOrDefault(), x.SourceServiceRequestId)).ToArrayAsync(ct);
 
     public async Task<IReadOnlyList<InvoiceFinancialSnapshot>> ListIssuedAsync(CancellationToken ct) =>
         await db.Invoices.AsNoTracking().Where(x => x.Status == InvoiceStatus.ISSUED)
             .Select(x => new InvoiceFinancialSnapshot(x.Id, x.InvoiceNumber, x.ApartmentUnitId,
                 x.BillingPeriodStart, x.BillingPeriodEnd, x.IssueDate, x.DueDate, x.TotalAmount, x.Status.ToString(), x.Type == null ? null : x.Type.ToString(),
                 db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.UnitNumber).FirstOrDefault(),
-                db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.FullName).FirstOrDefault())).ToArrayAsync(ct);
+                db.InvoiceRecipients.Where(r => r.InvoiceId == x.Id).OrderBy(r => r.Id).Select(r => r.FullName).FirstOrDefault(), x.SourceServiceRequestId)).ToArrayAsync(ct);
 }

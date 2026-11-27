@@ -1,3 +1,6 @@
+using System.Net.Mime;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Net;
 using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +25,23 @@ public sealed class FinanceMailOptions
 public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<FinanceMailOptions> config,
     ILogger<FinanceEmailWorker> logger) : BackgroundService
 {
+    internal static void AddInlineImages(MailMessage mail, string html)
+    {
+        var resources = new List<LinkedResource>();
+        var body = Regex.Replace(html, "data:image/png;base64,([A-Za-z0-9+/=]+)", match =>
+        {
+            var resource = new LinkedResource(new MemoryStream(Convert.FromBase64String(match.Groups[1].Value)), "image/png")
+            { ContentId = "invoice-qr-" + resources.Count, TransferEncoding = TransferEncoding.Base64 };
+            resources.Add(resource);
+            return "cid:" + resource.ContentId;
+        });
+        if (resources.Count == 0) return;
+        var view = AlternateView.CreateAlternateViewFromString(body, Encoding.UTF8, MediaTypeNames.Text.Html);
+        foreach (var resource in resources) view.LinkedResources.Add(resource);
+        mail.Body = body;
+        mail.AlternateViews.Add(view);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         // Operational switch for finance delivery only. Authentication/OTP uses its own worker.
@@ -54,6 +74,7 @@ public sealed class FinanceEmailWorker(IServiceScopeFactory scopes, IOptions<Fin
                         using var client = new SmtpClient(options.Host, options.Port) { EnableSsl = options.EnableSsl,
                             Credentials = new NetworkCredential(options.Username, options.Password), Timeout = 15000 };
                         using var mail = new MailMessage(options.From, address) { Subject = item.Subject, Body = item.Html, IsBodyHtml = true };
+                        AddInlineImages(mail, item.Html);
                         mail.Headers.Add("X-PropFlow-Event", item.EventId.ToString());
                         // The complete receipt is rendered in the email body for direct viewing.
                         // Do not attach a duplicate HTML file that mail clients display as source.

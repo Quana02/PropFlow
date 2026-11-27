@@ -1,0 +1,108 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+<style>.remote-local-preview__body{background:color-mix(in srgb,var(--app-surface) 84%,#dbe3ee)}.remote-local-preview__empty{color:var(--app-text)}.remote-local-preview__empty p{color:var(--app-muted)}:where(html[data-theme="dark"]) .remote-local-preview__body{background:#1f2937}:where(html[data-theme="dark"]) .remote-local-preview__empty{color:#f8fafc}:where(html[data-theme="dark"]) .remote-local-preview__empty p{color:#cbd5e1}</style>
+
+<section class="remote-local-preview" aria-label="Xem trước PDF">
+    <header class="remote-local-preview__header">
+        <div><h3>Xem trước PDF</h3><p>@(HasDocument ? $"{FileName} · Tệp {FilePosition} · Trang {currentPage}/{pageCount}" : "Chọn PDF ở phần thông tin hợp đồng")</p></div>
+        @if (HasDocument)
+        {
+            <div class="remote-local-preview__tools" aria-label="Điều khiển xem trước PDF">
+                <button type="button" title="Trang trước" aria-label="Trang trước" disabled="@(currentPage <= 1 || rendering)" @onclick="PreviousAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+                <button type="button" title="Trang sau" aria-label="Trang sau" disabled="@(currentPage >= pageCount || rendering)" @onclick="NextAsync"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+                <button type="button" title="Thu nhỏ" aria-label="Thu nhỏ" disabled="@rendering" @onclick="ZoomOutAsync"><span class="material-symbols-outlined" aria-hidden="true">zoom_out</span></button>
+                <button type="button" title="Phóng to" aria-label="Phóng to" disabled="@rendering" @onclick="ZoomInAsync"><span class="material-symbols-outlined" aria-hidden="true">zoom_in</span></button>
+                <button type="button" class="remote-local-preview__fit" disabled="@rendering" @onclick="FitWidthAsync">Vừa chiều rộng</button>
+            </div>
+        }
+    </header>
+    <div class="remote-local-preview__body">
+        @if (!HasDocument)
+        {
+            <div class="remote-local-preview__empty"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span><h4>Chưa có tài liệu để xem trước</h4><p>Chọn tệp PDF ở panel bên trái để xem nội dung tại đây.</p></div>
+        }
+        else if (rendering)
+        {
+            <div class="remote-local-preview__empty" role="status"><span class="material-symbols-outlined" aria-hidden="true">progress_activity</span><p>Đang tải nội dung PDF…</p></div>
+        }
+        else if (error is not null)
+        {
+            <div class="remote-local-preview__empty is-error" role="alert"><span class="material-symbols-outlined" aria-hidden="true">error</span><h4>Không thể xem trước PDF</h4><p>@error</p></div>
+        }
+        <div class="remote-local-preview__viewer @(HasDocument && error is null && !rendering ? null : "is-hidden")" @ref="host" aria-label="Nội dung PDF xem trước"></div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public byte[]? PdfBytes { get; set; }
+    [Parameter] public string FileName { get; set; } = string.Empty;
+    [Parameter] public string FilePosition { get; set; } = string.Empty;
+    [Parameter] public bool HasDocument { get; set; }
+    [Parameter] public int Revision { get; set; }
+
+    private ElementReference host;
+    private IJSObjectReference? module;
+    private int appliedRevision = -1, currentPage = 1, pageCount;
+    private decimal zoom = 1m;
+    private bool rendering, renderPending;
+    private string? error;
+
+    protected override void OnParametersSet()
+    {
+        if (appliedRevision == Revision && HasDocument) return;
+        appliedRevision = Revision;
+        currentPage = 1;
+        pageCount = 0;
+        zoom = 1m;
+        error = null;
+        renderPending = HasDocument;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!HasDocument)
+        {
+            if (module is not null) await module.InvokeVoidAsync("dispose", host);
+            return;
+        }
+        if (!renderPending) return;
+        renderPending = false;
+        rendering = true;
+        error = null;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Features/RemoteOnlineSign/Pages/remote-pdf-viewer.js");
+            pageCount = await module.InvokeAsync<int>("renderBytes", host, PdfBytes!, currentPage, (double)zoom);
+        }
+        catch
+        {
+            error = "Tệp PDF bị lỗi, được mã hóa hoặc không thể đọc trên trình duyệt.";
+            pageCount = 0;
+        }
+        finally
+        {
+            rendering = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task PreviousAsync() => await GoToPageAsync(currentPage - 1);
+    private async Task NextAsync() => await GoToPageAsync(currentPage + 1);
+    private async Task GoToPageAsync(int page)
+    {
+        if (module is null || page < 1 || page > pageCount) return;
+        currentPage = page;
+        await module.InvokeVoidAsync("scrollToPage", host, currentPage);
+    }
+    private async Task ZoomInAsync() { zoom = Math.Min(2.5m, zoom + .25m); await RenderCurrentAsync(); }
+    private async Task ZoomOutAsync() { zoom = Math.Max(.5m, zoom - .25m); await RenderCurrentAsync(); }
+    private async Task FitWidthAsync() { zoom = 1m; await RenderCurrentAsync(); }
+    private Task RenderCurrentAsync() { renderPending = true; return InvokeAsync(StateHasChanged); }
+    public async ValueTask DisposeAsync()
+    {
+        if (module is null) return;
+        try { await module.InvokeVoidAsync("dispose", host); } catch (JSDisconnectedException) { }
+        await module.DisposeAsync();
+    }
+}
