@@ -282,7 +282,38 @@ public sealed class RemoteContractService(
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception e) when (e is TaskCanceledException or TimeoutException) { throw new RemoteContractException(503, "pdf_upload_timeout", "Kho lưu trữ PDF phản hồi quá chậm. Vui lòng thử lại."); }
         catch (Exception e) when (e is IOException or HttpRequestException) { throw new RemoteContractException(503, "pdf_upload_failed", "Không thể tải PDF lên kho lưu trữ. Vui lòng thử lại."); }
-        var doc = new ContractDocument { ContractId = id, StorageKey = stored.Key, Sha256 = stored.Sha256, Size = stored.Length, PageCount = pages, PageMetadata = metadata }; db.Documents.Add(doc); await AuditAsync(id, actor, "ORIGINAL_PDF_UPLOADED"); try { await db.SaveChangesAsync(ct); } catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_contract_documents_ContractId" }) { db.ChangeTracker.Clear(); await CleanupAsync(stored.Key, ct); throw new RemoteContractException(409, "original_already_uploaded", "PDF gốc đã được tải lên."); } catch { db.ChangeTracker.Clear(); await CleanupAsync(stored.Key, ct); throw; } return ToDocument(doc);
+        try
+        {
+            // Storage I/O happens outside the transaction. Recheck under the same
+            // row lock as deletion before attaching the uploaded artifact.
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            // Refresh the tracked instance too: tracking queries do not replace
+            // values read before the storage call with the locked row's values.
+            var current = await LockAccessibleAsync(actor, true, id, ct);
+            await db.Entry(current).ReloadAsync(ct);
+            if (current.Status != RemoteContractStatus.DRAFT)
+                throw new RemoteContractException(409, "contract_not_draft", "Hợp đồng không còn ở bản nháp.");
+            if (await db.Documents.AnyAsync(x => x.ContractId == id && !x.IsFinal, ct))
+                throw new RemoteContractException(409, "original_already_uploaded", "PDF gốc đã được tải lên.");
+            var doc = new ContractDocument { ContractId = id, StorageKey = stored.Key, Sha256 = stored.Sha256, Size = stored.Length, PageCount = pages, PageMetadata = metadata };
+            db.Documents.Add(doc);
+            await AuditAsync(id, actor, "ORIGINAL_PDF_UPLOADED");
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return ToDocument(doc);
+        }
+        catch (DbUpdateException e) when (e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_contract_documents_ContractId" })
+        {
+            db.ChangeTracker.Clear();
+            await CleanupAsync(stored.Key, CancellationToken.None);
+            throw new RemoteContractException(409, "original_already_uploaded", "PDF gốc đã được tải lên.");
+        }
+        catch
+        {
+            db.ChangeTracker.Clear();
+            await CleanupAsync(stored.Key, CancellationToken.None);
+            throw;
+        }
     }
     public async Task<(RemoteDocumentMetadata Metadata, Stream Content)> DownloadOriginalAsync(Guid actor, bool admin, Guid id, CancellationToken ct)
     {

@@ -11,28 +11,36 @@ internal sealed record ParkingVisionDimension(double Length,string? Unit,double[
 internal static class ParkingVisionGeometry
 {
     private static readonly string[] IgnoredEvidence=["VEHICLE","DIMENSION","TEXT","UNKNOWN"];
-    public static ParkingDrawing Build(ParkingVisionPlan plan,ParkingGeometryResult source,CancellationToken ct=default,bool strict=true,ISet<Guid>? uncertain=null)
+    internal static readonly string[] EditorKinds = ParkingDrawingRules.Kinds.Where(kind => kind != "TRACE").ToArray();
+
+    public static ParkingDrawing Build(ParkingVisionPlan plan,ParkingGeometryResult source,CancellationToken ct=default,bool strict=true,ISet<Guid>? uncertain=null,bool allowPartial=false)
     {
-        if(!plan.IsParkingPlan||!plan.Complete||plan.Objects is null||plan.Objects.Length>ParkingDrawingRules.MaxShapes)throw Invalid();
+        if(!plan.IsParkingPlan||(!plan.Complete&&!allowPartial)||plan.Objects is null||plan.Objects.Length>ParkingDrawingRules.MaxShapes)throw Invalid();
         var shapes=new List<ParkingShape>();var labels=new HashSet<string>(StringComparer.OrdinalIgnoreCase);var number=1;
         foreach(var item in plan.Objects)
         {
-            if(item is null)throw Invalid();
-            if(IgnoredEvidence.Contains(item.Evidence??"")||item.Kind is "VEHICLE" or "DIMENSION" or "TEXT" or "UNKNOWN")continue;
-            var generic=item.Kind=="OTHER";var kind=generic?"RECT":item.Kind;
-            if(item.Evidence is not ("BAY_MARKINGS" or "STRUCTURE")||!ParkingDrawingRules.Kinds.Contains(kind??"")||kind=="TRACE")throw Invalid();
-            if(generic&&item.Evidence!="STRUCTURE")throw Invalid();
-            if(item.Kind=="SPACE"&&item.Evidence!="BAY_MARKINGS")continue;
-            if(shapes.Count>=ParkingDrawingRules.MaxObjects)throw Invalid();
-            var points=Points(item.Points,source);var label=(item.Label??"").Trim().Normalize();if(label.Length>80)throw Invalid();
-            if(generic&&label.Length==0)label="Chi tiết cần kiểm tra";
-            if(item.Kind=="SPACE")
-            {if(label.Length==0||!labels.Add(label)){do{label=$"P-{number++:000}";}while(!labels.Add(label));}}
             ct.ThrowIfCancellationRequested();
-            var shape=Shape(kind!,label,points,source.Drawing.Width,source.Drawing.Height);
-            if(strict)ParkingBayEdgeAlignment.ValidateOrientation(shape,source,ct);
-            if(item.Uncertain)uncertain?.Add(shape.Id);
-            ParkingDrawingRules.Validate(new(source.Drawing.Width,source.Drawing.Height,[shape]));shapes.Add(shape);
+            if(item is null){if(allowPartial)continue;throw Invalid();}
+            if(IgnoredEvidence.Contains(item.Evidence??"")||item.Kind is "VEHICLE" or "DIMENSION" or "TEXT" or "UNKNOWN")continue;
+            if(item.Kind=="SPACE"&&item.Evidence!="BAY_MARKINGS")continue;
+            try
+            {
+                if(item.Evidence is not ("BAY_MARKINGS" or "STRUCTURE")||!EditorKinds.Contains(item.Kind??""))throw Invalid();
+                if(shapes.Count>=ParkingDrawingRules.MaxObjects)throw Invalid();
+                var points=Points(item.Points,source);
+                var label=(item.Label??"").Trim().Normalize();
+                if(label.Length>80)throw Invalid();
+                var isSpace=item.Kind=="SPACE";
+                if(isSpace&&(label.Length==0||labels.Contains(label)))
+                    do{label=$"P-{number++:000}";}while(labels.Contains(label));
+                var shape=Shape(item.Kind!,label,points,source.Drawing.Width,source.Drawing.Height);
+                if(strict)ParkingBayEdgeAlignment.ValidateOrientation(shape,source,ct);
+                ParkingDrawingRules.Validate(new(source.Drawing.Width,source.Drawing.Height,[shape]));
+                if(isSpace)labels.Add(label);
+                if(item.Uncertain)uncertain?.Add(shape.Id);
+                shapes.Add(shape);
+            }
+            catch(ParkingFailure)when(allowPartial){}
         }
         ParkingScale? scale=null;
         foreach(var dimension in plan.Dimensions??[])
@@ -56,9 +64,9 @@ internal static class ParkingVisionGeometry
     private static ParkingShape Shape(string kind,string label,ParkingPoint[] p,int cw,int ch)
     {
         var id=Guid.NewGuid();
-        if(kind is "LINE" or "CURVE")
+        if(kind is "LINE" or "DASHED_LINE" or "CURVE")
         {
-            if(p.Length!=(kind=="LINE"?2:3))throw Invalid();
+            if(p.Length!=(kind=="CURVE"?3:2))throw Invalid();
             var x=p.Min(v=>v.X);var y=p.Min(v=>v.Y);var w=Math.Max(4,p.Max(v=>v.X)-x);var h=Math.Max(4,p.Max(v=>v.Y)-y);
             x=Math.Clamp(x-(w-(p.Max(v=>v.X)-x))/2,0,cw-w);y=Math.Clamp(y-(h-(p.Max(v=>v.Y)-y))/2,0,ch-h);
             return new(id,kind,label,x,y,w,h,ControlPoints:p.Select(v=>new ParkingPoint((v.X-x)/w,(v.Y-y)/h)).ToArray());
@@ -74,7 +82,7 @@ internal static class ParkingVisionGeometry
         {
             if(kind=="SPACE")throw Invalid();
             var x=Math.Min(p[0].X,p[1].X);var y=Math.Min(p[0].Y,p[1].Y);var w=Math.Abs(p[1].X-p[0].X);var h=Math.Abs(p[1].Y-p[0].Y);
-            if(kind is "WALL_CIRCLE" or "WALL_SQUARE" or "SQUARE"){var size=(w+h)/2;x+=(w-size)/2;y+=(h-size)/2;w=h=size;}
+            if(ParkingToolCatalog.IsSquare(kind)){var size=(w+h)/2;x+=(w-size)/2;y+=(h-size)/2;w=h=size;}
             return new(id,kind,label,x,y,w,h,NeedsReview:kind=="SPACE");
         }
         if(p.Length!=4)throw Invalid();
@@ -85,14 +93,14 @@ internal static class ParkingVisionGeometry
         var dot=((p[1].X-p[0].X)*(p[2].X-p[1].X)+(p[1].Y-p[0].Y)*(p[2].Y-p[1].Y))/(widths[0]*heights[0]);
         // Only canonicalize actual rectangles. Approximate quadrilaterals retain their four source corners.
         var rectangular=Math.Abs(dot)<.0001&&Math.Abs(widths[0]-widths[1])<widths.Average()*.0001&&Math.Abs(heights[0]-heights[1])<heights.Average()*.0001;
-        if(rectangular)
+        if(rectangular || (ParkingToolCatalog.Additional.Any(tool=>tool.Kind==kind) && !ParkingToolCatalog.SupportsOutline(kind) && Math.Abs(dot)<.20))
         {
-            var w=widths.Average();var h=heights.Average();if(kind is "SQUARE" or "WALL_SQUARE" or "WALL_CIRCLE")w=h=(w+h)/2;
+            var w=widths.Average();var h=heights.Average();if(ParkingToolCatalog.IsSquare(kind))w=h=(w+h)/2;
             var angle=Math.Atan2(p[1].Y-p[0].Y+p[2].Y-p[3].Y,p[1].X-p[0].X+p[2].X-p[3].X);
             var shape=new ParkingShape(id,kind,label,p.Average(v=>v.X)-w/2,p.Average(v=>v.Y)-h/2,w,h,Angle(angle),NeedsReview:kind=="SPACE");
-            try{ParkingDrawingRules.Validate(new(cw,ch,[shape]));return shape;}catch(ParkingFailure)when(kind is "SPACE" or "RECT" or "WALL" or "LANE" or "LABEL"){}
+            try{ParkingDrawingRules.Validate(new(cw,ch,[shape]));return shape;}catch(ParkingFailure)when(ParkingToolCatalog.SupportsOutline(kind)){}
         }
-        if(kind is not ("SPACE" or "RECT" or "WALL" or "LANE" or "LABEL"))throw Invalid();
+        if(!ParkingToolCatalog.SupportsOutline(kind))throw Invalid();
         var left=p.Min(v=>v.X);var top=p.Min(v=>v.Y);var width=p.Max(v=>v.X)-left;var height=p.Max(v=>v.Y)-top;
         return new(id,kind,label,left,top,width,height,Outline:p.Select(v=>new ParkingPoint((v.X-left)/width,(v.Y-top)/height)).ToArray(),NeedsReview:kind=="SPACE");
     }

@@ -30,8 +30,15 @@ public sealed class ParkingController(ParkingWorkspace workspace):ControllerBase
     public Task<IActionResult> Save(Guid id,SaveParkingDrawing input,CancellationToken ct)=>Run(()=>workspace.SaveAsync(id,input,Actor,ct));
     [HttpPost("{id:guid}/publish"),ProducesResponseType(typeof(ParkingAreaView),200)]
     public Task<IActionResult> Publish(Guid id,PublishParkingDrawing input,CancellationToken ct)=>Run(()=>workspace.PublishAsync(id,input,Actor,ct));
+    [HttpDelete("{id:guid}/published"), ProducesResponseType(typeof(ParkingAreaView), 200)]
+    [ProducesResponseType(typeof(ProblemDetails), 400), ProducesResponseType(typeof(ProblemDetails), 404), ProducesResponseType(typeof(ProblemDetails), 409)]
+    public Task<IActionResult> RemovePublishedDrawing(Guid id, [FromQuery] Guid expectedVersion, CancellationToken ct) =>
+        Run(() => workspace.RemovePublishedDrawingAsync(id, expectedVersion, Actor, ct));
     [HttpPut("{id:guid}/spaces/{space:guid}"),ProducesResponseType(typeof(ParkingAreaView),200)]
     public Task<IActionResult> ChangeSpace(Guid id,Guid space,ChangeParkingSpace input,CancellationToken ct)=>Run(()=>workspace.ChangeSpaceAsync(id,space,input,Actor,ct));
+    [HttpPut("{id:guid}/spaces/{space:guid}/listing"), ProducesResponseType(typeof(ParkingAreaView), 200)]
+    public Task<IActionResult> UpdateSpaceListing(Guid id, Guid space, UpdateParkingSpaceListing input, CancellationToken ct) =>
+        Run(() => workspace.UpdateListingAsync(id, space, input, Actor, ct));
     [HttpPost("{id:guid}/import"),Consumes("multipart/form-data"),RequestSizeLimit(ParkingWorkspace.MaxFileBytes+65536),EnableRateLimiting("parking-recognition")]
     [ProducesResponseType(typeof(ParkingImportResult),200),ProducesResponseType(413),ProducesResponseType(429)]
     // IFormFile must retain the framework's inferred FormFile binding for Swagger.

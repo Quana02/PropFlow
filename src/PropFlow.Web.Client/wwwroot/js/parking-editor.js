@@ -1,4 +1,4 @@
-import { shapeNames, squareKinds, pathKinds, drawnGeometry, shapePath, worldPoint, boundedPointFrame, extendDivider, normalizeAngle, frameInside, selectInRectangle, nextSpaceLabel, pasteShapes, selectionGaps, arrangeShapes, measurementScale, shapeBounds, groupFrame, rotatedShapes, smartPlacement } from './parking-shapes.js?v=20261125-smart-guides-1';
+import { shapeNames, squareKinds, ellipseKinds, twoPointKinds, pathKinds, drawnGeometry, shapePath, worldPoint, boundedPointFrame, extendDivider, normalizeAngle, frameInside, selectInRectangle, nextSpaceLabel, pasteShapes, selectionGaps, arrangeShapes, measurementScale, shapeBounds, groupFrame, rotatedShapes, smartPlacement } from './parking-shapes.js?v=20261127-symbols';
 const NS = 'http://www.w3.org/2000/svg';
 export const kinds = Object.keys(shapeNames);
 export const copyDrawing = drawing => structuredClone(drawing);
@@ -9,8 +9,12 @@ export { nextSpaceLabel };
 export function sourceUrl(bytes, mime) { return URL.createObjectURL(new Blob([bytes], { type: mime })); }
 export function releaseUrl(url) { if (url?.startsWith('blob:')) URL.revokeObjectURL(url); }
 
-export function create(root, dotnet, initial, initialSpaces, editing) {
-  let drawing = copyDrawing(initial), spaces = initialSpaces || [], editable = editing, tool = 'select', selected = null;
+const operationalStatusLabels = { AVAILABLE: 'Trống', IN_USE: 'Đang sử dụng', MAINTENANCE: 'Bảo trì' };
+const listingStatusLabels = { AVAILABLE: 'Trống', PROCESSING: 'Đang xử lý', SOLD: 'Đã mua' };
+
+export function create(root, dotnet, initial, initialSpaces, editing, showListings = false, blockSoldSpaces = false) {
+  const indexSpaces = (spaces) => new Map((spaces || []).map(space => [space.id, space]));
+  let drawing = copyDrawing(initial), spaceDetails = indexSpaces(initialSpaces), editable = editing, tool = 'select', selected = null;
   let disposed = false, dragging, preview, marquee, view, snap = !initial.digitization, referenceImage = null, scaleStart = null, selection = new Set();
   let clipboard = [], pasteCount = 0;
   let measureAxis = 'x', measureUnit = 'm';
@@ -34,9 +38,13 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
     const hatch = svg.querySelector('#' + hatchId);
     if (hatch) { hatch.setAttribute('width', 8 / scale); hatch.setAttribute('height', 8 / scale); hatch.firstElementChild.setAttribute('d', `M0 0V${8 / scale}M${4 / scale} 0V${8 / scale}`); }
     for (const label of svg.querySelectorAll('.parking-shape text')) {
-      const base = Number(label.dataset.baseSize), chosen = label.parentElement.dataset.id === selected;
-      label.setAttribute('font-size', chosen ? Math.max(base, 10 / scale) : base);
-      label.style.visibility = chosen || base * scale >= 8 ? 'visible' : 'hidden';
+      const group = label.parentElement;
+      const base = Number(label.dataset.baseSize);
+      const note = group.classList.contains('kind-label');
+      const chosen = group.dataset.id === selected;
+      const minimum = note ? 11 : chosen ? 10 : 0;
+      label.setAttribute('font-size', Math.max(base, minimum / scale));
+      label.style.visibility = minimum > 0 || base * scale >= 8 ? 'visible' : 'hidden';
     }
   }
   const chosenShapes = () => drawing.shapes.filter(s=>selection.has(s.id)&&s.kind!=='TRACE');
@@ -89,7 +97,13 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
     const handle=element('circle',{class:'parking-resize parking-group-rotate','data-group-rotate':'true',cx:x,cy:y,r:6/scale,tabindex:0,role:'button','aria-label':'Xoay cả nhóm. Phím trái/phải xoay 1 độ, giữ Shift để xoay 15 độ.'});
     const title=element('title');title.textContent='Kéo để xoay cả nhóm; giữ Shift để xoay theo bước 15°';handle.append(title);layer.append(handle);svg.append(layer);
   }
-  function selectMany(ids) { const visible = new Set(drawing.shapes.filter(s => s.kind !== 'TRACE').map(s => s.id)); selection = new Set(ids.filter(id => visible.has(id))); selected = selection.size === 1 ? [...selection][0] : null; render(); notifySelection(); }
+  function selectable(shape) {
+    if (editable) return shape.kind !== 'TRACE';
+    if (shape.kind !== 'SPACE') return false;
+    const details = spaceDetails.get(shape.id);
+    return !blockSoldSpaces || (!!details && details.listingStatus !== 'SOLD');
+  }
+  function selectMany(ids) { const visible = new Set(drawing.shapes.filter(selectable).map(s => s.id)); selection = new Set(ids.filter(id => visible.has(id))); selected = selection.size === 1 ? [...selection][0] : null; render(); notifySelection(); }
   function commit(previous) { if(drawing.recognitionReview)drawing.recognitionReview.stale=true;undo.push(previous); while (undo.length > 1 && (undo.length > 30 || undo.reduce((sum, x) => sum + JSON.stringify(x).length, 0) > 8000000)) undo.shift(); redo.length = 0; tool = 'select'; if (selected) selection = new Set([selected]); render(); notify('OnParkingChanged', drawing, selected); notifySelection(); }
   function select(id) { selectMany(id ? [id] : []); }
   function transform(shape) { return `rotate(${shape.rotation || 0} ${shape.x + shape.width / 2} ${shape.y + shape.height / 2})`; }
@@ -119,18 +133,25 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
     svg.replaceChildren(defs, element('rect', { x: 0, y: 0, width: drawing.width, height: drawing.height, class: 'parking-sheet' }));
     if (editable && referenceImage) svg.append(element('image', { href: referenceImage, x: 0, y: 0, width: drawing.width, height: drawing.height, preserveAspectRatio: 'none', opacity: .45, 'pointer-events': 'none', 'aria-label': 'Bản gốc để đối chiếu' }));
     if (editable && snap) svg.append(element('rect', { class:'parking-grid-sheet',x: 0, y: 0, width: drawing.width, height: drawing.height, fill: 'url(#parking-grid)', 'pointer-events': 'none' }));
-    const status = new Map(spaces.map(x => [x.id, x.status]));
     const sourceIssues=new Set((drawing.recognitionReview?.stale?[]:drawing.recognitionReview?.issues||[]).flatMap(issue=>issue.shapeIds||[]));
-    const layers = ['LANE', 'WALL', 'WALL_SQUARE', 'WALL_CIRCLE', 'RECT', 'SQUARE', 'SPACE', 'LINE', 'CURVE', 'DIVIDER', 'GATE', 'ENTRANCE', 'EXIT', 'LABEL'];
+    const layers = ['LANE', 'SIDEWALK', 'RAMP', 'GREEN_ISLAND', 'NO_PARKING', 'ROUNDABOUT',
+      'WALL', 'WALL_SQUARE', 'WALL_CIRCLE', 'RECT', 'SQUARE', 'SPACE', 'LINE', 'CURVE', 'DIVIDER',
+      'DASHED_LINE', 'CROSSWALK', 'TRAFFIC_ARROW', 'WHEEL_STOP', 'PILLAR', 'TREE', 'GUARD_BOOTH',
+      'STAIRS', 'ELEVATOR', 'BARRIER', 'GATE', 'ENTRANCE', 'EXIT', 'TRAFFIC_SIGN', 'LIGHT', 'LABEL'];
     const sorted = [...drawing.shapes].sort((a, b) => layers.indexOf(a.kind) - layers.indexOf(b.kind));
     for (const shape of sorted) {
       if (shape.kind === 'TRACE') continue; // Legacy contour data is never the editable object diagram.
-      const group = element('g', { 'data-id': shape.id, class: `parking-shape kind-${shape.kind.toLowerCase()} state-${(status.get(shape.id) || 'AVAILABLE').toLowerCase()}${shape.needsReview ? ' needs-review' : ''}${sourceIssues.has(shape.id)?' has-source-issue':''}${selection.has(shape.id) ? ' is-selected' : ''}` });
+      const details = spaceDetails.get(shape.id);
+      const state = details?.status || 'AVAILABLE';
+      const listing = showListings && !editable && shape.kind === 'SPACE' ? details?.listingStatus || 'AVAILABLE' : null;
+      const group = element('g', { 'data-id': shape.id, class: `parking-shape kind-${shape.kind.toLowerCase()} state-${state.toLowerCase()}${listing ? ' listing-' + listing.toLowerCase() : ''}${shape.needsReview ? ' needs-review' : ''}${sourceIssues.has(shape.id)?' has-source-issue':''}${selection.has(shape.id) ? ' is-selected' : ''}` });
       if (pathKinds.has(shape.kind)) group.append(element('path', { class: 'parking-hit', fill: 'none', stroke: 'transparent', 'stroke-width': 14, 'vector-effect': 'non-scaling-stroke', 'pointer-events': 'stroke' }));
-      group.append(element(pathKinds.has(shape.kind) ? 'path' : shape.kind === 'WALL_CIRCLE' ? 'ellipse' : shape.outline?.length === 4 ? 'polygon' : 'rect', { class: 'parking-body', 'fill-rule': 'evenodd' }));
+      group.append(element(pathKinds.has(shape.kind) ? 'path' : ellipseKinds.has(shape.kind) ? 'ellipse' : shape.outline?.length === 4 ? 'polygon' : 'rect', { class: 'parking-body', 'fill-rule': 'evenodd' }));
       const fontSize = Math.max(9, Math.min(drawing.width / 70, shape.height * .55, shape.width / Math.max(1, shape.label.length) * 1.3));
       const text = element('text', { 'text-anchor': 'middle', 'dominant-baseline': 'middle', 'font-size': fontSize, 'data-base-size': fontSize }); group.append(text);
-      const title = element('title'); title.textContent = shape.label || shapeNames[shape.kind] || 'Đối tượng sơ đồ'; group.append(title);
+      const name = shape.label || shapeNames[shape.kind] || 'Đối tượng sơ đồ';
+      const stateLabel = listing ? listingStatusLabels[listing] : operationalStatusLabels[state];
+      const title = element('title'); title.textContent = listing ? `${name}: ${stateLabel}` : name; group.append(title);
       if (editable && selected === shape.id) {
         const radius = 5 / displayScale();
         if (shape.controlPoints) shape.controlPoints.forEach((_, index) => group.append(element('circle', { r: radius, 'data-control': index, class: 'parking-resize parking-control' })));
@@ -139,7 +160,12 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
         if (shape.kind === 'DIVIDER') group.append(element('circle', { r: radius, 'data-tail': 'true', class: 'parking-resize parking-tail' }));
         group.append(element('circle', { r: radius, 'data-rotate': 'true', class: 'parking-resize parking-rotate' }));
       }
-      if (editable || shape.kind === 'SPACE') { group.setAttribute('tabindex', '0'); group.setAttribute('role', 'button'); group.setAttribute('aria-label', (shape.label || 'Đối tượng sơ đồ') + ': ' + (shape.needsReview ? 'Cần đối chiếu' : ({ AVAILABLE: 'Trống', IN_USE: 'Đang sử dụng', MAINTENANCE: 'Bảo trì' }[status.get(shape.id) || 'AVAILABLE']))); }
+      if (editable || shape.kind === 'SPACE') {
+        group.setAttribute('role', 'button');
+        group.setAttribute('aria-label', `${name}: ${editable && shape.needsReview ? 'Cần đối chiếu' : stateLabel}`);
+        if (selectable(shape)) group.setAttribute('tabindex', '0');
+        else group.setAttribute('aria-disabled', 'true');
+      }
       geometry(group, shape); svg.append(group);
     }
     if (editable && drawing.scale) {
@@ -167,7 +193,7 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
       if (Math.hypot(end.x - scaleStart.x, end.y - scaleStart.y) < 4) return;
       const before = copyDrawing(drawing); drawing.scale = { start: scaleStart, end, length: drawing.scale?.length || 0, unit: drawing.scale?.unit || '', confirmed: false }; scaleStart = null; tool = 'select'; commit(before); return;
     }
-    else if (!editable) { const item = event.target.closest('[data-id]'); const shape = drawing.shapes.find(x => x.id === item?.dataset.id); if (shape?.kind === 'SPACE') select(shape.id); return; }
+    else if (!editable) { const item = event.target.closest('[data-id]'); const shape = drawing.shapes.find(x => x.id === item?.dataset.id); if (shape && selectable(shape)) select(shape.id); return; }
     else if (tool === 'region' && !event.target.closest('.parking-resize')) { const previousSelection = [...selection]; selection.clear(); selected = null; render(); dragging = { mode: 'region', p, matrix, previousSelection }; }
     else if (tool !== 'select' && !event.target.closest('.parking-resize')) { if (drawing.shapes.filter(s => s.kind !== 'TRACE').length >= 1000) return; const start=bounded(p);dragging = { mode: 'draw', p: { x: align(start.x), y: align(start.y) } }; }
     else {
@@ -210,7 +236,7 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
       if(d.geometry&&!frameInside(d.geometry,drawing.width,drawing.height,drawing.infiniteCanvas))d.geometry=null;
       if(liveGuides){liveGuides.distances=[];if(d.geometry&&squareKinds.has(tool)){const b=shapeBounds({...d.geometry,kind:tool});liveGuides.guides=liveGuides.guides.filter(g=>(g.axis==='x'?[b.left,(b.left+b.right)/2,b.right]:[b.top,(b.top+b.bottom)/2,b.bottom]).some(v=>Math.abs(v-g.position)<1e-6));}}
       if (preview) preview.remove(); preview = null;
-      if (d.geometry) { preview = element('g', { class: 'parking-draw-preview' }); preview.append(element(pathKinds.has(tool) ? 'path' : tool === 'WALL_CIRCLE' ? 'ellipse' : 'rect', { class: 'parking-body' })); geometry(preview, { ...d.geometry, kind: tool, label: '' }); svg.append(preview); }
+      if (d.geometry) { preview = element('g', { class: 'parking-draw-preview' }); preview.append(element(pathKinds.has(tool) ? 'path' : ellipseKinds.has(tool) ? 'ellipse' : 'rect', { class: 'parking-body' })); geometry(preview, { ...d.geometry, kind: tool, label: '' }); svg.append(preview); }
       renderLiveGuides();
       return;
     }
@@ -320,7 +346,7 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
     const shape = drawing.shapes.find(x => x.id === selected); if (!shape) return;
     const before = copyDrawing(drawing);
     if (name === 'update') {
-      if (kinds.includes(input.kind) && input.kind !== shape.kind) { shape.kind = input.kind; shape.outline = null; shape.contours = null; shape.controlPoints = input.kind === 'LINE' ? [{ x: 0, y: .5 }, { x: 1, y: .5 }] : input.kind === 'CURVE' ? [{ x: 0, y: 1 }, { x: .5, y: 0 }, { x: 1, y: 1 }] : null; }
+      if (kinds.includes(input.kind) && input.kind !== shape.kind) { shape.kind = input.kind; shape.outline = null; shape.contours = null; shape.controlPoints = twoPointKinds.has(input.kind) ? [{ x: 0, y: .5 }, { x: 1, y: .5 }] : input.kind === 'CURVE' ? [{ x: 0, y: 1 }, { x: .5, y: 0 }, { x: 1, y: 1 }] : null; }
       for (const key of ['label', 'x', 'y', 'width', 'height', 'rotation', 'needsReview']) if (Object.hasOwn(input, key)) shape[key] = input[key];
       shape.rotation = normalizeAngle(shape.rotation);
       if (squareKinds.has(shape.kind)) shape.height = shape.width;
@@ -335,7 +361,16 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
   on(svg, 'pointercancel', event => { clearGuides();if (dragging?.before) drawing = dragging.before; const previous = dragging?.previousSelection; dragging = null; preview = null; marquee?.remove(); marquee = null; if (previous) selectMany(previous); else render(); });
   on(svg, 'wheel', event => { event.preventDefault();if (event.ctrlKey||event.metaKey) zoom(event.deltaY < 0 ? .9 : 1.1, point(event));else{const scale=displayScale();view.x+=(event.deltaX+(event.shiftKey?event.deltaY:0))/scale;view.y+=(event.shiftKey?0:event.deltaY)/scale;viewport();} }, { passive: false });
   on(svg, 'keydown', event => {
-    if (event.key === 'Enter' && event.target.closest('[data-id]')) { const id=event.target.closest('[data-id]').dataset.id;if(editable&&event.shiftKey){const ids=new Set(selection);if(ids.has(id))ids.delete(id);else ids.add(id);selectMany([...ids]);}else select(id);event.preventDefault();return; }
+    const targetId = event.target.closest('[data-id]')?.dataset.id;
+    if (targetId && (event.key === 'Enter' || (!editable && event.key === ' '))) {
+      const shape = drawing.shapes.find(item => item.id === targetId);
+      if (!shape || !selectable(shape)) return;
+      if(editable&&event.shiftKey){const ids=new Set(selection);if(ids.has(targetId))ids.delete(targetId);else ids.add(targetId);selectMany([...ids]);}
+      else select(targetId);
+      if (!editable) svg.querySelector(`[data-id="${CSS.escape(targetId)}"]`)?.focus({ preventScroll: true });
+      event.preventDefault();
+      return;
+    }
     if (!editable) return;
     if(event.target.closest('[data-group-rotate]')&&['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();action('rotate-group',(event.key==='ArrowLeft'?-1:1)*(event.shiftKey?15:1));svg.querySelector('[data-group-rotate]')?.focus({preventScroll:true});return;}
     if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); action('delete'); }
@@ -351,7 +386,12 @@ export function create(root, dotnet, initial, initialSpaces, editing) {
     action,
 
     setReference(url) { referenceImage = typeof url === 'string' && url.startsWith('blob:') ? url : null; render(); },
-    load(next, states, edit) { clearGuides();drawing = copyDrawing(next); spaces = states || []; editable = edit; selection = new Set([...selection].filter(id => drawing.shapes.some(x => x.id === id))); selected = selection.size === 1 ? [...selection][0] : null; undo.length = redo.length = 0; fit(); render(); },
+    load(next, states, edit, listings = false, resident = false) {
+      clearGuides();drawing = copyDrawing(next); spaceDetails = indexSpaces(states); editable = edit;
+      showListings = listings; blockSoldSpaces = resident;
+      selection = new Set([...selection].filter(id => drawing.shapes.some(shape => shape.id === id && selectable(shape))));
+      selected = selection.size === 1 ? [...selection][0] : null; undo.length = redo.length = 0; fit(); render();
+    },
     dispose() { disposed = true; listeners.forEach(off => off()); root.replaceChildren(); }
   };
 }

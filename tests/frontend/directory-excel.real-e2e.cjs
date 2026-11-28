@@ -345,7 +345,7 @@ async function apiRequest(p,method,route,body,authenticated=true){
    if(selectedFeatures.length&&!selectedFeatures.includes(feature))continue;
    await rpc({action:'progress',phase:'manager-'+feature+'-filters'});
    const qaPage=feature==='remote'?await newPage('admin-remote'):manager;if(feature==='remote')await login(qaPage,'ADMIN');
-   await require('./'+module+'.cjs').verify({p:qaPage,navigate,until,evaluate,wait,filters,multi,network,checks,scenarios,apiRequest,send,shot,key,out,fs});
+   await require('./'+module+'.cjs').verify({p:qaPage,newPage,login,navigate,until,evaluate,wait,filters,multi,network,checks,scenarios,apiRequest,send,shot,key,out,fs});
   }
   await rpc({action:'db',phase:'final-manager-filter-queries-no-business-writes',count:managerOnly?0:25});
   assert.deepEqual(jsErrors,[]);assert.deepEqual(consoleErrors,[]);

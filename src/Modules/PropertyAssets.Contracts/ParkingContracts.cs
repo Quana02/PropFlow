@@ -15,7 +15,17 @@ public sealed record ParkingDrawing(int Width, int Height, ParkingShape[] Shapes
     public static ParkingDrawing Empty => new(1600, 1000, [], new(new(0,0),new(100,0),1,"m"), InfiniteCanvas:true);
 }
 public sealed record ParkingSourceView(Guid Id, string FileName, string ContentType, int Page);
-public sealed record ParkingSpaceView(Guid Id, string Status);
+public static class ParkingListingStatus
+{
+    public const string Available = "AVAILABLE";
+    public const string Processing = "PROCESSING";
+    public const string Sold = "SOLD";
+}
+
+public sealed record ParkingSpaceView(Guid Id, string Status, int Number = 0, decimal? PriceVnd = null, string ListingStatus = ParkingListingStatus.Available);
+public sealed record PublishedParkingAreaSummary(Guid Id, string Name);
+public sealed record PublishedParkingSpace(Guid Id, int Number, decimal? PriceVnd, string ListingStatus);
+public sealed record PublishedParkingArea(Guid Id, string Name, ParkingDrawing Drawing, PublishedParkingSpace[] Spaces);
 public sealed record ParkingActionView(Guid Id, string Action, Guid ActorId, DateTimeOffset At, Guid? SpaceId, string Note);
 public sealed record ParkingAreaSummary(Guid Id, string Name, bool Published, int Total, int Available, int InUse, int Maintenance);
 public sealed record ParkingAreaView(Guid Id, string Name, Guid Version, ParkingDrawing Draft, ParkingDrawing? Published,
@@ -25,4 +35,5 @@ public sealed record SaveParkingDrawing(Guid ExpectedVersion, string Name, Parki
 public sealed record PublishParkingDrawing(Guid ExpectedVersion);
 public sealed record RecognizeParkingDrawing(Guid ExpectedVersion);
 public sealed record ChangeParkingSpace(Guid ExpectedVersion, string Status, string Note);
-public sealed record ParkingImportResult(ParkingAreaView Area, bool Recognized, string Message);
+public sealed record UpdateParkingSpaceListing(Guid ExpectedVersion, decimal? PriceVnd, string ListingStatus);
+public sealed record ParkingImportResult(ParkingAreaView Area, bool Recognized, string Message, ParkingDrawing? ReviewDrawing = null, bool LocalPreview = false);
